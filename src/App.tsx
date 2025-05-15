@@ -19,7 +19,7 @@ function App() {
         <Route path="testimonials" element={<TestimonialsPage />} />
         <Route path="booking" element={<BookingPage />} />
         <Route path="contact" element={<ContactPage />} /> {/* Add this line */}
-        <Route path="admin" element={<AdminConsole />} />
+        <Route path="admin/*" element={<AdminConsole />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

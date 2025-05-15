@@ -19,10 +19,29 @@ const initialPackages: Package[] = [
   },
 ];
 
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'admin123'; // Change this in production!
+
 const AdminConsole: React.FC = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
   const [packages, setPackages] = useState<Package[]>(initialPackages);
   const [newPackage, setNewPackage] = useState<Package>({ name: '', price: '', features: [''] });
 
+  // Login handler
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      setIsLoggedIn(true);
+      setLoginError('');
+    } else {
+      setLoginError('Invalid credentials');
+    }
+  };
+
+  // Package management handlers
   const handleAdd = () => {
     setPackages([...packages, { ...newPackage, features: newPackage.features.filter(f => f) }]);
     setNewPackage({ name: '', price: '', features: [''] });
@@ -42,9 +61,50 @@ const AdminConsole: React.FC = () => {
     setNewPackage({ ...newPackage, features: [...newPackage.features, ''] });
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <form
+          className="bg-white p-8 rounded shadow-md w-full max-w-xs"
+          onSubmit={handleLogin}
+        >
+          <h2 className="text-xl font-bold mb-4">Admin Login</h2>
+          <input
+            className="border px-2 py-1 mb-2 w-full"
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+          />
+          <input
+            className="border px-2 py-1 mb-2 w-full"
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+          {loginError && <div className="text-red-500 mb-2">{loginError}</div>}
+          <button
+            className="bg-primary-600 text-white px-4 py-2 rounded w-full"
+            type="submit"
+          >
+            Login
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">Admin Console - Manage Packages</h1>
+      <button
+        className="mb-6 bg-gray-200 px-3 py-1 rounded"
+        onClick={() => setIsLoggedIn(false)}
+      >
+        Logout
+      </button>
       <div className="mb-8">
         <h2 className="font-semibold mb-2">Add New Package</h2>
         <input
