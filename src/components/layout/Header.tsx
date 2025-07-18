@@ -41,7 +41,7 @@ const Header: React.FC = () => {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           <Link to="/" className="flex items-center space-x-2" onClick={closeMenu}>
-            <span className="text-primary-600 font-bold text-2xl">KH THERAPHY</span>
+            <span className="text-primary-600 font-bold text-2xl">KH THERAPY</span>
           </Link>
 
           {/* Desktop Navigation */}

@@ -15,6 +15,20 @@ const ContactPage: React.FC = () => {
           <input className="w-full border rounded px-3 py-2" id="email" type="email" required />
         </div>
         <div>
+          <label className="block mb-1 font-medium" htmlFor="service">Service Type</label>
+          <select className="w-full border rounded px-3 py-2" id="service" required>
+            <option value="">Select a service</option>
+            <option value="Basic Wellness">Basic Wellness</option>
+            <option value="Premium Care">Premium Care</option>
+            <option value="Ultimate Health">Ultimate Health</option>
+            <option value="Sports Massage / Deep Tissue Massage">Sports Massage / Deep Tissue Massage</option>
+            <option value="Pitch Side Cover for Sporting Events">Pitch Side Cover for Sporting Events</option>
+            <option value="Pre & Post Surgery Rehab">Pre & Post Surgery Rehab</option>
+            <option value="Return to Play/Sport & Strapping & Taping">Return to Play/Sport & Strapping & Taping</option>
+            <option value="Corporate Wellness / Workplace Events">Corporate Wellness / Workplace Events</option>
+          </select>
+        </div>
+        <div>
           <label className="block mb-1 font-medium" htmlFor="message">Message</label>
           <textarea className="w-full border rounded px-3 py-2" id="message" rows={5} required />
         </div>

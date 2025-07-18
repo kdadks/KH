@@ -8,33 +8,32 @@ const AboutPage = () => {
       <Container>
         <SectionHeading
           title="About Us"
-          subtitle="Learn more about our story and mission"
+          subtitle="Knowledge, Strength & Movement"
         />
-        
+        {/* Tagline */}
+        <div className="mt-4 mb-12 text-center">
+          <span className="inline-block text-xl font-bold text-primary-600">
+            Physiotherapy for you
+          </span>
+        </div>
         <div className="mt-12 grid md:grid-cols-2 gap-12">
           <div className="space-y-6">
             <h3 className="text-2xl font-semibold text-gray-900">Our Story</h3>
             <p className="text-gray-600 leading-relaxed">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do 
-              eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim 
-              ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut 
-              aliquip ex ea commodo consequat.
-            </p>
-            <p className="text-gray-600 leading-relaxed">
-              Duis aute irure dolor in reprehenderit in voluptate velit esse 
-              cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat 
-              cupidatat non proident, sunt in culpa qui officia deserunt mollit 
-              anim id est laborum.
+              KH Therapy aims to provide you with an excellent high standard of
+              care given through physical therapy sessions. Our services will
+              help you become pain free by education, knowledge and help
+              strengthen the body through rehab and movement.
             </p>
           </div>
-          
+
           <div className="space-y-6">
             <h3 className="text-2xl font-semibold text-gray-900">Our Mission</h3>
             <p className="text-gray-600 leading-relaxed">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do 
-              eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim 
-              ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut 
-              aliquip ex ea commodo consequat.
+              KH Therapy aims to provide you with an excellent high standard of
+              care given through physical therapy sessions. Our services will
+              help you become pain free by education, knowledge and help
+              strengthen the body through rehab and movement.
             </p>
             <div className="grid grid-cols-2 gap-6 mt-8">
               <div className="bg-white p-6 rounded-lg shadow-sm">

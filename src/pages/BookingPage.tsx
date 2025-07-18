@@ -107,11 +107,14 @@ const BookingPage: React.FC = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   >
                     <option value="">Select a service</option>
-                    <option value="initial-assessment">Initial Assessment</option>
-                    <option value="sports-injury">Sports Injury Rehabilitation</option>
-                    <option value="manual-therapy">Manual Therapy</option>
-                    <option value="chronic-pain">Chronic Pain Management</option>
-                    <option value="post-surgery">Post-Surgery Rehabilitation</option>
+                    <option value="Basic Wellness">Basic Wellness</option>
+                    <option value="Premium Care">Premium Care</option>
+                    <option value="Ultimate Health">Ultimate Health</option>
+                    <option value="Sports Massage / Deep Tissue Massage">Sports Massage / Deep Tissue Massage</option>
+                    <option value="Pitch Side Cover for Sporting Events">Pitch Side Cover for Sporting Events</option>
+                    <option value="Pre & Post Surgery Rehab">Pre & Post Surgery Rehab</option>
+                    <option value="Return to Play/Sport & Strapping & Taping">Return to Play/Sport & Strapping & Taping</option>
+                    <option value="Corporate Wellness / Workplace Events">Corporate Wellness / Workplace Events</option>
                   </select>
                   {errors.service && (
                     <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>

@@ -10,7 +10,7 @@ const Footer: React.FC = () => {
           
           {/* About */}
           <div>
-            <h3 className="text-xl font-semibold mb-4">PhysioLife</h3>
+            <h3 className="text-xl font-semibold mb-4">KH Therapy</h3>
             <p className="text-neutral-300 mb-4">
               Professional physiotherapy and rehabilitation services dedicated to improving your quality of life through personalized care and evidence-based treatments.
             </p>
@@ -94,7 +94,7 @@ const Footer: React.FC = () => {
               </div>
               <div className="flex items-center">
                 <Mail size={20} className="mr-3 text-primary-400" />
-                <a href="mailto:info@physiolife.ie" className="text-neutral-300 hover:text-white transition-colors">info@physiolife.ie</a>
+                <a href="mailto:info@physiolife.ie" className="text-neutral-300 hover:text-white transition-colors">khtherapy@hotmail.com</a>
               </div>
               <div className="flex items-start">
                 <Clock size={20} className="mr-3 mt-1 text-primary-400" />

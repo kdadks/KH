@@ -143,11 +143,14 @@ const HeroSection: React.FC = () => {
                   required
                 >
                   <option value="">Select a service</option>
-                  <option value="initial-assessment">Initial Assessment</option>
-                  <option value="sports-injury">Sports Injury Rehabilitation</option>
-                  <option value="manual-therapy">Manual Therapy</option>
-                  <option value="chronic-pain">Chronic Pain Management</option>
-                  <option value="post-surgery">Post-Surgery Rehabilitation</option>
+                  <option value="basic-wellness">Basic Wellness</option>
+                  <option value="corporate-wellness">Corporate Wellness / Workplace Events</option>
+                  <option value="pitch-side-cover">Pitch Side Cover for Sporting Events</option>
+                  <option value="pre-post-surgery-rehab">Pre & Post Surgery Rehab</option>
+                  <option value="premium-care">Premium Care</option>
+                  <option value="return-to-play">Return to Play/Sport & Strapping & Taping</option>
+                  <option value="sports-massage">Sports Massage / Deep Tissue Massage</option>
+                  <option value="ultimate-health">Ultimate Health</option>
                 </select>
               </div>
               
