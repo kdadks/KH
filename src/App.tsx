@@ -6,6 +6,8 @@ import ServicesPage from './pages/ServicesPage';
 import TestimonialsPage from './pages/TestimonialsPage';
 import BookingPage from './pages/BookingPage';
 import ContactPage from './pages/ContactPage'; // <-- Add this line
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminConsole from './pages/AdminConsole';
 
@@ -19,6 +21,8 @@ function App() {
         <Route path="testimonials" element={<TestimonialsPage />} />
         <Route path="booking" element={<BookingPage />} />
         <Route path="contact" element={<ContactPage />} /> {/* Add this line */}
+        <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="terms-of-service" element={<TermsOfServicePage />} />
         <Route path="admin/*" element={<AdminConsole />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

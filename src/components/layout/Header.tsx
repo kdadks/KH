@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { Menu, X, Phone } from 'lucide-react';
+import Logo from '../shared/Logo';
 
 const Header: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -41,7 +42,8 @@ const Header: React.FC = () => {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           <Link to="/" className="flex items-center space-x-2" onClick={closeMenu}>
-            <span className="text-primary-600 font-bold text-2xl">KH THERAPY</span>
+            <Logo className="w-12 h-12" />
+            <span className="text-primary-600 font-bold text-2xl">KH Therapy</span>
           </Link>
 
           {/* Desktop Navigation */}

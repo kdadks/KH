@@ -16,13 +16,14 @@ const SEOHead: React.FC<SEOHeadProps> = ({
   ogImage = '/images/og-image.jpg',
   ogType = 'website',
 }) => {
-  const siteUrl = 'https://physiolife.ie';
+  const siteUrl = 'https://khtherapy.ie';
   const fullCanonicalUrl = canonicalUrl ? `${siteUrl}${canonicalUrl}` : siteUrl;
   
   return (
     <Helmet>
       <title>{title}</title>
       <meta name="description" content={description} />
+      <meta name="robots" content="index, follow" />
       
       {/* Canonical URL */}
       <link rel="canonical" href={fullCanonicalUrl} />
@@ -33,6 +34,7 @@ const SEOHead: React.FC<SEOHeadProps> = ({
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={`${siteUrl}${ogImage}`} />
+      <meta property="og:site_name" content="KH Therapy" />
       
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -41,21 +43,24 @@ const SEOHead: React.FC<SEOHeadProps> = ({
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={`${siteUrl}${ogImage}`} />
       
+      {/* Author */}
+      <meta name="author" content="KH Therapy" />
+      
       {/* Schema.org markup */}
       <script type="application/ld+json">
         {JSON.stringify({
           '@context': 'https://schema.org',
           '@type': 'PhysicalTherapy',
-          name: 'PhysioLife',
+          name: 'KH Therapy',
           image: [`${siteUrl}${ogImage}`],
           '@id': siteUrl,
           url: siteUrl,
-          telephone: '+353123456789',
+          telephone: '(01) 234-5678',
           address: {
             '@type': 'PostalAddress',
-            streetAddress: '123 Healing Street',
-            addressLocality: 'Dublin',
-            postalCode: 'D02 AB12',
+            streetAddress: 'Ace Enterprise Centre, Bawnogue Road',
+            addressLocality: 'Clondalkin, Dublin 22',
+            postalCode: '',
             addressCountry: 'IE',
           },
           openingHoursSpecification: [

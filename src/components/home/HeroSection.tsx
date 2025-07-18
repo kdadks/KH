@@ -1,10 +1,36 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import Button from '../shared/Button';
 
 const HeroSection: React.FC = () => {
-  const [isVisible, setIsVisible] = useState(true);
+  // Removed unused visibility state
+  interface BookingFormData { name: string; email: string; phone: string; service: string; }
+  const { register, handleSubmit, formState: { errors } } = useForm<BookingFormData>();
+  const [successMsg, setSuccessMsg] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const sendBookingEmail = async (booking: BookingFormData) => {
+    setSendingEmail(true);
+    try {
+      await fetch('/api/send-booking-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(booking),
+      });
+      setSuccessMsg('Booking confirmed! Confirmation email sent.');
+    } catch {
+      setSuccessMsg('Booking confirmed, but failed to send email.');
+    }
+    setSendingEmail(false);
+  };
+
+  const onSubmit = async (data: BookingFormData) => {
+    const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
+    bookings.push(data);
+    localStorage.setItem('bookings', JSON.stringify(bookings));
+    await sendBookingEmail(data);
+  };
 
   return (
     <section className="relative pt-16 pb-12 md:pt-24 md:pb-20 overflow-hidden">
@@ -89,78 +115,54 @@ const HeroSection: React.FC = () => {
               <p className="text-neutral-600 mt-2">Quick appointment booking</p>
             </div>
             
-            <form className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-neutral-700 mb-1">
                   Full Name
                 </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="John Doe"
-                  required
-                />
+                <input type="text" id="name" {...register('name',{required:'Name is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="John Doe" />
+                {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
               </div>
-              
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-1">
                   Email Address
                 </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="john@example.com"
-                  required
-                />
+                <input type="email" id="email" {...register('email',{required:'Email is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="john@example.com" />
+                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
               </div>
-              
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
                   Phone Number
                 </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="(01) 234-5678"
-                  required
-                />
+                <input type="tel" id="phone" {...register('phone',{required:'Phone number is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="(01) 234-5678" />
+                {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
               </div>
-              
               <div>
                 <label htmlFor="service" className="block text-sm font-medium text-neutral-700 mb-1">
                   Service Type
                 </label>
-                <select
-                  id="service"
-                  name="service"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  required
-                >
-                  <option value="">Select a service</option>
-                  <option value="basic-wellness">Basic Wellness</option>
-                  <option value="corporate-wellness">Corporate Wellness / Workplace Events</option>
-                  <option value="pitch-side-cover">Pitch Side Cover for Sporting Events</option>
-                  <option value="pre-post-surgery-rehab">Pre & Post Surgery Rehab</option>
-                  <option value="premium-care">Premium Care</option>
-                  <option value="return-to-play">Return to Play/Sport & Strapping & Taping</option>
-                  <option value="sports-massage">Sports Massage / Deep Tissue Massage</option>
-                  <option value="ultimate-health">Ultimate Health</option>
-                </select>
-              </div>
+                <select id="service" {...register('service',{required:'Please select a service'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500">
+                   <option value="">Select a service</option>
+                   <option value="basic-wellness">Basic Wellness</option>
+                   <option value="corporate-wellness">Corporate Wellness / Workplace Events</option>
+                   <option value="pitch-side-cover">Pitch Side Cover for Sporting Events</option>
+                   <option value="pre-post-surgery-rehab">Pre & Post Surgery Rehab</option>
+                   <option value="premium-care">Premium Care</option>
+                   <option value="return-to-play">Return to Play/Sport & Strapping & Taping</option>
+                   <option value="sports-massage">Sports Massage / Deep Tissue Massage</option>
+                   <option value="ultimate-health">Ultimate Health</option>
+                 </select>
+                {errors.service && <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>}
+               </div>
               
-              <Button type="submit" variant="primary" fullWidth size="lg">
-                Check Availability <ArrowRight size={16} className="ml-2" />
+              <Button type="submit" variant="primary" fullWidth size="lg" disabled={sendingEmail}>
+                {sendingEmail ? 'Processing...' : 'Book Appointment'} <ArrowRight size={16} className="ml-2" />
               </Button>
+              {successMsg && <p className="mt-2 text-sm text-green-600 text-center">{successMsg}</p>}
               
               <p className="text-xs text-center text-neutral-500 mt-4">
-                By booking, you agree to our <a href="#" className="text-primary-600 hover:underline">Terms of Service</a> and <a href="#" className="text-primary-600 hover:underline">Privacy Policy</a>.
-              </p>
+                  By booking, you agree to our <a href="/terms-of-service" className="text-primary-600 hover:underline">Terms of Service</a> and <a href="/privacy-policy" className="text-primary-600 hover:underline">Privacy Policy</a>.
+                </p>
             </form>
           </motion.div>
           

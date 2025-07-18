@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/your-repo/', // <-- Replace with your repo name
+  base: '/', // Use root path for local development
 });

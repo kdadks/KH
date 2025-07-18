@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Calendar } from 'lucide-react';
 import SEOHead from '../components/utils/SEOHead';
@@ -18,10 +18,31 @@ interface BookingFormData {
 
 const BookingPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors } } = useForm<BookingFormData>();
+  const [successMsg, setSuccessMsg] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
-  const onSubmit = (data: BookingFormData) => {
-    console.log(data);
-    // Handle form submission
+  const sendBookingEmail = async (booking: BookingFormData) => {
+    setSendingEmail(true);
+    // Replace with your email API endpoint and logic
+    try {
+      await fetch('/api/send-booking-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(booking),
+      });
+      setSuccessMsg('Booking confirmed! Confirmation email sent.');
+    } catch (err) {
+      setSuccessMsg('Booking confirmed, but failed to send email.');
+    }
+    setSendingEmail(false);
+  };
+
+  const onSubmit = async (data: BookingFormData) => {
+    // Save booking to localStorage
+    const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
+    bookings.push(data);
+    localStorage.setItem('bookings', JSON.stringify(bookings));
+    await sendBookingEmail(data);
   };
 
   return (
@@ -175,9 +196,10 @@ const BookingPage: React.FC = () => {
               </div>
               
               <div className="flex flex-col items-center">
-                <Button type="submit" variant="primary" size="lg" icon={<Calendar size={20} />}>
-                  Book Appointment
+                <Button type="submit" variant="primary" size="lg" icon={<Calendar size={20} />} disabled={sendingEmail}>
+                  {sendingEmail ? 'Processing...' : 'Book Appointment'}
                 </Button>
+                {successMsg && <p className="text-green-600 mt-4">{successMsg}</p>}
                 <p className="text-sm text-neutral-500 mt-4">
                   By booking, you agree to our{' '}
                   <a href="/terms-of-service" className="text-primary-600 hover:underline">Terms of Service</a>

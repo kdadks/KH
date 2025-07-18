@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, Clock, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
+import Logo from '../shared/Logo';
 
 const Footer: React.FC = () => {
   return (
@@ -10,7 +11,10 @@ const Footer: React.FC = () => {
           
           {/* About */}
           <div>
-            <h3 className="text-xl font-semibold mb-4">KH Therapy</h3>
+            <div className="flex items-center mb-4">
+              <Logo className="w-10 h-10 mr-2" />
+              <h3 className="text-xl font-semibold">KH Therapy</h3>
+            </div>
             <p className="text-neutral-300 mb-4">
               Professional physiotherapy and rehabilitation services dedicated to improving your quality of life through personalized care and evidence-based treatments.
             </p>
@@ -112,7 +116,7 @@ const Footer: React.FC = () => {
         
         {/* Bottom Footer */}
         <div className="flex flex-col md:flex-row justify-between items-center text-sm text-neutral-400">
-          <p>&copy; {new Date().getFullYear()} PhysioLife. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} KH Therapy. All rights reserved.</p>
           <div className="flex space-x-4 mt-4 md:mt-0">
             <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link>
