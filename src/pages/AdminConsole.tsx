@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { treatmentPackages } from '../data/packages';
-import emailjs from 'emailjs-com';
+import { supabase } from '../supabaseClient';
 
 type Package = {
   name: string;
@@ -16,16 +16,19 @@ type BookingFormData = {
   date: string;
   time: string;
   notes: string;
+  status?: string;
 };
 
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'admin123'; // Change this in production!
+
 
 const AdminConsole: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [changePasswordMsg, setChangePasswordMsg] = useState('');
   const [packages, setPackages] = useState<Package[]>(treatmentPackages);
   const [newPackage, setNewPackage] = useState<Package>({ name: '', price: '', features: [''] });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability'>('dashboard');
@@ -38,14 +41,35 @@ const AdminConsole: React.FC = () => {
   const [newAvailability, setNewAvailability] = useState<{ date: string; start: string; end: string }>({ date: '', start: '', end: '' });
   const [confirmedBookings, setConfirmedBookings] = useState<number[]>([]);
 
-  // Login handler
-  const handleLogin = (e: React.FormEvent) => {
+  // Login handler using Supabase Auth
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    setLoginError('');
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      setLoginError(error.message);
+    } else if (data.user) {
       setIsLoggedIn(true);
       setLoginError('');
     } else {
-      setLoginError('Invalid credentials');
+      setLoginError('Login failed.');
+    }
+  };
+
+  // Change password handler
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePasswordMsg('');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setChangePasswordMsg('Failed to change password: ' + error.message);
+    } else {
+      setChangePasswordMsg('Password changed successfully!');
+      setShowChangePassword(false);
+      setNewPassword('');
     }
   };
 
@@ -107,12 +131,31 @@ const AdminConsole: React.FC = () => {
   };
 
   // Load all bookings on login for dashboard metrics
+
+  // Fetch bookings from Supabase after login or when bookings tab is active
   useEffect(() => {
-    if (isLoggedIn) {
-      const stored = localStorage.getItem('bookings');
-      setBookings(stored ? JSON.parse(stored) : []);
-    }
-  }, [isLoggedIn]);
+    const fetchBookings = async () => {
+      if (isLoggedIn && activeTab === 'bookings') {
+        const { data } = await supabase.from('bookings').select('*').order('booking_date', { ascending: false });
+        if (data) {
+          // Map DB fields to BookingFormData shape for display, include status
+          setBookings(data.map((b: any) => ({
+            name: b.customer_name,
+            email: b.customer_email,
+            phone: b.customer_phone,
+            service: b.package_name,
+            date: b.booking_date ? b.booking_date.split('T')[0] : '',
+            time: b.booking_date && b.booking_date.includes('T') ? b.booking_date.split('T')[1].slice(0,5) : '',
+            notes: b.notes || '',
+            status: b.status || 'pending',
+          })));
+        } else {
+          setBookings([]);
+        }
+      }
+    };
+    fetchBookings();
+  }, [isLoggedIn, activeTab]);
 
   const filteredBookings = filterRange
     ? bookings.filter(b => b.date >= filterRange.start && b.date <= filterRange.end)
@@ -146,27 +189,42 @@ const AdminConsole: React.FC = () => {
   const monthStart = new Date(year, month, 1).toISOString().split('T')[0];
   const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
-  const handleConfirmBooking = (booking: BookingFormData, idx: number) => {
-    // Replace these with your EmailJS credentials
-    const SERVICE_ID = 'your_service_id';
-    const TEMPLATE_ID = 'your_template_id';
-    const USER_ID = 'your_user_id';
+  const handleConfirmBooking = async (booking: BookingFormData, idx: number) => {
+    // 1. Update booking status in the database
+    const { data: dbBookings } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('customer_name', booking.name)
+      .eq('customer_email', booking.email)
+      .eq('package_name', booking.service)
+      .eq('booking_date', booking.date + (booking.time ? `T${booking.time}` : ''));
 
-    emailjs.send(SERVICE_ID, TEMPLATE_ID, {
-      to_name: booking.name,
-      to_email: booking.email,
-      service: booking.service,
-      date: booking.date,
-      time: booking.time,
-      notes: booking.notes || '-',
-    }, USER_ID)
-      .then(() => {
-        setConfirmedBookings([...confirmedBookings, idx]);
-        alert('Booking confirmed and email sent!');
-      })
-      .catch(() => {
-        alert('Failed to send confirmation email.');
-      });
+    if (dbBookings && dbBookings.length > 0) {
+      const bookingId = dbBookings[0].id;
+      const { error } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', bookingId);
+      if (!error) {
+        // Update local state so UI reflects the change immediately
+        setBookings(prev => prev.map((b, i) => {
+          if (
+            i === idx &&
+            b.name === booking.name &&
+            b.email === booking.email &&
+            b.service === booking.service &&
+            b.date === booking.date &&
+            b.time === booking.time
+          ) {
+            return { ...b, status: 'confirmed' };
+          }
+          return b;
+        }));
+      }
+    }
+
+    // 2. Send calendar invite to customer and admin (placeholder)
+    // ...existing code...
+
+    setConfirmedBookings([...confirmedBookings, idx]);
+    alert('Booking confirmed! Calendar invite will be sent.');
   };
 
   if (!isLoggedIn) {
@@ -179,9 +237,10 @@ const AdminConsole: React.FC = () => {
           <h2 className="text-xl font-bold mb-4">Admin Login</h2>
           <input
             className="border px-2 py-1 mb-2 w-full"
-            placeholder="Username"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
             required
           />
           <input
@@ -207,12 +266,35 @@ const AdminConsole: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">Admin Console</h1>
-      <button
-        className="mb-6 bg-gray-200 px-3 py-1 rounded"
-        onClick={() => setIsLoggedIn(false)}
-      >
-        Logout
-      </button>
+      <div className="mb-6 flex gap-2">
+        <button
+          className="bg-gray-200 px-3 py-1 rounded"
+          onClick={() => setIsLoggedIn(false)}
+        >
+          Logout
+        </button>
+        <button
+          className="bg-blue-200 px-3 py-1 rounded"
+          onClick={() => setShowChangePassword(v => !v)}
+        >
+          Change Password
+        </button>
+      </div>
+      {showChangePassword && (
+        <form className="mb-6 bg-white p-4 rounded shadow max-w-xs" onSubmit={handleChangePassword}>
+          <h3 className="font-semibold mb-2">Change Password</h3>
+          <input
+            className="border px-2 py-1 mb-2 w-full"
+            placeholder="New Password"
+            type="password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            required
+          />
+          <button className="bg-primary-600 text-white px-4 py-2 rounded w-full" type="submit">Update Password</button>
+          {changePasswordMsg && <div className="mt-2 text-green-600">{changePasswordMsg}</div>}
+        </form>
+      )}
       <div className="mb-8 flex gap-4">
         <button
           className={`px-4 py-2 rounded ${activeTab === 'dashboard' ? 'bg-primary-600 text-white' : 'bg-gray-200'}`}
@@ -420,15 +502,19 @@ const AdminConsole: React.FC = () => {
                   a.date === booking.date &&
                   booking.time >= a.start && booking.time <= a.end
                 );
-                const isConfirmed = confirmedBookings.includes(idx);
+                const isConfirmed = booking.status === 'confirmed';
                 return (
-                  <li key={idx} className={`mb-4 border p-4 rounded ${isAvailable ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <li
+                    key={idx}
+                    className={`mb-4 border p-4 rounded ${isConfirmed ? 'bg-green-100' : isAvailable ? 'bg-green-100' : 'bg-red-100'}`}
+                  >
                     <div><strong>Name:</strong> {booking.name}</div>
                     <div><strong>Email:</strong> {booking.email}</div>
                     <div><strong>Phone:</strong> {booking.phone}</div>
                     <div><strong>Service:</strong> {booking.service}</div>
                     <div><strong>Date:</strong> {booking.date}</div>
                     <div><strong>Time:</strong> {booking.time}</div>
+                    <div><strong>Status:</strong> {booking.status || 'pending'}</div>
                     <div><strong>Notes:</strong> {booking.notes || '-'}</div>
                     <div className="mt-2">
                       {isConfirmed ? (

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../supabaseClient';
 import { useForm } from 'react-hook-form';
 import { Calendar } from 'lucide-react';
 import SEOHead from '../components/utils/SEOHead';
@@ -17,7 +18,7 @@ interface BookingFormData {
 }
 
 const BookingPage: React.FC = () => {
-  const { register, handleSubmit, formState: { errors } } = useForm<BookingFormData>();
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
 
@@ -38,11 +39,28 @@ const BookingPage: React.FC = () => {
   };
 
   const onSubmit = async (data: BookingFormData) => {
-    // Save booking to localStorage
-    const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
-    bookings.push(data);
-    localStorage.setItem('bookings', JSON.stringify(bookings));
-    await sendBookingEmail(data);
+    // Map form data to bookings table columns
+    // Combine date and time into ISO string for booking_date
+    let bookingDateTime = data.date;
+    if (data.time) {
+      bookingDateTime = `${data.date}T${data.time}`;
+    }
+    const bookingData = {
+      customer_name: data.name,
+      customer_email: data.email,
+      customer_phone: data.phone,
+      package_name: data.service,
+      booking_date: bookingDateTime,
+      notes: data.notes,
+      status: 'pending'
+    };
+    const { error } = await supabase.from('bookings').insert([bookingData]);
+    if (error) {
+      setSuccessMsg('Booking failed: ' + error.message);
+    } else {
+      await sendBookingEmail(data);
+      reset(); // Clear the form after successful booking
+    }
   };
 
   return (
