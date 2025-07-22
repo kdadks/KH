@@ -34,11 +34,13 @@ const AdminConsole: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability'>('dashboard');
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editPackage, setEditPackage] = useState<Package | null>(null);
-  const [bookings, setBookings] = useState<BookingFormData[]>([]);
+  // bookings state removed; allBookings is the single source of truth
+  const [allBookings, setAllBookings] = useState<BookingFormData[]>([]);
   const [filterDate, setFilterDate] = useState('');
   const [filterRange, setFilterRange] = useState<{start: string; end: string} | null>(null);
-  const [availability, setAvailability] = useState<{ date: string; start: string; end: string }[]>([]);
-  const [newAvailability, setNewAvailability] = useState<{ date: string; start: string; end: string }>({ date: '', start: '', end: '' });
+  const [availability, setAvailability] = useState<{ id?: number; date: string; start: string; end_time: string }[]>([]);
+  const [newAvailability, setNewAvailability] = useState<{ date: string; start: string; end_time: string }>({ date: '', start: '', end_time: '' });
+  const [availabilityError, setAvailabilityError] = useState<string>('');
   const [confirmedBookings, setConfirmedBookings] = useState<number[]>([]);
 
   // Login handler using Supabase Auth
@@ -132,14 +134,13 @@ const AdminConsole: React.FC = () => {
 
   // Load all bookings on login for dashboard metrics
 
-  // Fetch bookings from Supabase after login or when bookings tab is active
+  // Fetch all bookings after login for dashboard metrics
   useEffect(() => {
-    const fetchBookings = async () => {
-      if (isLoggedIn && activeTab === 'bookings') {
+    const fetchAllBookings = async () => {
+      if (isLoggedIn) {
         const { data } = await supabase.from('bookings').select('*').order('booking_date', { ascending: false });
         if (data) {
-          // Map DB fields to BookingFormData shape for display, include status
-          setBookings(data.map((b: any) => ({
+          const mapped = data.map((b: any) => ({
             name: b.customer_name,
             email: b.customer_email,
             phone: b.customer_phone,
@@ -148,52 +149,85 @@ const AdminConsole: React.FC = () => {
             time: b.booking_date && b.booking_date.includes('T') ? b.booking_date.split('T')[1].slice(0,5) : '',
             notes: b.notes || '',
             status: b.status || 'pending',
-          })));
+          }));
+          setAllBookings(mapped);
         } else {
-          setBookings([]);
+          setAllBookings([]);
         }
       }
     };
-    fetchBookings();
+    fetchAllBookings();
+  }, [isLoggedIn]);
+
+  // bookings tab fetch effect removed; allBookings is always used
+
+  // Fetch availability blocks from Supabase
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      const { data } = await supabase.from('availability').select('*').order('date', { ascending: true });
+      if (data) {
+        setAvailability(data);
+      } else {
+        setAvailability([]);
+      }
+    };
+    if (isLoggedIn && activeTab === 'availability') {
+      fetchAvailability();
+    }
   }, [isLoggedIn, activeTab]);
 
-  const filteredBookings = filterRange
-    ? bookings.filter(b => b.date >= filterRange.start && b.date <= filterRange.end)
-    : filterDate
-      ? bookings.filter(b => b.date === filterDate)
-      : bookings;
-
-  // Dashboard metrics
+  // Dashboard metrics (use allBookings for accurate counts)
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
-  const bookingsToday = bookings.filter(b => b.date === todayStr).length;
+  const month = today.getMonth();
+  const year = today.getFullYear();
+  const monthStart = new Date(year, month, 1).toISOString().split('T')[0];
+  const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+  // Always filter from allBookings for correct results
+  const filteredBookings = (() => {
+    if (filterRange) {
+      // If the filterRange matches the current month, filter by month and year
+      const isCurrentMonth = filterRange.start === monthStart && filterRange.end === monthEnd;
+      if (isCurrentMonth) {
+        return allBookings.filter(b => {
+          const d = new Date(b.date);
+          return d.getMonth() === month && d.getFullYear() === year;
+        });
+      } else {
+        return allBookings.filter(b => b.date >= filterRange.start && b.date <= filterRange.end);
+      }
+    } else if (filterDate) {
+      return allBookings.filter(b => b.date === filterDate);
+    } else {
+      return allBookings;
+    }
+  })();
+
+  const bookingsToday = allBookings.filter(b => b.date === todayStr).length;
   const dayOfWeek = today.getDay();
   const diffToMonday = (dayOfWeek + 6) % 7;
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMonday);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const bookingsThisWeek = bookings.filter(b => {
+  const bookingsThisWeek = allBookings.filter(b => {
     const d = new Date(b.date);
     return d >= monday && d <= sunday;
   }).length;
-  const month = today.getMonth();
-  const year = today.getFullYear();
-  const bookingsThisMonth = bookings.filter(b => {
+  const bookingsThisMonth = allBookings.filter(b => {
     const d = new Date(b.date);
     return d.getMonth() === month && d.getFullYear() === year;
   }).length;
   // compute string ranges for drill-down filtering
   const mondayStr = monday.toISOString().split('T')[0];
   const sundayStr = sunday.toISOString().split('T')[0];
-  const monthStart = new Date(year, month, 1).toISOString().split('T')[0];
-  const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
   const handleConfirmBooking = async (booking: BookingFormData, idx: number) => {
     // 1. Update booking status in the database
     const { data: dbBookings } = await supabase
       .from('bookings')
-      .select('id')
+      .select('*')
       .eq('customer_name', booking.name)
       .eq('customer_email', booking.email)
       .eq('package_name', booking.service)
@@ -203,28 +237,58 @@ const AdminConsole: React.FC = () => {
       const bookingId = dbBookings[0].id;
       const { error } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', bookingId);
       if (!error) {
-        // Update local state so UI reflects the change immediately
-        setBookings(prev => prev.map((b, i) => {
-          if (
-            i === idx &&
-            b.name === booking.name &&
-            b.email === booking.email &&
-            b.service === booking.service &&
-            b.date === booking.date &&
-            b.time === booking.time
-          ) {
-            return { ...b, status: 'confirmed' };
+        // No need to update local bookings state; allBookings will be refreshed on next login or can be refetched if needed
+
+        // 2. Fetch the latest booking details from the database
+        const { data: latestBooking } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('id', bookingId)
+          .single();
+
+        // 3. Call backend API to send calendar invite email
+        if (latestBooking) {
+          try {
+            await fetch('/api/send-calendar-invite', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: latestBooking.customer_email,
+                booking: latestBooking
+              })
+            });
+          } catch (err) {
+            // Optionally handle error
           }
-          return b;
-        }));
+        }
       }
     }
 
-    // 2. Send calendar invite to customer and admin (placeholder)
-    // ...existing code...
-
     setConfirmedBookings([...confirmedBookings, idx]);
     alert('Booking confirmed! Calendar invite will be sent.');
+  };
+
+  const handleAddAvailability = async () => {
+    setAvailabilityError('');
+    if (newAvailability.date && newAvailability.start && newAvailability.end_time && newAvailability.start < newAvailability.end_time) {
+      const { error } = await supabase.from('availability').insert([
+        {
+          date: newAvailability.date,
+          start: newAvailability.start,
+          end_time: newAvailability.end_time
+        }
+      ]);
+      if (error) {
+        setAvailabilityError('Failed to add availability: ' + error.message);
+      } else {
+        // Refetch availability blocks
+        const { data } = await supabase.from('availability').select('*').order('date', { ascending: true });
+        setAvailability(data || []);
+        setNewAvailability({ date: '', start: '', end_time: '' });
+      }
+    } else {
+      setAvailabilityError('Please enter a valid date and time range.');
+    }
   };
 
   if (!isLoggedIn) {
@@ -326,21 +390,42 @@ const AdminConsole: React.FC = () => {
           <h2 className="font-semibold mb-4">Dashboard</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div
-              onClick={() => { setActiveTab('bookings'); setFilterRange({ start: todayStr, end: todayStr }); setFilterDate(''); }}
+              onClick={() => {
+                setFilterDate('');
+                setFilterRange(null);
+                setTimeout(() => {
+                  setActiveTab('bookings');
+                  setFilterRange({ start: todayStr, end: todayStr });
+                }, 0);
+              }}
               className="cursor-pointer p-4 bg-white rounded shadow hover:bg-gray-100"
             >
               <h3 className="text-lg font-bold">Bookings Today</h3>
               <p className="text-2xl">{bookingsToday}</p>
             </div>
             <div
-              onClick={() => { setActiveTab('bookings'); setFilterRange({ start: mondayStr, end: sundayStr }); setFilterDate(''); }}
+              onClick={() => {
+                setFilterDate('');
+                setFilterRange(null);
+                setTimeout(() => {
+                  setActiveTab('bookings');
+                  setFilterRange({ start: mondayStr, end: sundayStr });
+                }, 0);
+              }}
               className="cursor-pointer p-4 bg-white rounded shadow hover:bg-gray-100"
             >
               <h3 className="text-lg font-bold">Bookings This Week</h3>
               <p className="text-2xl">{bookingsThisWeek}</p>
             </div>
             <div
-              onClick={() => { setActiveTab('bookings'); setFilterRange({ start: monthStart, end: monthEnd }); setFilterDate(''); }}
+              onClick={() => {
+                setFilterDate('');
+                setFilterRange(null);
+                setTimeout(() => {
+                  setActiveTab('bookings');
+                  setFilterRange({ start: monthStart, end: monthEnd });
+                }, 0);
+              }}
               className="cursor-pointer p-4 bg-white rounded shadow hover:bg-gray-100"
             >
               <h3 className="text-lg font-bold">Bookings This Month</h3>
@@ -451,29 +536,26 @@ const AdminConsole: React.FC = () => {
             type="time"
             className="border px-2 py-1 mr-2"
             placeholder="End Time"
-            value={newAvailability.end}
-            onChange={e => setNewAvailability({ ...newAvailability, end: e.target.value })}
+            value={newAvailability.end_time}
+            onChange={e => setNewAvailability({ ...newAvailability, end_time: e.target.value })}
           />
           <button
             className="bg-primary-600 text-white px-4 py-2 rounded"
-            onClick={() => {
-              if (newAvailability.date && newAvailability.start && newAvailability.end && newAvailability.start < newAvailability.end) {
-                setAvailability([...availability, newAvailability]);
-                setNewAvailability({ date: '', start: '', end: '' });
-              }
-            }}
+            type="button"
+            onClick={handleAddAvailability}
           >
             Add Availability Block
           </button>
+          {availabilityError && <div className="text-red-500 mt-2">{availabilityError}</div>}
           <h2 className="font-semibold mb-2 mt-8">Current Availability Blocks</h2>
           <ul>
             {availability.length === 0 ? (
               <li className="text-gray-500">No availability set.</li>
             ) : (
-              availability.map((block, idx) => (
-                <li key={idx} className="mb-2 border p-2 rounded flex justify-between items-center">
-                  <span>{block.date} - {block.start} to {block.end}</span>
-                  <button className="bg-red-500 text-white px-2 py-1 rounded" onClick={() => setAvailability(availability.filter((_, i) => i !== idx))}>Delete</button>
+              availability.map((block) => (
+                <li key={block.id || `${block.date}-${block.start}-${block.end_time}`}
+                    className="mb-2 border p-2 rounded flex justify-between items-center">
+                  <span>{block.date} - {block.start} to {block.end_time}</span>
                 </li>
               ))
             )}
@@ -482,7 +564,7 @@ const AdminConsole: React.FC = () => {
       )}
       {activeTab === 'bookings' && (
         <div>
-          <h2 className="font-semibold mb-2">All Bookings</h2>
+          <h2 className="font-semibold mb-2">All Bookings [Click the Clear button to view all bookings]</h2>
           <div className="mb-4">
             <label className="mr-2">Filter by Date:</label>
             <input
@@ -500,7 +582,7 @@ const AdminConsole: React.FC = () => {
               filteredBookings.map((booking, idx) => {
                 const isAvailable = availability.some(a =>
                   a.date === booking.date &&
-                  booking.time >= a.start && booking.time <= a.end
+                  booking.time >= a.start && booking.time <= a.end_time
                 );
                 const isConfirmed = booking.status === 'confirmed';
                 return (

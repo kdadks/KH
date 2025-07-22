@@ -9,7 +9,7 @@ const AdminRegister: React.FC = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({ email, password });
     if (error) {
       setMessage(error.message);
     } else {
