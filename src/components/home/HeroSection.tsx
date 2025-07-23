@@ -3,13 +3,26 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import Button from '../shared/Button';
+import { supabase } from '../../supabaseClient';
 
 const HeroSection: React.FC = () => {
   // Removed unused visibility state
   interface BookingFormData { name: string; email: string; phone: string; service: string; }
-  const { register, handleSubmit, formState: { errors } } = useForm<BookingFormData>();
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Service mapping to convert dropdown values to display names
+  const serviceMapping: { [key: string]: string } = {
+    'basic-wellness': 'Basic Wellness',
+    'corporate-wellness': 'Corporate Wellness / Workplace Events',
+    'pitch-side-cover': 'Pitch Side Cover for Sporting Events',
+    'pre-post-surgery-rehab': 'Pre & Post Surgery Rehab',
+    'premium-care': 'Premium Care',
+    'return-to-play': 'Return to Play/Sport & Strapping & Taping',
+    'sports-massage': 'Sports Massage / Deep Tissue Massage',
+    'ultimate-health': 'Ultimate Health'
+  };
 
   const sendBookingEmail = async (booking: BookingFormData) => {
     setSendingEmail(true);
@@ -26,10 +39,48 @@ const HeroSection: React.FC = () => {
   };
 
   const onSubmit = async (data: BookingFormData) => {
-    const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
-    bookings.push(data);
-    localStorage.setItem('bookings', JSON.stringify(bookings));
-    await sendBookingEmail(data);
+    console.log('Form data received:', data); // Debug: Check what form data we're getting
+    
+    setSendingEmail(true);
+    setSuccessMsg('');
+    
+    try {
+      // Convert service value to display name
+      const serviceDisplayName = serviceMapping[data.service] || data.service;
+      
+      // Save to Supabase database
+      const bookingData = {
+        customer_name: data.name,
+        customer_email: data.email,
+        customer_phone: data.phone,
+        package_name: serviceDisplayName, // Use mapped display name
+        notes: 'Quick Appointment',
+        status: 'pending',
+        booking_date: null // Explicitly set booking_date to null (blank)
+      };
+
+      console.log('Submitting booking data to Supabase:', bookingData); // Debug log
+
+      const { data: insertedData, error } = await supabase.from('bookings').insert([bookingData]).select();
+      
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message);
+      }
+
+      console.log('Successfully inserted booking:', insertedData); // Debug: Confirm successful insert
+
+      // Send email notification
+      await sendBookingEmail(data);
+      
+      // Reset form on success
+      reset();
+      
+    } catch (error) {
+      console.error('Error submitting booking:', error);
+      setSuccessMsg('Error submitting booking. Please try again.');
+      setSendingEmail(false);
+    }
   };
 
   return (
