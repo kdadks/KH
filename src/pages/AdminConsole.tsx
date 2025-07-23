@@ -20,7 +20,9 @@ import {
   User,
   CheckCircle,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 type Package = {
@@ -75,6 +77,15 @@ const AdminConsole: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 10;
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, filterDate, filterRange]);
 
   // Login handler using Supabase Auth
   const handleLogin = async (e: React.FormEvent) => {
@@ -685,6 +696,47 @@ const AdminConsole: React.FC = () => {
       booking.service.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    // Pagination calculations
+    const totalRecords = filteredAndSearchedBookings.length;
+    const totalPages = Math.ceil(totalRecords / recordsPerPage);
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    const currentPageBookings = filteredAndSearchedBookings.slice(startIndex, endIndex);
+
+    const handlePageChange = (page: number) => {
+      setCurrentPage(page);
+    };
+
+    const getPageNumbers = () => {
+      const pageNumbers = [];
+      const maxVisiblePages = 5;
+      
+      if (totalPages <= maxVisiblePages) {
+        for (let i = 1; i <= totalPages; i++) {
+          pageNumbers.push(i);
+        }
+      } else {
+        const leftSide = Math.floor(maxVisiblePages / 2);
+        const rightSide = maxVisiblePages - leftSide - 1;
+        
+        if (currentPage <= leftSide + 1) {
+          for (let i = 1; i <= maxVisiblePages; i++) {
+            pageNumbers.push(i);
+          }
+        } else if (currentPage >= totalPages - rightSide) {
+          for (let i = totalPages - maxVisiblePages + 1; i <= totalPages; i++) {
+            pageNumbers.push(i);
+          }
+        } else {
+          for (let i = currentPage - leftSide; i <= currentPage + rightSide; i++) {
+            pageNumbers.push(i);
+          }
+        }
+      }
+      
+      return pageNumbers;
+    };
+
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -745,25 +797,30 @@ const AdminConsole: React.FC = () => {
 
         {/* Bookings List */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-gray-900">
-              Bookings ({filteredAndSearchedBookings.length})
+              Bookings ({totalRecords})
             </h3>
+            {totalRecords > 0 && (
+              <div className="text-sm text-gray-500">
+                Showing {startIndex + 1}-{Math.min(endIndex, totalRecords)} of {totalRecords} bookings
+              </div>
+            )}
           </div>
           <div className="overflow-hidden">
-            {filteredAndSearchedBookings.length === 0 ? (
+            {currentPageBookings.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-500">No bookings found</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
-                {filteredAndSearchedBookings.map((booking, idx) => {
+                {currentPageBookings.map((booking, idx) => {
                   const isConfirmed = booking.status === 'confirmed';
                   const needsDateTime = !booking.date && !booking.time;
 
                   return (
-                    <div key={idx} className="p-6 hover:bg-gray-50 transition-colors">
+                    <div key={startIndex + idx} className="p-6 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                           <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
@@ -814,7 +871,7 @@ const AdminConsole: React.FC = () => {
                             </span>
                           ) : (
                             <button
-                              onClick={() => handleConfirmBooking(booking, idx)}
+                              onClick={() => handleConfirmBooking(booking, startIndex + idx)}
                               className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                             >
                               <Check className="w-4 h-4 mr-2" />
@@ -829,6 +886,52 @@ const AdminConsole: React.FC = () => {
               </div>
             )}
           </div>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </button>
+                  
+                  <div className="flex items-center space-x-1">
+                    {getPageNumbers().map((pageNumber) => (
+                      <button
+                        key={pageNumber}
+                        onClick={() => handlePageChange(pageNumber)}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                          currentPage === pageNumber
+                            ? 'bg-primary-600 text-white'
+                            : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
