@@ -4,12 +4,13 @@ import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import Button from '../shared/Button';
 import { supabase } from '../../supabaseClient';
+import { useToast } from '../shared/Toast';
 
 const HeroSection: React.FC = () => {
   // Removed unused visibility state
   interface BookingFormData { name: string; email: string; phone: string; service: string; }
+  const { showSuccess, showError } = useToast();
   const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
-  const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
 
   // Service mapping to convert dropdown values to display names
@@ -31,9 +32,9 @@ const HeroSection: React.FC = () => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(booking),
       });
-      setSuccessMsg('Booking confirmed! Confirmation email sent.');
+      showSuccess('Booking Confirmed!', 'Confirmation email sent successfully.');
     } catch {
-      setSuccessMsg('Booking confirmed, but failed to send email.');
+      showSuccess('Booking Confirmed!', 'Booking saved but email notification failed.');
     }
     setSendingEmail(false);
   };
@@ -42,7 +43,6 @@ const HeroSection: React.FC = () => {
     console.log('Form data received:', data); // Debug: Check what form data we're getting
     
     setSendingEmail(true);
-    setSuccessMsg('');
     
     try {
       // Convert service value to display name
@@ -78,7 +78,7 @@ const HeroSection: React.FC = () => {
       
     } catch (error) {
       console.error('Error submitting booking:', error);
-      setSuccessMsg('Error submitting booking. Please try again.');
+      showError('Booking Failed', 'Error submitting booking. Please try again.');
       setSendingEmail(false);
     }
   };
@@ -209,7 +209,6 @@ const HeroSection: React.FC = () => {
               <Button type="submit" variant="primary" fullWidth size="lg" disabled={sendingEmail}>
                 {sendingEmail ? 'Processing...' : 'Book Appointment'} <ArrowRight size={16} className="ml-2" />
               </Button>
-              {successMsg && <p className="mt-2 text-sm text-green-600 text-center">{successMsg}</p>}
               
               <p className="text-xs text-center text-neutral-500 mt-4">
                   By booking, you agree to our <a href="/terms-of-service" className="text-primary-600 hover:underline">Terms of Service</a> and <a href="/privacy-policy" className="text-primary-600 hover:underline">Privacy Policy</a>.

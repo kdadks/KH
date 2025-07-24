@@ -1,22 +1,30 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { useToast } from './shared/Toast';
 
 const AdminRegister: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('');
+    setIsLoading(true);
+    
     const { error } = await supabase.auth.signUp({ email, password });
+    
     if (error) {
-      setMessage(error.message);
+      showError('Registration Failed', error.message);
     } else {
       // Insert into admins table
       await supabase.from('admins').insert([{ email }]);
-      setMessage('Registration successful! Please check your email to confirm.');
+      showSuccess('Registration Successful!', 'Please check your email to confirm your account.');
+      setEmail('');
+      setPassword('');
     }
+    
+    setIsLoading(false);
   };
 
   return (
@@ -36,8 +44,9 @@ const AdminRegister: React.FC = () => {
         onChange={e => setPassword(e.target.value)}
         required
       />
-      <button type="submit">Register</button>
-      {message && <p>{message}</p>}
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Registering...' : 'Register'}
+      </button>
     </form>
   );
 };

@@ -1,23 +1,29 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from './shared/Toast';
 
 const AdminLogin: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('');
+    setIsLoading(true);
+    
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
     if (error) {
-      setMessage(error.message);
+      showError('Login Failed', error.message);
     } else {
-      setMessage('Login successful!');
+      showSuccess('Login Successful!', 'Redirecting to admin dashboard...');
       navigate('/admin'); // Change to your admin route
     }
+    
+    setIsLoading(false);
   };
 
   return (
@@ -37,8 +43,9 @@ const AdminLogin: React.FC = () => {
         onChange={e => setPassword(e.target.value)}
         required
       />
-      <button type="submit">Login</button>
-      {message && <p>{message}</p>}
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Logging in...' : 'Login'}
+      </button>
     </form>
   );
 };

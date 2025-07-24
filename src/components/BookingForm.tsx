@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { useToast } from './shared/Toast';
 
 const BookingForm: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [packageName, setPackageName] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('pending');
-  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('');
+    setIsSubmitting(true);
+    
     const bookingData = {
       customer_name: customerName,
       customer_email: customerEmail,
@@ -21,12 +24,14 @@ const BookingForm: React.FC = () => {
       notes: notes,
       status: status
     };
+    
     const { data, error } = await supabase.from('bookings').insert([bookingData]);
     console.log('Supabase insert result:', { data, error });
+    
     if (error) {
-      setMessage(error.message);
+      showError('Booking Failed', error.message);
     } else {
-      setMessage('Booking submitted successfully!');
+      showSuccess('Booking Submitted!', 'We will contact you soon to confirm your appointment.');
       setCustomerName('');
       setCustomerEmail('');
       setCustomerPhone('');
@@ -34,6 +39,8 @@ const BookingForm: React.FC = () => {
       setNotes('');
       setStatus('pending');
     }
+    
+    setIsSubmitting(false);
   };
 
   return (
@@ -76,8 +83,9 @@ const BookingForm: React.FC = () => {
         <option value="confirmed">Confirmed</option>
         <option value="cancelled">Cancelled</option>
       </select>
-      <button type="submit">Submit Booking</button>
-      {message && <p>{message}</p>}
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? 'Submitting...' : 'Submit Booking'}
+      </button>
     </form>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { Menu, X, Phone } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+// import { Menu, X, Phone } from 'lucide-react'; // Phone commented out as emergency button is disabled
 import Logo from '../shared/Logo';
 
 const Header: React.FC = () => {
@@ -47,21 +48,26 @@ const Header: React.FC = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-4">
+          <nav className="hidden md:flex items-center justify-center flex-1 space-x-4">
             <NavLink to="/" className={navLinkClasses} end>Home</NavLink>
             <NavLink to="/about" className={navLinkClasses}>About</NavLink>
             <NavLink to="/services" className={navLinkClasses}>Services</NavLink>
             <NavLink to="/testimonials" className={navLinkClasses}>Testimonials</NavLink>
             <NavLink to="/contact" className={navLinkClasses}>Contact</NavLink>
+          </nav>
+
+          {/* Book Now Button */}
+          <div className="hidden md:flex">
             <Link 
               to="/booking" 
-              className="ml-4 px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors text-sm font-medium"
+              className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors text-sm font-medium"
             >
               Book Now
             </Link>
-          </nav>
+          </div>
 
           {/* Emergency Contact */}
+          {/* 
           <div className="hidden lg:flex items-center">
             <a 
               href="tel:+353123456789" 
@@ -71,6 +77,7 @@ const Header: React.FC = () => {
               <span className="font-medium">Emergency: (01) 234-5678</span>
             </a>
           </div>
+          */}
 
           {/* Mobile Navigation Button */}
           <button 
@@ -143,6 +150,7 @@ const Header: React.FC = () => {
           >
             Book Now
           </Link>
+          {/* 
           <a 
             href="tel:+353123456789" 
             className="flex items-center justify-center w-full mt-2 px-4 py-2 bg-secondary-500 text-white rounded-md hover:bg-secondary-600 transition-colors"
@@ -151,6 +159,7 @@ const Header: React.FC = () => {
             <Phone size={16} className="mr-2" />
             <span className="font-medium">Emergency: (01) 234-5678</span>
           </a>
+          */}
         </div>
       </div>
     </header>

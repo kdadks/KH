@@ -16,19 +16,19 @@ const Footer: React.FC = () => {
               <h3 className="text-xl font-semibold">KH Therapy</h3>
             </div>
             <p className="text-neutral-300 mb-4">
-              Professional physiotherapy and rehabilitation services dedicated to improving your quality of life through personalized care and evidence-based treatments.
+              KH Therapy provides excellent high standard physiotherapy care through personalized physical therapy sessions. We help you become pain free through education, knowledge, and strengthening the body through rehabilitation and movement.
             </p>
             <div className="flex space-x-4">
-              <a href="https://facebook.com" className="text-white hover:text-primary-400 transition-colors" aria-label="Facebook">
+              <a href="https://www.facebook.com/PhysiotherapyAndPerformance" className="text-white hover:text-primary-400 transition-colors" aria-label="Facebook" target="_blank" rel="noopener noreferrer">
                 <Facebook size={20} />
               </a>
-              <a href="https://instagram.com" className="text-white hover:text-primary-400 transition-colors" aria-label="Instagram">
+              <a href="https://www.instagram.com/galwayphysioclinic/" className="text-white hover:text-primary-400 transition-colors" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
                 <Instagram size={20} />
               </a>
-              <a href="https://twitter.com" className="text-white hover:text-primary-400 transition-colors" aria-label="Twitter">
+              <a href="https://twitter.com/galway_physio" className="text-white hover:text-primary-400 transition-colors" aria-label="Twitter" target="_blank" rel="noopener noreferrer">
                 <Twitter size={20} />
               </a>
-              <a href="https://linkedin.com" className="text-white hover:text-primary-400 transition-colors" aria-label="LinkedIn">
+              <a href="https://www.linkedin.com/in/kelly-thompson-physiotherapist" className="text-white hover:text-primary-400 transition-colors" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer">
                 <Linkedin size={20} />
               </a>
             </div>
@@ -90,7 +90,7 @@ const Footer: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-start">
                 <MapPin size={20} className="mr-3 mt-1 text-primary-400" />
-                <p className="text-neutral-300">123 Healing Street, Dublin 2, D02 AB12, Ireland</p>
+                <p className="text-neutral-300">Ace Enterprise Centre, Bawnogue Road, Clondalkin, Dublin 22, Ireland</p>
               </div>
               <div className="flex items-center">
                 <Phone size={20} className="mr-3 text-primary-400" />
@@ -98,7 +98,7 @@ const Footer: React.FC = () => {
               </div>
               <div className="flex items-center">
                 <Mail size={20} className="mr-3 text-primary-400" />
-                <a href="mailto:info@physiolife.ie" className="text-neutral-300 hover:text-white transition-colors">khtherapy@hotmail.com</a>
+                <a href="mailto:khtherapy@hotmail.com" className="text-neutral-300 hover:text-white transition-colors">khtherapy@hotmail.com</a>
               </div>
               <div className="flex items-start">
                 <Clock size={20} className="mr-3 mt-1 text-primary-400" />
