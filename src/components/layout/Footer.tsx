@@ -59,27 +59,27 @@ const Footer: React.FC = () => {
             </ul>
           </div>
           
-          {/* Services */}
+          {/* Specialized Services */}
           <div>
-            <h3 className="text-xl font-semibold mb-4">Our Services</h3>
+            <h3 className="text-xl font-semibold mb-4">Specialized Services</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/services#sports-injury" className="text-neutral-300 hover:text-white transition-colors">Sports Injury Rehabilitation</Link>
+                <Link to="/services/sports-injury" className="text-neutral-300 hover:text-white transition-colors">Sports Injury Rehabilitation</Link>
               </li>
               <li>
-                <Link to="/services#manual-therapy" className="text-neutral-300 hover:text-white transition-colors">Manual Therapy</Link>
+                <Link to="/services/manual-therapy" className="text-neutral-300 hover:text-white transition-colors">Manual Therapy</Link>
               </li>
               <li>
-                <Link to="/services#chronic-pain" className="text-neutral-300 hover:text-white transition-colors">Chronic Pain Management</Link>
+                <Link to="/services/chronic-pain" className="text-neutral-300 hover:text-white transition-colors">Chronic Pain Management</Link>
               </li>
               <li>
-                <Link to="/services#post-surgery" className="text-neutral-300 hover:text-white transition-colors">Post-Surgery Rehabilitation</Link>
+                <Link to="/services/post-surgery" className="text-neutral-300 hover:text-white transition-colors">Post-Surgery Rehabilitation</Link>
               </li>
               <li>
-                <Link to="/services#neuromuscular" className="text-neutral-300 hover:text-white transition-colors">Neuromuscular Therapy</Link>
+                <Link to="/services/neuromuscular" className="text-neutral-300 hover:text-white transition-colors">Neuromuscular Therapy</Link>
               </li>
               <li>
-                <Link to="/services#ergonomic" className="text-neutral-300 hover:text-white transition-colors">Ergonomic Assessments</Link>
+                <Link to="/services/ergonomic" className="text-neutral-300 hover:text-white transition-colors">Ergonomic Assessments</Link>
               </li>
             </ul>
           </div>

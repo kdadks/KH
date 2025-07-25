@@ -34,13 +34,13 @@ const Header: React.FC = () => {
 
   return (
     <header 
-      className={`fixed w-full z-50 transition-all duration-300 ${
+      className={`fixed w-full z-50 transition-all duration-300 overflow-visible ${
         isScrolled 
           ? 'bg-white shadow-md py-2' 
           : 'bg-white/90 backdrop-blur-sm py-4'
       }`}
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative overflow-visible">
         <div className="flex justify-between items-center">
           <Link to="/" className="flex items-center space-x-2" onClick={closeMenu}>
             <Logo className="w-12 h-12" />
@@ -91,12 +91,9 @@ const Header: React.FC = () => {
       </div>
 
       {/* Mobile Navigation Menu */}
-      <div 
-        className={`md:hidden absolute top-full left-0 w-full bg-white shadow-md transform transition-transform duration-300 ease-in-out ${
-          isOpen ? 'translate-y-0' : '-translate-y-full'
-        }`}
-      >
-        <div className="px-4 pt-2 pb-4 space-y-1">
+      {isOpen && (
+        <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-50 border-t border-gray-200 animate-fade-in">
+          <div className="px-4 pt-2 pb-4 space-y-1">
           <NavLink 
             to="/" 
             className={({ isActive }) => 
@@ -162,6 +159,7 @@ const Header: React.FC = () => {
           */}
         </div>
       </div>
+      )}
     </header>
   );
 };

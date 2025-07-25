@@ -46,37 +46,37 @@ const ServicesSection: React.FC = () => {
       icon: <Activity size={24} />,
       title: "Sports Injury Rehabilitation",
       description: "Specialized programs to help athletes and active individuals recover from injuries and return to their sport safely.",
-      href: "/services#sports-injury",
+      href: "/services/sports-injury",
     },
     {
       icon: <FirstAid size={24} />,
       title: "Manual Therapy",
       description: "Hands-on techniques to relieve pain, reduce inflammation, improve circulation and promote healing in affected areas.",
-      href: "/services#manual-therapy",
+      href: "/services/manual-therapy",
     },
     {
       icon: <Brain size={24} />,
       title: "Chronic Pain Management",
       description: "Comprehensive strategies to help manage and reduce persistent pain, improving daily function and quality of life.",
-      href: "/services#chronic-pain",
+      href: "/services/chronic-pain",
     },
     {
       icon: <Heart size={24} />,
       title: "Post-Surgery Rehabilitation",
       description: "Tailored programs to optimize recovery following surgical procedures, ensuring the best possible outcomes.",
-      href: "/services#post-surgery",
+      href: "/services/post-surgery",
     },
     {
       icon: <Zap size={24} />,
       title: "Neuromuscular Therapy",
       description: "Specialized treatment addressing neuromuscular dysfunction to restore optimal function and reduce pain.",
-      href: "/services#neuromuscular",
+      href: "/services/neuromuscular",
     },
     {
       icon: <Shield size={24} />,
       title: "Ergonomic Assessments",
       description: "Professional evaluations of workspaces to prevent injuries and improve comfort in daily activities.",
-      href: "/services#ergonomic",
+      href: "/services/ergonomic",
     },
   ];
 

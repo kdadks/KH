@@ -1,6 +1,7 @@
 import SEOHead from '../components/utils/SEOHead';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
+import PlaceholderImage from '../components/shared/PlaceholderImage';
 
 const AboutPage = () => {
   return (
@@ -72,33 +73,24 @@ const AboutPage = () => {
             <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
               {/* Profile Images Gallery */}
               <div className="flex flex-col items-center gap-4">
-                <img
-                  src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=192&h=192&q=80"
+                <PlaceholderImage
+                  src="https://images.pexels.com/photos/7176322/pexels-photo-7176322.jpeg?auto=compress&cs=tinysrgb&w=192&h=192"
                   alt="Physio Kelly portrait"
                   className="w-48 h-48 object-cover rounded-full border-4 border-primary-600 shadow-lg"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='sans-serif' font-size='14'%3EKelly Portrait%3C/text%3E%3C/svg%3E";
-                  }}
+                  fallbackText="Kelly Portrait"
                 />
                 <div className="flex gap-2">
-                  <img
-                    src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=64&h=64&q=80"
+                  <PlaceholderImage
+                    src="https://images.pexels.com/photos/5473958/pexels-photo-5473958.jpeg?auto=compress&cs=tinysrgb&w=64&h=64"
                     alt="Physio Kelly working"
                     className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 shadow"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='sans-serif' font-size='10'%3EWork%3C/text%3E%3C/svg%3E";
-                    }}
+                    fallbackText="Work"
                   />
-                  <img
-                    src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=64&h=64&q=80"
+                  <PlaceholderImage
+                    src="https://images.pexels.com/photos/4506237/pexels-photo-4506237.jpeg?auto=compress&cs=tinysrgb&w=64&h=64"
                     alt="Physio Kelly clinic"
                     className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 shadow"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236b7280' font-family='sans-serif' font-size='10'%3EClinic%3C/text%3E%3C/svg%3E";
-                    }}
+                    fallbackText="Clinic"
                   />
                 </div>
               </div>
