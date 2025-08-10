@@ -96,7 +96,7 @@ const AboutPage = () => {
               </div>
               {/* Bio and Details */}
               <div className="space-y-6">
-                <h3 className="text-2xl font-semibold text-gray-900">Kelly Thompson</h3>
+                <h3 className="text-2xl font-semibold text-gray-900">Kelly Hodings</h3>
                 <p className="text-gray-700 leading-relaxed">
                   As your dedicated physiotherapist, I guide you through every step of your recovery journey. Graduating in 2016 from IPTAS with a BSc in Physiotherapy, I continuously enhance my expertise through over 50 CPD hours annually. This commitment ensures I stay at the forefront of evidence-based practice.
                 </p>

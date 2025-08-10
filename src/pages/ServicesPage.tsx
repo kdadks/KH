@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import SectionHeading from '../components/shared/SectionHeading';
 import Container from '../components/shared/Container';
 import { useNavigate } from 'react-router-dom';
-import { treatmentPackages } from '../data/packages';
+import { treatmentPackages, packageCategories, Package } from '../data/packages';
 import SEOHead from '../components/utils/SEOHead';
 
 const ServicesPage: React.FC = () => {
 	const navigate = useNavigate();
+	const [activeCategory, setActiveCategory] = useState<string>(packageCategories[0]);
+
+	const filtered: Package[] = treatmentPackages.filter(
+		(p) => p.category === activeCategory
+	);
 	return (
 		<>
 			<SEOHead
@@ -20,15 +25,51 @@ const ServicesPage: React.FC = () => {
 						title="Our Services"
 						subtitle="Comprehensive solutions tailored to your needs"
 					/>
-					<div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-						{treatmentPackages.map((pkg) => (
+					{/* Tabs */}
+					<div className="mt-10 overflow-x-auto">
+						<ul className="flex gap-3 border-b pb-2 min-w-max">
+							{packageCategories.map((cat) => {
+								const isActive = cat === activeCategory;
+								return (
+									<li key={cat}>
+										<button
+											className={`px-4 py-2 rounded-t text-sm font-medium whitespace-nowrap transition border ${
+												isActive
+													? 'bg-primary-600 text-white border-primary-600'
+												: 'bg-neutral-100 hover:bg-neutral-200 border-transparent'
+											}`}
+											onClick={() => setActiveCategory(cat)}
+										>
+											{cat}
+										</button>
+									</li>
+								);
+							})}
+						</ul>
+					</div>
+
+					{/* Packages grid */}
+					<div className="mt-8 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+						{filtered.map((pkg) => (
 							<div
 								key={pkg.name}
 								className="border rounded-lg shadow p-6 flex flex-col h-full"
 							>
 								<h2 className="text-xl font-semibold mb-2">{pkg.name}</h2>
-								<div className="text-2xl font-bold text-primary-600 mb-4">
-									{pkg.price}
+								<div className="text-primary-600 mb-4 space-y-1">
+									{pkg.inHourPrice && (
+										<div className="text-lg font-semibold">
+											In Hours: <span>{pkg.inHourPrice}</span>
+										</div>
+									)}
+									{pkg.outOfHourPrice && (
+										<div className="text-lg font-semibold">
+											Out of Hours: <span>{pkg.outOfHourPrice}</span>
+										</div>
+									)}
+									{!pkg.inHourPrice && !pkg.outOfHourPrice && pkg.price && (
+										<div className="text-2xl font-bold">{pkg.price}</div>
+									)}
 								</div>
 								<ul className="mb-6 space-y-2">
 									{pkg.features.filter(Boolean).map((feature) => (

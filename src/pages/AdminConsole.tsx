@@ -4,11 +4,11 @@ import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-// import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar';
-// import moment from 'moment';
+import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar';
+import moment from 'moment';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, parseISO } from 'date-fns';
-// import 'react-big-calendar/lib/css/react-big-calendar.css';
-// import '../styles/calendar.css';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+import '../styles/calendar.css';
 import { useToast } from '../components/shared/Toast';
 import { 
   Calendar, 
@@ -33,8 +33,8 @@ import {
   ChevronRight,
   Download,
   FileText,
-  // CalendarDays, // COMMENTED OUT - only used in calendar views
-  // List, // COMMENTED OUT - only used in calendar views
+  CalendarDays, // used in calendar views
+  List, // used in calendar views
   Menu,
   FileSpreadsheet,
   Filter,
@@ -44,8 +44,11 @@ import {
 
 type Package = {
   name: string;
-  price: string;
+  price?: string;
+  inHourPrice?: string;
+  outOfHourPrice?: string;
   features: string[];
+  category?: string; // optional to avoid breaking existing saved data
 };
 
 type BookingFormData = {
@@ -69,7 +72,7 @@ const AdminConsole: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [packages, setPackages] = useState<Package[]>(treatmentPackages);
-  const [newPackage, setNewPackage] = useState<Package>({ name: '', price: '', features: [''] });
+  const [newPackage, setNewPackage] = useState<Package>({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], category: '' });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'reports'>('dashboard');
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editPackage, setEditPackage] = useState<Package | null>(null);
@@ -80,13 +83,19 @@ const AdminConsole: React.FC = () => {
   const [availability, setAvailability] = useState<{ id?: number; date: string; start: string; end_time: string }[]>([]);
   const [newAvailability, setNewAvailability] = useState<{ date: string; start: string; end_time: string }>({ date: '', start: '', end_time: '' });
   const [availabilityError, setAvailabilityError] = useState<string>('');
+  // Extended availability creation modes
+  const [availabilityMode, setAvailabilityMode] = useState<'date' | 'week' | 'month'>('date');
+  const [weekReferenceDate, setWeekReferenceDate] = useState('');
+  const [weekDaysSelected, setWeekDaysSelected] = useState<{[k:string]: boolean}>({ Mon:true, Tue:true, Wed:true, Thu:true, Fri:true });
+  const [monthRef, setMonthRef] = useState(''); // YYYY-MM
+  const [monthWeekDaysSelected, setMonthWeekDaysSelected] = useState<{[k:string]: boolean}>({ Mon:true, Tue:true, Wed:true, Thu:true, Fri:true });
   const [confirmedBookings, setConfirmedBookings] = useState<number[]>([]);
   
-  // Calendar view state - COMMENTED OUT
-  // const [calendarView, setCalendarView] = useState<'list' | 'calendar'>('list');
-  // const [calendarDate, setCalendarDate] = useState(new Date());
-  // const [calendarViewType, setCalendarViewType] = useState<View>(Views.MONTH);
-  // const localizer = momentLocalizer(moment);
+  // Availability calendar view state (separate from bookings calendar)
+  const [calendarView, setCalendarView] = useState<'list' | 'calendar'>('list');
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [calendarViewType, setCalendarViewType] = useState<View>(Views.MONTH);
+  const localizer = momentLocalizer(moment); // shared for both calendars
   
   // Date/Time selection modal state
   const [showDateTimeModal, setShowDateTimeModal] = useState(false);
@@ -117,9 +126,9 @@ const AdminConsole: React.FC = () => {
   const recordsPerPage = 10;
 
   // Calendar view state for bookings - COMMENTED OUT
-  // const [bookingsCalendarView, setBookingsCalendarView] = useState<'list' | 'calendar'>('list');
-  // const [bookingsCalendarDate, setBookingsCalendarDate] = useState(new Date());
-  // const [bookingsCalendarViewType, setBookingsCalendarViewType] = useState<View>(Views.MONTH);
+  const [bookingsCalendarView, setBookingsCalendarView] = useState<'list' | 'calendar'>('list');
+  const [bookingsCalendarDate, setBookingsCalendarDate] = useState(new Date());
+  const [bookingsCalendarViewType, setBookingsCalendarViewType] = useState<View>(Views.MONTH);
 
   // Booking modal states
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -185,8 +194,11 @@ const AdminConsole: React.FC = () => {
 
   // Package management handlers
   const handleAdd = () => {
-    setPackages([...packages, { ...newPackage, features: newPackage.features.filter(f => f) }]);
-    setNewPackage({ name: '', price: '', features: [''] });
+    setPackages([
+      ...packages,
+      { ...newPackage, features: newPackage.features.filter(f => f), category: newPackage.category || 'Uncategorized' }
+    ]);
+    setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], category: '' });
   };
 
   const handleDelete = (index: number) => {
@@ -690,24 +702,53 @@ const AdminConsole: React.FC = () => {
 
   const handleAddAvailability = async () => {
     setAvailabilityError('');
-    if (newAvailability.date && newAvailability.start && newAvailability.end_time && newAvailability.start < newAvailability.end_time) {
-      const { error } = await supabase.from('availability').insert([
-        {
-          date: newAvailability.date,
-          start: newAvailability.start,
-          end_time: newAvailability.end_time
-        }
-      ]);
-      if (error) {
-        setAvailabilityError('Failed to add availability: ' + error.message);
-      } else {
-        // Refetch availability blocks
-        const { data } = await supabase.from('availability').select('*').order('date', { ascending: true });
-        setAvailability(data || []);
-        setNewAvailability({ date: '', start: '', end_time: '' });
+    try {
+      if (!(newAvailability.start && newAvailability.end_time && newAvailability.start < newAvailability.end_time)) {
+        setAvailabilityError('Please provide a valid time range.');
+        return;
       }
-    } else {
-      setAvailabilityError('Please enter a valid date and time range.');
+      const toInsert: { date: string; start: string; end_time: string }[] = [];
+      if (availabilityMode === 'date') {
+        if (!newAvailability.date) { setAvailabilityError('Select a date.'); return; }
+        toInsert.push({ ...newAvailability });
+      } else if (availabilityMode === 'week') {
+        if (!weekReferenceDate) { setAvailabilityError('Select a reference date for week.'); return; }
+        const ref = new Date(weekReferenceDate + 'T00:00:00');
+        const day = ref.getDay();
+        const diffToMonday = (day + 6) % 7;
+        const monday = new Date(ref);
+        monday.setDate(ref.getDate() - diffToMonday);
+        const labels: [string, number][] = [['Mon',0],['Tue',1],['Wed',2],['Thu',3],['Fri',4],['Sat',5],['Sun',6]];
+        labels.forEach(([lbl, off]) => {
+          if (weekDaysSelected[lbl]) {
+            const d = new Date(monday); d.setDate(monday.getDate()+off);
+            toInsert.push({ date: d.toISOString().split('T')[0], start: newAvailability.start, end_time: newAvailability.end_time });
+          }
+        });
+      } else if (availabilityMode === 'month') {
+        if (!monthRef) { setAvailabilityError('Select a month (YYYY-MM).'); return; }
+        const [y,m] = monthRef.split('-');
+        const year = parseInt(y,10); const monthIdx = parseInt(m,10)-1;
+        if (isNaN(year) || isNaN(monthIdx)) { setAvailabilityError('Invalid month.'); return; }
+        const iter = new Date(year, monthIdx, 1);
+        while (iter.getMonth() === monthIdx) {
+          const map: {[k:number]: string} = {1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat',0:'Sun'};
+          const label = map[iter.getDay()];
+            if (monthWeekDaysSelected[label]) {
+              toInsert.push({ date: iter.toISOString().split('T')[0], start: newAvailability.start, end_time: newAvailability.end_time });
+            }
+          iter.setDate(iter.getDate()+1);
+        }
+      }
+      if (toInsert.length === 0) { setAvailabilityError('No dates selected.'); return; }
+      const { error } = await supabase.from('availability').insert(toInsert);
+      if (error) { setAvailabilityError('Failed to add availability: ' + error.message); return; }
+      const { data } = await supabase.from('availability').select('*').order('date', { ascending: true });
+      setAvailability(data || []);
+      setNewAvailability({ date: '', start: '', end_time: '' });
+      setWeekReferenceDate('');
+    } catch (e) {
+      setAvailabilityError('Unexpected error: ' + (e as Error).message);
     }
   };
 
@@ -1111,112 +1152,124 @@ const AdminConsole: React.FC = () => {
     }
   };
 
-  // Convert availability data to calendar events - COMMENTED OUT
-  // const getCalendarEvents = () => {
-  //   return availability.map((slot, index) => {
-  //     const startDateTime = new Date(`${slot.date}T${slot.start}`);
-  //     const endDateTime = new Date(`${slot.date}T${slot.end_time}`);
-      
-  //     return {
-  //       id: slot.id || index,
-  //       title: `Available: ${slot.start} - ${slot.end_time}`,
-  //       start: startDateTime,
-  //       end: endDateTime,
-  //       resource: slot,
-  //       allDay: false
-  //     };
-  //   });
-  // };
+  // Convert availability data to calendar events
+  const getCalendarEvents = () => {
+    return availability.map((slot, index) => {
+      if (!slot.date || !slot.start || !slot.end_time) return null;
+      const startDateTime = new Date(`${slot.date}T${slot.start}`);
+      const endDateTime = new Date(`${slot.date}T${slot.end_time}`);
+      return {
+        id: slot.id || index,
+        title: `Available: ${slot.start} - ${slot.end_time}`,
+        start: startDateTime,
+        end: endDateTime,
+        resource: slot,
+        allDay: false
+      } as any;
+    }).filter(Boolean) as any[];
+  };
 
-  // Convert bookings data to calendar events - COMMENTED OUT
-  // const getBookingsCalendarEvents = () => {
-  //   const bookingsWithDateTime = allBookings.filter(booking => booking.date && booking.time);
-    
-  //   // Group bookings by date
-  //   const bookingsByDate: { [key: string]: BookingFormData[] } = {};
-  //   bookingsWithDateTime.forEach(booking => {
-  //     const dateKey = booking.date;
-  //     if (!bookingsByDate[dateKey]) {
-  //       bookingsByDate[dateKey] = [];
-  //     }
-  //     bookingsByDate[dateKey].push(booking);
-  //   });
+  // Convert bookings data to calendar events
+  const getBookingsCalendarEvents = () => {
+    const bookingsWithDateTime = allBookings.filter(booking => booking.date && booking.time);
+    const bookingsByDate: { [key: string]: BookingFormData[] } = {};
+    bookingsWithDateTime.forEach(booking => {
+      const dateKey = booking.date!;
+      if (!bookingsByDate[dateKey]) bookingsByDate[dateKey] = [];
+      bookingsByDate[dateKey].push(booking);
+    });
+    const events: any[] = [];
+    Object.entries(bookingsByDate).forEach(([date, bookings]) => {
+      bookings.forEach((booking, index) => {
+        const startDateTime = new Date(`${booking.date}T${booking.time}`);
+        const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
+        const title = bookings.length > 1 && index === 0
+          ? `${booking.name} (+${bookings.length - 1} more)`
+          : booking.name;
+    // Classification for style (reuse availability logic)
+    const pad = (n:number) => n.toString().padStart(2,'0');
+    const endStr = `${pad(endDateTime.getHours())}:${pad(endDateTime.getMinutes())}`;
+    const classification = classifyInHour(booking.time!, endStr);
+        events.push({
+          id: `booking-${date}-${index}`,
+          title,
+          start: startDateTime,
+            end: endDateTime,
+          resource: {
+            ...booking,
+            isMultiple: bookings.length > 1,
+            totalCount: bookings.length,
+      allBookings: bookings,
+      classification
+          },
+          allDay: false
+        });
+      });
+    });
+    return events;
+  };
 
-  //   const events: any[] = [];
-    
-  //   Object.entries(bookingsByDate).forEach(([date, bookings]) => {
-  //     bookings.forEach((booking, index) => {
-  //       const startDateTime = new Date(`${booking.date}T${booking.time}`);
-  //       const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // Assume 1 hour duration
-        
-  //       // Create title with multiple indicator
-  //       const title = bookings.length > 1 && index === 0 
-  //         ? `${booking.name} (+${bookings.length - 1} more)`
-  //         : booking.name;
-        
-  //       events.push({
-  //         id: `booking-${date}-${index}`,
-  //         title: title,
-  //         start: startDateTime,
-  //         end: endDateTime,
-  //         resource: {
-  //           ...booking,
-  //           isMultiple: bookings.length > 1,
-  //           totalCount: bookings.length,
-  //           allBookings: bookings
-  //         },
-  //         allDay: false
-  //       });
-  //     });
-  //   });
+  // Style getter for availability events
+  const eventStyleGetter = () => ({
+    style: {
+      backgroundColor: '#3b82f6',
+      borderRadius: '5px',
+      opacity: 0.85,
+      color: 'white',
+      border: '0px',
+      display: 'block',
+      fontSize: '12px',
+      fontWeight: '500'
+    }
+  });
 
-  //   return events;
-  // };
+  // Classify availability slot relative to standard hours (09:00-17:00)
+  const classifyInHour = (start: string, end: string) => {
+    const toMinutes = (t: string) => { const [h,m] = t.split(':').map(Number); return h*60 + (m||0); };
+    const s = toMinutes(start); const e = toMinutes(end);
+    const inStart = 9*60, inEnd = 17*60; // 09:00-17:00
+    const earlyStart = 8*60, earlyEnd = 9*60; // 08:00-09:00
+    const lateStart = 18*60, lateEnd = 20*60; // 18:00-20:00
+    if (s >= inStart && e <= inEnd) return 'in-hour';
+    if ((s >= earlyStart && e <= earlyEnd) || (s >= lateStart && e <= lateEnd)) return 'out-of-hour';
+    if ((s < inStart && e > inStart) || (s < inEnd && e > inEnd) || (s < lateStart && e > lateStart)) return 'mixed';
+    return 'out-of-hour';
+  };
 
-  // Format event display for calendar - COMMENTED OUT
-  // const eventStyleGetter = () => {
-  //   return {
-  //     style: {
-  //       backgroundColor: '#3b82f6',
-  //       borderRadius: '5px',
-  //       opacity: 0.8,
-  //       color: 'white',
-  //       border: '0px',
-  //       display: 'block',
-  //       fontSize: '12px',
-  //       fontWeight: '500'
-  //     }
-  //   };
-  // };
-
-  // Format booking event display for calendar - COMMENTED OUT
-  // const bookingEventStyleGetter = (event: any) => {
-  //   const booking = event.resource;
-  //   let backgroundColor = '#3b82f6'; // default blue
-    
-  //   if (booking.status === 'confirmed') {
-  //     backgroundColor = '#10b981'; // green for confirmed
-  //   } else if (booking.status === 'cancelled') {
-  //     backgroundColor = '#ef4444'; // red for cancelled
-  //   } else if (!booking.date || !booking.time) {
-  //     backgroundColor = '#f59e0b'; // orange for missing date/time
-  //   } else {
-  //     backgroundColor = '#6b7280'; // gray for pending
-  //   }
-    
-  //   return {
-  //     style: {
-  //       backgroundColor,
-  //       borderRadius: '5px',
-  //       opacity: 0.8,
-  //       color: 'white',
-  //       border: '0px',
-  //       display: 'block',
-  //       fontSize: '12px',
-  //       fontWeight: '500'
-  //     }
-  //   };
-  // };
+  // Style getter for booking events
+  const bookingEventStyleGetter = (event: any) => {
+    const booking = event.resource;
+    let backgroundColor = '#6b7280';
+    if (booking.status === 'confirmed') backgroundColor = '#10b981';
+    else if (booking.status === 'cancelled') backgroundColor = '#ef4444';
+    else if (!booking.date || !booking.time) backgroundColor = '#f59e0b';
+    // Adjust visuals for in-hour vs out-of-hour classification
+    const classification = booking.classification; // in-hour | out-of-hour | mixed
+    let border = '0px';
+    let boxShadow = 'none';
+    if (classification === 'out-of-hour') {
+      border = '2px solid #6366f1'; // indigo border for out-of-hour
+      boxShadow = '0 0 0 1px #6366f1 inset';
+    } else if (classification === 'mixed') {
+      border = '2px dashed #f59e0b';
+    } else if (classification === 'in-hour') {
+      // Slightly brighten in-hour confirmed vs others
+      if (booking.status === 'confirmed') backgroundColor = '#14b285';
+    }
+    return {
+      style: {
+        backgroundColor,
+        borderRadius: '5px',
+        opacity: 0.85,
+        color: 'white',
+        border,
+        boxShadow,
+        display: 'block',
+        fontSize: '12px',
+        fontWeight: '500'
+      }
+    };
+  };
 
   if (!isLoggedIn) {
     return (
@@ -1622,7 +1675,7 @@ const AdminConsole: React.FC = () => {
       return pageNumbers;
     };
 
-    // const bookingsCalendarEvents = getBookingsCalendarEvents(); // COMMENTED OUT
+  const bookingsCalendarEvents = getBookingsCalendarEvents();
 
     return (
       <div className="space-y-6">
@@ -1632,7 +1685,6 @@ const AdminConsole: React.FC = () => {
             <p className="text-gray-600 mt-1">Manage all patient appointments and bookings</p>
           </div>
           <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
-            {/* CALENDAR VIEW TOGGLE COMMENTED OUT
             <button
               onClick={() => setBookingsCalendarView(bookingsCalendarView === 'list' ? 'calendar' : 'list')}
               className={`w-full sm:w-auto flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
@@ -1653,7 +1705,6 @@ const AdminConsole: React.FC = () => {
                 </>
               )}
             </button>
-            */}
             <button
               onClick={exportToExcel}
               className="w-full sm:w-auto flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -1675,8 +1726,9 @@ const AdminConsole: React.FC = () => {
           </div>
         </div>
 
-        {/* Filters - Always show now since calendar view is commented out */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  {/* Filters (hidden in calendar view for cleaner UI) */}
+  {bookingsCalendarView === 'list' && (
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
@@ -1723,6 +1775,7 @@ const AdminConsole: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
 
         {/* List View - Calendar view is commented out */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -1734,30 +1787,39 @@ const AdminConsole: React.FC = () => {
               <p className="text-xs text-gray-500 mt-1">
                 Export functions will include all {allBookings.length} booking records
               </p>
-              {/* CALENDAR VIEW LEGEND COMMENTED OUT
               {bookingsCalendarView === 'calendar' && (
                 <div className="flex items-center space-x-4 mt-2">
                   <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-green-500 rounded"></div>
+                    <div className="w-3 h-3 bg-green-500 rounded" />
                     <span className="text-xs text-gray-600">Confirmed</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-gray-500 rounded"></div>
+                    <div className="w-3 h-3 bg-gray-500 rounded" />
                     <span className="text-xs text-gray-600">Pending</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                    <div className="w-3 h-3 bg-orange-500 rounded" />
                     <span className="text-xs text-gray-600">Missing Date/Time</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-red-500 rounded"></div>
+                    <div className="w-3 h-3 bg-red-500 rounded" />
                     <span className="text-xs text-gray-600">Cancelled</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded" style={{background:'#14b285'}} />
+                    <span className="text-xs text-gray-600">In-Hour</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded border-2 border-indigo-500" style={{background:'#6366f1'}} />
+                    <span className="text-xs text-gray-600">Out-of-Hour</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded border-2 border-amber-500" style={{background:'#f59e0b'}} />
+                    <span className="text-xs text-gray-600">Mixed</span>
                   </div>
                 </div>
               )}
-              */}
             </div>
-            {/* CALENDAR VIEW CONTROLS COMMENTED OUT
             {bookingsCalendarView === 'calendar' && (
               <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto">
                 <button
@@ -1792,7 +1854,6 @@ const AdminConsole: React.FC = () => {
                 </button>
               </div>
             )}
-            */}
             {totalRecords > 0 && (
               <div className="text-sm text-gray-500">
                 Showing {startIndex + 1}-{Math.min(endIndex, totalRecords)} of {totalRecords} bookings
@@ -1801,8 +1862,32 @@ const AdminConsole: React.FC = () => {
           </div>
 
           <div className="overflow-hidden">
-            {/* CALENDAR VIEW COMMENTED OUT - Only showing list view */}
-            {currentPageBookings.length === 0 ? (
+            {bookingsCalendarView === 'calendar' ? (
+              <div className="p-4">
+                <BigCalendar
+                  localizer={localizer}
+                  events={bookingsCalendarEvents}
+                  startAccessor="start"
+                  endAccessor="end"
+                  style={{ height: 600 }}
+                  date={bookingsCalendarDate}
+                  view={bookingsCalendarViewType}
+                  onNavigate={(newDate) => setBookingsCalendarDate(newDate)}
+                  onView={(v) => setBookingsCalendarViewType(v)}
+                  eventPropGetter={(event) => bookingEventStyleGetter(event)}
+                  popup
+                  onSelectEvent={(event: any) => {
+                    if (event.resource?.isMultiple) {
+                      setSelectedDateBookings(event.resource.allBookings);
+                      setShowMultiBookingsModal(true);
+                    } else {
+                      setSelectedBooking(event.resource);
+                      setShowBookingModal(true);
+                    }
+                  }}
+                />
+              </div>
+            ) : currentPageBookings.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-500">No bookings found</p>
@@ -2006,7 +2091,7 @@ const AdminConsole: React.FC = () => {
         {/* Add New Service */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Service</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
               <input
@@ -2018,13 +2103,50 @@ const AdminConsole: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              <select
+                value={newPackage.category}
+                onChange={(e) => setNewPackage({ ...newPackage, category: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              >
+                <option value="">Select category</option>
+                <option value="Packages">Packages</option>
+                <option value="Individual">Individual</option>
+                <option value="Classes">Classes</option>
+                <option value="Rehab & Fitness">Rehab & Fitness</option>
+                <option value="Corporate Packages">Corporate Packages</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Flat Price (optional)</label>
               <input
                 type="text"
                 value={newPackage.price}
                 onChange={(e) => setNewPackage({ ...newPackage, price: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                placeholder="â‚¬99"
+                placeholder="€25 / class or Contact for Quote"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">In Hour Price</label>
+              <input
+                type="text"
+                value={newPackage.inHourPrice}
+                onChange={(e) => setNewPackage({ ...newPackage, inHourPrice: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="€65"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Out of Hour Price</label>
+              <input
+                type="text"
+                value={newPackage.outOfHourPrice}
+                onChange={(e) => setNewPackage({ ...newPackage, outOfHourPrice: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="€80"
               />
             </div>
           </div>
@@ -2069,18 +2191,48 @@ const AdminConsole: React.FC = () => {
               <div key={idx} className="p-6">
                 {editIndex === idx && editPackage ? (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <input
                         type="text"
                         value={editPackage.name}
                         onChange={(e) => handleEditChange('name', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Name"
+                      />
+                      <select
+                        value={editPackage.category || ''}
+                        onChange={(e) => handleEditChange('category', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                      >
+                        <option value="">Category</option>
+                        <option value="Packages">Packages</option>
+                        <option value="Individual">Individual</option>
+                        <option value="Classes">Classes</option>
+                        <option value="Rehab & Fitness">Rehab & Fitness</option>
+                        <option value="Corporate Packages">Corporate Packages</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={editPackage.inHourPrice || ''}
+                        onChange={(e) => handleEditChange('inHourPrice', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="In Hour"
                       />
                       <input
                         type="text"
-                        value={editPackage.price}
+                        value={editPackage.outOfHourPrice || ''}
+                        onChange={(e) => handleEditChange('outOfHourPrice', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Out of Hour"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input
+                        type="text"
+                        value={editPackage.price || ''}
                         onChange={(e) => handleEditChange('price', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Flat Price / Quote"
                       />
                     </div>
                     <div className="space-y-2">
@@ -2158,7 +2310,7 @@ const AdminConsole: React.FC = () => {
 
   // Availability Component
   function AvailabilityView() {
-    // const calendarEvents = getCalendarEvents(); // COMMENTED OUT
+    const calendarEvents = getCalendarEvents();
 
     return (
       <div className="space-y-6">
@@ -2167,7 +2319,6 @@ const AdminConsole: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-900">Availability Management</h2>
             <p className="text-gray-600 mt-1">Manage your clinic availability and time slots</p>
           </div>
-          {/* CALENDAR VIEW TOGGLE COMMENTED OUT
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setCalendarView(calendarView === 'list' ? 'calendar' : 'list')}
@@ -2190,22 +2341,70 @@ const AdminConsole: React.FC = () => {
               )}
             </button>
           </div>
-          */}
         </div>
 
-        {/* Add Availability Form - Always visible */}
+        {/* Add Availability Form - supports single date, week, month */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Availability Block</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-              <input
-                type="date"
-                value={newAvailability.date}
-                onChange={(e) => setNewAvailability({ ...newAvailability, date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mode</label>
+              <select
+                value={availabilityMode}
+                onChange={(e) => setAvailabilityMode(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              >
+                <option value="date">Single Date</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
             </div>
+            {availabilityMode === 'week' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reference Date</label>
+                <input type="date" value={weekReferenceDate} onChange={e=>setWeekReferenceDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+              </div>
+            )}
+            {availabilityMode === 'month' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                <input type="month" value={monthRef} onChange={e=>setMonthRef(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+              </div>
+            )}
+          </div>
+          {availabilityMode === 'week' && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">Days of Week</p>
+              <div className="flex flex-wrap gap-2">
+                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+                  <label key={d} className={`px-3 py-1 border rounded cursor-pointer text-sm ${weekDaysSelected[d] ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-50 text-gray-700 border-gray-300'}`}> 
+                    <input type="checkbox" className="hidden" checked={!!weekDaysSelected[d]} onChange={()=>setWeekDaysSelected(prev=>({...prev,[d]:!prev[d]}))} />
+                    {d}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {availabilityMode === 'month' && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">Weekdays</p>
+              <div className="flex flex-wrap gap-2">
+                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+                  <label key={d} className={`px-3 py-1 border rounded cursor-pointer text-sm ${monthWeekDaysSelected[d] ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-50 text-gray-700 border-gray-300'}`}> 
+                    <input type="checkbox" className="hidden" checked={!!monthWeekDaysSelected[d]} onChange={()=>setMonthWeekDaysSelected(prev=>({...prev,[d]:!prev[d]}))} />
+                    {d}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {availabilityMode === 'date' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <input type="date" value={newAvailability.date} onChange={e=>setNewAvailability({...newAvailability, date: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
               <input
@@ -2240,13 +2439,12 @@ const AdminConsole: React.FC = () => {
           </button>
         </div>
 
-        {/* List View - Calendar view is commented out */}
+        {/* Availability List / Calendar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-gray-900">
               Current Availability
             </h3>
-            {/* CALENDAR VIEW CONTROLS COMMENTED OUT
             {calendarView === 'calendar' && (
               <div className="flex items-center space-x-2">
                 <button
@@ -2281,41 +2479,70 @@ const AdminConsole: React.FC = () => {
                 </button>
               </div>
             )}
-            */}
           </div>
           
           <div className="p-6">
-            {/* CALENDAR VIEW COMMENTED OUT - Only showing list view */}
-            {availability.length === 0 ? (
+            {calendarView === 'calendar' ? (
+              <BigCalendar
+                localizer={localizer}
+                events={calendarEvents}
+                startAccessor="start"
+                endAccessor="end"
+                style={{ height: 600 }}
+                date={calendarDate}
+                view={calendarViewType}
+                onNavigate={(d) => setCalendarDate(d)}
+                onView={(v) => setCalendarViewType(v)}
+                selectable
+                onSelectSlot={(slotInfo: any) => {
+                  const start: Date = slotInfo.start;
+                  const end: Date = slotInfo.end;
+                  const pad = (n: number) => n.toString().padStart(2, '0');
+                  const dateStr = `${start.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`;
+                  const startTime = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+                  const endTime = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+                  setNewAvailability({ date: dateStr, start: startTime, end_time: endTime });
+                }}
+                eventPropGetter={() => eventStyleGetter()}
+              />
+            ) : availability.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-500">No availability blocks set</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {availability.map((block, index) => (
-                      <div
-                        key={block.id || `${block.date}-${block.start}-${block.end_time}`}
-                        className="p-4 border border-gray-200 rounded-lg"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-gray-900">{block.date}</p>
-                            <p className="text-sm text-gray-500">{block.start} - {block.end_time}</p>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-5 h-5 text-gray-400" />
-                            <button
-                              onClick={() => handleDeleteAvailability(block.id, index)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Delete availability block"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                {availability.map((block, index) => {
+                  const cls = classifyInHour(block.start, block.end_time);
+                  return (
+                    <div
+                      key={block.id || `${block.date}-${block.start}-${block.end_time}`}
+                      className="p-4 border border-gray-200 rounded-lg relative"
+                    >
+                      <span className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        cls === 'in-hour' ? 'bg-green-100 text-green-700' : cls === 'out-of-hour' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {cls === 'in-hour' ? 'IN-HOUR' : cls === 'out-of-hour' ? 'OUT' : 'MIXED'}
+                      </span>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">{block.date}</p>
+                          <p className="text-sm text-gray-500">{block.start} - {block.end_time}</p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Clock className="w-5 h-5 text-gray-400" />
+                          <button
+                            onClick={() => handleDeleteAvailability(block.id, index)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete availability block"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
