@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import SectionHeading from '../components/shared/SectionHeading';
 import Container from '../components/shared/Container';
 import { useNavigate } from 'react-router-dom';
-import { Package } from '../data/packages'; // Only import the type
+import { packageCategories, Package } from '../data/packages';
 import { supabase } from '../supabaseClient';
 import SEOHead from '../components/utils/SEOHead';
 
 const ServicesPage: React.FC = () => {
 	const navigate = useNavigate();
+	const [activeCategory, setActiveCategory] = useState<string>(packageCategories[0]);
 	const [services, setServices] = useState<Package[]>([]);
-	const [categories, setCategories] = useState<string[]>([]);
-	const [activeCategory, setActiveCategory] = useState<string>('');
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
@@ -24,7 +23,7 @@ const ServicesPage: React.FC = () => {
 				.from('services')
 				.select('*')
 				.eq('is_active', true)
-				.order('category, name');
+				.order('name');
 
 			if (error) {
 				console.error('Error fetching services:', error);
@@ -42,18 +41,6 @@ const ServicesPage: React.FC = () => {
 			})) || [];
 
 			setServices(transformedServices);
-
-			// Get unique categories from the data
-			const uniqueCategories = Array.from(new Set(transformedServices.map(service => service.category)))
-				.filter(Boolean) // Remove any null/undefined categories
-				.sort(); // Sort alphabetically
-
-			setCategories(uniqueCategories);
-			
-			// Set first category as active if we have categories
-			if (uniqueCategories.length > 0 && !activeCategory) {
-				setActiveCategory(uniqueCategories[0]);
-			}
 		} catch (error) {
 			console.error('Error fetching services:', error);
 		} finally {
@@ -81,7 +68,7 @@ const ServicesPage: React.FC = () => {
 					{/* Tabs */}
 					<div className="mt-10 overflow-x-auto">
 						<ul className="flex gap-3 border-b pb-2 min-w-max">
-							{categories.map((cat) => {
+							{packageCategories.map((cat) => {
 								const isActive = cat === activeCategory;
 								return (
 									<li key={cat}>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -6,24 +6,51 @@ import Button from '../shared/Button';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../shared/toastContext';
 
+interface Service {
+  id: number;
+  name: string;
+  category: string;
+  price?: string;
+  in_hour_price?: string;
+  out_of_hour_price?: string;
+}
+
 const HeroSection: React.FC = () => {
   // Removed unused visibility state
   interface BookingFormData { name: string; email: string; phone: string; service: string; }
   const { showSuccess, showError } = useToast();
   const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
 
-  // Service mapping to convert dropdown values to display names
-  const serviceMapping: { [key: string]: string } = {
-    'basic-wellness': 'Basic Wellness',
-    'corporate-wellness': 'Corporate Wellness / Workplace Events',
-    'pitch-side-cover': 'Pitch Side Cover for Sporting Events',
-    'pre-post-surgery-rehab': 'Pre & Post Surgery Rehab',
-    'premium-care': 'Premium Care',
-    'return-to-play': 'Return to Play/Sport & Strapping & Taping',
-    'sports-massage': 'Sports Massage / Deep Tissue Massage',
-    'ultimate-health': 'Ultimate Health'
+  // Fetch services from database on component mount
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      setLoadingServices(true);
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name, category, price, in_hour_price, out_of_hour_price')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching services:', error);
+      } else {
+        setServices(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoadingServices(false);
+    }
   };
+
+  // Service mapping is no longer needed as we use service names directly
 
   const sendBookingEmail = async (booking: BookingFormData) => {
     setSendingEmail(true);
@@ -45,15 +72,15 @@ const HeroSection: React.FC = () => {
     setSendingEmail(true);
     
     try {
-      // Convert service value to display name
-      const serviceDisplayName = serviceMapping[data.service] || data.service;
+      // Use service name directly from the form (no mapping needed)
+      const serviceDisplayName = data.service;
       
       // Save to Supabase database
       const bookingData = {
         customer_name: data.name,
         customer_email: data.email,
         customer_phone: data.phone,
-        package_name: serviceDisplayName, // Use mapped display name
+        package_name: serviceDisplayName, // Use service name directly
         notes: 'Quick Appointment',
         status: 'pending',
         booking_date: null // Explicitly set booking_date to null (blank)
@@ -193,15 +220,16 @@ const HeroSection: React.FC = () => {
                   Service Type
                 </label>
                 <select id="service" {...register('service',{required:'Please select a service'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500">
-                   <option value="">Select a service</option>
-                   <option value="basic-wellness">Basic Wellness</option>
-                   <option value="corporate-wellness">Corporate Wellness / Workplace Events</option>
-                   <option value="pitch-side-cover">Pitch Side Cover for Sporting Events</option>
-                   <option value="pre-post-surgery-rehab">Pre & Post Surgery Rehab</option>
-                   <option value="premium-care">Premium Care</option>
-                   <option value="return-to-play">Return to Play/Sport & Strapping & Taping</option>
-                   <option value="sports-massage">Sports Massage / Deep Tissue Massage</option>
-                   <option value="ultimate-health">Ultimate Health</option>
+                   <option value="">
+                     {loadingServices ? 'Loading services...' : 'Select a service'}
+                   </option>
+                   {!loadingServices && services.map((service) => (
+                     <option key={service.id} value={service.name}>
+                       {service.name}
+                       {service.price && ` - ${service.price}`}
+                       {!service.price && service.in_hour_price && ` - In-Hour: ${service.in_hour_price}`}
+                     </option>
+                   ))}
                  </select>
                 {errors.service && <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>}
                </div>

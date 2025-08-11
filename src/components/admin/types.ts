@@ -1,12 +1,28 @@
 // Common types for Admin Console components
 
 export type Package = {
+  id?: number;
   name: string;
   price?: string;
   inHourPrice?: string;
   outOfHourPrice?: string;
   features: string[];
   category?: string;
+  description?: string;
+  isActive?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ServiceTimeSlot = {
+  id?: number;
+  service_id: number;
+  slot_type: 'in-hour' | 'out-of-hour';
+  day_of_week: number; // 0=Sunday, 6=Saturday
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  created_at?: string;
 };
 
 export type BookingFormData = {

@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MapPin, Clock, User, Send, MessageSquare } from 'lucide-react';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
+import { supabase } from '../supabaseClient';
+
+interface Service {
+  id: number;
+  name: string;
+}
 
 const ContactPage: React.FC = () => {
+  const [services, setServices] = useState<Service[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -13,6 +21,43 @@ const ContactPage: React.FC = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch services from database
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        setServicesLoading(true);
+        const { data, error } = await supabase
+          .from('services')
+          .select('id, name')
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('Supabase error fetching services:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          setServicesLoading(false);
+          return;
+        }
+
+        if (data) {
+          setServices(data);
+        }
+      } catch (err) {
+        console.error('Network error fetching services:', {
+          error: err instanceof Error ? err.message : 'Unknown error',
+          stack: err instanceof Error ? err.stack : null
+        });
+      } finally {
+        setServicesLoading(false);
+      }
+    };
+
+    fetchServices();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
@@ -108,16 +153,21 @@ const ContactPage: React.FC = () => {
                       value={formData.service}
                       onChange={handleInputChange}
                       required
+                      disabled={servicesLoading}
                     >
-                      <option value="">Select a service</option>
-                      <option value="Basic Wellness">Basic Wellness</option>
-                      <option value="Premium Care">Premium Care</option>
-                      <option value="Ultimate Health">Ultimate Health</option>
-                      <option value="Sports Massage / Deep Tissue Massage">Sports Massage / Deep Tissue Massage</option>
-                      <option value="Pitch Side Cover for Sporting Events">Pitch Side Cover for Sporting Events</option>
-                      <option value="Pre & Post Surgery Rehab">Pre & Post Surgery Rehab</option>
-                      <option value="Return to Play/Sport & Strapping & Taping">Return to Play/Sport & Strapping & Taping</option>
-                      <option value="Corporate Wellness / Workplace Events">Corporate Wellness / Workplace Events</option>
+                      <option value="">
+                        {servicesLoading 
+                          ? "Loading services..." 
+                          : services.length === 0 
+                          ? "No services available" 
+                          : "Select a service"
+                        }
+                      </option>
+                      {!servicesLoading && services.map((service) => (
+                        <option key={service.id} value={service.name}>
+                          {service.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

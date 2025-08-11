@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useForm } from 'react-hook-form';
 import { Calendar } from 'lucide-react';
@@ -17,10 +17,46 @@ interface BookingFormData {
   notes: string;
 }
 
+interface Service {
+  id: number;
+  name: string;
+  category: string;
+  price?: string;
+  in_hour_price?: string;
+  out_of_hour_price?: string;
+}
+
 const BookingPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      setLoadingServices(true);
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name, category, price, in_hour_price, out_of_hour_price')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching services:', error);
+      } else {
+        setServices(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoadingServices(false);
+    }
+  };
 
   const sendBookingEmail = async (booking: BookingFormData) => {
     setSendingEmail(true);
@@ -146,14 +182,17 @@ const BookingPage: React.FC = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   >
                     <option value="">Select a service</option>
-                    <option value="Basic Wellness">Basic Wellness</option>
-                    <option value="Premium Care">Premium Care</option>
-                    <option value="Ultimate Health">Ultimate Health</option>
-                    <option value="Sports Massage / Deep Tissue Massage">Sports Massage / Deep Tissue Massage</option>
-                    <option value="Pitch Side Cover for Sporting Events">Pitch Side Cover for Sporting Events</option>
-                    <option value="Pre & Post Surgery Rehab">Pre & Post Surgery Rehab</option>
-                    <option value="Return to Play/Sport & Strapping & Taping">Return to Play/Sport & Strapping & Taping</option>
-                    <option value="Corporate Wellness / Workplace Events">Corporate Wellness / Workplace Events</option>
+                    {loadingServices ? (
+                      <option disabled>Loading services...</option>
+                    ) : (
+                      services.map((service) => (
+                        <option key={service.id} value={service.name}>
+                          {service.name}
+                          {service.price && ` - ${service.price}`}
+                          {!service.price && service.in_hour_price && ` - In-Hour: ${service.in_hour_price}`}
+                        </option>
+                      ))
+                    )}
                   </select>
                   {errors.service && (
                     <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>

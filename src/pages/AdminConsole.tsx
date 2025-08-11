@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { treatmentPackages } from '../data/packages';
 import { supabase } from '../supabaseClient';
 import { 
   Calendar, 
@@ -32,14 +31,15 @@ const AdminConsole = () => {
   
   // State management
   const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'reports'>('dashboard');
-  const [packages, setPackages] = useState<PackageType[]>(treatmentPackages);
+  const [packages, setPackages] = useState<PackageType[]>([]);
   const [newPackage, setNewPackage] = useState<PackageType>({ 
     name: '', 
     price: '', 
     inHourPrice: '', 
     outOfHourPrice: '', 
     features: [''], 
-    category: '' 
+    category: '',
+    description: ''
   });
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editPackage, setEditPackage] = useState<PackageType | null>(null);

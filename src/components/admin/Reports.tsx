@@ -298,7 +298,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
         body: bookingRows,
         theme: 'grid',
         styles: { fontSize: 9 },
-        headStyles: { fillColor: [63,131,248], textColor: 255 }
+        headStyles: { fillColor: '#3f83f8', textColor: '#ffffff' }
       });
 
       doc.save(`bookings_report_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -309,8 +309,9 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     }
   };
 
-  // Get unique services for filter (normalized)
+  // Get unique services for filter (normalized and alphabetically sorted)
   const uniqueServices = Array.from(new Set(allBookings.map(b => b.package_name || b.service).filter(Boolean))) as string[];
+  uniqueServices.sort(); // Sort alphabetically
 
   return (
     <div className="space-y-6">
