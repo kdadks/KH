@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, Clock, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Facebook, Twitter } from 'lucide-react';
+import { FaInstagram, FaLinkedinIn } from 'react-icons/fa';
 import Logo from '../shared/Logo';
 
 const Footer: React.FC = () => {
@@ -13,7 +14,11 @@ const Footer: React.FC = () => {
           <div>
             <div className="flex items-center mb-4">
               <Logo className="w-10 h-10 mr-2" />
-              <h3 className="text-xl font-semibold">KH Therapy</h3>
+              <img 
+                src="/KHtherapy.png" 
+                alt="KH Therapy" 
+                className="h-6 w-auto"
+              />
             </div>
             <p className="text-neutral-300 mb-4">
               KH Therapy provides excellent high standard physiotherapy care through personalized physical therapy sessions. We help you become pain free through education, knowledge, and strengthening the body through rehabilitation and movement.
@@ -22,14 +27,14 @@ const Footer: React.FC = () => {
               <a href="https://www.facebook.com/PhysiotherapyAndPerformance" className="text-white hover:text-primary-400 transition-colors" aria-label="Facebook" target="_blank" rel="noopener noreferrer">
                 <Facebook size={20} />
               </a>
-              <a href="https://www.instagram.com/galwayphysioclinic/" className="text-white hover:text-primary-400 transition-colors" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
-                <Instagram size={20} />
+              <a href="https://www.instagram.com/kh.therapy/" className="text-white hover:text-primary-400 transition-colors" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
+                <FaInstagram size={20} />
               </a>
               <a href="https://twitter.com/galway_physio" className="text-white hover:text-primary-400 transition-colors" aria-label="Twitter" target="_blank" rel="noopener noreferrer">
                 <Twitter size={20} />
               </a>
-              <a href="https://www.linkedin.com/in/kelly-thompson-physiotherapist" className="text-white hover:text-primary-400 transition-colors" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer">
-                <Linkedin size={20} />
+              <a href="https://www.linkedin.com/in/kelly-hodgins-547b05211/" className="text-white hover:text-primary-400 transition-colors" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer">
+                <FaLinkedinIn size={20} />
               </a>
             </div>
           </div>

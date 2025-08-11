@@ -2,6 +2,7 @@ import SEOHead from '../components/utils/SEOHead';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import PlaceholderImage from '../components/shared/PlaceholderImage';
+import { FaInstagram, FaLinkedinIn } from 'react-icons/fa';
 
 const AboutPage = () => {
   return (
@@ -74,25 +75,12 @@ const AboutPage = () => {
               {/* Profile Images Gallery */}
               <div className="flex flex-col items-center gap-4">
                 <PlaceholderImage
-                  src="https://images.pexels.com/photos/7176322/pexels-photo-7176322.jpeg?auto=compress&cs=tinysrgb&w=192&h=192"
+                  src="/Clinic Photo.jpg"
                   alt="Physio Kelly portrait"
-                  className="w-48 h-48 object-cover rounded-full border-4 border-primary-600 shadow-lg"
+                  className="w-90 h-90 object-cover rounded-full border-4 border-primary-600 shadow-lg"
                   fallbackText="Kelly Portrait"
                 />
-                <div className="flex gap-2">
-                  <PlaceholderImage
-                    src="https://images.pexels.com/photos/5473958/pexels-photo-5473958.jpeg?auto=compress&cs=tinysrgb&w=64&h=64"
-                    alt="Physio Kelly working"
-                    className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 shadow"
-                    fallbackText="Work"
-                  />
-                  <PlaceholderImage
-                    src="https://images.pexels.com/photos/4506237/pexels-photo-4506237.jpeg?auto=compress&cs=tinysrgb&w=64&h=64"
-                    alt="Physio Kelly clinic"
-                    className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 shadow"
-                    fallbackText="Clinic"
-                  />
-                </div>
+                
               </div>
               {/* Bio and Details */}
               <div className="space-y-6">
@@ -115,7 +103,7 @@ const AboutPage = () => {
                 <div className="bg-primary-50 border-l-4 border-primary-600 p-4 rounded-lg">
                   <h4 className="font-semibold text-primary-700 mb-2">Clinic & Home Visits</h4>
                   <p className="text-gray-700 text-sm">
-                    Ace Enterprise Centre, Bawnogue Road, Clondalkin, Dublin 22<br />
+                    Neilstown Village Court, neilstown rd, Clondalkin D22E8P2.<br />
                     <span className="italic">Open since 2020</span>, free parking & late security access<br />
                     Home visits available (rates vary by location)
                   </p>
@@ -127,6 +115,31 @@ const AboutPage = () => {
                   <a href="/contact" className="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-primary-600 font-semibold px-6 py-3 rounded-xl shadow transition text-center">
                     View Location
                   </a>
+                </div>
+                
+                {/* Social Media Links */}
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-3">Connect with Kelly</h4>
+                  <div className="flex space-x-4">
+                    <a 
+                      href="https://www.instagram.com/kh.therapy/" 
+                      className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-200 group shadow-lg"
+                      aria-label="Follow on Instagram"
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <FaInstagram className="w-6 h-6 text-white" />
+                    </a>
+                    <a 
+                      href="https://www.linkedin.com/in/kelly-hodgins-547b05211/" 
+                      className="flex items-center justify-center w-12 h-12 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors group shadow-lg"
+                      aria-label="Connect on LinkedIn"
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <FaLinkedinIn className="w-6 h-6 text-white" />
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>

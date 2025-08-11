@@ -44,7 +44,11 @@ const Header: React.FC = () => {
         <div className="flex justify-between items-center">
           <Link to="/" className="flex items-center space-x-2" onClick={closeMenu}>
             <Logo className="w-12 h-12" />
-            <span className="text-primary-600 font-bold text-2xl">KH Therapy</span>
+            <img 
+              src="/KHtherapy.png" 
+              alt="KH Therapy" 
+              className="h-8 w-auto"
+            />
           </Link>
 
           {/* Desktop Navigation */}

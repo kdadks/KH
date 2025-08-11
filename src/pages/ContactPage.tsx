@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MapPin, Clock, User, Send, MessageSquare } from 'lucide-react';
+import { FaInstagram, FaLinkedinIn } from 'react-icons/fa';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
@@ -228,7 +229,7 @@ const ContactPage: React.FC = () => {
                     <div>
                       <h4 className="font-semibold text-gray-900">Phone</h4>
                       <a href="tel:+353123456789" className="text-primary-600 hover:text-primary-700 transition-colors">
-                        (01) 234-5678
+                        (083)  8009404
                       </a>
                     </div>
                   </div>
@@ -256,9 +257,9 @@ const ContactPage: React.FC = () => {
                     <div>
                       <h4 className="font-semibold text-gray-900">Address</h4>
                       <p className="text-gray-600 leading-relaxed">
-                        Ace Enterprise Centre<br />
-                        Bawnogue Road<br />
-                        Clondalkin, Dublin 22
+                        Neilstown Village Court<br />
+                        Neilstown Rd<br />
+                        Clondalkin, D22E8P2
                       </p>
                     </div>
                   </div>
@@ -276,6 +277,30 @@ const ContactPage: React.FC = () => {
                         <p>Saturday: 9am - 2pm</p>
                         <p>Sunday: Closed</p>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100">
+                    <h4 className="font-semibold text-gray-900 mb-3">Follow Us</h4>
+                    <div className="flex space-x-3">
+                      <a 
+                        href="https://www.instagram.com/kh.therapy/" 
+                        className="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg hover:bg-primary-200 transition-colors group"
+                        aria-label="Instagram"
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <FaInstagram className="w-5 h-5 text-primary-600 group-hover:text-primary-700" />
+                      </a>
+                      <a 
+                        href="https://www.linkedin.com/in/kelly-hodgins-547b05211/" 
+                        className="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg hover:bg-primary-200 transition-colors group"
+                        aria-label="LinkedIn"
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <FaLinkedinIn className="w-5 h-5 text-primary-600 group-hover:text-primary-700" />
+                      </a>
                     </div>
                   </div>
                 </div>

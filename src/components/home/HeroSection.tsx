@@ -111,50 +111,37 @@ const HeroSection: React.FC = () => {
   };
 
   return (
-    <section className="relative pt-16 pb-12 md:pt-24 md:pb-20 overflow-hidden">
-      {/* Background image with overlay */}
-      <div 
-        className="absolute inset-0 z-0 bg-cover bg-center"
-        style={{ 
-          backgroundImage: 'url(https://images.pexels.com/photos/7706643/pexels-photo-7706643.jpeg)',
-          backgroundPosition: 'center',
-          backgroundSize: 'cover',
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-900/80 to-primary-700/50"></div>
-      </div>
-
+  <section className="relative pt-16 pb-12 md:pt-24 md:pb-20 overflow-hidden bg-gray-100">
+      {/* Light grey background applied via Tailwind class */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+  <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center" style={{ color: '#333333' }}>
           
           {/* Hero Content - Left Side */}
-          <div className="lg:col-span-7 text-white">
+          <div className="lg:col-span-7">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-                Your Journey to <span className="text-secondary-300">Recovery</span> and <span className="text-secondary-300">Wellness</span>
+                Your Journey to <span>Recovery</span> and <span>Wellness</span>
               </h1>
-              
-              <p className="text-lg md:text-xl mb-8 text-gray-100 max-w-2xl">
+              <p className="text-lg md:text-xl mb-8 max-w-2xl">
                 Professional physiotherapy services with personalized care plans 
                 designed to help you move better, feel better, and live better.
               </p>
-              
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <Button to="/booking" size="lg" variant="secondary" icon={<Calendar size={20} />}>
                   Book Appointment
                 </Button>
-                <Button to="/services" size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
+                <Button to="/services" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
                   Explore Services
                 </Button>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="flex items-center">
-                  <div className="bg-white/20 rounded-full p-2 mr-3">
+                  <div className="bg-gray-300 rounded-full p-2 mr-3">
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
@@ -162,7 +149,7 @@ const HeroSection: React.FC = () => {
                   <p className="font-medium">Certified Specialists</p>
                 </div>
                 <div className="flex items-center">
-                  <div className="bg-white/20 rounded-full p-2 mr-3">
+                  <div className="bg-gray-300 rounded-full p-2 mr-3">
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
@@ -170,12 +157,34 @@ const HeroSection: React.FC = () => {
                   <p className="font-medium">Modern Techniques</p>
                 </div>
                 <div className="flex items-center">
-                  <div className="bg-white/20 rounded-full p-2 mr-3">
+                  <div className="bg-gray-300 rounded-full p-2 mr-3">
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                   </div>
                   <p className="font-medium">Personalized Care</p>
+                </div>
+              </div>
+              
+              {/* Brand Associations */}
+              <div className="mt-8">
+                <p className="text-sm font-medium text-gray-600 mb-6 text-center"></p>
+                <div className="flex justify-center items-center gap-8 md:gap-12 lg:gap-16">
+                  <img 
+                    src="/vhi.png" 
+                    alt="VHI Healthcare" 
+                    className="h-24 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+                  />
+                  <img 
+                    src="/IAPT Logo.png" 
+                    alt="IAPT - Improving Access to Psychological Therapies" 
+                    className="h-20 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+                  />
+                  <img 
+                    src="/laya_conservative.png" 
+                    alt="Laya Healthcare" 
+                    className="h-20 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+                  />
                 </div>
               </div>
             </motion.div>

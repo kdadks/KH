@@ -2,7 +2,7 @@ import React from 'react';
 
 const WhatsAppChat: React.FC = () => (
   <a
-    href="https://wa.me/919999999999" // Replace with your WhatsApp number
+    href="https://wa.me/0838009404" // Replace with your WhatsApp number
     target="_blank"
     rel="noopener noreferrer"
     className="fixed bottom-6 right-6 z-50"
