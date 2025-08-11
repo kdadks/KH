@@ -340,16 +340,61 @@ export const Bookings: React.FC<BookingsProps> = ({
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 32);
     doc.text(`Total Bookings: ${filteredBookings.length}`, 14, 40);
     
-    // Prepare table data
-    const tableData = filteredBookings.map(booking => [
-      booking.customer_name || booking.name || 'N/A',
-      booking.customer_email || booking.email || 'N/A',
-      booking.customer_phone || booking.phone || 'N/A',
-      booking.package_name || booking.service || 'N/A',
-      booking.appointment_date || booking.date || 'N/A',
-      booking.appointment_time || booking.time || 'N/A',
-      booking.status || 'pending'
-    ]);
+    // Helper to derive date & time prioritizing booking_date column (single source of truth)
+    const deriveDateTime = (b: BookingFormData) => {
+      if (b.booking_date) {
+        // Support ISO 'YYYY-MM-DDTHH:MM:SS' or space separated
+        const raw = b.booking_date.trim();
+        const dateSeg = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0];
+        let timeSeg = '';
+        if (raw.includes('T')) {
+          timeSeg = raw.split('T')[1];
+        } else if (raw.includes(' ')) {
+          timeSeg = raw.split(' ')[1] || '';
+        }
+        // Remove timezone / milliseconds if present
+        timeSeg = timeSeg.replace(/Z$/, '').split('.')[0];
+        if (timeSeg.includes('+')) timeSeg = timeSeg.split('+')[0];
+        if (timeSeg.includes('-')) {
+          // If timezone offset like -05:00 after seconds
+          const parts = timeSeg.split(/-(?=\d{2}:?\d{2}$)/);
+          timeSeg = parts[0];
+        }
+        // Normalize to HH:MM
+        if (timeSeg) {
+          const parts = timeSeg.split(':');
+          if (parts.length >= 2) timeSeg = `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}`;
+          else timeSeg = 'N/A';
+        } else {
+          timeSeg = 'N/A';
+        }
+        return { date: dateSeg || 'N/A', time: timeSeg };
+      }
+      // Fallback legacy fields if booking_date missing
+      const dateFallback = b.appointment_date || b.date || b.created_at || 'N/A';
+      const datePart = dateFallback === 'N/A' ? 'N/A' : dateFallback.split('T')[0].split(' ')[0];
+      const timeFallback = b.appointment_time || b.time || 'N/A';
+      let timePart = 'N/A';
+      if (timeFallback !== 'N/A') {
+        const p = timeFallback.split(':');
+        if (p.length >= 2) timePart = `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}`;
+      }
+      return { date: datePart, time: timePart };
+    };
+
+    // Prepare table data ensuring normalized date/time always populated
+    const tableData = filteredBookings.map(booking => {
+      const { date, time } = deriveDateTime(booking);
+      return [
+        booking.customer_name || booking.name || 'N/A',
+        booking.customer_email || booking.email || 'N/A',
+        booking.customer_phone || booking.phone || 'N/A',
+        booking.package_name || booking.service || 'N/A',
+        date,
+        time,
+        booking.status || 'pending'
+      ];
+    });
     
     // Add table
     autoTable(doc, {
@@ -357,8 +402,14 @@ export const Bookings: React.FC<BookingsProps> = ({
       head: [['Customer Name', 'Email', 'Phone', 'Service', 'Date', 'Time', 'Status']],
       body: tableData,
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246] },
-      alternateRowStyles: { fillColor: [245, 247, 250] }
+      headStyles: { fillColor: '#3b82f6' },
+      alternateRowStyles: { fillColor: '#f5f7fa' },
+      didParseCell: (data: any) => {
+        // Ensure empty cells show N/A explicitly
+        if (data.cell.raw === '' || data.cell.raw == null) {
+          data.cell.text = ['N/A'];
+        }
+      }
     });
     
     // Save the PDF
