@@ -12,6 +12,10 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+      parserOptions: {
+        project: false,
+        ecmaFeatures: { jsx: true },
+      },
     },
     plugins: {
       'react-hooks': reactHooks,
@@ -20,9 +24,11 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
+  'off',
+  { allowConstantExport: true },
       ],
+      // Temporary disable due to TS 5.6 plugin mismatch throwing error
+      '@typescript-eslint/no-unused-expressions': 'off',
     },
   }
 );

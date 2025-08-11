@@ -4,7 +4,7 @@ import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import Button from '../shared/Button';
 import { supabase } from '../../supabaseClient';
-import { useToast } from '../shared/Toast';
+import { useToast } from '../shared/toastContext';
 
 const HeroSection: React.FC = () => {
   // Removed unused visibility state

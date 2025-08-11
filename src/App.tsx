@@ -16,7 +16,7 @@ import ChronicPainPage from './pages/services/ChronicPainPage';
 import PostSurgeryPage from './pages/services/PostSurgeryPage';
 import NeuromuscularPage from './pages/services/NeuromuscularPage';
 import ErgonomicPage from './pages/services/ErgonomicPage';
-import { ToastProvider } from './components/shared/Toast';
+import { ToastProvider } from './components/shared/toastContext';
 
 function App() {
   return (

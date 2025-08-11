@@ -32,7 +32,7 @@ const BookingPage: React.FC = () => {
         body: JSON.stringify(booking),
       });
       setSuccessMsg('Booking confirmed! Confirmation email sent.');
-    } catch (err) {
+  } catch {
       setSuccessMsg('Booking confirmed, but failed to send email.');
     }
     setSendingEmail(false);

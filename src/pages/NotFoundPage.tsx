@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Home } from 'lucide-react';
 import Button from '../components/shared/Button';
 import SEOHead from '../components/utils/SEOHead';
