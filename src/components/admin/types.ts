@@ -37,6 +37,16 @@ export type BookingFormData = {
   notes?: string;
   status?: string;
   created_at?: string;
+  customer_id?: number; // New field for customer relationship
+  customer_details?: { // New field for customer relationship data
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone?: string;
+    created_at?: string;
+    updated_at?: string;
+  };
   // Legacy field mappings for compatibility
   name?: string;
   email?: string;
@@ -48,15 +58,83 @@ export type BookingFormData = {
 
 export type AvailabilitySlot = {
   id?: number;
-  date: string;
-  start: string;
+  day_of_week: number;
+  start_time: string;
   end_time: string;
+  is_available: boolean;
 };
 
-export type AvailabilityToDelete = {
-  id: number;
-  date: string;
-  start: string;
-  end_time: string;
-  index: number;
+// New types for Invoice Management System
+
+export type Customer = {
+  id?: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  address_line_1?: string;
+  address_line_2?: string;
+  city?: string;
+  county?: string;
+  eircode?: string;
+  country?: string;
+  date_of_birth?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  medical_notes?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Invoice = {
+  id?: number;
+  invoice_number: string;
+  customer_id: number;
+  booking_id?: string; // UUID from bookings table
+  invoice_date: string;
+  due_date: string;
+  subtotal: number;
+  vat_rate: number;
+  vat_amount: number;
+  total_amount: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  payment_method?: string;
+  payment_date?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Related data for display
+  customer?: Customer;
+  items?: InvoiceItem[];
+};
+
+export type InvoiceItem = {
+  id?: number;
+  invoice_id?: number;
+  service_id?: number;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  created_at?: string;
+  // Related data for display
+  service?: Package;
+};
+
+export type InvoiceFormData = {
+  customer_id: number;
+  booking_id?: string; // UUID from bookings table
+  invoice_date: string;
+  due_date: string;
+  items: InvoiceItem[];
+  notes?: string;
+};
+
+export type PaymentRecord = {
+  invoice_id: number;
+  amount: number;
+  payment_method: string;
+  payment_date: string;
+  notes?: string;
 };

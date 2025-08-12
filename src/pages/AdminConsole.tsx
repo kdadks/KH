@@ -10,16 +10,23 @@ import {
   AlertCircle,
   TrendingUp,
   Settings,
-  LogOut
+  LogOut,
+  FileText,
+  Users
 } from 'lucide-react';
 import { Dashboard } from '../components/admin/Dashboard';
 import { Services } from '../components/admin/Services';
 import { Bookings } from '../components/admin/Bookings';
 import { Availability } from '../components/admin/Availability';
 import { Reports } from '../components/admin/Reports';
+import InvoiceManagement from '../components/admin/InvoiceManagement';
+import CustomerManagement from '../components/admin/CustomerManagement';
 import { BookingFormData, Package as PackageType } from '../components/admin/types';
+import { getBookingsWithCustomers } from '../utils/customerBookingUtils';
+import { useToast } from '../components/shared/toastContext';
 
 const AdminConsole = () => {
+  const { showError } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +37,7 @@ const AdminConsole = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // State management
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'reports'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports'>('dashboard');
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [newPackage, setNewPackage] = useState<PackageType>({ 
     name: '', 
@@ -80,7 +87,7 @@ const AdminConsole = () => {
   };
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports');
+    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices');
   };
 
   // Change password handler
@@ -106,17 +113,23 @@ const AdminConsole = () => {
   useEffect(() => {
     if (isLoggedIn) {
       fetchAllBookings();
+      fetchAllServices();
     }
   }, [isLoggedIn]);
 
-  // Also fetch bookings when the active tab changes to ensure fresh data
+  // Also fetch data when the active tab changes to ensure fresh data
   useEffect(() => {
-    if (isLoggedIn && (activeTab === 'dashboard' || activeTab === 'bookings')) {
+    if (isLoggedIn && (activeTab === 'dashboard' || activeTab === 'bookings' || activeTab === 'invoices')) {
       if (allBookings.length === 0) {
         fetchAllBookings();
       }
     }
-  }, [activeTab, isLoggedIn, allBookings.length]);
+    if (isLoggedIn && (activeTab === 'dashboard' || activeTab === 'package')) {
+      if (packages.length === 0) {
+        fetchAllServices();
+      }
+    }
+  }, [activeTab, isLoggedIn, allBookings.length, packages.length]);
 
   // Login handler
   const handleLogin = async (e: React.FormEvent) => {
@@ -134,7 +147,7 @@ const AdminConsole = () => {
       } else if (data.user) {
         setIsLoggedIn(true);
         setLoginError('');
-        await fetchAllBookings();
+        await Promise.all([fetchAllBookings(), fetchAllServices()]);
       } else {
         setLoginError('Login failed.');
       }
@@ -143,21 +156,126 @@ const AdminConsole = () => {
     }
   };
 
-  // Fetch bookings
+  // Fetch bookings with customer details
   const fetchAllBookings = async () => {
     try {
-      const { data, error } = await supabase
+      console.log('🔍 Testing Supabase connection...');
+      
+      // First, test a simple query to see if Supabase is accessible
+      const { data: testData, error: testError } = await supabase
+        .from('bookings')
+        .select('id, package_name')
+        .limit(1);
+      
+      if (testError) {
+        console.error('❌ Simple Supabase test failed:', testError);
+        showError('Database Connection Error', 'Could not connect to database. Please check your connection.');
+        return;
+      }
+      
+      console.log('✅ Simple Supabase test successful:', testData);
+      
+      // Now try the customer join query
+      console.log('🔍 Fetching bookings with customer join...');
+      const { bookings: bookingsWithCustomers, error: customerError } = await getBookingsWithCustomers();
+      
+      if (!customerError && bookingsWithCustomers) {
+        console.log('✅ Raw bookings from Supabase:', bookingsWithCustomers);
+        
+        // Transform the data to include customer details while maintaining backward compatibility
+        const transformedBookings = bookingsWithCustomers.map((booking: any) => {
+          console.log('📝 Processing booking:', booking.id);
+          console.log('👤 Customer data:', booking.customers);
+          
+          const transformed = {
+            ...booking,
+            // If customer relationship exists, use it, otherwise fall back to direct fields
+            customer_name: booking.customers?.first_name && booking.customers?.last_name 
+              ? `${booking.customers.first_name} ${booking.customers.last_name}`
+              : booking.customer_name,
+            customer_email: booking.customers?.email || booking.customer_email,
+            customer_phone: booking.customers?.phone || booking.customer_phone,
+            // Keep the customer object for potential future use
+            customer_details: booking.customers
+          };
+          
+          console.log('🔄 Transformed booking:', {
+            id: transformed.id,
+            customer_name: transformed.customer_name,
+            customer_email: transformed.customer_email,
+            customer_phone: transformed.customer_phone,
+            customer_details: transformed.customer_details
+          });
+          
+          return transformed;
+        });
+        
+        console.log('✨ Final transformed bookings:', transformedBookings);
+        setAllBookings(transformedBookings);
+        return;
+      }
+      
+      // Fallback to the old method if customer integration fails
+      console.warn('❌ Customer integration failed, using fallback method:', customerError);
+      
+      // Try the simple fallback method
+      console.log('🔍 Trying fallback: simple bookings fetch...');
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from('bookings')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (error) {
-        console.error('Error fetching bookings:', error);
+      if (fallbackError) {
+        console.error('❌ Fallback method also failed:', fallbackError);
+        showError('Database Error', 'Cannot fetch bookings data. Please check your connection and try again.');
+        return;
       } else {
-        setAllBookings(data || []);
+        console.log('✅ Fallback successful, got bookings:', fallbackData);
+        setAllBookings(fallbackData || []);
       }
     } catch (error) {
-      console.error('Exception in fetchAllBookings:', error);
+      console.error('❌ Exception in fetchAllBookings:', error);
+      
+      // Show user-friendly error
+      showError('Connection Error', 'Unable to fetch booking data. Please check your internet connection and try again.');
+      
+      // Fallback to empty array to prevent UI crashes
+      setAllBookings([]);
+    }
+  };
+
+  // Fetch services from database
+  const fetchAllServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching services:', error);
+      } else {
+        // Transform database format to component format
+        const transformedServices: PackageType[] = (data || []).map(service => ({
+          id: service.id,
+          name: service.name,
+          category: service.category,
+          price: service.price,
+          inHourPrice: service.in_hour_price,
+          outOfHourPrice: service.out_of_hour_price,
+          features: service.features || [],
+          description: service.description,
+          isActive: service.is_active,
+          created_at: service.created_at,
+          updated_at: service.updated_at
+        }));
+        
+        setPackages(transformedServices);
+      }
+    } catch (error) {
+      console.error('Exception in fetchAllServices:', error);
     }
   };
 
@@ -295,11 +413,13 @@ const AdminConsole = () => {
               { id: 'bookings', label: 'Bookings', icon: Calendar },
               { id: 'package', label: 'Services', icon: Package },
               { id: 'availability', label: 'Availability', icon: Clock },
+              { id: 'customers', label: 'Customers', icon: Users },
+              { id: 'invoices', label: 'Invoices', icon: FileText },
               { id: 'reports', label: 'Reports', icon: TrendingUp }
             ].map(tab => (
               <button
                 key={tab.id}
-        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'reports')}
+        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports')}
                 className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
@@ -349,6 +469,12 @@ const AdminConsole = () => {
         )}
         {activeTab === 'availability' && (
           <Availability />
+        )}
+        {activeTab === 'customers' && (
+          <CustomerManagement />
+        )}
+        {activeTab === 'invoices' && (
+          <InvoiceManagement />
         )}
         {activeTab === 'reports' && (
           <Reports allBookings={allBookings} />

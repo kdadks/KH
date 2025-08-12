@@ -65,6 +65,33 @@ export const Bookings: React.FC<BookingsProps> = ({
 }) => {
   const { showSuccess, showError } = useToast();
   
+  // Helper functions to get customer data with fallbacks
+  const getCustomerName = (booking: BookingFormData): string => {
+    const name = booking.customer_details?.first_name && booking.customer_details?.last_name 
+      ? `${booking.customer_details.first_name} ${booking.customer_details.last_name}`
+      : booking.customer_name || booking.name || 'Unknown';
+    
+    console.log('getCustomerName for booking', booking.id, ':', {
+      customer_details: booking.customer_details,
+      customer_name: booking.customer_name,
+      result: name
+    });
+    
+    return name;
+  };
+
+  const getCustomerEmail = (booking: BookingFormData): string => {
+    const email = booking.customer_details?.email || booking.customer_email || booking.email || 'No email';
+    console.log('getCustomerEmail for booking', booking.id, ':', email);
+    return email;
+  };
+
+  const getCustomerPhone = (booking: BookingFormData): string => {
+    const phone = booking.customer_details?.phone || booking.customer_phone || booking.phone || 'No phone';
+    console.log('getCustomerPhone for booking', booking.id, ':', phone);
+    return phone;
+  };
+  
   // State management
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
@@ -114,9 +141,9 @@ export const Bookings: React.FC<BookingsProps> = ({
 
   // Filter bookings
   const filteredBookings = allBookings.filter(booking => {
-    // Normalized fields (handle legacy + new schema)
-    const customerName = booking.customer_name || booking.name || '';
-    const customerEmail = booking.customer_email || booking.email || '';
+    // Normalized fields using helper functions
+    const customerName = getCustomerName(booking);
+    const customerEmail = getCustomerEmail(booking);
     const packageName = booking.package_name || booking.service || '';
 
     // Collect all possible date sources
@@ -386,9 +413,9 @@ export const Bookings: React.FC<BookingsProps> = ({
     const tableData = filteredBookings.map(booking => {
       const { date, time } = deriveDateTime(booking);
       return [
-        booking.customer_name || booking.name || 'N/A',
-        booking.customer_email || booking.email || 'N/A',
-        booking.customer_phone || booking.phone || 'N/A',
+        getCustomerName(booking),
+        getCustomerEmail(booking),
+        getCustomerPhone(booking),
         booking.package_name || booking.service || 'N/A',
         date,
         time,
@@ -475,7 +502,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         
         const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
         
-        const customerName = booking.customer_name || booking.name || 'Booking';
+        const customerName = getCustomerName(booking);
         const title: string = bookings.length > 1 && index === 0
           ? `${customerName} (+${bookings.length - 1} more)`
           : customerName;
@@ -808,7 +835,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
                             <h4 className={`text-lg font-medium ${
                               isCancelled ? 'text-gray-500 line-through' : 'text-gray-900'
-                            }`}>{booking.customer_name || booking.name || 'Unknown'}</h4>
+                            }`}>{getCustomerName(booking)}</h4>
                             <div className="flex items-center space-x-2">
                               <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full w-fit ${
                                 isCancelled ? 'bg-red-100 text-red-800' :
@@ -825,14 +852,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="flex items-center min-w-0">
                               <Mail className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <span className="text-sm text-gray-600 truncate" title={booking.customer_email || booking.email || ''}>
-                                {booking.customer_email || booking.email || 'No email'}
+                              <span className="text-sm text-gray-600 truncate" title={getCustomerEmail(booking)}>
+                                {getCustomerEmail(booking)}
                               </span>
                             </div>
                             <div className="flex items-center min-w-0">
                               <Phone className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <span className="text-sm text-gray-600 truncate" title={booking.customer_phone || booking.phone || ''}>
-                                {booking.customer_phone || booking.phone || 'No phone'}
+                              <span className="text-sm text-gray-600 truncate" title={getCustomerPhone(booking)}>
+                                {getCustomerPhone(booking)}
                               </span>
                             </div>
                           </div>
@@ -1014,7 +1041,7 @@ export const Bookings: React.FC<BookingsProps> = ({
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
-                <p className="text-sm text-gray-600">{editingBooking.customer_name || editingBooking.name}</p>
+                <p className="text-sm text-gray-600">{getCustomerName(editingBooking)}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
@@ -1069,7 +1096,7 @@ export const Bookings: React.FC<BookingsProps> = ({
               <h3 className="text-lg font-semibold text-gray-900">Delete Booking</h3>
             </div>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to delete the booking for <span className="font-medium">{bookingToDelete.customer_name || bookingToDelete.name}</span>? 
+              Are you sure you want to delete the booking for <span className="font-medium">{getCustomerName(bookingToDelete)}</span>? 
               This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
@@ -1102,7 +1129,7 @@ export const Bookings: React.FC<BookingsProps> = ({
               <h3 className="text-lg font-semibold text-gray-900">Cancel Booking</h3>
             </div>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to cancel the booking for <span className="font-medium">{bookingToCancel.customer_name || bookingToCancel.name}</span>?
+              Are you sure you want to cancel the booking for <span className="font-medium">{getCustomerName(bookingToCancel)}</span>?
             </p>
             <div className="flex justify-end space-x-3">
               <button
@@ -1144,15 +1171,15 @@ export const Bookings: React.FC<BookingsProps> = ({
                   <User className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">{selectedBooking.customer_name || selectedBooking.name}</p>
-                  <p className="text-sm text-gray-500">{selectedBooking.customer_email || selectedBooking.email}</p>
+                  <p className="font-semibold text-gray-900">{getCustomerName(selectedBooking)}</p>
+                  <p className="text-sm text-gray-500">{getCustomerEmail(selectedBooking)}</p>
                 </div>
               </div>
               
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium text-gray-500">Phone:</span>
-                  <span className="text-sm text-gray-900">{selectedBooking.customer_phone || selectedBooking.phone}</span>
+                  <span className="text-sm text-gray-900">{getCustomerPhone(selectedBooking)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium text-gray-500">Service:</span>
@@ -1286,8 +1313,8 @@ export const Bookings: React.FC<BookingsProps> = ({
                           <User className="w-5 h-5 text-primary-600" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-gray-900">{booking.customer_name || booking.name}</p>
-                          <p className="text-sm text-gray-500">{booking.customer_email || booking.email}</p>
+                          <p className="font-semibold text-gray-900">{getCustomerName(booking)}</p>
+                          <p className="text-sm text-gray-500">{getCustomerEmail(booking)}</p>
                           <p className="text-sm text-gray-600">{booking.package_name || booking.service}</p>
                           <div className="flex items-center space-x-4 mt-1">
                             <span className="text-sm text-gray-500">

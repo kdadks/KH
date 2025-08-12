@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
-import { useToast } from './shared/Toast';
+import { useToast } from './shared/toastContext';
+import { createBookingWithCustomer } from '../utils/customerBookingUtils';
 
 const BookingForm: React.FC = () => {
   const { showSuccess, showError } = useToast();
-  const [customerName, setCustomerName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [packageName, setPackageName] = useState('');
@@ -16,23 +17,27 @@ const BookingForm: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
+    const customerData = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: customerEmail,
+      phone: customerPhone
+    };
+
     const bookingData = {
-      customer_name: customerName,
-      customer_email: customerEmail,
-      customer_phone: customerPhone,
       package_name: packageName,
       notes: notes,
       status: status
     };
     
-    const { data, error } = await supabase.from('bookings').insert([bookingData]);
-    console.log('Supabase insert result:', { data, error });
+    const { error } = await createBookingWithCustomer(customerData, bookingData);
     
     if (error) {
-      showError('Booking Failed', error.message);
+      showError('Booking Failed', error);
     } else {
       showSuccess('Booking Submitted!', 'We will contact you soon to confirm your appointment.');
-      setCustomerName('');
+      setFirstName('');
+      setLastName('');
       setCustomerEmail('');
       setCustomerPhone('');
       setPackageName('');
@@ -48,9 +53,16 @@ const BookingForm: React.FC = () => {
       <h2>Book a Service</h2>
       <input
         type="text"
-        placeholder="Name"
-        value={customerName}
-        onChange={e => setCustomerName(e.target.value)}
+        placeholder="First Name"
+        value={firstName}
+        onChange={e => setFirstName(e.target.value)}
+        required
+      />
+      <input
+        type="text"
+        placeholder="Last Name"
+        value={lastName}
+        onChange={e => setLastName(e.target.value)}
         required
       />
       <input
@@ -65,6 +77,7 @@ const BookingForm: React.FC = () => {
         placeholder="Phone Number"
         value={customerPhone}
         onChange={e => setCustomerPhone(e.target.value)}
+        required
       />
       <input
         type="text"

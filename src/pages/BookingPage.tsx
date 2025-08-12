@@ -6,9 +6,11 @@ import SEOHead from '../components/utils/SEOHead';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
+import { createBookingWithCustomer } from '../utils/customerBookingUtils';
 
 interface BookingFormData {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
   service: string;
@@ -26,16 +28,6 @@ interface Service {
   out_of_hour_price?: string;
   displayName?: string;
   priceType?: string;
-}
-
-interface ServiceTimeSlot {
-  id: number;
-  service_id: number;
-  slot_type: 'in-hour' | 'out-of-hour';
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  is_available: boolean;
 }
 
 const BookingPage: React.FC = () => {
@@ -280,29 +272,57 @@ const BookingPage: React.FC = () => {
   };
 
   const onSubmit = async (data: BookingFormData) => {
-    // Map form data to bookings table columns
-    // Combine date and time into ISO string for booking_date
-    let bookingDateTime = data.date;
-    if (data.time) {
-      // Extract start time from range (e.g., "17:00-20:00" -> "17:00")
-      const startTime = data.time.includes('-') ? data.time.split('-')[0] : data.time;
-      bookingDateTime = `${data.date}T${startTime}`;
-    }
-    const bookingData = {
-      customer_name: data.name,
-      customer_email: data.email,
-      customer_phone: data.phone,
-      package_name: data.service,
-      booking_date: bookingDateTime,
-      notes: data.notes,
-      status: 'pending'
-    };
-    const { error } = await supabase.from('bookings').insert([bookingData]);
-    if (error) {
-      setSuccessMsg('Booking failed: ' + error.message);
-    } else {
-      await sendBookingEmail(data);
-      reset(); // Clear the form after successful booking
+    setSendingEmail(true);
+    setSuccessMsg('');
+
+    try {
+      // Map form data to booking data
+      // Combine date and time into ISO string for booking_date
+      let bookingDateTime = data.date;
+      if (data.time) {
+        // Extract start time from range (e.g., "17:00-20:00" -> "17:00")
+        const startTime = data.time.includes('-') ? data.time.split('-')[0] : data.time;
+        bookingDateTime = `${data.date}T${startTime}`;
+      }
+
+      // Prepare customer data
+      const customerData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone
+      };
+
+      // Prepare booking data
+      const bookingData = {
+        package_name: data.service,
+        booking_date: bookingDateTime,
+        notes: data.notes,
+        status: 'pending'
+      };
+
+      // Create booking with customer integration
+      const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
+
+      if (error) {
+        setSuccessMsg('Booking failed: ' + error);
+        setSendingEmail(false);
+        return;
+      }
+
+      if (booking && customer) {
+        console.log('Booking created successfully:', { booking, customer });
+        setSuccessMsg('Booking submitted successfully! We will contact you to confirm your appointment.');
+        
+        // Send email notification
+        await sendBookingEmail(data);
+        reset(); // Clear the form after successful booking
+      }
+    } catch (error) {
+      console.error('Error submitting booking:', error);
+      setSuccessMsg('An error occurred while submitting your booking. Please try again.');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -326,18 +346,34 @@ const BookingPage: React.FC = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-neutral-700 mb-1">
-                    Full Name *
+                  <label htmlFor="firstName" className="block text-sm font-medium text-neutral-700 mb-1">
+                    First Name *
                   </label>
                   <input
                     type="text"
-                    id="name"
-                    {...register('name', { required: 'Name is required' })}
+                    id="firstName"
+                    {...register('firstName', { required: 'First name is required' })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="John Doe"
+                    placeholder="John"
                   />
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+                  {errors.firstName && (
+                    <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <label htmlFor="lastName" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    {...register('lastName', { required: 'Last name is required' })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Doe"
+                  />
+                  {errors.lastName && (
+                    <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
                   )}
                 </div>
                 

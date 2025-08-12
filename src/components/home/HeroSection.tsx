@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import Button from '../shared/Button';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../shared/toastContext';
+import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 
 interface Service {
   id: number | string;
@@ -19,7 +20,7 @@ interface Service {
 
 const HeroSection: React.FC = () => {
   // Removed unused visibility state
-  interface BookingFormData { name: string; email: string; phone: string; service: string; }
+  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; }
   const { showSuccess, showError } = useToast();
   const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -122,50 +123,54 @@ const HeroSection: React.FC = () => {
   };
 
   const onSubmit = async (data: BookingFormData) => {
-    console.log('Form data received:', data); // Debug: Check what form data we're getting
+    console.log('Hero form data received:', data); // Debug: Check what form data we're getting
     
     setSendingEmail(true);
     
     try {
-      // Use service name directly from the form (no mapping needed)
-      const serviceDisplayName = data.service;
-      
-      // Save to Supabase database
-      const bookingData = {
-        customer_name: data.name,
-        customer_email: data.email,
-        customer_phone: data.phone,
-        package_name: serviceDisplayName, // Use service name directly
-        notes: 'Quick Appointment',
-        status: 'pending',
-        booking_date: null // Explicitly set booking_date to null (blank)
+      // Prepare customer data
+      const customerData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone
       };
 
-      console.log('Submitting booking data to Supabase:', bookingData); // Debug log
+      // Prepare booking data
+      const bookingData = {
+        package_name: data.service,
+        notes: 'Quick Appointment from Hero Section',
+        status: 'pending'
+        // No booking_date - this will be handled later by admin
+      };
 
-      const { data: insertedData, error } = await supabase.from('bookings').insert([bookingData]).select();
-      
+      console.log('Submitting hero booking data:', { customerData, bookingData }); // Debug log
+
+      // Create booking with customer integration
+      const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
+
       if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(error.message);
+        console.error('Booking creation error:', error);
+        throw new Error(error);
       }
 
-      console.log('Successfully inserted booking:', insertedData); // Debug: Confirm successful insert
+      if (booking && customer) {
+        console.log('Successfully created booking and customer:', { booking, customer }); // Debug: Confirm successful insert
 
-      // Send email notification
-      await sendBookingEmail(data);
-      
-      // Reset form on success
-      reset();
+        // Send email notification
+        await sendBookingEmail(data);
+        
+        // Reset form on success
+        reset();
+      }
       
     } catch (error) {
-      console.error('Error submitting booking:', error);
+      console.error('Error submitting hero booking:', error);
       showError('Booking Failed', 'Error submitting booking. Please try again.');
+    } finally {
       setSendingEmail(false);
     }
-  };
-
-  return (
+  };  return (
   <section className="relative pt-16 pb-12 md:pt-24 md:pb-20 overflow-hidden bg-gray-100">
       {/* Light grey background applied via Tailwind class */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -258,30 +263,39 @@ const HeroSection: React.FC = () => {
             </div>
             
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Full Name
-                </label>
-                <input type="text" id="name" {...register('name',{required:'Name is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="John Doe" />
-                {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="firstName" className="block text-sm font-medium text-neutral-700 mb-1">
+                    First Name *
+                  </label>
+                  <input type="text" id="firstName" {...register('firstName',{required:'First name is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="John" />
+                  {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>}
+                </div>
+                <div>
+                  <label htmlFor="lastName" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Last Name *
+                  </label>
+                  <input type="text" id="lastName" {...register('lastName',{required:'Last name is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="Doe" />
+                  {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>}
+                </div>
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Email Address
+                  Email Address *
                 </label>
                 <input type="email" id="email" {...register('email',{required:'Email is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="john@example.com" />
                 {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
               </div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Phone Number
+                  Phone Number *
                 </label>
                 <input type="tel" id="phone" {...register('phone',{required:'Phone number is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="(01) 234-5678" />
                 {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
               </div>
               <div>
                 <label htmlFor="service" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Service Type
+                  Service Type *
                 </label>
                 <select id="service" {...register('service',{required:'Please select a service'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500">
                    <option value="">

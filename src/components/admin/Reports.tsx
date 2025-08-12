@@ -447,47 +447,65 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
         </>
       )}
 
-  {/* Filters at bottom with Generate Report */}
+      {/* Filters with improved grid layout matching CustomerManagement */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Filters</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-            <input
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-            <input
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Service</label>
-            <select
-              value={selectedService}
-              onChange={(e) => setSelectedService(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">All Services</option>
-              {uniqueServices.map(service => (
-                <option key={service} value={service}>{service}</option>
-              ))}
-            </select>
-          </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+        <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+          <FileText className="w-5 h-5 mr-2 text-blue-600" />
+          Report Filters
+        </h3>
+        
+        {/* Filter Controls Section */}
+        <div className="bg-blue-50 rounded-lg p-4 sm:p-5">
+          <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+            Filter Options
+          </h4>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Service
+              </label>
+              <select
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Services</option>
+                {uniqueServices.map(service => (
+                  <option key={service} value={service}>{service}</option>
+                ))}
+              </select>
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
@@ -495,43 +513,52 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-        </div>
-        <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div className="flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0 w-full sm:w-auto">
-            <button
-              onClick={() => { setHasGenerated(true); generateReportData(); }}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center"
-            >
-              <TrendingUp className="w-4 h-4 mr-2" /> Generate Report
-            </button>
-            <button
-              onClick={() => {
-                setDateRange({ start: '', end: '' });
-                setSelectedService('');
-                setSelectedStatus('');
-                setHasGenerated(false);
-                setReportData(null);
-              }}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Clear Filters
-            </button>
-            <button
-              onClick={exportToExcel}
-              disabled={!hasGenerated || !reportData}
-              className={`px-4 py-2 rounded-lg flex items-center justify-center text-white transition-colors ${!hasGenerated || !reportData ? 'bg-green-400 cursor-not-allowed opacity-60' : 'bg-green-600 hover:bg-green-700'}`}
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
-            </button>
-            <button
-              onClick={exportToPDF}
-              disabled={!hasGenerated || !reportData}
-              className={`px-4 py-2 rounded-lg flex items-center justify-center text-white transition-colors ${!hasGenerated || !reportData ? 'bg-red-400 cursor-not-allowed opacity-60' : 'bg-red-600 hover:bg-red-700'}`}
-            >
-              <FileText className="w-4 h-4 mr-2" /> PDF
-            </button>
           </div>
-          <p className="text-xs text-gray-500">Click Generate Report to view results.</p>
+        </div>
+        
+        {/* Action Buttons Section */}
+        <div className="bg-green-50 rounded-lg p-4 sm:p-5 mt-6">
+          <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <FileSpreadsheet className="w-5 h-5 mr-2 text-green-600" />
+            Report Actions
+          </h4>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+            <div className="flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0 w-full sm:w-auto">
+              <button
+                onClick={() => { setHasGenerated(true); generateReportData(); }}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" /> Generate Report
+              </button>
+              <button
+                onClick={() => {
+                  setDateRange({ start: '', end: '' });
+                  setSelectedService('');
+                  setSelectedStatus('');
+                  setHasGenerated(false);
+                  setReportData(null);
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Clear Filters
+              </button>
+              <button
+                onClick={exportToExcel}
+                disabled={!hasGenerated || !reportData}
+                className={`px-4 py-2 rounded-lg flex items-center justify-center text-white transition-colors ${!hasGenerated || !reportData ? 'bg-green-400 cursor-not-allowed opacity-60' : 'bg-green-600 hover:bg-green-700'}`}
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
+              </button>
+              <button
+                onClick={exportToPDF}
+                disabled={!hasGenerated || !reportData}
+                className={`px-4 py-2 rounded-lg flex items-center justify-center text-white transition-colors ${!hasGenerated || !reportData ? 'bg-red-400 cursor-not-allowed opacity-60' : 'bg-red-600 hover:bg-red-700'}`}
+              >
+                <FileText className="w-4 h-4 mr-2" /> PDF
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">Click Generate Report to view results.</p>
+          </div>
         </div>
       </div>
 
@@ -549,28 +576,26 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Customer</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Contact</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">Customer Name</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">Phone</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-600">Service</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Time</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {reportData.filteredBookings.map((b, idx) => {
-                    const { date, time } = deriveDateTime(b);
                     const status = b.status || 'pending';
                     const phone = b.customer_phone || b.phone;
                     const email = b.customer_email || b.email;
-                    const contact = phone && email ? `${phone} | ${email}` : (phone || email || '—');
+                    const service = b.package_name || b.service || '—';
+                    const customerName = b.customer_name || b.name || '—';
                     return (
                       <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-medium text-gray-900">{b.customer_name || b.name || '—'}</td>
-                        <td className="px-4 py-2 text-gray-700">{contact}</td>
-                        <td className="px-4 py-2 text-gray-700">{b.package_name || b.service || '—'}</td>
-                        <td className="px-4 py-2 text-gray-700">{date}</td>
-                        <td className="px-4 py-2 text-gray-700">{time || '—'}</td>
+                        <td className="px-4 py-2 font-medium text-gray-900">{customerName}</td>
+                        <td className="px-4 py-2 text-gray-700">{email || '—'}</td>
+                        <td className="px-4 py-2 text-gray-700">{phone || '—'}</td>
+                        <td className="px-4 py-2 text-gray-700">{service}</td>
                         <td className="px-4 py-2">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                             status === 'confirmed' ? 'bg-green-100 text-green-800' :
