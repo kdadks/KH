@@ -13,13 +13,6 @@ const supabaseAnonKey = envAnon || fallbackAnon;
 if (!envUrl || !envAnon) {
   // eslint-disable-next-line no-console
   console.warn('[Supabase] Using fallback URL/key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for production.');
-  console.log('[DEBUG] Environment check:', {
-    'import.meta.env exists': !!(import.meta as any)?.env,
-    'URL variable exists': !!(import.meta as any)?.env?.VITE_SUPABASE_URL,
-    'KEY variable exists': !!(import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY,
-    'Using URL': supabaseUrl,
-    'Using Key (first 10 chars)': supabaseAnonKey.substring(0, 10) + '...'
-  });
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

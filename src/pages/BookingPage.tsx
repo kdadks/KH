@@ -74,27 +74,6 @@ const BookingPage: React.FC = () => {
 
   useEffect(() => {
     fetchServices();
-    // Add a direct test query to verify Supabase connection
-    const testSupabaseConnection = async () => {
-      try {
-        console.log('[DEBUG] Testing Supabase connection...');
-        // Use a simpler query to test connection - just get a few records
-        const { data, error } = await supabase
-          .from('services_time_slots')
-          .select('*')
-          .limit(5);
-        
-        if (error) {
-          console.error('[DEBUG] Supabase connection test error:', error);
-        } else {
-          console.log('[DEBUG] Supabase connection successful, sample time slots:', data);
-          console.log('[DEBUG] Number of time slots returned:', data ? data.length : 0);
-        }
-      } catch (err) {
-        console.error('[DEBUG] Supabase connection test exception:', err);
-      }
-    };
-    testSupabaseConnection();
   }, []);
 
   // Fetch time slots when service changes
@@ -124,12 +103,6 @@ const BookingPage: React.FC = () => {
     try {
       setLoadingTimeSlots(true);
       
-      console.log('[DEBUG] Selected service:', service);
-      console.log('[DEBUG] Environment variables available:', {
-        url: (import.meta as any)?.env?.VITE_SUPABASE_URL ? 'Set' : 'Not set',
-        key: (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Not set'
-      });
-      
       // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
       let serviceId: number;
       if (typeof service.id === 'string') {
@@ -148,7 +121,6 @@ const BookingPage: React.FC = () => {
       }
 
       // Fetch time slots for the selected service
-      console.log('[DEBUG] Querying time slots for serviceId:', serviceId);
       const { data, error } = await supabase
         .from('services_time_slots')
         .select('*')
@@ -163,25 +135,13 @@ const BookingPage: React.FC = () => {
         return;
       }
 
-      console.log('[DEBUG] Raw time slots data:', data);
-
       // Filter time slots based on service price type
       let relevantSlots = data || [];
-      console.log('[DEBUG] Service priceType:', service.priceType);
-      
       if (service.priceType === 'in-hour') {
         relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
       } else if (service.priceType === 'out-of-hour') {
         relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
       }
-      
-      // If no slots found after filtering, log and include all slots as fallback
-      if (relevantSlots.length === 0 && (data || []).length > 0) {
-        console.log('[DEBUG] No slots found after filtering by priceType. Using all slots as fallback.');
-        relevantSlots = data || [];
-      }
-
-      console.log('[DEBUG] Filtered slots by priceType:', service.priceType, relevantSlots);
 
       // Convert time slots to formatted time options
       const timeOptions: string[] = [];
@@ -211,8 +171,6 @@ const BookingPage: React.FC = () => {
         return timeA.localeCompare(timeB);
       });
       
-      console.log('[DEBUG] Final time options:', uniqueTimeOptions);
-      
       // ONLY use database time slots - no fallbacks
       setTimeSlots(uniqueTimeOptions);
       
@@ -234,7 +192,6 @@ const BookingPage: React.FC = () => {
   const fetchServices = async () => {
     try {
       setLoadingServices(true);
-      console.log('[DEBUG] Fetching services');
       const { data, error } = await supabase
         .from('services')
         .select('id, name, category, price, in_hour_price, out_of_hour_price')
@@ -244,7 +201,6 @@ const BookingPage: React.FC = () => {
       if (error) {
         console.error('Error fetching services:', error);
       } else {
-        console.log('[DEBUG] Raw services data:', data);
         // Transform services to include separate in-hour/out-of-hour options
         const transformedServices: any[] = [];
         (data || []).forEach(service => {
@@ -298,7 +254,6 @@ const BookingPage: React.FC = () => {
             });
           }
         });
-        console.log('[DEBUG] Transformed services:', transformedServices);
         setServices(transformedServices);
       }
     } catch (error) {
