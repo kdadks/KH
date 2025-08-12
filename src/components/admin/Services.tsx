@@ -27,6 +27,12 @@ export const Services: React.FC<ServicesProps> = ({
 }) => {
   const { showSuccess, showError, showConfirm } = useToast();
   
+  // Helper function to format time without seconds
+  const formatTime = (time: string) => {
+    if (!time) return '';
+    return time.substring(0, 5); // Remove seconds (HH:MM:SS -> HH:MM)
+  };
+  
   // State for time slots management
   const [showTimeSlots, setShowTimeSlots] = useState<number | null>(null);
   const [timeSlots, setTimeSlots] = useState<ServiceTimeSlot[]>([]);
@@ -38,6 +44,41 @@ export const Services: React.FC<ServicesProps> = ({
     end_time: '10:00',
     is_available: true
   });
+
+  // Map of service_id -> time slot count
+  const [timeSlotCounts, setTimeSlotCounts] = useState<Record<number, number>>({});
+  const [loadingCounts, setLoadingCounts] = useState(false);
+
+  // Fetch time slot counts for all visible services
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        setLoadingCounts(true);
+        const serviceIds = (packages || [])
+          .map(p => p.id)
+          .filter((id): id is number => typeof id === 'number');
+        if (serviceIds.length === 0) {
+          setTimeSlotCounts({});
+          return;
+        }
+        const { data, error } = await supabase
+          .from('services_time_slots')
+          .select('service_id, id')
+          .in('service_id', serviceIds);
+        if (error) throw error;
+        const counts: Record<number, number> = {};
+        (data || []).forEach(row => {
+          counts[row.service_id] = (counts[row.service_id] || 0) + 1;
+        });
+        setTimeSlotCounts(counts);
+      } catch (err) {
+        console.error('Error fetching time slot counts:', err);
+      } finally {
+        setLoadingCounts(false);
+      }
+    };
+    fetchCounts();
+  }, [packages]);
 
   // Days of week for time slot management
   const daysOfWeek = [
@@ -248,8 +289,8 @@ export const Services: React.FC<ServicesProps> = ({
           service_id: serviceId,
           slot_type: newTimeSlot.slot_type,
           day_of_week: newTimeSlot.day_of_week,
-          start_time: newTimeSlot.start_time,
-          end_time: newTimeSlot.end_time,
+          start_time: formatTime(newTimeSlot.start_time || ''),
+          end_time: formatTime(newTimeSlot.end_time || ''),
           is_available: newTimeSlot.is_available ?? true
         }])
         .select()
@@ -268,6 +309,11 @@ export const Services: React.FC<ServicesProps> = ({
         end_time: '10:00',
         is_available: true
       });
+      // Increment count for this service
+      setTimeSlotCounts(prev => ({
+        ...prev,
+        [serviceId]: (prev[serviceId] ?? 0) + 1
+      }));
       
       showSuccess('Success', 'Time slot added successfully');
     } catch (error) {
@@ -287,6 +333,16 @@ export const Services: React.FC<ServicesProps> = ({
       if (error) throw error;
 
       setTimeSlots(prev => prev.filter(slot => slot.id !== slotId));
+      // Decrement count for the currently open service, if any
+      if (showTimeSlots !== null) {
+        const svcId = packages[showTimeSlots]?.id as number | undefined;
+        if (typeof svcId === 'number') {
+          setTimeSlotCounts(prev => ({
+            ...prev,
+            [svcId]: Math.max(0, (prev[svcId] ?? 0) - 1)
+          }));
+        }
+      }
       showSuccess('Success', 'Time slot deleted successfully');
     } catch (error) {
       console.error('Error deleting time slot:', error);
@@ -641,8 +697,14 @@ export const Services: React.FC<ServicesProps> = ({
                           <p className="text-2xl font-bold text-primary-600 mt-1">{pkg.price}</p>
                         )}
                         {pkg.category && (
-                          <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full mt-2">
+                          <span className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full mt-2">
                             {pkg.category}
+                            {typeof pkg.id === 'number' && (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {timeSlotCounts[pkg.id] ?? 0}
+                              </span>
+                            )}
                           </span>
                         )}
                         {pkg.description && (
@@ -746,6 +808,7 @@ export const Services: React.FC<ServicesProps> = ({
                               <label className="block text-sm font-medium text-gray-600 mb-1">Start</label>
                               <input
                                 type="time"
+                                step={60}
                                 value={newTimeSlot.start_time}
                                 onChange={(e) => setNewTimeSlot({ ...newTimeSlot, start_time: e.target.value })}
                                 className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -755,6 +818,7 @@ export const Services: React.FC<ServicesProps> = ({
                               <label className="block text-sm font-medium text-gray-600 mb-1">End</label>
                               <input
                                 type="time"
+                                step={60}
                                 value={newTimeSlot.end_time}
                                 onChange={(e) => setNewTimeSlot({ ...newTimeSlot, end_time: e.target.value })}
                                 className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -805,7 +869,7 @@ export const Services: React.FC<ServicesProps> = ({
                                       </span>
                                     </div>
                                     <div className="text-sm text-gray-600 mt-1">
-                                      {slot.start_time} - {slot.end_time}
+                                      {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
                                     </div>
                                   </div>
                                   <button

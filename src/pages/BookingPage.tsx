@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { useForm } from 'react-hook-form';
 import { Calendar } from 'lucide-react';
@@ -28,16 +28,166 @@ interface Service {
   priceType?: string;
 }
 
+interface ServiceTimeSlot {
+  id: number;
+  service_id: number;
+  slot_type: 'in-hour' | 'out-of-hour';
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+}
+
 const BookingPage: React.FC = () => {
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
+  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<BookingFormData>();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+
+  // Watch the service field to trigger time slot updates
+  const watchedService = watch('service');
+
+  // Memoize time slot rendering to prevent excessive re-renders
+  const timeSlotOptions = useMemo(() => {
+    if (!selectedService) {
+      return <option disabled>Please select a service first</option>;
+    }
+    if (loadingTimeSlots) {
+      return <option disabled>Loading available times...</option>;
+    }
+    if (timeSlots.length === 0) {
+      return <option disabled>No time slots available for selected service</option>;
+    }
+    return timeSlots.map((slot, index) => {
+      const [timeValue, displayTime] = slot.split('|');
+      return (
+        <option key={index} value={timeValue}>
+          {displayTime}
+        </option>
+      );
+    });
+  }, [selectedService, loadingTimeSlots, timeSlots]);
 
   useEffect(() => {
     fetchServices();
   }, []);
+
+  // Fetch time slots when service changes
+  useEffect(() => {
+    if (watchedService) {
+      // Find by displayName first (since that's what shows in the dropdown)
+      let service = services.find(s => s.displayName === watchedService);
+      if (!service) {
+        // Fallback to name matching
+        service = services.find(s => s.name === watchedService);
+      }
+      
+      if (service) {
+        setSelectedService(service);
+        fetchTimeSlots(service);
+      } else {
+        setSelectedService(null);
+        setTimeSlots([]);
+      }
+    } else {
+      setSelectedService(null);
+      setTimeSlots([]);
+    }
+  }, [watchedService, services]);
+
+  const fetchTimeSlots = async (service: Service) => {
+    try {
+      setLoadingTimeSlots(true);
+      
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0]);
+        } else {
+          serviceId = parseInt(service.id);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId, returning');
+        return;
+      }
+
+      // Fetch time slots for the selected service
+      const { data, error } = await supabase
+        .from('services_time_slots')
+        .select('*')
+        .eq('service_id', serviceId)
+        .eq('is_available', true)
+        .order('day_of_week', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching time slots:', error);
+        setTimeSlots([]);
+        return;
+      }
+
+      // Filter time slots based on service price type
+      let relevantSlots = data || [];
+      if (service.priceType === 'in-hour') {
+        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
+      }
+
+      // Convert time slots to formatted time options
+      const timeOptions: string[] = [];
+      
+      relevantSlots.forEach(slot => {
+        // Show the actual time range from database instead of generating hourly slots
+        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
+        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
+        
+        const startDisplay = formatTimeForDisplay(startTime);
+        const endDisplay = formatTimeForDisplay(endTime);
+        
+        const timeRange = `${startTime}-${endTime}`;
+        const displayRange = `${startDisplay} - ${endDisplay}`;
+        const timeOption = `${timeRange}|${displayRange}`;
+        
+        // Only add if not already in array
+        if (!timeOptions.includes(timeOption)) {
+          timeOptions.push(timeOption);
+        }
+      });
+
+      // Remove duplicates using Set and sort by time value
+      const uniqueTimeOptions = Array.from(new Set(timeOptions)).sort((a, b) => {
+        const timeA = a.split('|')[0];
+        const timeB = b.split('|')[0];
+        return timeA.localeCompare(timeB);
+      });
+      
+      // ONLY use database time slots - no fallbacks
+      setTimeSlots(uniqueTimeOptions);
+      
+    } catch (error) {
+      console.error('Error fetching time slots:', error);
+      setTimeSlots([]);
+    } finally {
+      setLoadingTimeSlots(false);
+    }
+  };
+
+  const formatTimeForDisplay = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
 
   const fetchServices = async () => {
     try {
@@ -134,7 +284,9 @@ const BookingPage: React.FC = () => {
     // Combine date and time into ISO string for booking_date
     let bookingDateTime = data.date;
     if (data.time) {
-      bookingDateTime = `${data.date}T${data.time}`;
+      // Extract start time from range (e.g., "17:00-20:00" -> "17:00")
+      const startTime = data.time.includes('-') ? data.time.split('-')[0] : data.time;
+      bookingDateTime = `${data.date}T${startTime}`;
     }
     const bookingData = {
       customer_name: data.name,
@@ -241,7 +393,7 @@ const BookingPage: React.FC = () => {
                       <option disabled>Loading services...</option>
                     ) : (
                       services.map((service) => (
-                        <option key={service.id} value={service.name}>
+                        <option key={service.id} value={service.displayName || service.name}>
                           {service.displayName || service.name}
                         </option>
                       ))
@@ -277,14 +429,7 @@ const BookingPage: React.FC = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   >
                     <option value="">Select a time</option>
-                    <option value="09:00">09:00 AM</option>
-                    <option value="10:00">10:00 AM</option>
-                    <option value="11:00">11:00 AM</option>
-                    <option value="12:00">12:00 PM</option>
-                    <option value="14:00">02:00 PM</option>
-                    <option value="15:00">03:00 PM</option>
-                    <option value="16:00">04:00 PM</option>
-                    <option value="17:00">05:00 PM</option>
+                    {timeSlotOptions}
                   </select>
                   {errors.time && (
                     <p className="mt-1 text-sm text-red-600">{errors.time.message}</p>
