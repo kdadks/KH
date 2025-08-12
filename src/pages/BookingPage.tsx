@@ -18,12 +18,14 @@ interface BookingFormData {
 }
 
 interface Service {
-  id: number;
+  id: number | string;
   name: string;
   category: string;
   price?: string;
   in_hour_price?: string;
   out_of_hour_price?: string;
+  displayName?: string;
+  priceType?: string;
 }
 
 const BookingPage: React.FC = () => {
@@ -49,7 +51,60 @@ const BookingPage: React.FC = () => {
       if (error) {
         console.error('Error fetching services:', error);
       } else {
-        setServices(data || []);
+        // Transform services to include separate in-hour/out-of-hour options
+        const transformedServices: any[] = [];
+        (data || []).forEach(service => {
+          const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
+          const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
+          const hasMainPrice = service.price && service.price.trim() !== '';
+
+          if (hasInHour && hasOutOfHour) {
+            // Both in-hour and out-of-hour prices exist
+            transformedServices.push({
+              ...service,
+              id: `${service.id}-in`,
+              displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+              name: service.name,
+              priceType: 'in-hour'
+            });
+            transformedServices.push({
+              ...service,
+              id: `${service.id}-out`,
+              displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+              name: service.name,
+              priceType: 'out-of-hour'
+            });
+          } else if (hasInHour || hasOutOfHour || hasMainPrice) {
+            // Only one pricing option or main price
+            let displayName = service.name;
+            let priceType = 'standard';
+            
+            if (hasInHour) {
+              displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+              priceType = 'in-hour';
+            } else if (hasOutOfHour) {
+              displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+              priceType = 'out-of-hour';
+            } else if (hasMainPrice) {
+              displayName = `${service.name} (${service.price})`;
+              priceType = 'standard';
+            }
+            
+            transformedServices.push({
+              ...service,
+              displayName,
+              priceType
+            });
+          } else {
+            // No pricing info, just show service name
+            transformedServices.push({
+              ...service,
+              displayName: service.name,
+              priceType: 'standard'
+            });
+          }
+        });
+        setServices(transformedServices);
       }
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -187,9 +242,7 @@ const BookingPage: React.FC = () => {
                     ) : (
                       services.map((service) => (
                         <option key={service.id} value={service.name}>
-                          {service.name}
-                          {service.price && ` - ${service.price}`}
-                          {!service.price && service.in_hour_price && ` - In-Hour: ${service.in_hour_price}`}
+                          {service.displayName || service.name}
                         </option>
                       ))
                     )}
