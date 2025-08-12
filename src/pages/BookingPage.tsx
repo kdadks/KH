@@ -78,14 +78,17 @@ const BookingPage: React.FC = () => {
     const testSupabaseConnection = async () => {
       try {
         console.log('[DEBUG] Testing Supabase connection...');
+        // Use a simpler query to test connection - just get a few records
         const { data, error } = await supabase
           .from('services_time_slots')
-          .select('count(*)');
+          .select('*')
+          .limit(5);
         
         if (error) {
           console.error('[DEBUG] Supabase connection test error:', error);
         } else {
-          console.log('[DEBUG] Supabase connection successful, time slots count:', data);
+          console.log('[DEBUG] Supabase connection successful, sample time slots:', data);
+          console.log('[DEBUG] Number of time slots returned:', data ? data.length : 0);
         }
       } catch (err) {
         console.error('[DEBUG] Supabase connection test exception:', err);
