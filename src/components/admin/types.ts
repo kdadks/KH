@@ -34,6 +34,8 @@ export type BookingFormData = {
   appointment_date?: string;
   appointment_time?: string;
   booking_date?: string; // New field that stores both date and time
+  timeslot_start_time?: string; // New field for timeslot start time
+  timeslot_end_time?: string; // New field for timeslot end time
   notes?: string;
   status?: string;
   created_at?: string;

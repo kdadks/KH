@@ -17,7 +17,8 @@ import {
   ChevronRight,
   AlertCircle,
   List,
-  Grid3x3
+  Grid3x3,
+  Plus
 } from 'lucide-react';
 import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar';
 import moment from 'moment';
@@ -39,6 +40,7 @@ interface BookingCalendarEvent {
 }
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
+import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -116,6 +118,25 @@ export const Bookings: React.FC<BookingsProps> = ({
   const [selectedBooking, setSelectedBooking] = useState<BookingFormData | null>(null);
   const [showMultiBookingsModal, setShowMultiBookingsModal] = useState(false);
   const [selectedDateBookings, setSelectedDateBookings] = useState<BookingFormData[]>([]);
+  
+  // New booking modal states
+  const [showNewBookingModal, setShowNewBookingModal] = useState(false);
+  const [newBookingData, setNewBookingData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    service: '',
+    date: '',
+    time: '',
+    notes: '',
+    status: 'pending'
+  });
+  const [services, setServices] = useState<any[]>([]);
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
+  const [creatingBooking, setCreatingBooking] = useState(false);
   
   const recordsPerPage = 10;
 
@@ -347,9 +368,330 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
+  // New booking functions
+  const fetchServices = async () => {
+    try {
+      setLoadingServices(true);
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+
+      // Transform services to include pricing options
+      const transformedServices: any[] = [];
+      data?.forEach((service: any) => {
+        const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
+        const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
+        const hasMainPrice = service.price && service.price.trim() !== '';
+
+        if (hasInHour && hasOutOfHour) {
+          transformedServices.push({
+            ...service,
+            id: `${service.id}-in`,
+            displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+            priceType: 'in-hour'
+          });
+          transformedServices.push({
+            ...service,
+            id: `${service.id}-out`,
+            displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+            priceType: 'out-of-hour'
+          });
+        } else if (hasInHour || hasOutOfHour || hasMainPrice) {
+          let displayName = service.name;
+          let priceType = 'standard';
+          
+          if (hasInHour) {
+            displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+            priceType = 'in-hour';
+          } else if (hasOutOfHour) {
+            displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+            priceType = 'out-of-hour';
+          } else if (hasMainPrice) {
+            displayName = `${service.name} (${service.price})`;
+            priceType = 'standard';
+          }
+          
+          transformedServices.push({
+            ...service,
+            displayName,
+            priceType
+          });
+        }
+      });
+
+      setServices(transformedServices);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoadingServices(false);
+    }
+  };
+
+  const fetchTimeSlots = async (serviceId: string, selectedDate: string) => {
+    if (!serviceId || !selectedDate) {
+      setTimeSlots([]);
+      return;
+    }
+
+    console.log('Fetching time slots for:', { serviceId, selectedDate });
+
+    try {
+      setLoadingTimeSlots(true);
+      
+      // Extract service ID and price type from the composite ID
+      let actualServiceId: number;
+      let priceType = 'standard';
+      
+      if (serviceId.includes('-')) {
+        const [baseServiceId, type] = serviceId.split('-');
+        actualServiceId = parseInt(baseServiceId);
+        priceType = type === 'in' ? 'in-hour' : type === 'out' ? 'out-of-hour' : 'standard';
+      } else {
+        actualServiceId = parseInt(serviceId);
+      }
+
+      console.log('Parsed service info:', { actualServiceId, priceType });
+
+      if (!actualServiceId || isNaN(actualServiceId)) {
+        console.log('Invalid serviceId, returning');
+        setTimeSlots([]);
+        return;
+      }
+
+      // Fetch time slots for the selected service (don't filter by day initially)
+      const { data, error } = await supabase
+        .from('services_time_slots')
+        .select('*')
+        .eq('service_id', actualServiceId)
+        .eq('is_available', true)
+        .order('day_of_week', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      console.log('Time slots query result:', { data, error });
+
+      if (error) {
+        console.error('Error fetching time slots:', error);
+        setTimeSlots([]);
+        return;
+      }
+
+      // Filter time slots based on service price type
+      let relevantSlots = data || [];
+      console.log('All slots before filtering:', relevantSlots);
+      
+      if (priceType === 'in-hour') {
+        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
+      } else if (priceType === 'out-of-hour') {
+        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
+      }
+
+      console.log('Relevant slots after filtering:', relevantSlots);
+
+      // If no slots found after filtering, show all slots as fallback
+      if (relevantSlots.length === 0 && (data || []).length > 0) {
+        console.log('No slots found for specific price type, showing all available slots');
+        relevantSlots = data || [];
+      }
+
+      // Convert time slots to formatted time options
+      const timeOptions: string[] = [];
+      
+      relevantSlots.forEach(slot => {
+        // Show the actual time range from database
+        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
+        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
+        
+        const startDisplay = formatTimeForDisplay(startTime);
+        const endDisplay = formatTimeForDisplay(endTime);
+        
+        const timeRange = `${startTime}-${endTime}`;
+        const displayRange = `${startDisplay} - ${endDisplay}`;
+        const timeOption = `${timeRange}|${displayRange}`;
+        
+        // Only add if not already in array
+        if (!timeOptions.includes(timeOption)) {
+          timeOptions.push(timeOption);
+        }
+      });
+
+      console.log('Generated time options:', timeOptions);
+
+      // Remove duplicates using Set and sort by time value
+      const uniqueTimeOptions = Array.from(new Set(timeOptions)).sort((a, b) => {
+        const timeA = a.split('|')[0];
+        const timeB = b.split('|')[0];
+        return timeA.localeCompare(timeB);
+      });
+      
+      setTimeSlots(uniqueTimeOptions);
+      
+    } catch (error) {
+      console.error('Error fetching time slots:', error);
+      setTimeSlots([]);
+    } finally {
+      setLoadingTimeSlots(false);
+    }
+  };
+
+  const formatTimeForDisplay = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const handleOpenNewBookingModal = () => {
+    setShowNewBookingModal(true);
+    fetchServices();
+  };
+
+  const handleCloseNewBookingModal = () => {
+    setShowNewBookingModal(false);
+    setNewBookingData({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      service: '',
+      date: '',
+      time: '',
+      notes: '',
+      status: 'pending'
+    });
+    setTimeSlots([]);
+  };
+
+  const handleNewBookingInputChange = (field: string, value: string) => {
+    console.log('Input change:', { field, value });
+    
+    setNewBookingData(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Fetch time slots when service or date changes
+      if (field === 'service' || field === 'date') {
+        const serviceName = field === 'service' ? value : updated.service;
+        const date = field === 'date' ? value : updated.date;
+        
+        console.log('Checking for time slots:', { serviceName, date });
+        
+        if (serviceName && date) {
+          // Find the service object to get the ID
+          const selectedService = services.find(s => s.displayName === serviceName);
+          console.log('Found service:', selectedService);
+          
+          if (selectedService) {
+            fetchTimeSlots(selectedService.id.toString(), date);
+          }
+        } else {
+          setTimeSlots([]);
+        }
+      }
+      
+      return updated;
+    });
+  };
+
+  const handleCreateNewBooking = async () => {
+    if (!newBookingData.firstName || !newBookingData.lastName || !newBookingData.email || 
+        !newBookingData.service || !newBookingData.date) {
+      showError('Missing Information', 'Please fill in all required fields.');
+      return;
+    }
+
+    setCreatingBooking(true);
+    
+    try {
+      // Find the selected service to get proper service name
+      const selectedService = services.find(s => s.displayName === newBookingData.service);
+      const serviceName = selectedService ? selectedService.name : newBookingData.service;
+
+      // Extract timeslot information
+      let timeslotStartTime = null;
+      let timeslotEndTime = null;
+      let bookingDateTime = newBookingData.date;
+      
+      if (newBookingData.time) {
+        if (newBookingData.time.includes('-')) {
+          const [startTime, endTime] = newBookingData.time.split('-');
+          timeslotStartTime = startTime;
+          timeslotEndTime = endTime;
+          bookingDateTime = `${newBookingData.date}T${startTime}`;
+        } else {
+          timeslotStartTime = newBookingData.time;
+          bookingDateTime = `${newBookingData.date}T${newBookingData.time}`;
+        }
+      }
+
+      const customerData = {
+        firstName: newBookingData.firstName,
+        lastName: newBookingData.lastName,
+        email: newBookingData.email,
+        phone: newBookingData.phone
+      };
+
+      const bookingData = {
+        package_name: serviceName, // Use the actual service name, not the display name with pricing
+        booking_date: bookingDateTime,
+        timeslot_start_time: timeslotStartTime || undefined,
+        timeslot_end_time: timeslotEndTime || undefined,
+        notes: newBookingData.notes,
+        status: newBookingData.status
+      };
+
+      const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
+
+      if (error) {
+        showError('Booking Failed', error);
+        return;
+      }
+
+      if (booking && customer) {
+        // Add the new booking to the list
+        const newBookingForList: BookingFormData = {
+          ...booking,
+          customer_details: customer,
+          customer_name: `${customer.first_name} ${customer.last_name}`,
+          customer_email: customer.email,
+          customer_phone: customer.phone || ''
+        };
+        
+        setAllBookings([newBookingForList, ...allBookings]);
+        showSuccess('Booking Created', 'New booking has been created successfully.');
+        handleCloseNewBookingModal();
+      }
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      showError('Error', 'Failed to create booking. Please try again.');
+    } finally {
+      setCreatingBooking(false);
+    }
+  };
+
   // Export functions
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredBookings);
+    const exportData = filteredBookings.map(booking => ({
+      'Customer Name': getCustomerName(booking),
+      'Email': getCustomerEmail(booking),
+      'Phone': getCustomerPhone(booking),
+      'Service': booking.package_name || booking.service || 'N/A',
+      'Booking Date': booking.booking_date ? 
+        new Date(booking.booking_date).toLocaleDateString() : 
+        (booking.appointment_date || booking.date || 'N/A'),
+      'Booking Time': booking.booking_date ? 
+        new Date(booking.booking_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
+        (booking.appointment_time || booking.time || 'N/A'),
+      'Timeslot Start': booking.timeslot_start_time || 'N/A',
+      'Timeslot End': booking.timeslot_end_time || 'N/A',
+      'Status': booking.status || 'pending',
+      'Notes': booking.notes || 'N/A',
+      'Created At': booking.created_at || 'N/A'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
     XLSX.writeFile(wb, `bookings_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -412,6 +754,10 @@ export const Bookings: React.FC<BookingsProps> = ({
     // Prepare table data ensuring normalized date/time always populated
     const tableData = filteredBookings.map(booking => {
       const { date, time } = deriveDateTime(booking);
+      const timeslotRange = booking.timeslot_start_time && booking.timeslot_end_time 
+        ? `${booking.timeslot_start_time.substring(0, 5)}-${booking.timeslot_end_time.substring(0, 5)}`
+        : 'N/A';
+      
       return [
         getCustomerName(booking),
         getCustomerEmail(booking),
@@ -419,6 +765,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         booking.package_name || booking.service || 'N/A',
         date,
         time,
+        timeslotRange,
         booking.status || 'pending'
       ];
     });
@@ -426,7 +773,7 @@ export const Bookings: React.FC<BookingsProps> = ({
     // Add table
     autoTable(doc, {
       startY: 50,
-      head: [['Customer Name', 'Email', 'Phone', 'Service', 'Date', 'Time', 'Status']],
+      head: [['Customer Name', 'Email', 'Phone', 'Service', 'Date', 'Time', 'Timeslot', 'Status']],
       body: tableData,
       styles: { fontSize: 8 },
       headStyles: { fillColor: '#3b82f6' },
@@ -612,6 +959,13 @@ export const Bookings: React.FC<BookingsProps> = ({
                 Calendar View
               </>
             )}
+          </button>
+          <button
+            onClick={handleOpenNewBookingModal}
+            className="w-full sm:w-auto flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create New Booking
           </button>
           <button
             onClick={exportToPDF}
@@ -865,7 +1219,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                           </div>
                           
                           {/* Date and Time Information Row */}
-                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="flex items-center min-w-0">
                               <Calendar className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
                               <span className="text-sm text-gray-600">
@@ -878,9 +1232,29 @@ export const Bookings: React.FC<BookingsProps> = ({
                             <div className="flex items-center min-w-0">
                               <Clock className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
                               <span className="text-sm text-gray-600">
-                                {booking.booking_date ? 
+                                {booking.timeslot_start_time && booking.timeslot_end_time ? (
+                                  <>
+                                    {booking.timeslot_start_time.substring(0, 5)} - {booking.timeslot_end_time.substring(0, 5)}
+                                    <span className="text-xs text-gray-500 ml-1">(Timeslot)</span>
+                                  </>
+                                ) : booking.booking_date ? 
                                   new Date(booking.booking_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
                                   (booking.appointment_time || booking.time || <span className="text-red-500 italic">Not set</span>)
+                                }
+                              </span>
+                            </div>
+                            <div className="flex items-center min-w-0">
+                              <div className="w-4 h-4 mr-2 flex-shrink-0 flex items-center justify-center">
+                                <div className={`w-3 h-3 rounded-full ${
+                                  booking.timeslot_start_time && booking.timeslot_end_time 
+                                    ? 'bg-green-500' 
+                                    : 'bg-orange-500'
+                                }`} />
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {booking.timeslot_start_time && booking.timeslot_end_time 
+                                  ? 'Full timeslot booked' 
+                                  : 'Legacy booking'
                                 }
                               </span>
                             </div>
@@ -1043,6 +1417,15 @@ export const Bookings: React.FC<BookingsProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
                 <p className="text-sm text-gray-600">{getCustomerName(editingBooking)}</p>
               </div>
+              {editingBooking.timeslot_start_time && editingBooking.timeslot_end_time && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Current Timeslot</label>
+                  <p className="text-sm text-gray-600 p-2 bg-blue-50 rounded-lg">
+                    {editingBooking.timeslot_start_time.substring(0, 5)} - {editingBooking.timeslot_end_time.substring(0, 5)}
+                    <span className="text-xs text-blue-600 ml-2">(Full timeslot)</span>
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
                 <input
@@ -1060,6 +1443,11 @@ export const Bookings: React.FC<BookingsProps> = ({
                   onChange={(e) => setEditBookingTime(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
+                {editingBooking.timeslot_start_time && editingBooking.timeslot_end_time && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Note: Editing time will override the original timeslot information
+                  </p>
+                )}
               </div>
               {editBookingError && (
                 <div className="text-red-600 text-sm">{editBookingError}</div>
@@ -1197,7 +1585,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                 <div className="flex justify-between">
                   <span className="text-sm font-medium text-gray-500">Time:</span>
                   <span className="text-sm text-gray-900">
-                    {selectedBooking.booking_date ? 
+                    {selectedBooking.timeslot_start_time && selectedBooking.timeslot_end_time ? (
+                      <div className="flex flex-col">
+                        <span>
+                          {selectedBooking.timeslot_start_time.substring(0, 5)} - {selectedBooking.timeslot_end_time.substring(0, 5)}
+                        </span>
+                        <span className="text-xs text-gray-500">(Full timeslot)</span>
+                      </div>
+                    ) : selectedBooking.booking_date ? 
                       new Date(selectedBooking.booking_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
                       (selectedBooking.appointment_time || selectedBooking.time || 'Not set')
                     }
@@ -1393,6 +1788,180 @@ export const Bookings: React.FC<BookingsProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Booking Modal */}
+      {showNewBookingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white rounded-t-xl">
+              <h3 className="text-lg font-semibold text-gray-900">Create New Booking</h3>
+              <button
+                onClick={handleCloseNewBookingModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {/* Customer Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+                  <input
+                    type="text"
+                    value={newBookingData.firstName}
+                    onChange={(e) => handleNewBookingInputChange('firstName', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="John"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+                  <input
+                    type="text"
+                    value={newBookingData.lastName}
+                    onChange={(e) => handleNewBookingInputChange('lastName', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Doe"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                  <input
+                    type="email"
+                    value={newBookingData.email}
+                    onChange={(e) => handleNewBookingInputChange('email', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                  <input
+                    type="tel"
+                    value={newBookingData.phone}
+                    onChange={(e) => handleNewBookingInputChange('phone', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="+353 123 456 789"
+                  />
+                </div>
+              </div>
+
+              {/* Service and Appointment Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Service *</label>
+                  <select
+                    value={newBookingData.service}
+                    onChange={(e) => handleNewBookingInputChange('service', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    disabled={loadingServices}
+                  >
+                    <option value="">Select a service</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.displayName}>
+                        {service.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingServices && (
+                    <p className="text-xs text-gray-500 mt-1">Loading services...</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
+                  <input
+                    type="date"
+                    value={newBookingData.date}
+                    onChange={(e) => handleNewBookingInputChange('date', e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Time Slot</label>
+                  <select
+                    value={newBookingData.time}
+                    onChange={(e) => handleNewBookingInputChange('time', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    disabled={loadingTimeSlots || !newBookingData.service || !newBookingData.date}
+                  >
+                    <option value="">Select a time slot</option>
+                    {timeSlots.map((slot) => {
+                      const [timeRange, displayRange] = slot.split('|');
+                      return (
+                        <option key={timeRange} value={timeRange}>
+                          {displayRange}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {loadingTimeSlots && (
+                    <p className="text-xs text-gray-500 mt-1">Loading available times...</p>
+                  )}
+                  {!loadingTimeSlots && timeSlots.length === 0 && newBookingData.service && newBookingData.date && (
+                    <p className="text-xs text-orange-600 mt-1">No available time slots for selected service and date.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <select
+                    value={newBookingData.status}
+                    onChange={(e) => handleNewBookingInputChange('status', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                <textarea
+                  value={newBookingData.notes}
+                  onChange={(e) => handleNewBookingInputChange('notes', e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Additional notes or special requirements..."
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={handleCloseNewBookingModal}
+                disabled={creatingBooking}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateNewBooking}
+                disabled={creatingBooking || !newBookingData.firstName || !newBookingData.lastName || 
+                         !newBookingData.email || !newBookingData.service || !newBookingData.date}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                {creatingBooking ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Creating...
+                  </>
+                ) : (
+                  'Create Booking'
+                )}
+              </button>
             </div>
           </div>
         </div>

@@ -6,10 +6,14 @@ import {
   TrendingUp,
   FileSpreadsheet,
   PieChart,
-  BarChart3
+  BarChart3,
+  DollarSign,
+  Receipt,
+  AlertTriangle
 } from 'lucide-react';
-import { BookingFormData } from './types';
+import { BookingFormData, Invoice } from './types';
 import { useToast } from '../shared/toastContext';
+import { supabase } from '../../supabaseClient';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -26,6 +30,18 @@ interface ReportData {
   serviceBreakdown: { [key: string]: number };
   monthlyTrend: { month: string; bookings: number }[];
   filteredBookings: BookingFormData[]; // retain the exact rows contributing to the stats & exports
+  
+  // Invoice-related data
+  totalInvoices: number;
+  draftInvoices: number;
+  sentInvoices: number;
+  paidInvoices: number;
+  overdueInvoices: number;
+  totalRevenue: number;
+  unpaidRevenue: number;
+  monthlyRevenueTrend: { month: string; revenue: number }[];
+  invoiceStatusBreakdown: { [key: string]: number };
+  filteredInvoices: Invoice[];
 }
 
 export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
@@ -35,10 +51,46 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedService, setSelectedService] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedInvoiceStatus, setSelectedInvoiceStatus] = useState('');
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
+  const [activeMainTab, setActiveMainTab] = useState<'bookings' | 'invoices'>('bookings');
   // Manual generation flag
   const [hasGenerated, setHasGenerated] = useState(false);
+
+  // Helper to format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IE', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount);
+  };
+
+  // Fetch invoices from database
+  const fetchInvoices = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          customer:customers(*),
+          items:invoice_items(*)
+        `)
+        .order('invoice_date', { ascending: false });
+
+      if (error) throw error;
+      setAllInvoices(data || []);
+    } catch (err) {
+      console.error('Error fetching invoices:', err);
+      setAllInvoices([]);
+    }
+  }, []);
+
+  // Fetch invoices on component mount
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   // ---------- Helpers for normalization (mirrors Dashboard / Bookings logic) ----------
   const extractDateOnly = (b: BookingFormData): string | null => {
@@ -117,7 +169,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   };
 
   // Build stats helper (optionally filteredBookings input)
-  const buildStats = useCallback((filteredBookings: BookingFormData[]) => {
+  const buildStats = useCallback((filteredBookings: BookingFormData[], filteredInvoices?: Invoice[]) => {
     const totalBookings = filteredBookings.length;
     const confirmedBookings = filteredBookings.filter(b => b.status === 'confirmed').length;
     const cancelledBookings = filteredBookings.filter(b => b.status === 'cancelled').length;
@@ -138,6 +190,35 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       }, 0);
       monthlyTrend.push({ month: monthName, bookings: monthCount });
     }
+
+    // Invoice statistics
+    const invoicesForStats = filteredInvoices || allInvoices;
+    const totalInvoices = invoicesForStats.length;
+    const draftInvoices = invoicesForStats.filter(inv => inv.status === 'draft').length;
+    const sentInvoices = invoicesForStats.filter(inv => inv.status === 'sent').length;
+    const paidInvoices = invoicesForStats.filter(inv => inv.status === 'paid').length;
+    const overdueInvoices = invoicesForStats.filter(inv => inv.status === 'overdue').length;
+    const totalRevenue = invoicesForStats.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + inv.total_amount, 0);
+    const unpaidRevenue = invoicesForStats.filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled').reduce((sum, inv) => sum + inv.total_amount, 0);
+    
+    const invoiceStatusBreakdown: { [key: string]: number } = {};
+    invoicesForStats.forEach(inv => {
+      const status = inv.status || 'draft';
+      invoiceStatusBreakdown[status] = (invoiceStatusBreakdown[status] || 0) + 1;
+    });
+
+    const monthlyRevenueTrend: { month: string; revenue: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = ref.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      const monthRevenue = invoicesForStats.reduce((acc, inv) => {
+        const dt = new Date(inv.invoice_date);
+        return dt.getFullYear() === ref.getFullYear() && dt.getMonth() === ref.getMonth() && inv.status === 'paid' 
+          ? acc + inv.total_amount : acc;
+      }, 0);
+      monthlyRevenueTrend.push({ month: monthName, revenue: monthRevenue });
+    }
+
     return {
       totalBookings,
       confirmedBookings,
@@ -145,9 +226,19 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       pendingBookings,
       serviceBreakdown,
       monthlyTrend,
-      filteredBookings
+      filteredBookings,
+      totalInvoices,
+      draftInvoices,
+      sentInvoices,
+      paidInvoices,
+      overdueInvoices,
+      totalRevenue,
+      unpaidRevenue,
+      monthlyRevenueTrend,
+      invoiceStatusBreakdown,
+      filteredInvoices: invoicesForStats
     } as ReportData;
-  }, []);
+  }, [allInvoices]);
 
   // Manual generate using current filters
   const generateReportData = useCallback(() => {
@@ -168,16 +259,29 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     if (selectedStatus) {
       filtered = filtered.filter(b => (b.status || 'pending') === selectedStatus);
     }
-    setReportData(buildStats(filtered));
+
+    // Filter invoices based on the same date range and status
+    let filteredInvoices = [...allInvoices];
+    if (dateRange.start && dateRange.end) {
+      filteredInvoices = filteredInvoices.filter(inv => {
+        const invoiceDate = inv.invoice_date;
+        return invoiceDate >= dateRange.start && invoiceDate <= dateRange.end;
+      });
+    }
+    if (selectedInvoiceStatus) {
+      filteredInvoices = filteredInvoices.filter(inv => inv.status === selectedInvoiceStatus);
+    }
+
+    setReportData(buildStats(filtered, filteredInvoices));
     setLoading(false);
-  }, [allBookings, dateRange.start, dateRange.end, selectedService, selectedStatus, buildStats]);
+  }, [allBookings, allInvoices, dateRange.start, dateRange.end, selectedService, selectedStatus, selectedInvoiceStatus, buildStats]);
 
   // Baseline stats on initial load / when bookings change before any manual generate
   useEffect(() => {
-    if (!hasGenerated) {
-      setReportData(buildStats(allBookings));
+    if (!hasGenerated && allInvoices.length > 0) {
+      setReportData(buildStats(allBookings, allInvoices));
     }
-  }, [allBookings, hasGenerated, buildStats]);
+  }, [allBookings, allInvoices, hasGenerated, buildStats]);
 
   // Export functions
   const exportToExcel = () => {
@@ -187,12 +291,22 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
 
     // Summary sheet
     const summaryData = [
+      ['BOOKING STATISTICS', ''],
       ['Total Bookings', reportData.totalBookings],
       ['Confirmed Bookings', reportData.confirmedBookings],
       ['Cancelled Bookings', reportData.cancelledBookings],
       ['Pending Bookings', reportData.pendingBookings],
       [''],
-      ['Service Breakdown', ''],
+      ['INVOICE STATISTICS', ''],
+      ['Total Invoices', reportData.totalInvoices],
+      ['Draft Invoices', reportData.draftInvoices],
+      ['Sent Invoices', reportData.sentInvoices],
+      ['Paid Invoices', reportData.paidInvoices],
+      ['Overdue Invoices', reportData.overdueInvoices],
+      ['Total Revenue (Paid)', `€${reportData.totalRevenue.toFixed(2)}`],
+      ['Unpaid Revenue', `€${reportData.unpaidRevenue.toFixed(2)}`],
+      [''],
+      ['SERVICE BREAKDOWN', ''],
       ...Object.entries(reportData.serviceBreakdown).map(([service, count]) => [service, count])
     ];
     const summaryWS = XLSX.utils.aoa_to_sheet(summaryData);
@@ -216,9 +330,33 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     const bookingsWS = XLSX.utils.json_to_sheet(exportBookings);
     XLSX.utils.book_append_sheet(wb, bookingsWS, 'Filtered Bookings');
 
+    // Invoices sheet
+    if (reportData.filteredInvoices.length > 0) {
+      const exportInvoices = reportData.filteredInvoices.map((inv, idx) => ({
+        S_No: idx + 1,
+        Invoice_Number: inv.invoice_number,
+        Customer: inv.customer ? `${inv.customer.first_name} ${inv.customer.last_name}` : '',
+        Date: inv.invoice_date,
+        Due_Date: inv.due_date,
+        Status: inv.status,
+        Amount: inv.total_amount,
+        Payment_Date: inv.payment_date || '',
+        Payment_Method: inv.payment_method || '',
+        Notes: inv.notes || ''
+      }));
+      const invoicesWS = XLSX.utils.json_to_sheet(exportInvoices);
+      XLSX.utils.book_append_sheet(wb, invoicesWS, 'Invoices');
+    }
+
     // Monthly trend sheet
     const trendWS = XLSX.utils.json_to_sheet(reportData.monthlyTrend);
-    XLSX.utils.book_append_sheet(wb, trendWS, 'Monthly Trend');
+    XLSX.utils.book_append_sheet(wb, trendWS, 'Monthly Bookings');
+
+    // Revenue trend sheet
+    if (reportData.monthlyRevenueTrend.length > 0) {
+      const revenueTrendWS = XLSX.utils.json_to_sheet(reportData.monthlyRevenueTrend);
+      XLSX.utils.book_append_sheet(wb, revenueTrendWS, 'Monthly Revenue');
+    }
 
     XLSX.writeFile(wb, `bookings_report_${new Date().toISOString().split('T')[0]}.xlsx`);
     showSuccess('Export Successful', 'Report has been exported to Excel');
@@ -242,7 +380,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
 
       // Summary statistics
       doc.setFontSize(16);
-      doc.text('Summary Statistics', 20, 50);
+      doc.text('Booking Statistics', 20, 50);
       
       const summaryData = [
         ['Metric', 'Count'],
@@ -259,14 +397,38 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
         theme: 'striped'
       });
 
+      // Invoice statistics
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const afterBookingY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : 85;
+      doc.setFontSize(16);
+      doc.text('Invoice Statistics', 20, afterBookingY);
+      
+      const invoiceSummaryData = [
+        ['Metric', 'Value'],
+        ['Total Invoices', reportData.totalInvoices.toString()],
+        ['Draft Invoices', reportData.draftInvoices.toString()],
+        ['Sent Invoices', reportData.sentInvoices.toString()],
+        ['Paid Invoices', reportData.paidInvoices.toString()],
+        ['Overdue Invoices', reportData.overdueInvoices.toString()],
+        ['Total Revenue', formatCurrency(reportData.totalRevenue)],
+        ['Unpaid Revenue', formatCurrency(reportData.unpaidRevenue)]
+      ];
+
+  autoTable(doc, {
+        startY: afterBookingY + 5,
+        head: [invoiceSummaryData[0]],
+        body: invoiceSummaryData.slice(1),
+        theme: 'striped'
+      });
+
       // Service breakdown
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterSummaryY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : 70;
+  const afterInvoiceY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : 140;
       doc.setFontSize(16);
-      doc.text('Service Breakdown', 20, afterSummaryY);
+      doc.text('Service Breakdown', 20, afterInvoiceY);
       const serviceData = Object.entries(reportData.serviceBreakdown).map(([service, count]) => [service, count.toString()]);
   autoTable(doc, {
-        startY: afterSummaryY + 5,
+        startY: afterInvoiceY + 5,
         head: [['Service', 'Bookings']],
         body: serviceData,
         theme: 'striped'
@@ -274,7 +436,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
 
       // Detailed bookings table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterServicesY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : afterSummaryY + 40;
+  const afterServicesY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : afterInvoiceY + 40;
       doc.setFontSize(16);
       doc.text('Bookings Detail', 20, afterServicesY);
       const bookingRows = reportData.filteredBookings.map((b, i) => {
@@ -314,144 +476,329 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   uniqueServices.sort(); // Sort alphabetically
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Reports & Analytics</h2>
-        <p className="text-gray-600 mt-1">View detailed reports and analytics for your bookings</p>
+    <>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Reports & Analytics</h2>
+          <p className="text-gray-600 mt-1">View detailed reports and analytics for your business</p>
+        </div>
+
+        {/* Main Tab Navigation */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
+            <button
+              onClick={() => setActiveMainTab('bookings')}
+              className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center ${
+                activeMainTab === 'bookings'
+                  ? 'bg-white text-primary-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Booking Reports & Analytics
+            </button>
+            <button
+              onClick={() => setActiveMainTab('invoices')}
+              className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center ${
+                activeMainTab === 'invoices'
+                  ? 'bg-white text-primary-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Receipt className="w-4 h-4 mr-2" />
+              Invoice Reports & Analytics
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          {activeMainTab === 'bookings' ? (
+            <div className="space-y-6">
+              {/* Booking Reports Content */}
+              {loading && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Generating booking report...</p>
+                </div>
+              )}
+
+              {reportData && !loading && (
+                <>
+                  {/* Booking Summary Statistics */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Users className="w-5 h-5 mr-2 text-blue-600" />
+                      Booking Statistics
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <Users className="h-8 w-8 text-blue-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Total Bookings</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.totalBookings}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <TrendingUp className="h-8 w-8 text-green-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Confirmed</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.confirmedBookings}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <Calendar className="h-8 w-8 text-yellow-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Pending</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.pendingBookings}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <PieChart className="h-8 w-8 text-red-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Cancelled</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.cancelledBookings}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Service Breakdown */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <BarChart3 className="w-5 h-5 mr-2" />
+                      Service Breakdown
+                    </h3>
+                    <div className="space-y-4">
+                      {Object.entries(reportData.serviceBreakdown).map(([service, count]) => {
+                        const percentage = (count / reportData.totalBookings) * 100;
+                        return (
+                          <div key={service} className="flex items-center space-x-4">
+                            <div className="w-32 text-sm font-medium text-gray-700 truncate" title={service}>
+                              {service}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-primary-600 h-2 rounded-full"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <div className="text-sm text-gray-600 w-20 text-right">
+                                  {count} ({percentage.toFixed(1)}%)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Monthly Booking Trend */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Booking Trend</h3>
+                    <div className="space-y-4">
+                      {reportData.monthlyTrend.map((item, index) => {
+                        const maxBookings = Math.max(...reportData.monthlyTrend.map(m => m.bookings));
+                        const percentage = maxBookings > 0 ? (item.bookings / maxBookings) * 100 : 0;
+                        return (
+                          <div key={index} className="flex items-center space-x-4">
+                            <div className="w-20 text-sm font-medium text-gray-700">
+                              {item.month}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-3">
+                                  <div
+                                    className="bg-blue-600 h-3 rounded-full"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <div className="text-sm text-gray-600 w-12 text-right">
+                                  {item.bookings}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Invoice Reports Content */}
+              {loading && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Generating invoice report...</p>
+                </div>
+              )}
+
+              {reportData && !loading && (
+                <>
+                  {/* Invoice Summary Statistics */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Receipt className="w-5 h-5 mr-2 text-green-600" />
+                      Invoice & Revenue Statistics
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <Receipt className="h-8 w-8 text-blue-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Total Invoices</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.totalInvoices}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <DollarSign className="h-8 w-8 text-green-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Paid Invoices</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.paidInvoices}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <AlertTriangle className="h-8 w-8 text-red-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Overdue</p>
+                            <p className="text-2xl font-semibold text-gray-900">{reportData.overdueInvoices}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <DollarSign className="h-8 w-8 text-purple-600" />
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                            <p className="text-2xl font-semibold text-gray-900">{formatCurrency(reportData.totalRevenue)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Invoice Status Breakdown */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Receipt className="w-5 h-5 mr-2" />
+                      Invoice Status Breakdown
+                    </h3>
+                    <div className="space-y-4">
+                      {Object.entries(reportData.invoiceStatusBreakdown).map(([status, count]) => {
+                        const percentage = reportData.totalInvoices > 0 ? (count / reportData.totalInvoices) * 100 : 0;
+                        const getStatusColor = (status: string) => {
+                          switch (status) {
+                            case 'paid': return 'bg-green-600';
+                            case 'sent': return 'bg-blue-600';
+                            case 'overdue': return 'bg-red-600';
+                            case 'draft': return 'bg-yellow-600';
+                            default: return 'bg-gray-600';
+                          }
+                        };
+                        return (
+                          <div key={status} className="flex items-center space-x-4">
+                            <div className="w-24 text-sm font-medium text-gray-700 capitalize">
+                              {status}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full ${getStatusColor(status)}`}
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <div className="text-sm text-gray-600 w-20 text-right">
+                                  {count} ({percentage.toFixed(1)}%)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Monthly Revenue Trend */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue Trend</h3>
+                    <div className="space-y-4">
+                      {reportData.monthlyRevenueTrend.map((item, index) => {
+                        const maxRevenue = Math.max(...reportData.monthlyRevenueTrend.map(m => m.revenue));
+                        const percentage = maxRevenue > 0 ? (item.revenue / maxRevenue) * 100 : 0;
+                        return (
+                          <div key={index} className="flex items-center space-x-4">
+                            <div className="w-20 text-sm font-medium text-gray-700">
+                              {item.month}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-3">
+                                  <div
+                                    className="bg-green-600 h-3 rounded-full"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <div className="text-sm text-gray-600 w-20 text-right">
+                                  {formatCurrency(item.revenue)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {loading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Generating report...</p>
-        </div>
-      )}
-
-  {reportData && !loading && (
-        <>
-          {/* Summary Statistics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Users className="h-8 w-8 text-blue-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Bookings</p>
-                  <p className="text-2xl font-semibold text-gray-900">{reportData.totalBookings}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <TrendingUp className="h-8 w-8 text-green-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Confirmed</p>
-                  <p className="text-2xl font-semibold text-gray-900">{reportData.confirmedBookings}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Calendar className="h-8 w-8 text-yellow-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Pending</p>
-                  <p className="text-2xl font-semibold text-gray-900">{reportData.pendingBookings}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <PieChart className="h-8 w-8 text-red-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Cancelled</p>
-                  <p className="text-2xl font-semibold text-gray-900">{reportData.cancelledBookings}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Service Breakdown */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <BarChart3 className="w-5 h-5 mr-2" />
-              Service Breakdown
-            </h3>
-            <div className="space-y-4">
-              {Object.entries(reportData.serviceBreakdown).map(([service, count]) => {
-                const percentage = (count / reportData.totalBookings) * 100;
-                return (
-                  <div key={service} className="flex items-center space-x-4">
-                    <div className="w-32 text-sm font-medium text-gray-700 truncate" title={service}>
-                      {service}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex-1 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-primary-600 h-2 rounded-full"
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                        <div className="text-sm text-gray-600 w-20 text-right">
-                          {count} ({percentage.toFixed(1)}%)
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Monthly Trend */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Trend</h3>
-            <div className="space-y-4">
-              {reportData.monthlyTrend.map((item, index) => {
-                const maxBookings = Math.max(...reportData.monthlyTrend.map(m => m.bookings));
-                const percentage = maxBookings > 0 ? (item.bookings / maxBookings) * 100 : 0;
-                return (
-                  <div key={index} className="flex items-center space-x-4">
-                    <div className="w-20 text-sm font-medium text-gray-700">
-                      {item.month}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex-1 bg-gray-200 rounded-full h-3">
-                          <div
-                            className="bg-blue-600 h-3 rounded-full"
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                        <div className="text-sm text-gray-600 w-12 text-right">
-                          {item.bookings}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-        </>
-      )}
-
-      {/* Filters with improved grid layout matching CustomerManagement */}
+      {/* Filters Section - Show appropriate filters based on active tab */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
           <FileText className="w-5 h-5 mr-2 text-blue-600" />
-          Report Filters
+          {activeMainTab === 'bookings' ? 'Booking Report Filters' : 'Invoice Report Filters'}
         </h3>
         
         {/* Filter Controls Section */}
@@ -460,7 +807,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
             <Calendar className="w-5 h-5 mr-2 text-blue-600" />
             Filter Options
           </h4>
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 ${activeMainTab === 'bookings' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
             <div className="lg:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Start Date
@@ -483,36 +830,59 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div className="lg:col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Service
-              </label>
-              <select
-                value={selectedService}
-                onChange={(e) => setSelectedService(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Services</option>
-                {uniqueServices.map(service => (
-                  <option key={service} value={service}>{service}</option>
-                ))}
-              </select>
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+            
+            {activeMainTab === 'bookings' ? (
+              <>
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Service
+                  </label>
+                  <select
+                    value={selectedService}
+                    onChange={(e) => setSelectedService(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Services</option>
+                    {uniqueServices.map(service => (
+                      <option key={service} value={service}>{service}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Booking Status
+                  </label>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Invoice Status
+                </label>
+                <select
+                  value={selectedInvoiceStatus}
+                  onChange={(e) => setSelectedInvoiceStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Invoices</option>
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="paid">Paid</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
         
@@ -528,13 +898,15 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                 onClick={() => { setHasGenerated(true); generateReportData(); }}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center"
               >
-                <TrendingUp className="w-4 h-4 mr-2" /> Generate Report
+                <TrendingUp className="w-4 h-4 mr-2" /> 
+                Generate {activeMainTab === 'bookings' ? 'Booking' : 'Invoice'} Report
               </button>
               <button
                 onClick={() => {
                   setDateRange({ start: '', end: '' });
                   setSelectedService('');
                   setSelectedStatus('');
+                  setSelectedInvoiceStatus('');
                   setHasGenerated(false);
                   setReportData(null);
                 }}
@@ -562,58 +934,122 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
         </div>
       </div>
 
-      {/* Results Grid only after manual generate */}
+      {/* Results Section - Show data based on active tab */}
       {hasGenerated && reportData && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Report Results</h3>
-            <span className="text-sm text-gray-500">{reportData.filteredBookings.length} record(s)</span>
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {activeMainTab === 'bookings' ? 'Booking Report Results' : 'Invoice Report Results'}
+              </h3>
+              <div className="text-sm text-gray-500">
+                {activeMainTab === 'bookings' 
+                  ? `${reportData.filteredBookings.length} booking(s)`
+                  : `${reportData.filteredInvoices.length} invoice(s)`
+                }
+              </div>
+            </div>
           </div>
+          
           <div className="overflow-x-auto">
-            {reportData.filteredBookings.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No bookings match the selected filters.</div>
+            {activeMainTab === 'bookings' ? (
+              // Bookings Table
+              reportData.filteredBookings.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No bookings match the selected filters.</div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Customer Name</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Phone</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Service</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {reportData.filteredBookings.map((b, idx) => {
+                      const status = b.status || 'pending';
+                      const phone = b.customer_phone || b.phone;
+                      const email = b.customer_email || b.email;
+                      const service = b.package_name || b.service || '—';
+                      const customerName = b.customer_name || b.name || '—';
+                      const { date } = deriveDateTime(b);
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-medium text-gray-900">{customerName}</td>
+                          <td className="px-4 py-2 text-gray-700">{email || '—'}</td>
+                          <td className="px-4 py-2 text-gray-700">{phone || '—'}</td>
+                          <td className="px-4 py-2 text-gray-700">{service}</td>
+                          <td className="px-4 py-2 text-gray-700">{date}</td>
+                          <td className="px-4 py-2">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                              status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )
             ) : (
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Customer Name</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Phone</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Service</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {reportData.filteredBookings.map((b, idx) => {
-                    const status = b.status || 'pending';
-                    const phone = b.customer_phone || b.phone;
-                    const email = b.customer_email || b.email;
-                    const service = b.package_name || b.service || '—';
-                    const customerName = b.customer_name || b.name || '—';
-                    return (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-medium text-gray-900">{customerName}</td>
-                        <td className="px-4 py-2 text-gray-700">{email || '—'}</td>
-                        <td className="px-4 py-2 text-gray-700">{phone || '—'}</td>
-                        <td className="px-4 py-2 text-gray-700">{service}</td>
-                        <td className="px-4 py-2">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                            status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              // Invoices Table
+              reportData.filteredInvoices.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No invoices match the selected filters.</div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Invoice #</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Customer</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Due Date</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Amount</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {reportData.filteredInvoices.map((inv, idx) => {
+                      const customerName = inv.customer ? `${inv.customer.first_name} ${inv.customer.last_name}` : '—';
+                      const getStatusColor = (status: string) => {
+                        switch (status) {
+                          case 'paid': return 'bg-green-100 text-green-800';
+                          case 'sent': return 'bg-blue-100 text-blue-800';
+                          case 'overdue': return 'bg-red-100 text-red-800';
+                          case 'draft': return 'bg-yellow-100 text-yellow-800';
+                          case 'cancelled': return 'bg-gray-100 text-gray-800';
+                          default: return 'bg-gray-100 text-gray-800';
+                        }
+                      };
+                      
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-medium text-gray-900">{inv.invoice_number}</td>
+                          <td className="px-4 py-2 text-gray-700">{customerName}</td>
+                          <td className="px-4 py-2 text-gray-700">{inv.invoice_date}</td>
+                          <td className="px-4 py-2 text-gray-700">{inv.due_date}</td>
+                          <td className="px-4 py-2 font-medium text-gray-900">{formatCurrency(inv.total_amount)}</td>
+                          <td className="px-4 py-2">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full capitalize ${getStatusColor(inv.status)}`}>
+                              {inv.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )
             )}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

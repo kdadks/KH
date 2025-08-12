@@ -25,6 +25,8 @@ export interface BookingData {
   customer_id: number;
   package_name: string;
   booking_date?: string;
+  timeslot_start_time?: string;
+  timeslot_end_time?: string;
   appointment_date?: string;
   appointment_time?: string;
   notes?: string;

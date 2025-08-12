@@ -102,11 +102,11 @@ const FaqSection: React.FC = () => {
           <p className="text-neutral-600">
             Still have questions? Contact us directly at{' '}
             <a href="tel:+353123456789" className="text-primary-600 font-medium hover:underline">
-              (01) 234-5678
+              (083) 8009404
             </a>{' '}
             or{' '}
-            <a href="mailto:info@physiolife.ie" className="text-primary-600 font-medium hover:underline">
-              info@physiolife.ie
+            <a href="mailto:khtherapy@hotmail.com" className="text-primary-600 font-medium hover:underline">
+              khtherapy@hotmail.com
             </a>
           </p>
         </div>

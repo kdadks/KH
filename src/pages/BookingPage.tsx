@@ -279,10 +279,21 @@ const BookingPage: React.FC = () => {
       // Map form data to booking data
       // Combine date and time into ISO string for booking_date
       let bookingDateTime = data.date;
+      let timeslotStartTime = null;
+      let timeslotEndTime = null;
+      
       if (data.time) {
-        // Extract start time from range (e.g., "17:00-20:00" -> "17:00")
-        const startTime = data.time.includes('-') ? data.time.split('-')[0] : data.time;
-        bookingDateTime = `${data.date}T${startTime}`;
+        // Extract start and end times from range (e.g., "17:00-20:00" -> start: "17:00", end: "20:00")
+        if (data.time.includes('-')) {
+          const [startTime, endTime] = data.time.split('-');
+          timeslotStartTime = startTime;
+          timeslotEndTime = endTime;
+          bookingDateTime = `${data.date}T${startTime}`;
+        } else {
+          // Fallback for single time value
+          timeslotStartTime = data.time;
+          bookingDateTime = `${data.date}T${data.time}`;
+        }
       }
 
       // Prepare customer data
@@ -297,6 +308,9 @@ const BookingPage: React.FC = () => {
       const bookingData = {
         package_name: data.service,
         booking_date: bookingDateTime,
+        // Only include timeslot fields if they have values
+        ...(timeslotStartTime && { timeslot_start_time: timeslotStartTime }),
+        ...(timeslotEndTime && { timeslot_end_time: timeslotEndTime }),
         notes: data.notes,
         status: 'pending'
       };

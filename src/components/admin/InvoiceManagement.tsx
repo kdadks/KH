@@ -24,6 +24,8 @@ import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData } from './types';
 import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Service type that matches database schema
 interface Service {
@@ -449,6 +451,171 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
     }
   };
 
+  const downloadInvoicePDF = (invoice: Invoice) => {
+    if (!invoice) return;
+    
+    try {
+      const doc = new jsPDF();
+      
+      // Company header
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('KH Therapy', 14, 22);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Professional Physiotherapy Services', 14, 32);
+      
+      // Invoice title and number
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INVOICE', 150, 22);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(invoice.invoice_number, 150, 32);
+      
+      // Status badge (text only)
+      doc.text(`Status: ${invoice.status.toUpperCase()}`, 150, 42);
+      
+      // Invoice dates
+      doc.text(`Invoice Date: ${formatDate(invoice.invoice_date)}`, 150, 52);
+      doc.text(`Due Date: ${formatDate(invoice.due_date)}`, 150, 62);
+      
+      // Customer information
+      const customer = invoice.customer as Customer;
+      if (customer) {
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bill To:', 14, 80);
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        let yPos = 90;
+        
+        doc.text(getCustomerDisplayName(customer), 14, yPos);
+        yPos += 10;
+        
+        if (customer.email) {
+          doc.text(`Email: ${customer.email}`, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.phone) {
+          doc.text(`Phone: ${customer.phone}`, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.address_line_1) {
+          doc.text(customer.address_line_1, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.address_line_2) {
+          doc.text(customer.address_line_2, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.city || customer.county || customer.eircode) {
+          const addressLine = [customer.city, customer.county, customer.eircode]
+            .filter(Boolean)
+            .join(', ');
+          if (addressLine) {
+            doc.text(addressLine, 14, yPos);
+          }
+        }
+      }
+      
+      // Prepare invoice items table data
+      const tableData = (invoice.items || []).map((item: InvoiceItem) => [
+        item.description || 'Service',
+        item.quantity.toString(),
+        formatCurrency(item.unit_price),
+        formatCurrency(item.total_price)
+      ]);
+      
+      // Add invoice items table
+      autoTable(doc, {
+        startY: 140,
+        head: [['Description', 'Quantity', 'Unit Price', 'Total']],
+        body: tableData,
+        styles: {
+          fontSize: 10,
+          cellPadding: 6
+        },
+        headStyles: {
+          fillColor: '#3b82f6',
+          textColor: '#ffffff',
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: '#f8fafc'
+        },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'right' },
+          3: { halign: 'right' }
+        }
+      });
+      
+      // Calculate totals
+      const subtotal = (invoice.items || []).reduce((sum, item) => sum + item.total_price, 0);
+      const vatRate = 0.23; // 23% VAT for Ireland
+      const vatAmount = subtotal * vatRate;
+      const totalAmount = subtotal + vatAmount;
+      
+      // Get final Y position from the table
+      const finalY = (doc as any).lastAutoTable.finalY + 20;
+      
+      // Totals section
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      
+      const totalsX = 130;
+      let totalsY = finalY;
+      
+      doc.text('Subtotal:', totalsX, totalsY);
+      doc.text(formatCurrency(subtotal), 170, totalsY);
+      totalsY += 10;
+      
+      doc.text('VAT (23%):', totalsX, totalsY);
+      doc.text(formatCurrency(vatAmount), 170, totalsY);
+      totalsY += 10;
+      
+      // Total line with bold styling
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('Total:', totalsX, totalsY);
+      doc.text(formatCurrency(totalAmount), 170, totalsY);
+      
+      // Notes section
+      if (invoice.notes) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Notes:', 14, totalsY + 20);
+        
+        // Split long notes into multiple lines
+        const noteLines = doc.splitTextToSize(invoice.notes, 180);
+        doc.text(noteLines, 14, totalsY + 30);
+      }
+      
+      // Footer
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Thank you for your business!', 14, pageHeight - 20);
+      doc.text(`Generated on ${new Date().toLocaleDateString('en-IE')}`, 14, pageHeight - 10);
+      
+      // Save the PDF
+      doc.save(`invoice_${invoice.invoice_number.replace('/', '-')}.pdf`);
+      
+      showSuccess('PDF Downloaded', 'Invoice has been downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showError('Download Failed', 'Failed to download invoice PDF');
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IE', {
       style: 'currency',
@@ -762,6 +929,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
               <span>Edit</span>
             </button>
             <button
+              onClick={() => downloadInvoicePDF(previewingInvoice)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
             >
               <Download size={16} />
