@@ -18,8 +18,8 @@ if (!envUrl || !envAnon) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: sessionStorage,
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: false,  // Disabled since we're using custom auth
+    persistSession: false,   // Disabled since we're using custom auth
     detectSessionInUrl: false
   }
 });

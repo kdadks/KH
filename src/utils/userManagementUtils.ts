@@ -1,0 +1,321 @@
+import { supabase } from '../supabaseClient';
+import {
+  UserCustomer,
+  UserDashboardData,
+  UserProfileUpdateData,
+  UserInvoice,
+  UserPayment,
+  UserBooking
+} from '../types/userManagement';
+
+/**
+ * Get customer by auth user ID
+ */
+export const getCustomerByAuthId = async (authUserId: string): Promise<{ customer: UserCustomer | null; error?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('auth_user_id', authUserId)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching customer by auth ID:', error);
+      return { customer: null, error: error.message };
+    }
+
+    return { customer: data };
+  } catch (error) {
+    console.error('Exception in getCustomerByAuthId:', error);
+    return { customer: null, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get customer by email (for custom authentication)
+ */
+export const getCustomerByEmail = async (email: string): Promise<{ customer: UserCustomer | null; error?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('email', email)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching customer by email:', error);
+      return { customer: null, error: error.message };
+    }
+
+    return { customer: data };
+  } catch (error) {
+    console.error('Exception in getCustomerByEmail:', error);
+    return { customer: null, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get customer by ID
+ */
+export const getCustomerById = async (customerId: number): Promise<{ customer: UserCustomer | null; error?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', customerId)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching customer by ID:', error);
+      return { customer: null, error: error.message };
+    }
+
+    return { customer: data };
+  } catch (error) {
+    console.error('Exception in getCustomerById:', error);
+    return { customer: null, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Link customer to auth user
+ */
+export const linkCustomerToAuthUser = async (customerId: number, authUserId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .update({ auth_user_id: authUserId })
+      .eq('id', customerId);
+
+    if (error) {
+      console.error('Error linking customer to auth user:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Exception in linkCustomerToAuthUser:', error);
+    return { success: false, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Update user profile
+ */
+export const updateUserProfile = async (customerId: number, profileData: UserProfileUpdateData): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .update({
+        first_name: profileData.first_name,
+        last_name: profileData.last_name,
+        phone: profileData.phone,
+        address_line_1: profileData.address_line_1,
+        address_line_2: profileData.address_line_2,
+        city: profileData.city,
+        county: profileData.county,
+        eircode: profileData.eircode,
+        country: profileData.country,
+        date_of_birth: profileData.date_of_birth,
+        emergency_contact_name: profileData.emergency_contact_name,
+        emergency_contact_phone: profileData.emergency_contact_phone,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', customerId);
+
+    if (error) {
+      console.error('Error updating user profile:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Exception in updateUserProfile:', error);
+    return { success: false, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Change user password (placeholder implementation)
+ */
+export const changeUserPassword = async (
+  _currentPassword: string, // Keep for future verification if needed
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // For custom authentication, we would update the password in the customer table
+    // This is a placeholder implementation - in production you would:
+    // 1. Hash the new password
+    // 2. Update the customer table
+    // 3. Set must_change_password to false
+    
+    console.log('Password change requested for new password:', newPassword);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Exception in changeUserPassword:', error);
+    return { success: false, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get user invoices
+ */
+export const getUserInvoices = async (_authUserId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
+  try {
+    // This is a placeholder - you would implement based on your invoice structure
+    return { invoices: [] };
+  } catch (error) {
+    console.error('Exception in getUserInvoices:', error);
+    return { invoices: [], error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get user payment history
+ */
+export const getUserPaymentHistory = async (_authUserId: string): Promise<{ payments: UserPayment[]; error?: string }> => {
+  try {
+    // This is a placeholder - you would implement based on your payment structure
+    return { payments: [] };
+  } catch (error) {
+    console.error('Exception in getUserPaymentHistory:', error);
+    return { payments: [], error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get user bookings
+ */
+export const getUserBookings = async (_authUserId: string): Promise<{ bookings: UserBooking[]; error?: string }> => {
+  try {
+    // This is a placeholder - you would implement based on your booking structure
+    return { bookings: [] };
+  } catch (error) {
+    console.error('Exception in getUserBookings:', error);
+    return { bookings: [], error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get dashboard data for a customer
+ */
+export const getUserDashboardData = async (customerId: string): Promise<{ data: UserDashboardData | null; error?: string }> => {
+  try {
+    // Get customer info
+    const { customer, error: customerError } = await getCustomerById(parseInt(customerId));
+    if (customerError || !customer) {
+      return { data: null, error: customerError || 'Customer not found' };
+    }
+
+    // Get real invoices for this customer - only show invoices with 'sent' status
+    const { data: invoices } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('customer_id', parseInt(customerId))
+      .eq('status', 'sent')
+      .order('invoice_date', { ascending: false })
+      .limit(5);
+
+    // Get real bookings for this customer - only show confirmed bookings
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('customer_id', parseInt(customerId))
+      .eq('status', 'confirmed')
+      .order('booking_date', { ascending: false })
+      .limit(5);
+
+    // Calculate stats from real data - only for 'sent' invoices
+    const totalOutstanding = invoices?.reduce((sum, inv) => 
+      inv.status === 'sent' ? sum + (inv.total_amount || 0) : sum, 0) || 0;
+    
+    const overdueCount = invoices?.filter(inv => 
+      inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
+    ).length || 0;
+
+    const totalPaid = 0; // Since we only show 'sent' invoices, paid amount is 0 for this view
+
+    const dashboardData: UserDashboardData = {
+      customer: customer,
+      recentInvoices: invoices || [],
+      recentPayments: [], // You can implement payment history later
+      overdueInvoices: invoices?.filter(inv => 
+        inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
+      ) || [],
+      totalOutstanding: totalOutstanding,
+      upcomingBookings: bookings?.filter(booking => 
+        booking.status === 'confirmed' && new Date(booking.booking_date) > new Date()
+      ) || [],
+      stats: {
+        totalInvoices: invoices?.length || 0,
+        totalPaid: totalPaid,
+        totalOutstanding: totalOutstanding,
+        overdueCount: overdueCount
+      }
+    };
+
+    return { data: dashboardData };
+  } catch (error) {
+    console.error('Exception in getUserDashboardData:', error);
+    return { data: null, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Format currency as Euro
+ */
+export const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('en-IE', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(amount);
+};
+
+/**
+ * Get invoice status display properties
+ */
+export const getInvoiceStatusDisplay = (status: string): { color: string; bgColor: string; text: string } => {
+  switch (status.toLowerCase()) {
+    case 'paid':
+      return { color: 'text-green-700', bgColor: 'bg-green-100', text: 'Paid' };
+    case 'pending':
+      return { color: 'text-yellow-700', bgColor: 'bg-yellow-100', text: 'Pending' };
+    case 'overdue':
+      return { color: 'text-red-700', bgColor: 'bg-red-100', text: 'Overdue' };
+    case 'draft':
+      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: 'Draft' };
+    case 'cancelled':
+      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: 'Cancelled' };
+    default:
+      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: status };
+  }
+};
+
+/**
+ * Get payment status display properties
+ */
+export const getPaymentStatusDisplay = (status: string): { color: string; bgColor: string; text: string } => {
+  switch (status.toLowerCase()) {
+    case 'completed':
+    case 'success':
+    case 'paid':
+      return { color: 'text-green-700', bgColor: 'bg-green-100', text: 'Completed' };
+    case 'pending':
+    case 'processing':
+      return { color: 'text-yellow-700', bgColor: 'bg-yellow-100', text: 'Pending' };
+    case 'failed':
+    case 'error':
+      return { color: 'text-red-700', bgColor: 'bg-red-100', text: 'Failed' };
+    case 'cancelled':
+    case 'canceled':
+      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: 'Cancelled' };
+    case 'refunded':
+      return { color: 'text-blue-700', bgColor: 'bg-blue-100', text: 'Refunded' };
+    default:
+      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: status };
+  }
+};

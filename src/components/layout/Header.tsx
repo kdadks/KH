@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
-// import { Menu, X, Phone } from 'lucide-react'; // Phone commented out as emergency button is disabled
+import { Menu, X, User } from 'lucide-react';
 import Logo from '../shared/Logo';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 
 const Header: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const { authUser, user } = useUserAuth();
+  
+  // Check if user is admin - Supabase Auth user without customer profile is admin
+  const isAdmin = !!authUser && !user;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -51,25 +55,36 @@ const Header: React.FC = () => {
             />
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center justify-center flex-1 space-x-4">
-            <NavLink to="/" className={navLinkClasses} end>Home</NavLink>
-            <NavLink to="/about" className={navLinkClasses}>About</NavLink>
-            <NavLink to="/services" className={navLinkClasses}>Services</NavLink>
-            <NavLink to="/testimonials" className={navLinkClasses}>Testimonials</NavLink>
-            <NavLink to="/contact" className={navLinkClasses}>Contact</NavLink>
-            <NavLink to="/admin" className={navLinkClasses}>Admin</NavLink>
-          </nav>
+          {/* Desktop Navigation - Hide all navigation for admin users */}
+          {!isAdmin && (
+            <nav className="hidden md:flex items-center justify-center flex-1 space-x-4">
+              <NavLink to="/" className={navLinkClasses} end>Home</NavLink>
+              <NavLink to="/about" className={navLinkClasses}>About</NavLink>
+              <NavLink to="/services" className={navLinkClasses}>Services</NavLink>
+              <NavLink to="/testimonials" className={navLinkClasses}>Testimonials</NavLink>
+              <NavLink to="/contact" className={navLinkClasses}>Contact</NavLink>
+              <NavLink to="/admin" className={navLinkClasses}>Admin</NavLink>
+            </nav>
+          )}
 
-          {/* Book Now Button */}
-          <div className="hidden md:flex">
-            <Link 
-              to="/booking" 
-              className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors text-sm font-medium"
-            >
-              Book Now
-            </Link>
-          </div>
+          {/* Book Now Button and My Account - Hide for admin users */}
+          {!isAdmin && (
+            <div className="hidden md:flex items-center space-x-3">
+              <Link 
+                to="/my-account" 
+                className="flex items-center px-3 py-2 rounded-md border border-primary-600 text-primary-600 hover:bg-primary-50 transition-colors text-sm font-medium"
+              >
+                <User className="w-4 h-4 mr-2" />
+                My Account
+              </Link>
+              <Link 
+                to="/booking" 
+                className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors text-sm font-medium"
+              >
+                Book Now
+              </Link>
+            </div>
+          )}
 
           {/* Emergency Contact */}
           {/* 
@@ -84,19 +99,21 @@ const Header: React.FC = () => {
           </div>
           */}
 
-          {/* Mobile Navigation Button */}
-          <button 
-            className="md:hidden text-neutral-800 focus:outline-none" 
-            onClick={toggleMenu}
-            aria-label="Toggle menu"
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          {/* Mobile Navigation Button - Hide for admin users */}
+          {!isAdmin && (
+            <button 
+              className="md:hidden text-neutral-800 focus:outline-none" 
+              onClick={toggleMenu}
+              aria-label="Toggle menu"
+            >
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Mobile Navigation Menu */}
-      {isOpen && (
+      {/* Mobile Navigation Menu - Hide for admin users */}
+      {isOpen && !isAdmin && (
         <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-50 border-t border-gray-200 animate-fade-in">
           <div className="px-4 pt-2 pb-4 space-y-1">
           <NavLink 
@@ -109,42 +126,42 @@ const Header: React.FC = () => {
           >
             Home
           </NavLink>
-          <NavLink 
-            to="/about" 
-            className={({ isActive }) => 
-              `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-            } 
-            onClick={closeMenu}
-          >
-            About
-          </NavLink>
-          <NavLink 
-            to="/services" 
-            className={({ isActive }) => 
-              `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-            } 
-            onClick={closeMenu}
-          >
-            Services
-          </NavLink>
-          <NavLink 
-            to="/testimonials" 
-            className={({ isActive }) => 
-              `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-            } 
-            onClick={closeMenu}
-          >
-            Testimonials
-          </NavLink>
-          <NavLink 
-            to="/contact" 
-            className={({ isActive }) => 
-              `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-            } 
-            onClick={closeMenu}
-          >
-            Contact
-          </NavLink>
+              <NavLink 
+                to="/about" 
+                className={({ isActive }) => 
+                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
+                } 
+                onClick={closeMenu}
+              >
+                About
+              </NavLink>
+              <NavLink 
+                to="/services" 
+                className={({ isActive }) => 
+                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
+                } 
+                onClick={closeMenu}
+              >
+                Services
+              </NavLink>
+              <NavLink 
+                to="/testimonials" 
+                className={({ isActive }) => 
+                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
+                } 
+                onClick={closeMenu}
+              >
+                Testimonials
+              </NavLink>
+              <NavLink 
+                to="/contact" 
+                className={({ isActive }) => 
+                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
+                } 
+                onClick={closeMenu}
+              >
+                Contact
+              </NavLink>
           <NavLink 
             to="/admin" 
             className={({ isActive }) => 
@@ -154,13 +171,22 @@ const Header: React.FC = () => {
           >
             Admin
           </NavLink>
-          <Link 
-            to="/booking" 
-            className="block w-full mt-4 px-4 py-2 text-center rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors font-medium"
-            onClick={closeMenu}
-          >
-            Book Now
-          </Link>
+          {/* Mobile Book Now Button and My Account */}
+              <Link 
+                to="/my-account" 
+                className="flex items-center px-3 py-2 mt-4 rounded-md border border-primary-600 text-primary-600 hover:bg-primary-50 transition-colors font-medium"
+                onClick={closeMenu}
+              >
+                <User className="w-4 h-4 mr-2" />
+                My Account
+              </Link>
+              <Link 
+                to="/booking" 
+                className="block w-full mt-2 px-4 py-2 text-center rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors font-medium"
+                onClick={closeMenu}
+              >
+                Book Now
+              </Link>
           {/* 
           <a 
             href="tel:+353123456789" 
