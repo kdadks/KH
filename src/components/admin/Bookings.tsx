@@ -1173,149 +1173,186 @@ export const Bookings: React.FC<BookingsProps> = ({
                       ? 'bg-gray-50 opacity-75' 
                       : 'hover:bg-gray-50'
                   }`}>
-                    <div className="flex items-start justify-between space-x-4">
-                      {/* Left: Avatar and Content */}
-                      <div className="flex items-start space-x-4 flex-1 min-w-0">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          isCancelled ? 'bg-gray-200' : 'bg-primary-100'
-                        }`}>
-                          <User className={`w-6 h-6 ${
-                            isCancelled ? 'text-gray-500' : 'text-primary-600'
-                          }`} />
-                        </div>
-                        
-                        {/* Content Section */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
-                            <h4 className={`text-lg font-medium ${
+                    {/* Three Column Layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      
+                      {/* Column 1: Customer Info, Email, Date, Service (6 columns on large screens) */}
+                      <div className="lg:col-span-5 space-y-2">
+                        {/* Customer Name with Status */}
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isCancelled ? 'bg-gray-200' : 'bg-primary-100'
+                          }`}>
+                            <User className={`w-5 h-5 ${
+                              isCancelled ? 'text-gray-500' : 'text-primary-600'
+                            }`} />
+                          </div>
+                          <div className="flex items-center space-x-3 min-w-0 flex-1">
+                            <h4 className={`text-lg font-medium break-words ${
                               isCancelled ? 'text-gray-500 line-through' : 'text-gray-900'
                             }`}>{getCustomerName(booking)}</h4>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full w-fit ${
-                                isCancelled ? 'bg-red-100 text-red-800' :
-                                isConfirmed ? 'bg-green-100 text-green-800' :
-                                needsDateTime ? 'bg-orange-100 text-orange-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {isCancelled ? 'Cancelled' : isConfirmed ? 'Confirmed' : needsDateTime ? 'Needs Date/Time' : 'Pending'}
-                              </span>
-                            </div>
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ${
+                              isCancelled ? 'bg-red-100 text-red-800' :
+                              isConfirmed ? 'bg-green-100 text-green-800' :
+                              needsDateTime ? 'bg-orange-100 text-orange-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {isCancelled ? 'Cancelled' : isConfirmed ? 'Confirmed' : needsDateTime ? 'Needs Date/Time' : 'Pending'}
+                            </span>
                           </div>
-                          
-                          {/* Contact Information Row */}
-                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="flex items-center min-w-0">
-                              <Mail className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <span className="text-sm text-gray-600 truncate" title={getCustomerEmail(booking)}>
+                        </div>
+
+                        {/* Content aligned with customer name, not icon */}
+                        <div className="ml-14 space-y-2">
+                          {/* Email */}
+                          <div className="flex items-start space-x-2">
+                            <Mail className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-600 break-words" title={getCustomerEmail(booking)}>
                                 {getCustomerEmail(booking)}
-                              </span>
-                            </div>
-                            <div className="flex items-center min-w-0">
-                              <Phone className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <span className="text-sm text-gray-600 truncate" title={getCustomerPhone(booking)}>
-                                {getCustomerPhone(booking)}
-                              </span>
+                              </p>
                             </div>
                           </div>
-                          
-                          {/* Date and Time Information Row */}
-                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="flex items-center min-w-0">
-                              <Calendar className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <span className="text-sm text-gray-600">
+
+                          {/* Date */}
+                          <div className="flex items-start space-x-2">
+                            <Calendar className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-600">
                                 {booking.booking_date ? 
                                   new Date(booking.booking_date).toLocaleDateString() : 
                                   (booking.appointment_date || booking.date || <span className="text-red-500 italic">Not set</span>)
                                 }
-                              </span>
-                            </div>
-                            <div className="flex items-center min-w-0">
-                              <Clock className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <span className="text-sm text-gray-600">
-                                {booking.timeslot_start_time && booking.timeslot_end_time ? (
-                                  <>
-                                    {booking.timeslot_start_time.substring(0, 5)} - {booking.timeslot_end_time.substring(0, 5)}
-                                    <span className="text-xs text-gray-500 ml-1">(Timeslot)</span>
-                                  </>
-                                ) : booking.booking_date ? 
-                                  new Date(booking.booking_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
-                                  (booking.appointment_time || booking.time || <span className="text-red-500 italic">Not set</span>)
-                                }
-                              </span>
-                            </div>
-                            <div className="flex items-center min-w-0">
-                              <div className="w-4 h-4 mr-2 flex-shrink-0 flex items-center justify-center">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  booking.timeslot_start_time && booking.timeslot_end_time 
-                                    ? 'bg-green-500' 
-                                    : 'bg-orange-500'
-                                }`} />
-                              </div>
-                              <span className="text-xs text-gray-500">
-                                {booking.timeslot_start_time && booking.timeslot_end_time 
-                                  ? 'Full timeslot booked' 
-                                  : 'Legacy booking'
-                                }
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Service Information */}
-                          <div className="mt-2 flex items-center">
-                            <div className="flex items-center text-sm text-gray-600">
-                              <span className="font-medium">Service:</span>
-                              <span className="ml-1 text-gray-600">{booking.package_name || booking.service || 'Not specified'}</span>
-                            </div>
-                          </div>
-
-                          {/* Notes if available */}
-                          {booking.notes && (
-                            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                              <p className="text-sm text-gray-600">
-                                <span className="font-medium">Notes:</span> {booking.notes}
                               </p>
                             </div>
-                          )}
+                          </div>
+
+                          {/* Service */}
+                          <div className="flex items-start space-x-2">
+                            <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
+                              <div className="w-3 h-3 bg-blue-500 rounded-full" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-600 break-words">
+                                <span className="font-medium">Service:</span> {booking.package_name || booking.service || 'Not specified'}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      
-                      {/* Right: Action Buttons - Always present for consistent spacing */}
-                      <div className="flex flex-col gap-2 flex-shrink-0 min-w-[40px] items-center">
+
+                      {/* Column 2: Phone, Time Slot, Timeslot Message (4 columns on large screens) */}
+                      <div className="lg:col-span-4 space-y-2">
+                        {/* Phone Number */}
+                        <div className="flex items-start space-x-2">
+                          <Phone className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm text-gray-600 break-words" title={getCustomerPhone(booking)}>
+                              {getCustomerPhone(booking)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Time Slot */}
+                        <div className="flex items-start space-x-2">
+                          <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm text-gray-600">
+                              {booking.timeslot_start_time && booking.timeslot_end_time ? (
+                                <>
+                                  {booking.timeslot_start_time.substring(0, 5)} - {booking.timeslot_end_time.substring(0, 5)}
+                                  <span className="text-xs text-gray-500 ml-1">(Timeslot)</span>
+                                </>
+                              ) : booking.booking_date ? 
+                                new Date(booking.booking_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
+                                (booking.appointment_time || booking.time || <span className="text-red-500 italic">Not set</span>)
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Timeslot Status Message */}
+                        <div className="flex items-start space-x-2">
+                          <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
+                            <div className={`w-3 h-3 rounded-full ${
+                              booking.timeslot_start_time && booking.timeslot_end_time 
+                                ? 'bg-green-500' 
+                                : 'bg-orange-500'
+                            }`} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-500">
+                              {booking.timeslot_start_time && booking.timeslot_end_time 
+                                ? 'Full timeslot booked' 
+                                : 'Legacy booking'
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Notes if available */}
+                        {booking.notes && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-600 break-words">
+                              <span className="font-medium">Notes:</span> {booking.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Column 3: Action Buttons (3 columns on large screens) */}
+                      <div className="lg:col-span-3 flex flex-row lg:flex-col justify-end lg:justify-start items-center lg:items-end space-x-2 lg:space-x-0 lg:space-y-2 relative z-10">
                         {!isCancelled ? (
                           <>
                             {!isConfirmed && (
                               <button
-                                onClick={() => handleConfirmBooking(booking)}
-                                className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleConfirmBooking(booking);
+                                }}
+                                className="flex items-center justify-center w-10 h-10 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors cursor-pointer"
                                 title="Confirm Booking"
+                                type="button"
                               >
                                 <Check className="w-4 h-4" />
                               </button>
                             )}
                             <button
-                              onClick={() => handleEditBooking(booking)}
-                              className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleEditBooking(booking);
+                              }}
+                              className="flex items-center justify-center w-10 h-10 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors cursor-pointer"
                               title="Edit Booking"
+                              type="button"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 setBookingToDelete(booking);
                                 setShowDeleteConfirmModal(true);
                               }}
-                              className="flex items-center justify-center w-8 h-8 bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                              className="flex items-center justify-center w-10 h-10 bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors cursor-pointer"
                               title="Delete Booking"
+                              type="button"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 setBookingToCancel(booking);
                                 setShowCancelConfirmModal(true);
                               }}
-                              className="flex items-center justify-center w-8 h-8 bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors"
+                              className="flex items-center justify-center w-10 h-10 bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors cursor-pointer"
                               title="Cancel Booking"
+                              type="button"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -1323,16 +1360,20 @@ export const Bookings: React.FC<BookingsProps> = ({
                         ) : null}
                         {/* Details button - Always present for all bookings */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             setSelectedBooking(booking);
                             setShowBookingModal(true);
                           }}
-                          className="flex items-center justify-center w-8 h-8 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                          className="flex items-center justify-center w-10 h-10 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
                           title="View Details"
+                          type="button"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                       </div>
+
                     </div>
                   </div>
                 );
