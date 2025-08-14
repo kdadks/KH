@@ -206,6 +206,18 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       // Customer authentication successful
       console.log('Customer authenticated:', customers.email);
       
+      // Check if password equals email (default password) and set must_change_password flag
+      if (customers.password === customers.email && customers.must_change_password !== true) {
+        const { error: flagError } = await supabase
+          .from('customers')
+          .update({ must_change_password: true })
+          .eq('id', customers.id);
+        
+        if (!flagError) {
+          customers.must_change_password = true; // Update local data
+        }
+      }
+      
       // Set the authenticated user data
       setUser(customers);
       

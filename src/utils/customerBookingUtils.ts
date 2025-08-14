@@ -19,6 +19,9 @@ export interface Customer {
   created_at?: string;
   updated_at?: string;
   is_active?: boolean;
+  password?: string;
+  must_change_password?: boolean;
+  first_login?: boolean;
 }
 
 export interface BookingData {
@@ -96,14 +99,17 @@ export const findOrCreateCustomer = async (customerData: {
       return { customer: existingCustomer, error: null };
     }
 
-    // Customer doesn't exist, create a new one
+    // Customer doesn't exist, create a new one with default password same as email
     const newCustomerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'> = {
       first_name: customerData.firstName.trim(),
       last_name: customerData.lastName.trim(),
       email: customerData.email.toLowerCase().trim(),
       phone: customerData.phone?.trim() || undefined,
       country: 'Ireland',
-      is_active: true
+      is_active: true,
+      password: customerData.email.toLowerCase().trim(), // Default password same as email
+      must_change_password: true, // Force password change on first login
+      first_login: true
     };
 
     const { data: newCustomer, error: createError } = await supabase
