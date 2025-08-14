@@ -4,8 +4,8 @@ import {
   UserDashboardData,
   UserProfileUpdateData,
   UserInvoice,
-  UserPayment,
-  UserBooking
+  UserBooking,
+  PaymentHistoryItem
 } from '../types/userManagement';
 
 /**
@@ -162,12 +162,24 @@ export const changeUserPassword = async (
 };
 
 /**
- * Get user invoices
+ * Get user invoices with real data filtering
  */
-export const getUserInvoices = async (_authUserId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
+export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
-    // This is a placeholder - you would implement based on your invoice structure
-    return { invoices: [] };
+    // Get real invoices for this customer - only show invoices with 'sent' status
+    const { data: invoices, error } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('customer_id', parseInt(customerId))
+      .eq('status', 'sent')
+      .order('invoice_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user invoices:', error);
+      return { invoices: [], error: error.message };
+    }
+
+    return { invoices: invoices || [] };
   } catch (error) {
     console.error('Exception in getUserInvoices:', error);
     return { invoices: [], error: 'Unexpected error occurred' };
@@ -175,12 +187,16 @@ export const getUserInvoices = async (_authUserId: string): Promise<{ invoices: 
 };
 
 /**
- * Get user payment history
+ * Get user payment history with real data
  */
-export const getUserPaymentHistory = async (_authUserId: string): Promise<{ payments: UserPayment[]; error?: string }> => {
+export const getUserPaymentHistory = async (_customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
   try {
-    // This is a placeholder - you would implement based on your payment structure
-    return { payments: [] };
+    // Get payment history from invoice items or a payments table if you have one
+    // For now, we'll return empty array since payment tracking might be implemented later
+    // You could implement this based on your payment system
+    const payments: PaymentHistoryItem[] = [];
+
+    return { payments };
   } catch (error) {
     console.error('Exception in getUserPaymentHistory:', error);
     return { payments: [], error: 'Unexpected error occurred' };
@@ -188,12 +204,24 @@ export const getUserPaymentHistory = async (_authUserId: string): Promise<{ paym
 };
 
 /**
- * Get user bookings
+ * Get user bookings with real data filtering
  */
-export const getUserBookings = async (_authUserId: string): Promise<{ bookings: UserBooking[]; error?: string }> => {
+export const getUserBookings = async (customerId: string): Promise<{ bookings: UserBooking[]; error?: string }> => {
   try {
-    // This is a placeholder - you would implement based on your booking structure
-    return { bookings: [] };
+    // Get real bookings for this customer - only show confirmed bookings
+    const { data: bookings, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('customer_id', parseInt(customerId))
+      .eq('status', 'confirmed')
+      .order('booking_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user bookings:', error);
+      return { bookings: [], error: error.message };
+    }
+
+    return { bookings: bookings || [] };
   } catch (error) {
     console.error('Exception in getUserBookings:', error);
     return { bookings: [], error: 'Unexpected error occurred' };

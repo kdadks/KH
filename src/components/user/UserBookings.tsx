@@ -25,17 +25,17 @@ const UserBookings: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    if (user?.auth_user_id) {
+    if (user?.id) {
       loadBookings();
     }
   }, [user]);
 
   const loadBookings = async () => {
-    if (!user?.auth_user_id) return;
+    if (!user?.id) return;
 
     setLoading(true);
     try {
-      const { bookings: data, error } = await getUserBookings(user.auth_user_id);
+      const { bookings: data, error } = await getUserBookings(user.id.toString());
       
       if (error) {
         showError('Error', `Failed to load bookings: ${error}`);

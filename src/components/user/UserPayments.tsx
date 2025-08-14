@@ -25,17 +25,17 @@ const UserPayments: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    if (user?.auth_user_id) {
+    if (user?.id) {
       loadPayments();
     }
   }, [user]);
 
   const loadPayments = async () => {
-    if (!user?.auth_user_id) return;
+    if (!user?.id) return;
 
     setLoading(true);
     try {
-      const { payments: data, error } = await getUserPaymentHistory(user.auth_user_id);
+      const { payments: data, error } = await getUserPaymentHistory(user.id.toString());
       
       if (error) {
         showError('Error', `Failed to load payments: ${error}`);
@@ -264,7 +264,7 @@ const UserPayments: React.FC = () => {
                           statusInfo.color === 'blue' ? 'bg-blue-100 text-blue-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {statusInfo.label}
+                          {statusInfo.text}
                         </span>
                       </div>
                     </div>

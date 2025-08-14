@@ -24,17 +24,17 @@ const UserInvoices: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    if (user?.auth_user_id) {
+    if (user?.id) {
       loadInvoices();
     }
   }, [user]);
 
   const loadInvoices = async () => {
-    if (!user?.auth_user_id) return;
+    if (!user?.id) return;
 
     setLoading(true);
     try {
-      const { invoices: data, error } = await getUserInvoices(user.auth_user_id);
+      const { invoices: data, error } = await getUserInvoices(user.id.toString());
       
       if (error) {
         showError('Error', `Failed to load invoices: ${error}`);
@@ -140,7 +140,7 @@ const UserInvoices: React.FC = () => {
           {/* Table Body */}
           <div className="divide-y divide-gray-200">
             {filteredInvoices.map((invoice) => {
-              const statusInfo = getInvoiceStatusDisplay(invoice);
+              const statusInfo = getInvoiceStatusDisplay(invoice.status);
               
               return (
                 <div key={invoice.id} className="px-6 py-4 hover:bg-gray-50">
@@ -201,7 +201,7 @@ const UserInvoices: React.FC = () => {
                         statusInfo.color === 'blue' ? 'bg-blue-100 text-blue-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {statusInfo.label}
+                        {statusInfo.text}
                       </span>
                     </div>
 
