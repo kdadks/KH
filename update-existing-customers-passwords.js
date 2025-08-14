@@ -1,9 +1,35 @@
+/**
+ * Update existing customers without passwords to set default hashed password same as email
+ * 
+ * Prerequisites:
+ * 1. Install bcryptjs: npm install bcryptjs
+ * 2. Update supabaseUrl and supabaseKey with your actual credentials
+ * 3. Run: node update-existing-customers-passwords.js
+ */
+
 const { createClient } = require('@supabase/supabase-js');
+const bcrypt = require('bcryptjs');
 
 // Configure Supabase client
 const supabaseUrl = 'https://your-supabase-project.supabase.co'; // Replace with your actual URL
 const supabaseKey = 'your-supabase-anon-key'; // Replace with your actual key
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Salt rounds for password hashing
+const SALT_ROUNDS = 12;
+
+/**
+ * Hash a plain text password using bcrypt
+ */
+async function hashPassword(plainPassword) {
+  try {
+    const hashedPassword = await bcrypt.hash(plainPassword, SALT_ROUNDS);
+    return hashedPassword;
+  } catch (error) {
+    console.error('Error hashing password:', error);
+    throw new Error('Failed to hash password');
+  }
+}
 
 /**
  * Update existing customers who don't have passwords to set default password same as email
@@ -33,21 +59,29 @@ async function updateExistingCustomersWithDefaultPasswords() {
 
     // Update each customer to set password same as email and require password change
     const updatePromises = customersWithoutPasswords.map(async (customer) => {
-      const { error } = await supabase
-        .from('customers')
-        .update({
-          password: customer.email.toLowerCase().trim(),
-          must_change_password: true,
-          first_login: true
-        })
-        .eq('id', customer.id);
+      try {
+        const defaultPassword = customer.email.toLowerCase().trim();
+        const hashedPassword = await hashPassword(defaultPassword);
+        
+        const { error } = await supabase
+          .from('customers')
+          .update({
+            password: hashedPassword, // Store hashed password
+            must_change_password: true,
+            first_login: true
+          })
+          .eq('id', customer.id);
 
-      if (error) {
-        console.error(`Error updating customer ${customer.email}:`, error);
+        if (error) {
+          console.error(`Error updating customer ${customer.email}:`, error);
+          return { success: false, email: customer.email, error: error.message };
+        } else {
+          console.log(`✓ Updated customer: ${customer.email} (password hashed)`);
+          return { success: true, email: customer.email };
+        }
+      } catch (error) {
+        console.error(`Error processing customer ${customer.email}:`, error);
         return { success: false, email: customer.email, error: error.message };
-      } else {
-        console.log(`✓ Updated customer: ${customer.email}`);
-        return { success: true, email: customer.email };
       }
     });
 

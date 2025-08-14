@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 import { 
   UserCustomer, 
   UserAuthContext, 
@@ -15,6 +15,7 @@ import {
   getCustomerByEmail,
   getCustomerById
 } from '../utils/userManagementUtils';
+import { hashPassword, verifyPassword, isPasswordHashed } from '../utils/passwordUtils';
 
 interface UserAuthProviderProps {
   children: React.ReactNode;
@@ -190,36 +191,74 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     try {
       setLoading(true);
 
-      // First, try to find the customer by email and password
-      const { data: customers, error: customerError } = await supabase
+      // First, find the customer by email only
+      const { data: customer, error: customerError } = await supabase
         .from('customers')
         .select('*')
         .eq('email', email)
-        .eq('password', password)
         .eq('is_active', true)
         .single();
 
-      if (customerError || !customers) {
+      if (customerError || !customer) {
+        return { success: false, error: 'Invalid credentials' };
+      }
+
+      // Verify password using bcrypt
+      let isValidPassword = false;
+      
+      // Check if password is already hashed
+      if (isPasswordHashed(customer.password)) {
+        // Verify against hashed password
+        isValidPassword = await verifyPassword(password, customer.password);
+      } else {
+        // Handle legacy plain text passwords (for backwards compatibility during transition)
+        // Check if plain text password matches
+        isValidPassword = customer.password === password;
+        
+        // If valid, hash the password and update it in the database
+        if (isValidPassword) {
+          const hashedPassword = await hashPassword(password);
+          await supabase
+            .from('customers')
+            .update({ password: hashedPassword })
+            .eq('id', customer.id);
+          
+          console.log('Migrated plain text password to hashed for user:', customer.email);
+        }
+      }
+
+      if (!isValidPassword) {
         return { success: false, error: 'Invalid credentials' };
       }
 
       // Customer authentication successful
-      console.log('Customer authenticated:', customers.email);
+      console.log('Customer authenticated:', customer.email);
       
       // Check if password equals email (default password) and set must_change_password flag
-      if (customers.password === customers.email && customers.must_change_password !== true) {
+      // For plain text comparison, check against the original password
+      // For hashed passwords, we need to verify against the email
+      let needsPasswordChange = false;
+      if (isPasswordHashed(customer.password)) {
+        // For hashed passwords, check if the plain password was the email
+        needsPasswordChange = password === customer.email;
+      } else {
+        // For plain text passwords (legacy), direct comparison
+        needsPasswordChange = customer.password === customer.email;
+      }
+      
+      if (needsPasswordChange && customer.must_change_password !== true) {
         const { error: flagError } = await supabase
           .from('customers')
           .update({ must_change_password: true })
-          .eq('id', customers.id);
+          .eq('id', customer.id);
         
         if (!flagError) {
-          customers.must_change_password = true; // Update local data
+          customer.must_change_password = true; // Update local data
         }
       }
       
       // Set the authenticated user data
-      setUser(customers);
+      setUser(customer);
       
       // Update last login time
       const { error: updateError } = await supabase
@@ -228,7 +267,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
           last_login: new Date().toISOString(),
           first_login: false 
         })
-        .eq('id', customers.id);
+        .eq('id', customer.id);
 
       if (updateError) {
         console.warn('Failed to update last login:', updateError);
@@ -286,16 +325,13 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         return { success: false, error: 'Not authenticated' };
       }
 
-      // For custom authentication, we need to implement password change in the database
-      // This is a placeholder - in production you would:
-      // 1. Hash the new password
-      // 2. Update the customer table
-      // 3. Set must_change_password to false
+      // Hash the new password before storing it
+      const hashedPassword = await hashPassword(passwordData.newPassword);
       
       const { error: updateError } = await supabase
         .from('customers')
         .update({ 
-          password: passwordData.newPassword,
+          password: hashedPassword,
           must_change_password: false 
         })
         .eq('id', user.id);

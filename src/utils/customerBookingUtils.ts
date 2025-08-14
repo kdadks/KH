@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { hashPassword } from './passwordUtils';
 
 export interface Customer {
   id?: number;
@@ -99,7 +100,10 @@ export const findOrCreateCustomer = async (customerData: {
       return { customer: existingCustomer, error: null };
     }
 
-    // Customer doesn't exist, create a new one with default password same as email
+    // Customer doesn't exist, create a new one with default password same as email (hashed)
+    const defaultPassword = customerData.email.toLowerCase().trim();
+    const hashedDefaultPassword = await hashPassword(defaultPassword);
+    
     const newCustomerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'> = {
       first_name: customerData.firstName.trim(),
       last_name: customerData.lastName.trim(),
@@ -107,7 +111,7 @@ export const findOrCreateCustomer = async (customerData: {
       phone: customerData.phone?.trim() || undefined,
       country: 'Ireland',
       is_active: true,
-      password: customerData.email.toLowerCase().trim(), // Default password same as email
+      password: hashedDefaultPassword, // Store hashed password
       must_change_password: true, // Force password change on first login
       first_login: true
     };
