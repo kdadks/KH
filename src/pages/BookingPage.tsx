@@ -315,17 +315,34 @@ const BookingPage: React.FC = () => {
         status: 'pending'
       };
 
+      console.log('📝 BookingPage - About to create booking with:', {
+        customerData,
+        bookingData,
+        serviceValue: data.service
+      });
+
       // Create booking with customer integration
-      const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
+      const { booking, customer, paymentRequest, error } = await createBookingWithCustomer(customerData, bookingData);
 
       if (error) {
+        console.error('❌ BookingPage - Booking creation failed:', error);
         setSuccessMsg('Booking failed: ' + error);
         setSendingEmail(false);
         return;
       }
 
       if (booking && customer) {
-        console.log('Booking created successfully:', { booking, customer });
+        console.log('✅ BookingPage - Booking created successfully:', { 
+          booking, 
+          customer, 
+          paymentRequest: paymentRequest ? 'Created' : 'Not created',
+          paymentRequestDetails: paymentRequest 
+        });
+        
+        if (!paymentRequest) {
+          console.warn('⚠️ BookingPage - No payment request was created for this booking');
+        }
+        
         setSuccessMsg('Booking submitted successfully! We will contact you to confirm your appointment.');
         
         // Send email notification

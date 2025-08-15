@@ -18,7 +18,9 @@ import {
   AlertCircle,
   List,
   Grid3x3,
-  Plus
+  Plus,
+  CreditCard,
+  Euro
 } from 'lucide-react';
 import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar';
 import moment from 'moment';
@@ -40,7 +42,11 @@ interface BookingCalendarEvent {
 }
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
+import { createPaymentRequest } from '../../utils/paymentRequestUtils';
+import { PAYMENT_CONFIG } from '../../config/paymentConfig';
+import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -137,6 +143,11 @@ export const Bookings: React.FC<BookingsProps> = ({
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [creatingBooking, setCreatingBooking] = useState(false);
+  
+  // Payment request state
+  const [bookingPaymentStatus, setBookingPaymentStatus] = useState<Map<string, {paymentRequest: any, payment: any}>>(new Map());
+  const [bookingDepositAmounts, setBookingDepositAmounts] = useState<Map<string, number>>(new Map());
+  const [loadingPaymentStatus, setLoadingPaymentStatus] = useState(false);
   
   const recordsPerPage = 10;
 
@@ -236,6 +247,215 @@ export const Bookings: React.FC<BookingsProps> = ({
       showError('Error', 'Failed to confirm booking. Please try again.');
     }
   };
+
+  // Payment request functions
+  const checkBookingPaymentStatus = async (booking: BookingFormData) => {
+    if (!booking.customer_id) return { paymentRequest: null, payment: null };
+    
+    try {
+      // Check for payment requests - first try to match by booking_id, then fall back to customer_id + service matching
+      let { data: paymentRequests, error: requestError } = await supabase
+        .from('payment_requests')
+        .select('*')
+        .eq('booking_id', booking.id)
+        .order('created_at', { ascending: false });
+
+      if (requestError) {
+        console.error('Error checking payment requests by booking_id:', requestError);
+      }
+
+      // If no booking_id match found, fall back to customer_id and service name matching (for legacy requests)
+      if (!paymentRequests || paymentRequests.length === 0) {
+        const { data: legacyRequests, error: legacyError } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .eq('customer_id', booking.customer_id)
+          .order('created_at', { ascending: false });
+
+        if (legacyError) {
+          console.error('Error checking legacy payment requests:', legacyError);
+        }
+
+        // Filter by service name in notes for legacy requests
+        if (legacyRequests && booking.package_name) {
+          paymentRequests = legacyRequests.filter(req => 
+            req.notes && req.notes.toLowerCase().includes(booking.package_name.toLowerCase())
+          );
+        }
+      }
+
+      // Get the most recent matching payment request
+      const matchingPaymentRequest = paymentRequests && paymentRequests.length > 0 ? paymentRequests[0] : null;
+
+      console.log(`[Admin] Payment request lookup for booking ${booking.id} (${booking.package_name}):`, {
+        bookingIdMatches: paymentRequests?.length || 0,
+        matchingRequest: matchingPaymentRequest ? {
+          id: matchingPaymentRequest.id,
+          amount: matchingPaymentRequest.amount,
+          booking_id: matchingPaymentRequest.booking_id,
+          hasBookingId: !!matchingPaymentRequest.booking_id
+        } : null
+      });
+
+      // Check for completed payments - match by booking_id first, then fallback to service name matching
+      const { data: payments, error: paymentError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('customer_id', booking.customer_id)
+        .in('status', ['paid', 'processing'])
+        .order('created_at', { ascending: false });
+
+      if (paymentError) {
+        console.error('Error checking payments:', paymentError);
+      }
+
+      // Try to match payment by booking_id first (most accurate)
+      let matchingPayment = null;
+      if (payments && booking.id) {
+        matchingPayment = payments.find(payment => payment.booking_id === booking.id);
+        
+        console.log(`[Admin] Payment lookup for booking ${booking.id} (${booking.package_name}):`, {
+          totalPayments: payments.length,
+          bookingIdMatch: !!matchingPayment,
+          matchedPayment: matchingPayment ? {
+            id: matchingPayment.id,
+            amount: matchingPayment.amount,
+            booking_id: matchingPayment.booking_id
+          } : null
+        });
+        
+        // Fallback: try to match by service name in notes (for legacy payments)
+        if (!matchingPayment && booking.package_name) {
+          matchingPayment = payments.find(payment => 
+            payment.notes && payment.notes.toLowerCase().includes(booking.package_name.toLowerCase())
+          );
+          
+          if (matchingPayment) {
+            console.log(`[Admin] Fallback: Found payment by service name matching for ${booking.package_name}`);
+          }
+        }
+        
+        // Last resort: don't use any payment to avoid showing wrong amounts
+        // This prevents showing incorrect payment amounts for different services
+        if (!matchingPayment) {
+          console.log(`[Admin] No specific payment found for booking ${booking.id} - avoiding incorrect payment display`);
+        }
+      }
+
+      return {
+        paymentRequest: matchingPaymentRequest,
+        payment: matchingPayment
+      };
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      return { paymentRequest: null, payment: null };
+    }
+  };
+
+  const checkBookingPaymentRequest = async (booking: BookingFormData) => {
+    const status = await checkBookingPaymentStatus(booking);
+    return status.paymentRequest;
+  };
+
+  const handleCreatePaymentRequest = async (booking: BookingFormData) => {
+    if (!booking.customer_id || !booking.package_name) {
+      showError('Error', 'Missing customer or service information');
+      return;
+    }
+
+    try {
+      setLoadingPaymentStatus(true);
+      
+      await createPaymentRequest(
+        booking.customer_id,
+        booking.package_name,
+        booking.booking_date || new Date().toISOString(),
+        null, // invoiceId
+        booking.id // bookingId - now string UUID
+      );
+
+      showSuccess('Payment Request Created', 'Deposit payment request has been sent to the customer');
+      
+      // Refresh payment request status
+      const updatedStatus = await checkBookingPaymentStatus(booking);
+      if (booking.id) {
+        setBookingPaymentStatus(prev => new Map(prev.set(booking.id!, updatedStatus)));
+      }
+    } catch (error) {
+      console.error('Error creating payment request:', error);
+      showError('Error', 'Failed to create payment request. Please try again.');
+    } finally {
+      setLoadingPaymentStatus(false);
+    }
+  };
+
+  const calculateDepositAmount = async (serviceName: string): Promise<number> => {
+    try {
+      // Extract base service name and determine time slot type
+      const baseServiceName = extractBaseServiceName(serviceName);
+      const timeSlotType = determineTimeSlotType(serviceName);
+      
+      // Fetch pricing from database
+      const servicePricing = await fetchServicePricing(baseServiceName);
+      
+      if (servicePricing) {
+        const basePrice = getServicePrice(servicePricing, timeSlotType);
+        return Math.round(basePrice * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+      }
+      
+      // Fallback: try to extract price from service name
+      const priceMatch = serviceName.match(/€(\d+)/);
+      const baseCost = priceMatch ? parseInt(priceMatch[1]) : 75; // Default to €75
+      
+      return Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+    } catch (error) {
+      console.error('Error calculating deposit:', error);
+      return Math.round(75 * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE); // Default fallback
+    }
+  };
+
+  // Load payment status for visible bookings
+  useEffect(() => {
+    const loadPaymentStatus = async () => {
+      if (currentPageBookings.length === 0) return;
+      
+      setLoadingPaymentStatus(true);
+      try {
+        const statusMap = new Map();
+        const depositMap = new Map();
+        
+        for (const booking of currentPageBookings) {
+          if (booking.customer_id) {
+            const status = await checkBookingPaymentStatus(booking);
+            statusMap.set(booking.id, status);
+            
+            // Calculate deposit amount for this booking
+            if (booking.package_name) {
+              const depositAmount = await calculateDepositAmount(booking.package_name);
+              depositMap.set(booking.id, depositAmount);
+            }
+          }
+        }
+        
+        setBookingPaymentStatus(statusMap);
+        setBookingDepositAmounts(depositMap);
+      } catch (error) {
+        console.error('Error loading payment status:', error);
+      } finally {
+        setLoadingPaymentStatus(false);
+      }
+    };
+
+    loadPaymentStatus();
+  }, [
+    // Only reload payment status when page/filter changes, not when booking status changes
+    currentPage, 
+    searchTerm, 
+    statusFilter, 
+    filterDate,
+    filterRange?.start,
+    filterRange?.end
+  ]);
 
   // Helper function to process booking data for editing
   const processBookingForEdit = (bookingToEdit: BookingFormData) => {
@@ -1289,6 +1509,88 @@ export const Bookings: React.FC<BookingsProps> = ({
                             </p>
                           </div>
                         </div>
+
+                        {/* Deposit Payment Status */}
+                        {booking.customer_id && booking.package_name && (
+                          <div className="flex items-start space-x-2">
+                            <Euro className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              {(() => {
+                                const status = bookingPaymentStatus.get(booking.id || '');
+                                const depositAmount = bookingDepositAmounts.get(booking.id || '') || 75; // Default fallback
+                                
+                                // If payment is completed
+                                if (status?.payment) {
+                                  return (
+                                    <div className="space-y-1">
+                                      <p className="text-xs text-green-700 font-medium">
+                                        ✓ Deposit Completed - €{status.payment.amount.toFixed(2)}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
+                                        Service: {booking.package_name}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Paid: {status.payment.payment_date ? 
+                                          new Date(status.payment.payment_date).toLocaleDateString() : 
+                                          new Date(status.payment.created_at).toLocaleDateString()}
+                                      </p>
+                                    </div>
+                                  );
+                                }
+                                
+                                // If payment request exists but not paid
+                                if (status?.paymentRequest) {
+                                  const isExpired = status.paymentRequest.payment_due_date && 
+                                    new Date(status.paymentRequest.payment_due_date) < new Date();
+                                  
+                                  return (
+                                    <div className="space-y-1">
+                                      <p className={`text-xs font-medium ${
+                                        isExpired ? 'text-red-600' : 
+                                        status.paymentRequest.status === 'paid' ? 'text-green-600' : 'text-blue-600'
+                                      }`}>
+                                        {isExpired ? '⚠ Overdue' : '📧 Request sent'} - €{status.paymentRequest.amount.toFixed(2)} deposit
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
+                                        Service: {booking.package_name}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Status: {status.paymentRequest.status} • Due: {status.paymentRequest.payment_due_date ? 
+                                          new Date(status.paymentRequest.payment_due_date).toLocaleDateString() : 'N/A'}
+                                      </p>
+                                    </div>
+                                  );
+                                }
+                                
+                                // No payment request exists
+                                return (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center space-x-2">
+                                      <p className="text-xs text-amber-600">
+                                        ⚠ No payment request - €{depositAmount.toFixed(2)} deposit needed
+                                      </p>
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          handleCreatePaymentRequest(booking);
+                                        }}
+                                        disabled={loadingPaymentStatus}
+                                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
+                                        title="Create Payment Request"
+                                      >
+                                        {loadingPaymentStatus ? '...' : 'Create Request'}
+                                      </button>
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
+                                      Service: {booking.package_name}
+                                    </p>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Notes if available */}
                         {booking.notes && (

@@ -74,19 +74,19 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       setLoading(true);
       console.log('Fetching customers...');
       
-      // Query all customers (active and inactive)
+      // Optimized query with smaller limit and only essential fields for initial load
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
-        .order('first_name', { ascending: true })
-        .order('last_name', { ascending: true });
+        .select('id, first_name, last_name, email, phone, is_active, created_at, updated_at')
+        .order('created_at', { ascending: false }) // Most recent first
+        .limit(100); // Reduced limit for faster loading
 
       if (error) {
         console.error('Supabase error:', error);
         throw error;
       }
       
-      console.log('Customers data:', data);
+      console.log('Customers data loaded:', data?.length, 'records');
       setCustomers(data || []);
     } catch (err) {
       console.error('Full error details:', err);

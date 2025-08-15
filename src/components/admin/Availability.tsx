@@ -96,7 +96,8 @@ export const Availability: React.FC<AvailabilityProps> = () => {
           )
         `)
         .in('status', ['confirmed', 'completed'])
-        .order('booking_date', { ascending: true });
+        .order('booking_date', { ascending: true })
+        .limit(500); // Add limit for performance
 
       if (error) {
         // If the join fails, try a simpler query without the join
@@ -106,7 +107,8 @@ export const Availability: React.FC<AvailabilityProps> = () => {
           .from('bookings')
           .select('id, package_name, booking_date, status, customer_id')
           .in('status', ['confirmed', 'completed'])
-          .order('booking_date', { ascending: true });
+          .order('booking_date', { ascending: true })
+          .limit(500); // Add limit for performance
 
         if (simpleError) {
           showError('Error', `Database error: ${simpleError.message}`);

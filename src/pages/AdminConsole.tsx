@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { 
   Calendar, 
   Package, 
@@ -82,12 +83,42 @@ const AdminConsole = () => {
 
   // Logout handler
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setIsLoggedIn(false);
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+        showError('Logout Error', 'Failed to sign out properly, but you are now logged out locally.');
+      }
+      // Force local logout regardless of server response
+      setIsLoggedIn(false);
+      setEmail('');
+      setPassword('');
+      setActiveTab('dashboard');
+      
+      // Clear any cached session data
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.clear();
+    } catch (error) {
+      console.error('Logout error:', error);
+      showError('Logout Error', 'Error during logout, but you are now logged out locally.');
+      // Force logout anyway
+      setIsLoggedIn(false);
+      setEmail('');
+      setPassword('');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices');
+    // Set loading state briefly for visual feedback
+    if (tab !== activeTab) {
+      setIsLoading(true);
+      setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers');
+      // Clear loading state after a brief delay to allow components to render
+      setTimeout(() => setIsLoading(false), 100);
+    }
   };
 
   // Change password handler
@@ -117,19 +148,16 @@ const AdminConsole = () => {
     }
   }, [isLoggedIn]);
 
-  // Also fetch data when the active tab changes to ensure fresh data
+  // Only fetch data when first logging in, not on tab changes
+  // This prevents losing payment status and reduces unnecessary API calls
   useEffect(() => {
-    if (isLoggedIn && (activeTab === 'dashboard' || activeTab === 'bookings' || activeTab === 'invoices')) {
-      if (allBookings.length === 0) {
-        fetchAllBookings();
-      }
+    if (isLoggedIn && allBookings.length === 0) {
+      fetchAllBookings();
     }
-    if (isLoggedIn && (activeTab === 'dashboard' || activeTab === 'package')) {
-      if (packages.length === 0) {
-        fetchAllServices();
-      }
+    if (isLoggedIn && packages.length === 0) {
+      fetchAllServices();
     }
-  }, [activeTab, isLoggedIn, allBookings.length, packages.length]);
+  }, [isLoggedIn]); // Only depend on login state, not active tab
 
   // Login handler
   const handleLogin = async (e: React.FormEvent) => {
@@ -159,10 +187,8 @@ const AdminConsole = () => {
   // Fetch bookings with customer details
   const fetchAllBookings = async () => {
     try {
-      console.log('🔍 Testing Supabase connection...');
-      
       // First, test a simple query to see if Supabase is accessible
-      const { data: testData, error: testError } = await supabase
+      const { error: testError } = await supabase
         .from('bookings')
         .select('id, package_name')
         .limit(1);
@@ -173,20 +199,12 @@ const AdminConsole = () => {
         return;
       }
       
-      console.log('✅ Simple Supabase test successful:', testData);
-      
       // Now try the customer join query
-      console.log('🔍 Fetching bookings with customer join...');
       const { bookings: bookingsWithCustomers, error: customerError } = await getBookingsWithCustomers();
       
       if (!customerError && bookingsWithCustomers) {
-        console.log('✅ Raw bookings from Supabase:', bookingsWithCustomers);
-        
         // Transform the data to include customer details while maintaining backward compatibility
         const transformedBookings = bookingsWithCustomers.map((booking: any) => {
-          console.log('📝 Processing booking:', booking.id);
-          console.log('👤 Customer data:', booking.customers);
-          
           const transformed = {
             ...booking,
             // If customer relationship exists, use it, otherwise fall back to direct fields
@@ -199,18 +217,9 @@ const AdminConsole = () => {
             customer_details: booking.customers
           };
           
-          console.log('🔄 Transformed booking:', {
-            id: transformed.id,
-            customer_name: transformed.customer_name,
-            customer_email: transformed.customer_email,
-            customer_phone: transformed.customer_phone,
-            customer_details: transformed.customer_details
-          });
-          
           return transformed;
         });
         
-        console.log('✨ Final transformed bookings:', transformedBookings);
         setAllBookings(transformedBookings);
         return;
       }
@@ -218,19 +227,26 @@ const AdminConsole = () => {
       // Fallback to the old method if customer integration fails
       console.warn('❌ Customer integration failed, using fallback method:', customerError);
       
-      // Try the simple fallback method
-      console.log('🔍 Trying fallback: simple bookings fetch...');
+      // Try the simple fallback method with performance optimization
+      // Add timeout protection
+      const timeoutId = setTimeout(() => {
+        showError('Timeout Error', 'Data loading is taking too long. Please check your connection.');
+      }, 15000); // 15 second timeout
+      
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('bookings')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(1000); // Add limit to prevent massive data loads
+      
+      // Clear timeout if successful
+      clearTimeout(timeoutId);
       
       if (fallbackError) {
         console.error('❌ Fallback method also failed:', fallbackError);
         showError('Database Error', 'Cannot fetch bookings data. Please check your connection and try again.');
         return;
       } else {
-        console.log('✅ Fallback successful, got bookings:', fallbackData);
         setAllBookings(fallbackData || []);
       }
     } catch (error) {
@@ -243,6 +259,14 @@ const AdminConsole = () => {
       setAllBookings([]);
     }
   };
+
+  // Auto-refresh only for bookings table changes (most important)
+  useAutoRefresh({
+    table: 'bookings',
+    onDataChange: fetchAllBookings,
+    enabled: isLoggedIn,
+    throttleMs: 3000 // 3 second throttle to prevent excessive calls
+  });
 
   // Fetch services from database
   const fetchAllServices = async () => {
@@ -436,6 +460,18 @@ const AdminConsole = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Loading overlay for tab switches */}
+        {isLoading && (
+          <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-40">
+            <div className="bg-white rounded-lg p-4 shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="text-gray-700">Processing...</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {activeTab === 'dashboard' && (
           <Dashboard
             allBookings={allBookings}

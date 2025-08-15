@@ -123,8 +123,6 @@ const HeroSection: React.FC = () => {
   };
 
   const onSubmit = async (data: BookingFormData) => {
-    console.log('Hero form data received:', data); // Debug: Check what form data we're getting
-    
     setSendingEmail(true);
     
     try {
@@ -139,12 +137,10 @@ const HeroSection: React.FC = () => {
       // Prepare booking data
       const bookingData = {
         package_name: data.service,
+        booking_date: new Date().toISOString(), // Set current date and time
         notes: 'Quick Appointment from Hero Section',
         status: 'pending'
-        // No booking_date - this will be handled later by admin
       };
-
-      console.log('Submitting hero booking data:', { customerData, bookingData }); // Debug log
 
       // Create booking with customer integration
       const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
@@ -155,8 +151,6 @@ const HeroSection: React.FC = () => {
       }
 
       if (booking && customer) {
-        console.log('Successfully created booking and customer:', { booking, customer }); // Debug: Confirm successful insert
-
         // Send email notification
         await sendBookingEmail(data);
         
@@ -302,7 +296,7 @@ const HeroSection: React.FC = () => {
                      {loadingServices ? 'Loading services...' : 'Select a service'}
                    </option>
                    {!loadingServices && services.map((service) => (
-                     <option key={service.id} value={service.name}>
+                     <option key={service.id} value={service.displayName || service.name}>
                        {service.displayName || service.name}
                      </option>
                    ))}
