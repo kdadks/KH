@@ -12,8 +12,10 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  RefreshCw
+  RefreshCw,
+  Plus
 } from 'lucide-react';
+import BookingModal from './BookingModal';
 
 const UserBookings: React.FC = () => {
   const { user } = useUserAuth();
@@ -23,6 +25,7 @@ const UserBookings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -70,8 +73,6 @@ const UserBookings: React.FC = () => {
     !b.booking_date || new Date(b.booking_date) <= new Date() || b.status === 'cancelled'
   );
 
-  // Remove unused helper functions - they're defined in BookingCard component
-
   if (loading) {
     return (
       <div className="p-6">
@@ -91,13 +92,22 @@ const UserBookings: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Your Bookings</h1>
           <p className="text-gray-600">View and manage your appointments and sessions.</p>
         </div>
-        <button
-          onClick={loadBookings}
-          className="flex items-center px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowBookingModal(true)}
+            className="flex items-center px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Booking
+          </button>
+          <button
+            onClick={loadBookings}
+            className="flex items-center px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -174,17 +184,8 @@ const UserBookings: React.FC = () => {
           <p className="text-gray-600 mb-4">
             {searchTerm || statusFilter !== 'all' 
               ? 'Try adjusting your search or filter criteria.' 
-              : 'You don\'t have any bookings yet.'}
+              : 'You don\'t have any bookings yet. Use the "Add New Booking" button above to create your first appointment.'}
           </p>
-          <button
-            onClick={() => {
-              // TODO: Navigate to booking page
-              console.log('Navigate to booking page');
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            Book an Appointment
-          </button>
         </div>
       ) : (
         <div className="space-y-8">
@@ -216,6 +217,25 @@ const UserBookings: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+      
+      {/* Booking Modal */}
+      {showBookingModal && user && (
+        <BookingModal
+          isOpen={showBookingModal}
+          onClose={() => setShowBookingModal(false)}
+          customer={{
+            id: user.id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email: user.email,
+            phone: user.phone
+          }}
+          onBookingCreated={() => {
+            setShowBookingModal(false);
+            loadBookings(); // Refresh bookings list
+          }}
+        />
       )}
     </div>
   );

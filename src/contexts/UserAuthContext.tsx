@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { 
@@ -358,17 +358,18 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     }
   };
 
-  const contextValue: UserAuthContext = {
+  const contextValue: UserAuthContext = useMemo(() => ({
     user,
     authUser,
     loading,
+    isAdmin: !!authUser && !user, // Admin detection: has auth user but no customer profile
     login,
     logout,
     register,
     updateProfile,
     changePassword,
     refreshUser
-  };
+  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

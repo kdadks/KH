@@ -35,15 +35,21 @@ const UserPortal: React.FC = () => {
     }
   }, [user]);
 
-  // Debug authentication state
   useEffect(() => {
-    console.log('UserPortal Auth State:', { 
-      user, 
-      authUser: authUser?.email, 
-      authLoading,
-      userId: user?.id 
-    });
   }, [user, authUser, authLoading]);
+
+  // Listen for navigation events from child components
+  useEffect(() => {
+    const handleNavigateToInvoices = () => {
+      setActiveTab('invoices');
+    };
+
+    window.addEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
+    
+    return () => {
+      window.removeEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
+    };
+  }, []);
 
   const loadDashboardData = async () => {
     if (!user?.id) return;
@@ -260,7 +266,7 @@ const UserPortal: React.FC = () => {
                   )}
                   {activeTab === 'profile' && <UserProfile />}
                   {activeTab === 'invoices' && <UserInvoices />}
-                  {activeTab === 'payments' && <UserPayments />}
+                  {activeTab === 'payments' && <UserPayments onDataChange={loadDashboardData} />}
                   {activeTab === 'bookings' && <UserBookings />}
                 </>
               )}

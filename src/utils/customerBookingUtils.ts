@@ -1,5 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { hashPassword } from './passwordUtils';
+import { createPaymentRequest, sendPaymentRequestNotification } from './paymentRequestUtils';
+import { sendWelcomeEmail } from './emailUtils';
 
 export interface Customer {
   id?: number;
@@ -35,6 +37,7 @@ export interface BookingData {
   appointment_time?: string;
   notes?: string;
   status?: string;
+  service_cost?: number;
 }
 
 /**
@@ -146,7 +149,7 @@ export const createBookingWithCustomer = async (
     phone?: string;
   },
   bookingData: Omit<BookingData, 'customer_id'>
-): Promise<{ booking: any | null; customer: Customer | null; error: string | null }> => {
+): Promise<{ booking: any | null; customer: Customer | null; paymentRequest?: any; error: string | null }> => {
   try {
     // Step 1: Find or create customer
     const { customer, error: customerError } = await findOrCreateCustomer(customerData);
@@ -155,15 +158,21 @@ export const createBookingWithCustomer = async (
       return { booking: null, customer: null, error: customerError || 'Failed to create customer' };
     }
 
-    // Step 2: Create booking with customer reference
-    const fullBookingData = {
-      ...bookingData,
-      customer_id: customer.id
+    // Step 2: Create booking with only fields that exist in the table
+    const bookingDataForInsert = {
+      customer_id: customer.id,
+      package_name: bookingData.package_name,
+      booking_date: bookingData.booking_date,
+      timeslot_start_time: bookingData.timeslot_start_time,
+      timeslot_end_time: bookingData.timeslot_end_time,
+      notes: bookingData.notes,
+      status: bookingData.status || 'confirmed'
     };
 
+    // Step 3: Create booking with customer reference
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .insert([fullBookingData])
+      .insert([bookingDataForInsert])
       .select()
       .single();
 
@@ -172,7 +181,53 @@ export const createBookingWithCustomer = async (
       return { booking: null, customer, error: bookingError.message };
     }
 
-    return { booking, customer, error: null };
+    // Step 4: Create payment request for 20% deposit
+    let paymentRequest = null;
+    if (customer.id) {
+      try {
+        console.log('🎯 Attempting to create payment request for service:', bookingData.package_name);
+        console.log('📊 Customer ID:', customer.id);
+        console.log('📅 Booking date:', bookingData.booking_date);
+        console.log('🆔 Booking ID:', booking.id);
+        
+        paymentRequest = await createPaymentRequest(
+          customer.id,
+          bookingData.package_name,
+          bookingData.booking_date || new Date().toISOString(),
+          null, // invoiceId
+          booking.id // bookingId
+        );
+
+        // Step 5: Send payment request email notification
+        if (paymentRequest) {
+          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
+          if (!emailSuccess) {
+            console.error('Failed to send payment request email:', emailError);
+            // Fallback: Send welcome email
+            await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+          } else {
+            console.log('📧 Payment request email sent successfully');
+          }
+        }
+      } catch (paymentError) {
+        console.error('❌ Error creating payment request:', {
+          error: paymentError,
+          message: paymentError instanceof Error ? paymentError.message : 'Unknown error',
+          stack: paymentError instanceof Error ? paymentError.stack : undefined,
+          serviceName: bookingData.package_name,
+          customerId: customer.id
+        });
+        // Fallback: Send welcome email if payment request fails
+        await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+      }
+    }
+
+    return { 
+      booking, 
+      customer, 
+      paymentRequest: paymentRequest,
+      error: null 
+    };
 
   } catch (error) {
     console.error('Exception in createBookingWithCustomer:', error);
@@ -193,7 +248,8 @@ export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | nu
         *,
         customers!bookings_customer_id_fkey(*)
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(1000); // Add limit for performance
 
     console.log('🔍 Join query completed');
     console.log('📊 Query result data:', data);

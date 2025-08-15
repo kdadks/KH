@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserDashboardData, UserPortalTab } from '../../types/userManagement';
 import { 
   AlertCircle, 
@@ -8,9 +8,15 @@ import {
   TrendingUp,
   Clock,
   Euro,
-  RefreshCw
+  RefreshCw,
+  X,
+  Plus
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/userManagementUtils';
+import { getCustomerPaymentRequests } from '../../utils/paymentRequestUtils';
+import { PaymentRequestWithCustomer } from '../../types/paymentTypes';
+import { useToast } from '../shared/toastContext';
+import BookingModal from './BookingModal';
 
 interface UserDashboardProps {
   data: UserDashboardData | null;
@@ -19,6 +25,45 @@ interface UserDashboardProps {
 }
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabChange }) => {
+  const { showSuccess, showError } = useToast();
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequestWithCustomer[]>([]);
+  const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(true);
+  const [dismissedNotifications, setDismissedNotifications] = useState<number[]>([]);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+
+  // Load payment requests when component mounts
+  useEffect(() => {
+    if (data?.customer?.id) {
+      loadPaymentRequests();
+    }
+  }, [data?.customer?.id]);
+
+  const loadPaymentRequests = async () => {
+    if (!data?.customer?.id) return;
+    
+    try {
+      setLoadingPaymentRequests(true);
+      const requests = await getCustomerPaymentRequests(data.customer.id);
+      setPaymentRequests(requests);
+    } catch (error) {
+      console.error('Failed to load payment requests:', error);
+    } finally {
+      setLoadingPaymentRequests(false);
+    }
+  };
+
+  const dismissNotification = (requestId: number) => {
+    setDismissedNotifications(prev => [...prev, requestId]);
+  };
+
+  const handlePaymentRequestClick = (requestId: number) => {
+    // Store both flags for the payments page
+    localStorage.setItem('highlightPaymentRequest', requestId.toString());
+    localStorage.setItem('autoOpenPaymentModal', 'true');
+    showSuccess('Navigating to Payments', 'Opening your payment request...');
+    onTabChange('payments');
+  };
+
   if (!data) {
     return (
       <div className="p-6">
@@ -119,6 +164,60 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
         </div>
       )}
 
+      {/* Payment Request Notifications */}
+      {!loadingPaymentRequests && paymentRequests.length > 0 && (
+        <div className="space-y-4 mb-6">
+          {paymentRequests
+            .filter(request => 
+              (request.status === 'pending' || request.status === 'sent') && 
+              !dismissedNotifications.includes(request.id)
+            )
+            .map((request) => (
+              <div key={request.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start">
+                    <CreditCard className="w-5 h-5 text-blue-500 mr-3 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-blue-800">
+                        Payment Request: {request.service_name || 'Service Payment'}
+                      </h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Amount due: <span className="font-semibold">{formatCurrency(request.amount)}</span>
+                        {request.payment_due_date && (
+                          <span className="ml-2">
+                            • Due: {new Date(request.payment_due_date).toLocaleDateString()}
+                          </span>
+                        )}
+                      </p>
+                      <div className="flex gap-3 mt-3">
+                        <button
+                          onClick={() => handlePaymentRequestClick(request.id)}
+                          className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          Pay Now
+                        </button>
+                        <button
+                          onClick={() => onTabChange('payments')}
+                          className="text-sm text-blue-600 underline hover:text-blue-800"
+                        >
+                          View all payment requests →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => dismissNotification(request.id)}
+                    className="text-gray-400 hover:text-gray-600 ml-4"
+                    title="Dismiss notification"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Invoices */}
         <div className="bg-white border border-gray-200 rounded-lg">
@@ -152,8 +251,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
                       </p>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         invoice.status === 'paid'
-                          ? 'bg-green-100 text-green-800'
-                          : invoice.is_overdue
+                          ? 'bg-green-500 text-white'
+                          : invoice.status === 'sent' && invoice.is_overdue
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
@@ -276,6 +375,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
           <div className="p-6">
             <div className="space-y-3">
               <button
+                onClick={() => setShowBookingModal(true)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+              >
+                <div className="flex items-center">
+                  <Plus className="w-5 h-5 text-blue-600 mr-3" />
+                  <span className="text-sm font-medium text-blue-900">Book New Appointment</span>
+                </div>
+                <span className="text-xs text-blue-500">→</span>
+              </button>
+              
+              <button
                 onClick={() => onTabChange('invoices')}
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -311,6 +421,20 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
           </div>
         </div>
       </div>
+
+      {/* Booking Modal */}
+      {showBookingModal && (
+        <BookingModal 
+          isOpen={showBookingModal}
+          onClose={() => setShowBookingModal(false)}
+          customer={customer}
+          onBookingCreated={() => {
+            setShowBookingModal(false);
+            showSuccess('Booking Request Submitted', 'Your booking request has been submitted successfully. We will review and confirm it shortly.');
+            onRefresh(); // Refresh dashboard data
+          }}
+        />
+      )}
     </div>
   );
 };
