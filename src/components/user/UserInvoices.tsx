@@ -3,6 +3,7 @@ import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getUserInvoices } from '../../utils/userManagementUtils';
 import { UserInvoice } from '../../types/userManagement';
 import { useToast } from '../shared/toastContext';
+import jsPDF from 'jspdf';
 import { 
   FileText, 
   Download, 
@@ -16,7 +17,7 @@ import { formatCurrency, getInvoiceStatusDisplay } from '../../utils/userManagem
 
 const UserInvoices: React.FC = () => {
   const { user } = useUserAuth();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   
   const [invoices, setInvoices] = useState<UserInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +47,81 @@ const UserInvoices: React.FC = () => {
       showError('Error', 'Unexpected error loading invoices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleViewInvoice = (invoice: UserInvoice) => {
+    // Create a modal or navigate to invoice details page
+    // For now, we'll create a simple modal showing invoice details
+    alert(`Invoice ${invoice.invoice_number}\nDate: ${new Date(invoice.invoice_date).toLocaleDateString()}\nAmount: ${formatCurrency(invoice.total_amount)}\nStatus: ${invoice.status}`);
+  };
+
+  const handleDownloadInvoice = async (invoice: UserInvoice) => {
+    try {
+      // Create PDF invoice
+      const pdf = new jsPDF();
+      
+      // Header
+      pdf.setFontSize(20);
+      pdf.text('INVOICE', 20, 20);
+      
+      // Company info
+      pdf.setFontSize(12);
+      pdf.text('KH Therapy', 20, 35);
+      pdf.text('Professional Physiotherapy Services', 20, 42);
+      
+      // Invoice details
+      pdf.setFontSize(14);
+      pdf.text('Invoice Details', 20, 60);
+      
+      pdf.setFontSize(10);
+      pdf.text(`Invoice Number: ${invoice.invoice_number}`, 20, 75);
+      pdf.text(`Invoice Date: ${new Date(invoice.invoice_date).toLocaleDateString()}`, 20, 82);
+      pdf.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString()}`, 20, 89);
+      pdf.text(`Status: ${invoice.status}`, 20, 96);
+      
+      // Amount details
+      pdf.setFontSize(12);
+      pdf.text('Amount Details', 20, 115);
+      pdf.setFontSize(10);
+      pdf.text(`Subtotal: ${formatCurrency(invoice.subtotal)}`, 20, 130);
+      if (invoice.vat_amount) {
+        pdf.text(`VAT: ${formatCurrency(invoice.vat_amount)}`, 20, 137);
+      }
+      pdf.setFontSize(12);
+      pdf.text(`Total: ${formatCurrency(invoice.total_amount)}`, 20, 150);
+      
+      // Items if available
+      let yPos = 170;
+      if (invoice.items && invoice.items.length > 0) {
+        pdf.setFontSize(12);
+        pdf.text('Items:', 20, yPos);
+        pdf.setFontSize(10);
+        yPos += 15;
+        invoice.items.forEach((item, index) => {
+          pdf.text(`${index + 1}. ${item.description} (x${item.quantity}) - ${formatCurrency(item.total_price)}`, 20, yPos);
+          yPos += 7;
+        });
+      }
+      
+      // Notes if available
+      if (invoice.notes) {
+        pdf.setFontSize(10);
+        pdf.text(`Notes: ${invoice.notes}`, 20, yPos + 10);
+      }
+      
+      // Footer
+      pdf.setFontSize(8);
+      pdf.text('Thank you for your business!', 20, 280);
+      pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, 287);
+      
+      // Save the PDF
+      pdf.save(`invoice_${invoice.invoice_number.replace('/', '-')}.pdf`);
+      
+      showSuccess('Invoice Downloaded', 'Invoice has been downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showError('Download Failed', 'Failed to download invoice PDF');
     }
   };
 
@@ -144,21 +220,15 @@ const UserInvoices: React.FC = () => {
               
               return (
                 <div key={invoice.id} className="px-6 py-4 hover:bg-gray-50">
+                  {/* Main row - all items in straight line */}
                   <div className="grid grid-cols-12 gap-4 items-center">
                     {/* Invoice Number */}
                     <div className="col-span-3">
                       <div className="flex items-center">
                         <FileText className="w-4 h-4 text-gray-400 mr-2" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {invoice.invoice_number}
-                          </p>
-                          {invoice.notes && (
-                            <p className="text-xs text-gray-500 truncate">
-                              {invoice.notes}
-                            </p>
-                          )}
-                        </div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {invoice.invoice_number}
+                        </p>
                       </div>
                     </div>
 
@@ -188,15 +258,12 @@ const UserInvoices: React.FC = () => {
                       <p className="text-sm font-medium text-gray-900">
                         {formatCurrency(invoice.total_amount)}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        Subtotal: {formatCurrency(invoice.subtotal)}
-                      </p>
                     </div>
 
                     {/* Status */}
                     <div className="col-span-2">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        statusInfo.color === 'green' ? 'bg-green-100 text-green-800' :
+                        statusInfo.color === 'green' ? 'bg-green-500 text-white' :
                         statusInfo.color === 'red' ? 'bg-red-100 text-red-800' :
                         statusInfo.color === 'blue' ? 'bg-blue-100 text-blue-800' :
                         'bg-gray-100 text-gray-800'
@@ -209,10 +276,7 @@ const UserInvoices: React.FC = () => {
                     <div className="col-span-1">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => {
-                            // TODO: Implement invoice view
-                            console.log('View invoice:', invoice.id);
-                          }}
+                          onClick={() => handleViewInvoice(invoice)}
                           className="text-blue-600 hover:text-blue-800"
                           title="View Invoice"
                         >
@@ -220,10 +284,7 @@ const UserInvoices: React.FC = () => {
                         </button>
                         
                         <button
-                          onClick={() => {
-                            // TODO: Implement PDF download
-                            console.log('Download invoice:', invoice.id);
-                          }}
+                          onClick={() => handleDownloadInvoice(invoice)}
                           className="text-gray-600 hover:text-gray-800"
                           title="Download PDF"
                         >
@@ -232,6 +293,35 @@ const UserInvoices: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Second row - Notes and Subtotal with vertical gap */}
+                  {(invoice.notes || invoice.subtotal !== invoice.total_amount) && (
+                    <div className="grid grid-cols-12 gap-4 mt-3">
+                      {/* Notes under Invoice Number */}
+                      <div className="col-span-3">
+                        {invoice.notes && (
+                          <p className="text-xs text-gray-500 ml-6">
+                            {invoice.notes}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Empty columns for alignment */}
+                      <div className="col-span-4"></div>
+
+                      {/* Subtotal under Amount */}
+                      <div className="col-span-2">
+                        {invoice.subtotal !== invoice.total_amount && (
+                          <p className="text-xs text-gray-500">
+                            Subtotal: {formatCurrency(invoice.subtotal)}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Empty columns */}
+                      <div className="col-span-3"></div>
+                    </div>
+                  )}
 
                   {/* Invoice Items */}
                   {invoice.items && invoice.items.length > 0 && (
