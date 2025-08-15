@@ -17,6 +17,7 @@ import PostSurgeryPage from './pages/services/PostSurgeryPage';
 import NeuromuscularPage from './pages/services/NeuromuscularPage';
 import ErgonomicPage from './pages/services/ErgonomicPage';
 import UserPortal from './components/UserPortal';
+import ResetPassword from './components/user/ResetPassword';
 import { ToastProvider } from './components/shared/toastContext';
 import { UserAuthProvider } from './contexts/UserAuthContext';
 
@@ -44,6 +45,8 @@ function App() {
             <Route path="admin/*" element={<AdminConsole />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
+          {/* Reset password route outside the main layout */}
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </UserAuthProvider>
     </ToastProvider>

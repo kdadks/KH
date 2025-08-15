@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import ForgotPassword from './ForgotPassword';
 
 const UserLogin: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -7,6 +8,7 @@ const UserLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   
   const { login } = useUserAuth();
 
@@ -31,6 +33,11 @@ const UserLogin: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Show forgot password component
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
@@ -135,7 +142,15 @@ const UserLogin: React.FC = () => {
             </button>
 
             {/* Additional Links */}
-            <div className="text-center">
+            <div className="text-center space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-primary-600 hover:text-primary-500 transition-colors font-medium"
+              >
+                Forgot your password?
+              </button>
+              
               <p className="text-sm text-neutral-600">
                 Need help accessing your account?{' '}
                 <a href="/contact" className="font-medium text-primary-600 hover:text-primary-500 transition-colors">

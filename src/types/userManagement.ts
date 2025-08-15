@@ -26,6 +26,9 @@ export interface UserCustomer {
   must_change_password?: boolean;
   first_login?: boolean;
   last_login?: string;
+  password_reset_token?: string;
+  password_reset_expires_at?: string;
+  password_reset_requested_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -168,6 +171,16 @@ export interface UserProfileUpdateData {
 
 export interface UserPasswordChangeData {
   currentPassword?: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export interface PasswordResetRequestData {
+  email: string;
+}
+
+export interface PasswordResetData {
+  token: string;
   newPassword: string;
   confirmPassword: string;
 }
@@ -327,6 +340,9 @@ export interface UserAuthContext {
   register: (data: UserRegistrationData) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (data: UserProfileUpdateData) => Promise<{ success: boolean; error?: string }>;
   changePassword: (data: UserPasswordChangeData) => Promise<{ success: boolean; error?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (data: PasswordResetData) => Promise<{ success: boolean; error?: string }>;
+  validateResetToken: (token: string) => Promise<{ success: boolean; error?: string; customerEmail?: string }>;
   refreshUser: () => Promise<void>;
 }
 

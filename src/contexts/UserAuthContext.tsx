@@ -6,7 +6,8 @@ import {
   UserAuthContext, 
   UserRegistrationData,
   UserProfileUpdateData,
-  UserPasswordChangeData
+  UserPasswordChangeData,
+  PasswordResetData
 } from '../types/userManagement';
 import { 
   getCustomerByAuthId, 
@@ -16,6 +17,11 @@ import {
   getCustomerById
 } from '../utils/userManagementUtils';
 import { hashPassword, verifyPassword, isPasswordHashed } from '../utils/passwordUtils';
+import { 
+  requestPasswordReset as requestPasswordResetUtil, 
+  validatePasswordResetToken as validatePasswordResetTokenUtil, 
+  resetPasswordWithToken as resetPasswordWithTokenUtil 
+} from '../utils/passwordResetUtils';
 
 interface UserAuthProviderProps {
   children: React.ReactNode;
@@ -358,6 +364,36 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     }
   };
 
+  // Request password reset
+  const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await requestPasswordResetUtil(email);
+    } catch (error) {
+      console.error('Exception in requestPasswordReset:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  };
+
+  // Validate password reset token
+  const validateResetToken = async (token: string): Promise<{ success: boolean; error?: string; customerEmail?: string }> => {
+    try {
+      return await validatePasswordResetTokenUtil(token);
+    } catch (error) {
+      console.error('Exception in validateResetToken:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  };
+
+  // Reset password with token
+  const resetPassword = async (data: PasswordResetData): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await resetPasswordWithTokenUtil(data);
+    } catch (error) {
+      console.error('Exception in resetPassword:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  };
+
   const contextValue: UserAuthContext = useMemo(() => ({
     user,
     authUser,
@@ -368,8 +404,11 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     register,
     updateProfile,
     changePassword,
+    requestPasswordReset,
+    resetPassword,
+    validateResetToken,
     refreshUser
-  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, refreshUser]);
+  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -54,6 +54,13 @@ export interface AdminNotificationData {
   additional_info?: string;
 }
 
+export interface PasswordResetEmailData {
+  customer_name: string;
+  customer_email: string;
+  reset_url: string;
+  expires_in_hours: number;
+}
+
 // Initialize EmailJS
 export const initializeEmailJS = (): boolean => {
   if (!EMAILJS_PUBLIC_KEY) {
@@ -442,4 +449,51 @@ export const validateEmailConfiguration = (): { isValid: boolean; missingConfig:
     isValid: missingConfig.length === 0,
     missingConfig
   };
+};
+
+// Send password reset email
+export const sendPasswordResetEmail = async (data: PasswordResetEmailData): Promise<{ success: boolean; error?: string }> => {
+  try {
+    if (!initializeEmailJS()) {
+      return { success: false, error: 'EmailJS not configured' };
+    }
+
+    if (!EMAILJS_SERVICE_ID) {
+      return { success: false, error: 'EmailJS service ID not configured' };
+    }
+
+    const templateParams = {
+      to_email: data.customer_email,
+      to_name: data.customer_name,
+      reset_url: data.reset_url,
+      expires_in_hours: data.expires_in_hours.toString(),
+      company_name: 'KH Therapy',
+      year: new Date().getFullYear().toString(),
+      // Using booking confirmation template structure for now
+      service_name: 'Password Reset Request',
+      appointment_date: 'Reset your password',
+      appointment_time: `This link expires in ${data.expires_in_hours} hour(s)`,
+      total_amount: '',
+      booking_reference: 'Password Reset',
+      therapist_name: 'KH Therapy Support Team',
+      clinic_address: 'Dublin, Ireland',
+      special_instructions: `Click the following link to reset your password: ${data.reset_url}`
+    };
+
+    await emailjs.send(
+      EMAILJS_SERVICE_ID!,
+      EMAILJS_TEMPLATE_BOOKING_CONFIRMATION, // Using existing template with custom content
+      templateParams,
+      EMAILJS_PUBLIC_KEY
+    );
+
+    console.log('Password reset email sent successfully to:', data.customer_email);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
 };
