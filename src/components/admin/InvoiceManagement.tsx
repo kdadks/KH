@@ -18,7 +18,8 @@ import {
   Calendar,
   User,
   Phone,
-  Mail
+  Mail,
+  CreditCard
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData } from './types';
@@ -26,6 +27,7 @@ import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 
 // Service type that matches database schema
 interface Service {
@@ -72,6 +74,17 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
     notes: ''
   });
   const [selectedBooking, setSelectedBooking] = useState<BookingFormData | null>(null);
+  
+  // Deposit tracking
+  const [customerDeposits, setCustomerDeposits] = useState<{amount: number, serviceName?: string}>({
+    amount: 0,
+    serviceName: undefined
+  });
+
+  // Payment request and invoice sending states
+  const [sendingInvoice, setSendingInvoice] = useState<{ [key: string]: boolean }>({});
+  const [sendingPaymentRequest, setSendingPaymentRequest] = useState<{ [key: string]: boolean }>({});
+  const [invoicePaymentStatus, setInvoicePaymentStatus] = useState<{ [key: string]: 'paid' | 'unpaid' | 'checking' }>({});
 
   useEffect(() => {
     fetchData();
@@ -81,45 +94,129 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
     filterInvoices();
   }, [invoices, searchTerm, statusFilter]);
 
+  // Check payment status for invoices when they are loaded
+  useEffect(() => {
+    const checkAllPaymentStatuses = async () => {
+      if (invoices.length === 0) return;
+      
+      const statusPromises = invoices.map(async (invoice) => {
+        if (invoice.id && invoice.status === 'sent') {
+          const status = await checkInvoicePaymentStatus(invoice.id);
+          return { invoiceId: invoice.id.toString(), status };
+        }
+        return null;
+      });
+
+      const results = await Promise.all(statusPromises);
+      const statusMap = results.reduce((acc, result) => {
+        if (result) {
+          acc[result.invoiceId] = result.status as 'paid' | 'unpaid' | 'checking';
+        }
+        return acc;
+      }, {} as { [key: string]: 'paid' | 'unpaid' | 'checking' });
+
+      setInvoicePaymentStatus(statusMap);
+
+      // Update invoice status to 'paid' if payment found
+      for (const result of results) {
+        if (result && result.status === 'paid') {
+          const invoice = invoices.find(inv => inv.id?.toString() === result.invoiceId);
+          if (invoice && invoice.status !== 'paid') {
+            try {
+              await supabase
+                .from('invoices')
+                .update({ status: 'paid', payment_date: new Date().toISOString() })
+                .eq('id', invoice.id);
+              
+              // Refresh data to show updated status
+              await fetchData();
+            } catch (error) {
+              console.error('Error updating invoice status:', error);
+            }
+          }
+        }
+      }
+    };
+
+    checkAllPaymentStatuses();
+  }, [invoices]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          customer:customers(*),
-          items:invoice_items(
+      // Set up timeout protection - increased to 30 seconds
+      const timeoutId = setTimeout(() => {
+        showError('Timeout Error', 'Data loading is taking too long. Please check your connection.');
+      }, 30000); // 30 second timeout instead of 15
+      
+      console.log('📊 Starting data fetch...');
+      
+      // Fetch data in parallel for better performance
+      const [invoiceResult, customerResult, serviceResult] = await Promise.allSettled([
+        supabase
+          .from('invoices')
+          .select(`
             *,
-            service:services(*)
-          )
-        `)
-        .order('invoice_date', { ascending: false });
+            customer:customers(*),
+            items:invoice_items(*)
+          `)
+          .order('invoice_date', { ascending: false })
+          .limit(100), // Reduced limit for better performance
+        
+        supabase
+          .from('customers')
+          .select('*')
+          .order('last_name', { ascending: true })
+          .limit(500), // Reduced limit
+        
+        supabase
+          .from('services')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true })
+      ]);
 
-      if (invoiceError) throw invoiceError;
+      // Clear timeout since queries completed
+      clearTimeout(timeoutId);
+      
+      console.log('📊 Data fetch results:', {
+        invoices: invoiceResult.status,
+        customers: customerResult.status,
+        services: serviceResult.status
+      });
 
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .select('*')
-        .order('last_name', { ascending: true });
+      // Process invoice data
+      if (invoiceResult.status === 'fulfilled' && !invoiceResult.value.error) {
+        setInvoices(invoiceResult.value.data || []);
+        console.log('✅ Invoices loaded:', invoiceResult.value.data?.length || 0);
+      } else {
+        console.error('❌ Invoice error:', invoiceResult.status === 'fulfilled' ? invoiceResult.value.error : invoiceResult.reason);
+        showError('Invoice Load Error', 'Failed to load invoices');
+      }
 
-      if (customerError) throw customerError;
+      // Process customer data
+      if (customerResult.status === 'fulfilled' && !customerResult.value.error) {
+        setCustomers(customerResult.value.data || []);
+        console.log('✅ Customers loaded:', customerResult.value.data?.length || 0);
+      } else {
+        console.error('❌ Customer error:', customerResult.status === 'fulfilled' ? customerResult.value.error : customerResult.reason);
+        showError('Customer Load Error', 'Failed to load customers');
+      }
 
-      const { data: serviceData, error: serviceError } = await supabase
-        .from('services')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
+      // Process service data
+      if (serviceResult.status === 'fulfilled' && !serviceResult.value.error) {
+        setServices(serviceResult.value.data || []);
+        console.log('✅ Services loaded:', serviceResult.value.data?.length || 0);
+      } else {
+        console.error('❌ Service error:', serviceResult.status === 'fulfilled' ? serviceResult.value.error : serviceResult.reason);
+        showError('Service Load Error', 'Failed to load services');
+      }
 
-      if (serviceError) throw serviceError;
-
-      setInvoices(invoiceData || []);
-      setCustomers(customerData || []);
-      setServices(serviceData || []);
+      console.log('✅ Data fetch completed successfully');
     } catch (err) {
-      showError('Data Fetch Error', 'Failed to fetch data');
-      console.error('Error fetching data:', err);
+      console.error('❌ Critical error in fetchData:', err);
+      showError('Data Fetch Error', 'Failed to fetch data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -131,6 +228,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
         .from('bookings')
         .select('*')
         .eq('customer_id', customerId)
+        .eq('status', 'confirmed')
         .order('booking_date', { ascending: false });
 
       if (error) throw error;
@@ -142,48 +240,132 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
   };
 
   const handleCustomerChange = async (customerId: number) => {
-    setFormData(prev => ({ ...prev, customer_id: customerId, booking_id: '' }));
-    setSelectedBooking(null);
+    console.log('🎯 Customer selected:', customerId);
     
-    if (customerId > 0) {
-      await fetchCustomerBookings(customerId);
-    } else {
-      setCustomerBookings([]);
+    try {
+      setFormData(prev => ({ ...prev, customer_id: customerId, booking_id: '' }));
+      setSelectedBooking(null);
+      setCustomerDeposits({ amount: 0, serviceName: undefined });
+      
+      // Clear any existing invoice items when customer changes
+      setFormData(prev => ({
+        ...prev,
+        items: []
+      }));
+      
+      if (customerId > 0) {
+        console.log('� Fetching bookings for customer...');
+        await fetchCustomerBookings(customerId);
+        console.log('✅ Customer bookings loaded, please select a specific booking/service');
+      } else {
+        setCustomerBookings([]);
+      }
+    } catch (error) {
+      console.error('❌ Error in handleCustomerChange:', error);
     }
   };
 
-  const handleBookingChange = (bookingId: string) => {
+  const handleBookingChange = async (bookingId: string) => {
+    console.log('📋 Booking selected:', bookingId);
     setFormData(prev => ({ ...prev, booking_id: bookingId }));
     
     const booking = customerBookings.find(b => b.id === bookingId);
     setSelectedBooking(booking || null);
     
-    // Auto-populate first invoice item with service details
+    // Clear previous invoice items and deposits
+    setFormData(prev => ({ ...prev, items: [] }));
+    setCustomerDeposits({ amount: 0, serviceName: undefined });
+    
+    // Auto-populate invoice item with selected booking's service details
     if (booking) {
+      console.log('🎯 Processing selected booking:', booking);
       const serviceName = booking.package_name || booking.service;
+      console.log('🎨 Service name from booking:', serviceName);
       
-      // Try to find matching service in services data
-      const matchingService = services.find(s => s.name === serviceName);
-      
-      if (matchingService && serviceName) {
-        // Determine if it's in-hour or out-of-hour based on booking time
-        const isInHour = isBookingInHour(booking);
-        const unitPrice = isInHour ? 
-          parseFloat(matchingService.in_hour_price?.replace('€', '') || '0') :
-          parseFloat(matchingService.out_of_hour_price?.replace('€', '') || '0');
-        
-        const newItem: InvoiceItem = {
-          description: `${serviceName} ${isInHour ? '(In-Hour)' : '(Out-of-Hour)'}`,
-          quantity: 1,
-          unit_price: unitPrice,
-          total_price: unitPrice
-        };
-        
-        setFormData(prev => ({
-          ...prev,
-          items: [newItem]
-        }));
+      if (serviceName) {
+        try {
+          // Clean service name by removing price info in parentheses
+          const cleanServiceName = serviceName.replace(/\s*\([^)]*\)$/, '').trim();
+          console.log('🧹 Cleaned service name:', cleanServiceName);
+          
+          // Try to find matching service by exact name or cleaned name
+          let matchingService = services.find(s => s.name === serviceName);
+          if (!matchingService) {
+            matchingService = services.find(s => s.name === cleanServiceName);
+          }
+          // Also try partial matching
+          if (!matchingService) {
+            matchingService = services.find(s => 
+              cleanServiceName.toLowerCase().includes(s.name.toLowerCase()) ||
+              s.name.toLowerCase().includes(cleanServiceName.toLowerCase())
+            );
+          }
+          
+          console.log('🔎 Found matching service:', matchingService ? 'Yes' : 'No');
+          console.log('🔎 Matching service details:', matchingService);
+          
+          if (matchingService) {
+            // Determine if it's in-hour or out-of-hour based on service name first, then booking time
+            const isOutOfHour = cleanServiceName.toLowerCase().includes('out of hour');
+            const isInHour = !isOutOfHour && isBookingInHour(booking);
+            
+            let unitPrice = isInHour ? 
+              parseFloat(matchingService.in_hour_price?.replace('€', '') || '0') :
+              parseFloat(matchingService.out_of_hour_price?.replace('€', '') || '0');
+            
+            // Fallback: If service price is 0 or not set, try to extract from booking service name
+            if (unitPrice === 0) {
+              const priceMatch = serviceName.match(/€(\d+)/);
+              if (priceMatch) {
+                unitPrice = parseFloat(priceMatch[1]);
+                console.log('💡 Using price from booking name:', unitPrice);
+              }
+            }
+            
+            console.log('⏰ Is Out of Hour:', isOutOfHour, 'Is In Hour:', isInHour);
+            console.log('💰 Final unit price:', unitPrice);
+            console.log('🏷️ Service prices - In Hour:', matchingService.in_hour_price, 'Out of Hour:', matchingService.out_of_hour_price);
+            
+            const newItem: InvoiceItem = {
+              description: cleanServiceName,
+              quantity: 1,
+              unit_price: unitPrice,
+              total_price: unitPrice
+            };
+            
+            console.log('📝 Auto-populating invoice item for selected booking:', newItem);
+            
+            setFormData(prev => ({
+              ...prev,
+              items: [newItem]
+            }));
+            
+            // Fetch deposit payments for this customer and service
+            if (formData.customer_id) {
+              console.log('🏦 Fetching deposit payments for selected service...');
+              const { getCustomerDepositPayments } = await import('../../utils/paymentRequestUtils');
+              const depositData = await getCustomerDepositPayments(formData.customer_id, cleanServiceName);
+              console.log('💳 Deposit found for selected service:', depositData.amount);
+              
+              setCustomerDeposits({
+                amount: depositData.amount,
+                serviceName: cleanServiceName
+              });
+            }
+            
+            console.log('✅ Booking-based auto-population completed successfully!');
+          } else {
+            console.log('❌ No matching service found for selected booking');
+            console.log('❌ Available services:', services.map(s => s.name));
+          }
+        } catch (error) {
+          console.error('❌ Error processing selected booking:', error);
+        }
+      } else {
+        console.log('❌ No service name found in selected booking');
       }
+    } else {
+      console.log('ℹ️ No booking selected or found');
     }
   };
 
@@ -241,6 +423,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
     setEditingInvoice(null);
     setSelectedBooking(null);
     setCustomerBookings([]);
+    setCustomerDeposits({ amount: 0, serviceName: undefined });
     setFormData({
       customer_id: 0,
       booking_id: '',
@@ -288,7 +471,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
         return;
       }
 
-      const totalAmount = formData.items.reduce((sum, item) => sum + item.total_price, 0);
+      const subtotalAmount = formData.items.reduce((sum, item) => sum + item.total_price, 0);
+      const finalAmount = Math.max(0, subtotalAmount - customerDeposits.amount);
 
       if (editingInvoice) {
         const { error: invoiceError } = await supabase
@@ -298,11 +482,11 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
             booking_id: formData.booking_id || null,
             invoice_date: formData.invoice_date,
             due_date: formData.due_date,
-            subtotal: totalAmount,
+            subtotal: subtotalAmount,
             vat_rate: 0,
             vat_amount: 0,
-            total_amount: totalAmount,
-            notes: formData.notes
+            total_amount: finalAmount,
+            notes: `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`
           })
           .eq('id', editingInvoice.id);
 
@@ -336,12 +520,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
             booking_id: formData.booking_id || null,
             invoice_date: formData.invoice_date,
             due_date: formData.due_date,
-            subtotal: totalAmount,
+            subtotal: subtotalAmount,
             vat_rate: 0,
             vat_amount: 0,
-            total_amount: totalAmount,
+            total_amount: finalAmount,
             status: 'draft',
-            notes: formData.notes
+            notes: `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`
           })
           .select()
           .single();
@@ -448,6 +632,301 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
         return <Clock size={14} />;
       default:
         return <FileText size={14} />;
+    }
+  };
+
+  // Check if invoice has been paid by checking payments table
+  const checkInvoicePaymentStatus = async (invoiceId: number) => {
+    try {
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('status')
+        .eq('invoice_id', invoiceId)
+        .eq('status', 'paid');
+
+      if (error) {
+        console.error('Error checking payment status:', error);
+        return 'unpaid';
+      }
+
+      return payments && payments.length > 0 ? 'paid' : 'unpaid';
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      return 'unpaid';
+    }
+  };
+
+  // Send invoice PDF via email
+  const sendInvoicePDF = async (invoice: Invoice) => {
+    if (!invoice || !invoice.customer?.email) {
+      showError('Email Error', 'Customer email not found');
+      return;
+    }
+
+    const invoiceId = invoice.id!.toString();
+    setSendingInvoice(prev => ({ ...prev, [invoiceId]: true }));
+
+    try {
+      // Generate PDF
+      const doc = new jsPDF();
+      
+      // Company header
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('KH Therapy', 14, 22);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Professional Physiotherapy Services', 14, 32);
+      
+      // Invoice title and number
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INVOICE', 150, 22);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(invoice.invoice_number, 150, 32);
+      
+      // Status badge (text only)
+      doc.text(`Status: ${invoice.status.toUpperCase()}`, 150, 42);
+      
+      // Invoice dates
+      doc.text(`Invoice Date: ${formatDate(invoice.invoice_date)}`, 150, 52);
+      doc.text(`Due Date: ${formatDate(invoice.due_date)}`, 150, 62);
+      
+      // Customer information
+      const customer = invoice.customer as Customer;
+      if (customer) {
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bill To:', 14, 80);
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        let yPos = 90;
+        
+        doc.text(getCustomerDisplayName(customer), 14, yPos);
+        yPos += 10;
+        
+        if (customer.email) {
+          doc.text(`Email: ${customer.email}`, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.phone) {
+          doc.text(`Phone: ${customer.phone}`, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.address_line_1) {
+          doc.text(customer.address_line_1, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.address_line_2) {
+          doc.text(customer.address_line_2, 14, yPos);
+          yPos += 10;
+        }
+        
+        if (customer.city || customer.county || customer.eircode) {
+          const addressLine = [customer.city, customer.county, customer.eircode]
+            .filter(Boolean)
+            .join(', ');
+          if (addressLine) {
+            doc.text(addressLine, 14, yPos);
+          }
+        }
+      }
+      
+      // Prepare invoice items table data
+      const tableData = (invoice.items || []).map((item: InvoiceItem) => [
+        item.description || 'Service',
+        item.quantity.toString(),
+        formatCurrency(item.unit_price),
+        formatCurrency(item.total_price)
+      ]);
+      
+      // Add invoice items table
+      autoTable(doc, {
+        startY: 140,
+        head: [['Description', 'Quantity', 'Unit Price', 'Total']],
+        body: tableData,
+        styles: {
+          fontSize: 10,
+          cellPadding: 6
+        },
+        headStyles: {
+          fillColor: '#3b82f6',
+          textColor: '#ffffff',
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: '#f8fafc'
+        },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'right' },
+          3: { halign: 'right' }
+        }
+      });
+      
+      // Get the table's end Y position
+      const finalY = (doc as any).lastAutoTable.finalY || 140;
+      
+      // Totals section
+      const totalsX = 130;
+      let totalsY = finalY + 20;
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      
+      // Subtotal
+      const itemsSubtotal = (invoice.items || []).reduce((sum, item) => sum + item.total_price, 0);
+      doc.text('Subtotal:', totalsX, totalsY);
+      doc.text(formatCurrency(itemsSubtotal), 170, totalsY);
+      totalsY += 10;
+      
+      // Total line with bold styling
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('Amount Due:', totalsX, totalsY);
+      doc.text(formatCurrency(invoice.total_amount), 170, totalsY);
+      
+      // Notes section
+      if (invoice.notes) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Notes:', 14, totalsY + 20);
+        
+        // Split long notes into multiple lines
+        const noteLines = doc.splitTextToSize(invoice.notes, 180);
+        doc.text(noteLines, 14, totalsY + 30);
+      }
+      
+      // Footer
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Thank you for your business!', 14, pageHeight - 20);
+      doc.text(`Generated on ${new Date().toLocaleDateString('en-IE')}`, 14, pageHeight - 10);
+      
+      // Send invoice notification email
+      const { sendInvoiceNotificationEmail } = await import('../../utils/emailUtils');
+      const emailData = {
+        customerName: getCustomerDisplayName(customer),
+        invoiceNumber: invoice.invoice_number,
+        invoiceAmount: formatCurrency(invoice.total_amount),
+        dueDate: formatDate(invoice.due_date),
+        companyName: 'KH Therapy'
+      };
+
+      let emailSuccess = false;
+      try {
+        const { success } = await sendInvoiceNotificationEmail(customer.email, emailData);
+        emailSuccess = success;
+      } catch (emailError) {
+        console.log('Email sending skipped - EmailJS not configured:', emailError);
+        emailSuccess = false;
+      }
+      
+      // Update invoice status to 'sent' (only using existing columns)
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ 
+          status: 'sent',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', invoice.id);
+
+      if (updateError) {
+        console.error('Update error details:', updateError);
+        throw new Error(`Failed to update invoice status: ${updateError.message}`);
+      }
+
+      // Refresh the data to show updated status
+      await fetchData();
+
+      if (emailSuccess) {
+        showSuccess('Invoice Sent', `Invoice ${invoice.invoice_number} has been sent to ${customer.email}. Customer will now see this invoice in their dashboard.`);
+      } else {
+        showSuccess('Invoice Status Updated', `Invoice ${invoice.invoice_number} status updated to "sent" but email notification failed. Customer can still view it in their dashboard.`);
+      }
+
+    } catch (error) {
+      console.error('Error sending invoice:', error);
+      showError('Send Failed', 'Failed to send invoice PDF');
+    } finally {
+      setSendingInvoice(prev => ({ ...prev, [invoiceId]: false }));
+    }
+  };
+
+  // Send payment request for invoice
+  const sendInvoicePaymentRequest = async (invoice: Invoice) => {
+    if (!invoice || !invoice.customer?.email) {
+      showError('Error', 'Customer email not found');
+      return;
+    }
+
+    const invoiceId = invoice.id!.toString();
+    setSendingPaymentRequest(prev => ({ ...prev, [invoiceId]: true }));
+
+    try {
+      // Calculate the remaining amount after any deposit deductions
+      // If invoice has deposit deduction notes, extract the deposit amount
+      let depositAmount = 0;
+      if (invoice.notes?.includes('Deposit Deducted:')) {
+        const depositMatch = invoice.notes.match(/Deposit Deducted: €([\d.]+)/);
+        if (depositMatch) {
+          depositAmount = parseFloat(depositMatch[1]);
+        }
+      }
+
+      // The payment request amount should be the full invoice total (which already has deposit deducted)
+      const remainingAmount = invoice.total_amount;
+
+      console.log('💳 Creating invoice payment request:', {
+        invoiceNumber: invoice.invoice_number,
+        totalAmount: invoice.total_amount,
+        depositAmount: depositAmount,
+        remainingAmount: remainingAmount,
+        hasDepositDeduction: depositAmount > 0
+      });
+
+      // Create payment request using existing utility with invoice-specific parameters
+      const paymentRequest = await createPaymentRequest(
+        invoice.customer_id,
+        `Invoice ${invoice.invoice_number}`, // serviceName
+        invoice.due_date, // bookingDate
+        invoice.id!, // invoiceId
+        null, // bookingId (not applicable for invoices)
+        true, // isInvoicePaymentRequest - this tells the function it's for an invoice
+        remainingAmount // customAmount - the exact amount to be paid
+      );
+
+      if (!paymentRequest) {
+        throw new Error('Failed to create payment request');
+      }
+
+      // Send payment request email notification
+      const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
+      const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
+      
+      if (!emailSuccess) {
+        console.error('Failed to send payment request email:', emailError);
+        showSuccess('Payment Request Created', 'Payment request created but email notification failed');
+      } else {
+        showSuccess('Payment Request Sent', `Payment request for ${formatCurrency(remainingAmount)} sent to ${invoice.customer.email}`);
+      }
+
+      // Refresh the data
+      await fetchData();
+
+    } catch (error) {
+      console.error('Error sending payment request:', error);
+      showError('Send Failed', 'Failed to send payment request');
+    } finally {
+      setSendingPaymentRequest(prev => ({ ...prev, [invoiceId]: false }));
     }
   };
 
@@ -559,10 +1038,15 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
       });
       
       // Calculate totals
-      const subtotal = (invoice.items || []).reduce((sum, item) => sum + item.total_price, 0);
-      const vatRate = 0.23; // 23% VAT for Ireland
-      const vatAmount = subtotal * vatRate;
-      const totalAmount = subtotal + vatAmount;
+      const itemsSubtotal = (invoice.items || []).reduce((sum, item) => sum + item.total_price, 0);
+      
+      // Check if deposit was deducted (from notes or difference between subtotal and total)
+      const hasDepositDeduction = invoice.notes?.includes('Deposit Deducted:');
+      const depositAmount = hasDepositDeduction 
+        ? parseFloat(invoice.notes?.match(/Deposit Deducted: €([\d.]+)/)?.[1] || '0')
+        : 0;
+      
+      const totalAmount = invoice.total_amount;
       
       // Get final Y position from the table
       const finalY = (doc as any).lastAutoTable.finalY + 20;
@@ -575,17 +1059,22 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
       let totalsY = finalY;
       
       doc.text('Subtotal:', totalsX, totalsY);
-      doc.text(formatCurrency(subtotal), 170, totalsY);
+      doc.text(formatCurrency(itemsSubtotal), 170, totalsY);
       totalsY += 10;
       
-      doc.text('VAT (23%):', totalsX, totalsY);
-      doc.text(formatCurrency(vatAmount), 170, totalsY);
-      totalsY += 10;
+      // Show deposit deduction if applicable
+      if (depositAmount > 0) {
+        doc.setTextColor(0, 128, 0); // Green color for deposit
+        doc.text('Less Deposit Paid:', totalsX, totalsY);
+        doc.text(`-${formatCurrency(depositAmount)}`, 170, totalsY);
+        doc.setTextColor(0, 0, 0); // Reset to black
+        totalsY += 10;
+      }
       
       // Total line with bold styling
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
-      doc.text('Total:', totalsX, totalsY);
+      doc.text('Amount Due:', totalsX, totalsY);
       doc.text(formatCurrency(totalAmount), 170, totalsY);
       
       // Notes section
@@ -700,7 +1189,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Booking Reference
+                    Select Service/Booking (Confirmed Only) *
                   </label>
                   <select
                     value={formData.booking_id}
@@ -708,7 +1197,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     disabled={!formData.customer_id || formData.customer_id === 0}
                   >
-                    <option value="">Select a booking (optional)</option>
+                    <option value="">Select a confirmed service/booking to auto-populate invoice</option>
                     {customerBookings.map(booking => (
                       <option key={booking.id} value={booking.id}>
                         {booking.package_name || booking.service} - {
@@ -719,14 +1208,32 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                       </option>
                     ))}
                   </select>
+                  {!formData.customer_id && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      First select a customer to see their bookings
+                    </p>
+                  )}
+                  {formData.customer_id && customerBookings.length === 0 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      No confirmed bookings found for this customer. Only confirmed bookings can be used for invoice generation.
+                    </p>
+                  )}
+                  {formData.customer_id && customerBookings.length > 0 && !formData.booking_id && (
+                    <p className="mt-1 text-xs text-blue-600">
+                      💡 Select a booking to automatically populate the invoice item with correct pricing
+                    </p>
+                  )}
                   {selectedBooking && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded-md text-xs text-blue-700">
-                      <p><strong>Selected:</strong> {selectedBooking.package_name || selectedBooking.service}</p>
-                      <p><strong>Date:</strong> {
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs">
+                      <p className="text-green-800"><strong>✅ Selected Service:</strong> {selectedBooking.package_name || selectedBooking.service}</p>
+                      <p className="text-green-600"><strong>Date:</strong> {
                         selectedBooking.booking_date 
                           ? new Date(selectedBooking.booking_date).toLocaleDateString()
                           : (selectedBooking.appointment_date || selectedBooking.date || 'No date')
                       }</p>
+                      {customerDeposits.amount > 0 && (
+                        <p className="text-green-600"><strong>💳 Deposit Available:</strong> €{customerDeposits.amount.toFixed(2)}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -867,10 +1374,41 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
               {/* Invoice Summary */}
               <div className="mt-6 bg-white rounded-lg border p-4">
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between font-medium text-lg">
-                    <span>Total:</span>
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
                     <span>{formatCurrency(formData.items.reduce((sum, item) => sum + item.total_price, 0))}</span>
                   </div>
+                  
+                  {/* Deposit Deduction */}
+                  {customerDeposits.amount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>
+                        Less Deposit Paid
+                        {customerDeposits.serviceName && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            ({customerDeposits.serviceName})
+                          </span>
+                        )}:
+                      </span>
+                      <span>-{formatCurrency(customerDeposits.amount)}</span>
+                    </div>
+                  )}
+                  
+                  <hr className="border-gray-200" />
+                  <div className="flex justify-between font-medium text-lg">
+                    <span>Amount Due:</span>
+                    <span>
+                      {formatCurrency(
+                        Math.max(0, formData.items.reduce((sum, item) => sum + item.total_price, 0) - customerDeposits.amount)
+                      )}
+                    </span>
+                  </div>
+                  
+                  {customerDeposits.amount > 0 && (
+                    <div className="text-xs text-gray-600 mt-2 p-2 bg-blue-50 rounded">
+                      💡 Deposit of {formatCurrency(customerDeposits.amount)} has been automatically deducted from the total amount.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -986,12 +1524,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                   <span className="text-gray-600">Due Date:</span>
                   <span className="font-medium">{formatDate(previewingInvoice.due_date)}</span>
                 </div>
-                {previewingInvoice.booking_id && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Booking Ref:</span>
-                    <span className="font-medium">{previewingInvoice.booking_id}</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1021,10 +1553,32 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
 
           <div className="flex justify-end">
             <div className="w-64 space-y-2">
-              <div className="flex justify-between text-lg font-bold">
-                <span>Total:</span>
-                <span>{formatCurrency(previewingInvoice.total_amount)}</span>
-              </div>
+              {(() => {
+                const itemsSubtotal = items.reduce((sum, item) => sum + item.total_price, 0);
+                const hasDepositDeduction = previewingInvoice.notes?.includes('Deposit Deducted:');
+                const depositAmount = hasDepositDeduction 
+                  ? parseFloat(previewingInvoice.notes?.match(/Deposit Deducted: €([\d.]+)/)?.[1] || '0')
+                  : 0;
+
+                return (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Subtotal:</span>
+                      <span>{formatCurrency(itemsSubtotal)}</span>
+                    </div>
+                    {depositAmount > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Less Deposit Paid:</span>
+                        <span>-{formatCurrency(depositAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-lg font-bold border-t pt-2">
+                      <span>Amount Due:</span>
+                      <span>{formatCurrency(previewingInvoice.total_amount)}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -1153,7 +1707,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
+                      <div className="flex space-x-1">
+                        {/* Preview Invoice */}
                         <button
                           onClick={() => handlePreviewInvoice(invoice)}
                           className="text-blue-600 hover:text-blue-900 p-1 rounded"
@@ -1161,20 +1716,60 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                         >
                           <Eye size={16} />
                         </button>
-                        <button
-                          onClick={() => handleEditInvoice(invoice)}
-                          className="text-yellow-600 hover:text-yellow-900 p-1 rounded"
-                          title="Edit invoice"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteInvoice(invoice.id!)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded"
-                          title="Delete invoice"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        
+                        {/* Send Invoice PDF - Only show for draft status */}
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => sendInvoicePDF(invoice)}
+                            disabled={sendingInvoice[invoice.id!.toString()]}
+                            className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Send invoice PDF to customer"
+                          >
+                            {sendingInvoice[invoice.id!.toString()] ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                            ) : (
+                              <Send size={16} />
+                            )}
+                          </button>
+                        )}
+                        
+                        {/* Payment Request - Only show for sent status */}
+                        {invoice.status === 'sent' && invoicePaymentStatus[invoice.id!.toString()] !== 'paid' && (
+                          <button
+                            onClick={() => sendInvoicePaymentRequest(invoice)}
+                            disabled={sendingPaymentRequest[invoice.id!.toString()]}
+                            className="text-purple-600 hover:text-purple-900 p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Send payment request to customer"
+                          >
+                            {sendingPaymentRequest[invoice.id!.toString()] ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                            ) : (
+                              <CreditCard size={16} />
+                            )}
+                          </button>
+                        )}
+                        
+                        {/* Edit - Only show for draft and sent status (not paid) */}
+                        {(invoice.status === 'draft' || (invoice.status === 'sent' && invoicePaymentStatus[invoice.id!.toString()] !== 'paid')) && (
+                          <button
+                            onClick={() => handleEditInvoice(invoice)}
+                            className="text-yellow-600 hover:text-yellow-900 p-1 rounded"
+                            title="Edit invoice"
+                          >
+                            <Edit size={16} />
+                          </button>
+                        )}
+                        
+                        {/* Delete - Only show for draft status */}
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => handleDeleteInvoice(invoice.id!)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded"
+                            title="Delete invoice"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -7,6 +7,7 @@ import {
   UserBooking,
   PaymentHistoryItem
 } from '../types/userManagement';
+import { getCustomerPayments } from './paymentRequestUtils';
 
 /**
  * Get customer by auth user ID
@@ -166,20 +167,38 @@ export const changeUserPassword = async (
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
-    // Get real invoices for this customer - only show invoices with 'sent' status
-    const { data: invoices, error } = await supabase
+    // Get all invoices for this customer - show both sent and paid invoices
+    const { data: invoicesData, error } = await supabase
       .from('invoices')
       .select('*')
       .eq('customer_id', parseInt(customerId))
-      .eq('status', 'sent')
-      .order('invoice_date', { ascending: false });
+      .in('status', ['sent', 'paid']) // Include both sent and paid invoices
+      .order('invoice_date', { ascending: false }); // Most recent first
 
     if (error) {
       console.error('Error fetching user invoices:', error);
       return { invoices: [], error: error.message };
     }
 
-    return { invoices: invoices || [] };
+    // Add overdue calculation and days overdue to invoices
+    const invoices = invoicesData?.map(invoice => {
+      const isOverdue = invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date();
+      let daysOverdue = 0;
+      
+      if (isOverdue && invoice.due_date) {
+        const today = new Date();
+        const dueDate = new Date(invoice.due_date);
+        daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      }
+      
+      return {
+        ...invoice,
+        is_overdue: isOverdue,
+        days_overdue: daysOverdue
+      };
+    }) || [];
+
+    return { invoices };
   } catch (error) {
     console.error('Exception in getUserInvoices:', error);
     return { invoices: [], error: 'Unexpected error occurred' };
@@ -239,14 +258,20 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
       return { data: null, error: customerError || 'Customer not found' };
     }
 
-    // Get real invoices for this customer - only show invoices with 'sent' status
-    const { data: invoices } = await supabase
+    // Get real invoices for this customer - show both sent and paid invoices
+    const { data: invoicesData } = await supabase
       .from('invoices')
       .select('*')
       .eq('customer_id', parseInt(customerId))
-      .eq('status', 'sent')
+      .in('status', ['sent', 'paid']) // Include both sent and paid invoices
       .order('invoice_date', { ascending: false })
-      .limit(5);
+      .limit(3); // Limit to 3 most recent for dashboard
+
+    // Add overdue calculation to invoices
+    const invoices = invoicesData?.map(invoice => ({
+      ...invoice,
+      is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date()
+    }));
 
     // Get real bookings for this customer - only show confirmed bookings
     const { data: bookings } = await supabase
@@ -257,7 +282,11 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
       .order('booking_date', { ascending: false })
       .limit(5);
 
-    // Calculate stats from real data - only for 'sent' invoices
+    // Get real payments for this customer
+    const payments = await getCustomerPayments(parseInt(customerId));
+    const recentPayments = payments.slice(0, 3); // Show last 3 payments
+
+    // Calculate stats from real data - only count unpaid invoices as outstanding
     const totalOutstanding = invoices?.reduce((sum, inv) => 
       inv.status === 'sent' ? sum + (inv.total_amount || 0) : sum, 0) || 0;
     
@@ -265,12 +294,29 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
       inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
     ).length || 0;
 
-    const totalPaid = 0; // Since we only show 'sent' invoices, paid amount is 0 for this view
+    // Calculate total paid from actual payment records
+    const totalPaid = payments.reduce((sum, payment) => 
+      payment.status === 'paid' ? sum + payment.amount : sum, 0);
 
     const dashboardData: UserDashboardData = {
       customer: customer,
       recentInvoices: invoices || [],
-      recentPayments: [], // You can implement payment history later
+      recentPayments: recentPayments.map(payment => ({
+        id: payment.id,
+        invoice_id: payment.invoice_id || 0,
+        customer_id: payment.customer_id,
+        amount: payment.amount,
+        currency: payment.currency || 'EUR',
+        payment_date: payment.payment_date || undefined,
+        payment_method: payment.payment_method || undefined,
+        status: payment.status as 'pending' | 'processing' | 'paid' | 'failed' | 'refunded' | 'cancelled',
+        created_at: payment.created_at || undefined,
+        updated_at: payment.updated_at || undefined,
+        notes: payment.notes || undefined,
+        sumup_transaction_id: payment.sumup_transaction_id || undefined,
+        sumup_checkout_id: payment.sumup_checkout_id || undefined,
+        sumup_payment_type: payment.sumup_payment_type || undefined
+      })),
       overdueInvoices: invoices?.filter(inv => 
         inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
       ) || [],
@@ -309,17 +355,17 @@ export const formatCurrency = (amount: number): string => {
 export const getInvoiceStatusDisplay = (status: string): { color: string; bgColor: string; text: string } => {
   switch (status.toLowerCase()) {
     case 'paid':
-      return { color: 'text-green-700', bgColor: 'bg-green-100', text: 'Paid' };
+      return { color: 'green', bgColor: 'bg-green-100', text: 'Paid' };
     case 'pending':
-      return { color: 'text-yellow-700', bgColor: 'bg-yellow-100', text: 'Pending' };
+      return { color: 'yellow', bgColor: 'bg-yellow-100', text: 'Pending' };
     case 'overdue':
-      return { color: 'text-red-700', bgColor: 'bg-red-100', text: 'Overdue' };
+      return { color: 'red', bgColor: 'bg-red-100', text: 'Overdue' };
     case 'draft':
-      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: 'Draft' };
+      return { color: 'gray', bgColor: 'bg-gray-100', text: 'Draft' };
     case 'cancelled':
-      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: 'Cancelled' };
+      return { color: 'gray', bgColor: 'bg-gray-100', text: 'Cancelled' };
     default:
-      return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: status };
+      return { color: 'gray', bgColor: 'bg-gray-100', text: status };
   }
 };
 
