@@ -607,6 +607,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
     switch (status) {
       case 'paid':
         return 'bg-green-100 text-green-800';
+      case 'partial':
+        return 'bg-orange-100 text-orange-800';
       case 'sent':
         return 'bg-blue-100 text-blue-800';
       case 'overdue':
@@ -622,6 +624,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
     switch (status) {
       case 'paid':
         return <Check size={14} />;
+      case 'partial':
+        return <CreditCard size={14} />;
       case 'sent':
         return <Send size={14} />;
       case 'overdue':
@@ -1459,13 +1463,16 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
             >
               Back to List
             </button>
-            <button
-              onClick={() => handleEditInvoice(previewingInvoice)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-            >
-              <Edit size={16} />
-              <span>Edit</span>
-            </button>
+            {/* Only show edit button for draft and sent invoices (not partial or fully paid) */}
+            {!['partial', 'paid', 'cancelled'].includes(previewingInvoice.status) && (
+              <button
+                onClick={() => handleEditInvoice(previewingInvoice)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <Edit size={16} />
+                <span>Edit</span>
+              </button>
+            )}
             <button
               onClick={() => downloadInvoicePDF(previewingInvoice)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
@@ -1749,8 +1756,9 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ onClose }) => {
                           </button>
                         )}
                         
-                        {/* Edit - Only show for draft and sent status (not paid) */}
-                        {(invoice.status === 'draft' || (invoice.status === 'sent' && invoicePaymentStatus[invoice.id!.toString()] !== 'paid')) && (
+                        {/* Edit - Only show for draft and sent status (not partial or fully paid) */}
+                        {!['partial', 'paid', 'cancelled'].includes(invoice.status) && 
+                         invoicePaymentStatus[invoice.id!.toString()] !== 'paid' && (
                           <button
                             onClick={() => handleEditInvoice(invoice)}
                             className="text-yellow-600 hover:text-yellow-900 p-1 rounded"

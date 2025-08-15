@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { 
   Calendar, 
   Package, 
@@ -13,7 +12,8 @@ import {
   Settings,
   LogOut,
   FileText,
-  Users
+  Users,
+  RefreshCw
 } from 'lucide-react';
 import { Dashboard } from '../components/admin/Dashboard';
 import { Services } from '../components/admin/Services';
@@ -27,7 +27,7 @@ import { getBookingsWithCustomers } from '../utils/customerBookingUtils';
 import { useToast } from '../components/shared/toastContext';
 
 const AdminConsole = () => {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -260,13 +260,26 @@ const AdminConsole = () => {
     }
   };
 
-  // Auto-refresh only for bookings table changes (most important)
-  useAutoRefresh({
-    table: 'bookings',
-    onDataChange: fetchAllBookings,
-    enabled: isLoggedIn,
-    throttleMs: 3000 // 3 second throttle to prevent excessive calls
-  });
+  // Manual refresh function to replace auto-refresh
+  const handleManualRefresh = async (dataType?: string) => {
+    try {
+      setIsLoading(true);
+      
+      if (!dataType || dataType === 'bookings') {
+        await fetchAllBookings();
+      }
+      if (!dataType || dataType === 'services') {
+        await fetchAllServices();
+      }
+      
+      showSuccess('Refresh Complete', 'Data has been refreshed successfully.');
+    } catch (error) {
+      console.error('Manual refresh error:', error);
+      showError('Refresh Error', 'Failed to refresh data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Fetch services from database
   const fetchAllServices = async () => {
@@ -402,6 +415,14 @@ const AdminConsole = () => {
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
+                onClick={() => handleManualRefresh()}
+                disabled={isLoading}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh Data"
+              >
+                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+              <button
                 onClick={() => setShowPasswordModal(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Change Password"
@@ -501,6 +522,7 @@ const AdminConsole = () => {
             setFilterDate={setFilterDate}
             filterRange={filterRange}
             setFilterRange={setFilterRange}
+            onRefresh={() => handleManualRefresh('bookings')}
           />
         )}
         {activeTab === 'availability' && (

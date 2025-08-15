@@ -42,7 +42,6 @@ interface BookingCalendarEvent {
 }
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
-import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
@@ -61,6 +60,7 @@ interface BookingsProps {
   setFilterDate: React.Dispatch<React.SetStateAction<string>>;
   filterRange: {start: string; end: string} | null;
   setFilterRange: React.Dispatch<React.SetStateAction<{start: string; end: string} | null>>;
+  onRefresh?: () => void;
 }
 
 export const Bookings: React.FC<BookingsProps> = ({ 
@@ -69,7 +69,8 @@ export const Bookings: React.FC<BookingsProps> = ({
   filterDate,
   setFilterDate,
   filterRange,
-  setFilterRange
+  setFilterRange,
+  onRefresh
 }) => {
   const { showSuccess, showError } = useToast();
   
