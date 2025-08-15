@@ -22,7 +22,7 @@ import { Availability } from '../components/admin/Availability';
 import { Reports } from '../components/admin/Reports';
 import InvoiceManagement from '../components/admin/InvoiceManagement';
 import CustomerManagement from '../components/admin/CustomerManagement';
-import { BookingFormData, Package as PackageType } from '../components/admin/types';
+import { BookingFormData, Package as PackageType, Customer, Invoice, Service } from '../components/admin/types';
 import { getBookingsWithCustomers } from '../utils/customerBookingUtils';
 import { useToast } from '../components/shared/toastContext';
 
@@ -52,6 +52,9 @@ const AdminConsole = () => {
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editPackage, setEditPackage] = useState<PackageType | null>(null);
   const [allBookings, setAllBookings] = useState<BookingFormData[]>([]);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const [filterDate, setFilterDate] = useState('');
   const [filterRange, setFilterRange] = useState<{start: string; end: string} | null>(null);
 
@@ -145,6 +148,8 @@ const AdminConsole = () => {
     if (isLoggedIn) {
       fetchAllBookings();
       fetchAllServices();
+      fetchAllCustomers();
+      fetchAllInvoices();
     }
   }, [isLoggedIn]);
 
@@ -156,6 +161,12 @@ const AdminConsole = () => {
     }
     if (isLoggedIn && packages.length === 0) {
       fetchAllServices();
+    }
+    if (isLoggedIn && allCustomers.length === 0) {
+      fetchAllCustomers();
+    }
+    if (isLoggedIn && allInvoices.length === 0) {
+      fetchAllInvoices();
     }
   }, [isLoggedIn]); // Only depend on login state, not active tab
 
@@ -175,7 +186,12 @@ const AdminConsole = () => {
       } else if (data.user) {
         setIsLoggedIn(true);
         setLoginError('');
-        await Promise.all([fetchAllBookings(), fetchAllServices()]);
+        await Promise.all([
+          fetchAllBookings(), 
+          fetchAllServices(), 
+          fetchAllCustomers(), 
+          fetchAllInvoices()
+        ]);
       } else {
         setLoginError('Login failed.');
       }
@@ -271,11 +287,93 @@ const AdminConsole = () => {
       if (!dataType || dataType === 'services') {
         await fetchAllServices();
       }
+      if (!dataType || dataType === 'customers') {
+        await fetchAllCustomers();
+      }
+      if (!dataType || dataType === 'invoices') {
+        await fetchAllInvoices();
+      }
       
       showSuccess('Refresh Complete', 'Data has been refreshed successfully.');
     } catch (error) {
       console.error('Manual refresh error:', error);
       showError('Refresh Error', 'Failed to refresh data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch customers from database
+  const fetchAllCustomers = async () => {
+    try {
+      setIsLoading(true);
+      console.log('📊 Fetching customers...');
+      
+      // Add timeout protection
+      const timeoutId = setTimeout(() => {
+        showError('Timeout Error', 'Customer data loading is taking too long. Please check your connection.');
+      }, 15000);
+      
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500); // Limit for performance
+      
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        console.error('❌ Error fetching customers:', error);
+        showError('Database Error', 'Cannot fetch customer data. Please check your connection and try again.');
+        return;
+      }
+      
+      setAllCustomers(data || []);
+      console.log('✅ Customers loaded:', data?.length || 0);
+    } catch (error) {
+      console.error('❌ Exception in fetchAllCustomers:', error);
+      showError('Connection Error', 'Unable to fetch customer data. Please check your internet connection and try again.');
+      setAllCustomers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch invoices from database
+  const fetchAllInvoices = async () => {
+    try {
+      setIsLoading(true);
+      console.log('📊 Fetching invoices...');
+      
+      // Add timeout protection
+      const timeoutId = setTimeout(() => {
+        showError('Timeout Error', 'Invoice data loading is taking too long. Please check your connection.');
+      }, 20000);
+      
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          customer:customers(*),
+          items:invoice_items(*)
+        `)
+        .order('invoice_date', { ascending: false })
+        .limit(200); // Limit for performance
+      
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        console.error('❌ Error fetching invoices:', error);
+        showError('Database Error', 'Cannot fetch invoice data. Please check your connection and try again.');
+        return;
+      }
+      
+      setAllInvoices(data || []);
+      console.log('✅ Invoices loaded:', data?.length || 0);
+    } catch (error) {
+      console.error('❌ Exception in fetchAllInvoices:', error);
+      showError('Connection Error', 'Unable to fetch invoice data. Please check your internet connection and try again.');
+      setAllInvoices([]);
     } finally {
       setIsLoading(false);
     }
@@ -294,7 +392,7 @@ const AdminConsole = () => {
       if (error) {
         console.error('Error fetching services:', error);
       } else {
-        // Transform database format to component format
+        // Transform database format to component format for Services tab
         const transformedServices: PackageType[] = (data || []).map(service => ({
           id: service.id,
           name: service.name,
@@ -309,7 +407,23 @@ const AdminConsole = () => {
           updated_at: service.updated_at
         }));
         
+        // Transform for Invoice Management (Service format)
+        const servicesForInvoice: Service[] = (data || []).map(service => ({
+          id: service.id!,
+          name: service.name,
+          category: service.category,
+          price: service.price,
+          in_hour_price: service.in_hour_price,
+          out_of_hour_price: service.out_of_hour_price,
+          features: service.features || [],
+          description: service.description,
+          is_active: service.is_active,
+          created_at: service.created_at,
+          updated_at: service.updated_at
+        }));
+        
         setPackages(transformedServices);
+        setAllServices(servicesForInvoice);
       }
     } catch (error) {
       console.error('Exception in fetchAllServices:', error);
@@ -529,10 +643,20 @@ const AdminConsole = () => {
           <Availability />
         )}
         {activeTab === 'customers' && (
-          <CustomerManagement />
+          <CustomerManagement 
+            customers={allCustomers}
+            setCustomers={setAllCustomers}
+            onRefresh={() => handleManualRefresh('customers')}
+          />
         )}
         {activeTab === 'invoices' && (
-          <InvoiceManagement />
+          <InvoiceManagement 
+            invoices={allInvoices}
+            setInvoices={setAllInvoices}
+            customers={allCustomers}
+            services={allServices}
+            onRefresh={() => handleManualRefresh('invoices')}
+          />
         )}
         {activeTab === 'reports' && (
           <Reports allBookings={allBookings} />

@@ -14,6 +14,21 @@ export type Package = {
   updated_at?: string;
 };
 
+// Service type alias for compatibility with invoice management
+export type Service = {
+  id: number;
+  name: string;
+  category?: string;
+  price?: string;
+  in_hour_price?: string;
+  out_of_hour_price?: string;
+  features?: string[];
+  description?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type ServiceTimeSlot = {
   id?: number;
   service_id: number;

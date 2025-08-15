@@ -20,15 +20,21 @@ import { getCustomerDisplayName, validateCustomerName } from './utils/customerUt
 interface CustomerManagementProps {
   onCustomerSelect?: (customer: Customer) => void;
   selectedCustomerId?: number;
+  customers?: Customer[];
+  setCustomers?: React.Dispatch<React.SetStateAction<Customer[]>>;
+  onRefresh?: () => void;
 }
 
 const CustomerManagement: React.FC<CustomerManagementProps> = ({ 
   onCustomerSelect, 
-  selectedCustomerId 
+  selectedCustomerId,
+  customers: propCustomers,
+  setCustomers: setPropCustomers,
+  onRefresh
 }) => {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(propCustomers || []);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!propCustomers);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -62,14 +68,24 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    if (propCustomers) {
+      // Use provided data from parent
+      setCustomers(propCustomers);
+      setLoading(false);
+    } else {
+      // Fetch data if not provided
+      fetchCustomers();
+    }
+  }, [propCustomers]);
 
   useEffect(() => {
     filterCustomers();
   }, [customers, searchTerm, statusFilter]);
 
   const fetchCustomers = async () => {
+    // Don't fetch if data is provided from parent
+    if (propCustomers) return;
+    
     try {
       setLoading(true);
       console.log('Fetching customers...');
@@ -94,6 +110,14 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       setError(`Failed to fetch customers: ${errorMessage}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper to update both local and parent state
+  const updateCustomers = (newCustomers: Customer[]) => {
+    setCustomers(newCustomers);
+    if (setPropCustomers) {
+      setPropCustomers(newCustomers);
     }
   };
 
