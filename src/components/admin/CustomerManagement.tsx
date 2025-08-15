@@ -16,6 +16,7 @@ import {
 import { supabase } from '../../supabaseClient';
 import { Customer } from './types';
 import { getCustomerDisplayName, validateCustomerName } from './utils/customerUtils';
+import { decryptCustomersArrayForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
 
 interface CustomerManagementProps {
   onCustomerSelect?: (customer: Customer) => void;
@@ -69,8 +70,9 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
 
   useEffect(() => {
     if (propCustomers) {
-      // Use provided data from parent
-      setCustomers(propCustomers);
+      // Use provided data from parent but decrypt it for admin viewing
+      const decryptedCustomers = decryptCustomersArrayForAdmin(propCustomers);
+      setCustomers(decryptedCustomers);
       setLoading(false);
     } else {
       // Fetch data if not provided
@@ -103,7 +105,17 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       }
       
       console.log('Customers data loaded:', data?.length, 'records');
-      setCustomers(data || []);
+      
+      // Decrypt customer data for admin viewing
+      const decryptedCustomers = decryptCustomersArrayForAdmin(data || []);
+      
+      // Log admin access for GDPR audit
+      const customerIds = decryptedCustomers.map(c => c.id).filter(Boolean);
+      if (customerIds.length > 0) {
+        logAdminDataAccess(null, 'VIEW_CUSTOMERS', customerIds, 'Customer management dashboard access'); // Auto-detect current admin user
+      }
+      
+      setCustomers(decryptedCustomers);
     } catch (err) {
       console.error('Full error details:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';

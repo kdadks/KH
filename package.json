@@ -9,12 +9,16 @@
     "preview": "vite preview",
     "generate-sitemap": "node scripts/generate-sitemap.js",
     "predeploy": "npm run build && npm run generate-sitemap",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "migrate-gdpr": "node scripts/migrate-gdpr-compliance.js",
+    "test:gdpr": "jest src/tests/gdpr-compliance.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.52.0",
+    "@types/crypto-js": "^4.2.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
+    "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "emailjs-com": "^3.2.0",
     "framer-motion": "^10.18.0",

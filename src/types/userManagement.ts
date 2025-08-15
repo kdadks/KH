@@ -29,6 +29,18 @@ export interface UserCustomer {
   password_reset_token?: string;
   password_reset_expires_at?: string;
   password_reset_requested_at?: string;
+  // GDPR Compliance Fields
+  gdpr_anonymized?: boolean;
+  gdpr_anonymized_at?: string;
+  privacy_consent_given?: boolean;
+  privacy_consent_date?: string;
+  marketing_consent?: boolean;
+  marketing_consent_date?: string;
+  data_processing_basis?: string;
+  last_data_export_request?: string;
+  deletion_requested?: boolean;
+  deletion_request_date?: string;
+  pii_encrypted?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -344,6 +356,7 @@ export interface UserAuthContext {
   resetPassword: (data: PasswordResetData) => Promise<{ success: boolean; error?: string }>;
   validateResetToken: (token: string) => Promise<{ success: boolean; error?: string; customerEmail?: string }>;
   refreshUser: () => Promise<void>;
+  recordConsent: (consentType: string, consentGiven: boolean) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Error Types

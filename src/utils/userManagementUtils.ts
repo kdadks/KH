@@ -8,22 +8,36 @@ import {
   PaymentHistoryItem
 } from '../types/userManagement';
 import { getCustomerPayments } from './paymentRequestUtils';
+import { decryptCustomerPII } from './gdprUtils';
 
 /**
  * Get customer by auth user ID
  */
 export const getCustomerByAuthId = async (authUserId: string): Promise<{ customer: UserCustomer | null; error?: string }> => {
   try {
-    const { data, error } = await supabase
+    // Optimized query with timeout for production
+    const queryPromise = supabase
       .from('customers')
       .select('*')
       .eq('auth_user_id', authUserId)
       .eq('is_active', true)
       .single();
 
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Database query timeout')), 8000)
+    );
+
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
     if (error && error.code !== 'PGRST116') {
       console.error('Error fetching customer by auth ID:', error);
       return { customer: null, error: error.message };
+    }
+
+    if (data) {
+      // Decrypt customer PII data for profile display
+      const decryptedCustomer = decryptCustomerPII(data);
+      return { customer: decryptedCustomer };
     }
 
     return { customer: data };
@@ -38,10 +52,11 @@ export const getCustomerByAuthId = async (authUserId: string): Promise<{ custome
  */
 export const getCustomerByEmail = async (email: string): Promise<{ customer: UserCustomer | null; error?: string }> => {
   try {
+    // Optimized query with only essential fields for login
     const { data, error } = await supabase
       .from('customers')
-      .select('*')
-      .eq('email', email)
+      .select('id, email, password, first_name, last_name, phone, is_active, must_change_password, last_login, auth_user_id')
+      .eq('email', email.toLowerCase())
       .eq('is_active', true)
       .single();
 
@@ -50,6 +65,12 @@ export const getCustomerByEmail = async (email: string): Promise<{ customer: Use
       return { customer: null, error: error.message };
     }
 
+    if (!data) {
+      return { customer: null };
+    }
+
+    // For login purposes, we don't need to decrypt all PII data immediately
+    // Only decrypt when needed to improve performance
     return { customer: data };
   } catch (error) {
     console.error('Exception in getCustomerByEmail:', error);

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
+import { decryptCustomerDataForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
 
 const localizer = momentLocalizer(moment);
 
@@ -60,6 +61,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
   const fetchAvailabilitySlots = useCallback(async () => {
     try {
+      console.log('🔍 Fetching availability slots...');
       const { data, error } = await supabase
         .from('availability')
         .select('*')
@@ -67,103 +69,87 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         .order('start', { ascending: true });
 
       if (error) {
+        console.error('❌ Error fetching availability slots:', error);
         showError('Error', `Database error: ${error.message}`);
         return;
       }
 
+      console.log('✅ Availability slots fetched:', data?.length || 0, 'slots');
       setAvailabilitySlots(data || []);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('❌ Exception fetching availability slots:', error);
       showError('Error', `Failed to load availability slots: ${errorMessage}`);
     }
   }, [showError]);
 
   const fetchBookedSlots = useCallback(async () => {
     try {
-      // First, try the new structure with customers join
-      const { data, error } = await supabase
+      console.log('🔍 Fetching booked slots...');
+      // Use the simple approach that works reliably - fetch bookings and customers separately
+      const { data: simpleData, error: simpleError } = await supabase
         .from('bookings')
-        .select(`
-          id, 
-          package_name, 
-          booking_date, 
-          status,
-          customer_id,
-          customers!inner (
-            first_name,
-            last_name,
-            email
-          )
-        `)
+        .select('id, package_name, booking_date, status, customer_id')
         .in('status', ['confirmed', 'completed'])
         .order('booking_date', { ascending: true })
         .limit(500); // Add limit for performance
 
-      if (error) {
-        // If the join fails, try a simpler query without the join
-        console.warn('Join query failed, trying simple query:', error.message);
-        
-        const { data: simpleData, error: simpleError } = await supabase
-          .from('bookings')
-          .select('id, package_name, booking_date, status, customer_id')
-          .in('status', ['confirmed', 'completed'])
-          .order('booking_date', { ascending: true })
-          .limit(500); // Add limit for performance
-
-        if (simpleError) {
-          showError('Error', `Database error: ${simpleError.message}`);
-          return;
-        }
-
-        // For simple data, try to fetch customer names separately
-        const transformedSimpleData = await Promise.all((simpleData || []).map(async (booking: any) => {
-          let customerName = `Customer ID: ${booking.customer_id}`;
-          
-          if (booking.customer_id) {
-            try {
-              const { data: customerData, error: customerError } = await supabase
-                .from('customers')
-                .select('first_name, last_name')
-                .eq('id', booking.customer_id)
-                .single();
-              
-              if (!customerError && customerData) {
-                customerName = `${customerData.first_name} ${customerData.last_name}`;
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch customer ${booking.customer_id}:`, err);
-            }
-          }
-          
-          return {
-            id: booking.id,
-            customer_name: customerName,
-            package_name: booking.package_name,
-            booking_date: booking.booking_date,
-            status: booking.status,
-            appointment_date: undefined,
-            appointment_time: undefined
-          };
-        }));
-
-        setBookedSlots(transformedSimpleData);
+      if (simpleError) {
+        console.error('❌ Error fetching bookings:', simpleError);
+        showError('Error', `Database error: ${simpleError.message}`);
         return;
       }
 
-      // Transform the data to match our BookedSlot interface
-      const transformedData = (data || []).map((booking: any) => ({
-        id: booking.id,
-        customer_name: booking.customers 
-          ? `${booking.customers.first_name} ${booking.customers.last_name}`.trim()
-          : `Customer ID: ${booking.customer_id}`,
-        package_name: booking.package_name,
-        booking_date: booking.booking_date,
-        status: booking.status,
-        appointment_date: undefined,
-        appointment_time: undefined
+      console.log('✅ Bookings fetched:', simpleData?.length || 0, 'bookings');
+
+      // For each booking, fetch customer names separately and decrypt them
+      const transformedSimpleData = await Promise.all((simpleData || []).map(async (booking: any) => {
+        let customerName = `Customer ID: ${booking.customer_id}`;
+        
+        if (booking.customer_id) {
+          try {
+            const { data: customerData, error: customerError } = await supabase
+              .from('customers')
+              .select('first_name, last_name')
+              .eq('id', booking.customer_id)
+              .single();
+            
+            if (!customerError && customerData) {
+              // Decrypt customer data for admin viewing
+              const decryptedCustomer = decryptCustomerDataForAdmin(customerData);
+              customerName = `${decryptedCustomer.first_name} ${decryptedCustomer.last_name}`;
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch customer ${booking.customer_id}:`, err);
+          }
+        }
+        
+        return {
+          id: booking.id,
+          customer_name: customerName,
+          package_name: booking.package_name,
+          booking_date: booking.booking_date,
+          status: booking.status,
+          appointment_date: undefined,
+          appointment_time: undefined
+        };
       }));
 
-      setBookedSlots(transformedData);
+      setBookedSlots(transformedSimpleData);
+      console.log('✅ Booked slots set:', transformedSimpleData.length, 'processed bookings');
+      
+      // Log admin access for GDPR audit trail
+      const customerIds = transformedSimpleData
+        .map(booking => {
+          // Extract customer ID from booking data
+          const originalBooking = (simpleData || []).find((d: any) => d.id === booking.id);
+          return originalBooking?.customer_id;
+        })
+        .filter(Boolean);
+      
+      if (customerIds.length > 0) {
+        logAdminDataAccess(null, 'VIEW_AVAILABILITY_BOOKINGS', customerIds, 'Availability calendar booking view');
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       showError('Error', `Failed to load booked slots: ${errorMessage}`);
@@ -384,6 +370,10 @@ export const Availability: React.FC<AvailabilityProps> = () => {
           <p className="text-gray-600 mt-1">
             Manage your available time slots for appointments. Booked slots are automatically marked and cannot be deleted.
           </p>
+          {/* Debug Info */}
+          <div className="mt-2 text-sm text-gray-500">
+            Debug: {availabilitySlots.length} availability slots, {bookedSlots.length} booked slots
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
           <button

@@ -25,6 +25,11 @@ import CustomerManagement from '../components/admin/CustomerManagement';
 import { BookingFormData, Package as PackageType, Customer, Invoice, Service } from '../components/admin/types';
 import { getBookingsWithCustomers } from '../utils/customerBookingUtils';
 import { useToast } from '../components/shared/toastContext';
+import { 
+  decryptCustomersArrayForAdmin, 
+  decryptBookingCustomerDataForAdmin, 
+  logAdminDataAccess 
+} from '../utils/adminGdprUtils';
 
 const AdminConsole = () => {
   const { showError, showSuccess } = useToast();
@@ -236,7 +241,25 @@ const AdminConsole = () => {
           return transformed;
         });
         
-        setAllBookings(transformedBookings);
+        // Decrypt customer data for admin viewing (GDPR compliance)
+        const decryptedBookings = transformedBookings.map(booking => 
+          decryptBookingCustomerDataForAdmin(booking)
+        );
+        
+        // Log admin access for GDPR audit trail
+        const customerIds = decryptedBookings
+          .map(b => b.customer_id)
+          .filter(Boolean);
+        if (customerIds.length > 0) {
+          logAdminDataAccess(
+            null, // Auto-detect current admin user
+            'VIEW_BOOKINGS', 
+            customerIds, 
+            'Admin console booking management access'
+          );
+        }
+        
+        setAllBookings(decryptedBookings);
         return;
       }
       
@@ -263,7 +286,12 @@ const AdminConsole = () => {
         showError('Database Error', 'Cannot fetch bookings data. Please check your connection and try again.');
         return;
       } else {
-        setAllBookings(fallbackData || []);
+        // Decrypt fallback booking data for admin viewing
+        const decryptedFallbackBookings = (fallbackData || []).map(booking => 
+          decryptBookingCustomerDataForAdmin(booking)
+        );
+        
+        setAllBookings(decryptedFallbackBookings);
       }
     } catch (error) {
       console.error('❌ Exception in fetchAllBookings:', error);
@@ -328,8 +356,22 @@ const AdminConsole = () => {
         return;
       }
       
-      setAllCustomers(data || []);
-      console.log('✅ Customers loaded:', data?.length || 0);
+      // Decrypt customer data for admin viewing (GDPR compliance)
+      const decryptedCustomers = decryptCustomersArrayForAdmin(data || []);
+      
+      // Log admin access for GDPR audit trail
+      const customerIds = decryptedCustomers.map(c => c.id).filter(Boolean);
+      if (customerIds.length > 0) {
+        logAdminDataAccess(
+          null, // Auto-detect current admin user
+          'VIEW_CUSTOMERS', 
+          customerIds, 
+          'Admin console customer management access'
+        );
+      }
+      
+      setAllCustomers(decryptedCustomers);
+      console.log('✅ Customers loaded:', decryptedCustomers?.length || 0);
     } catch (error) {
       console.error('❌ Exception in fetchAllCustomers:', error);
       showError('Connection Error', 'Unable to fetch customer data. Please check your internet connection and try again.');
@@ -368,8 +410,19 @@ const AdminConsole = () => {
         return;
       }
       
-      setAllInvoices(data || []);
-      console.log('✅ Invoices loaded:', data?.length || 0);
+      // Decrypt customer data in invoices for admin viewing (GDPR compliance)
+      const decryptedInvoices = (data || []).map(invoice => {
+        if (invoice.customer) {
+          return {
+            ...invoice,
+            customer: decryptCustomersArrayForAdmin([invoice.customer])[0]
+          };
+        }
+        return invoice;
+      });
+      
+      setAllInvoices(decryptedInvoices);
+      console.log('✅ Invoices loaded:', decryptedInvoices?.length || 0);
     } catch (error) {
       console.error('❌ Exception in fetchAllInvoices:', error);
       showError('Connection Error', 'Unable to fetch invoice data. Please check your internet connection and try again.');

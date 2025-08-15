@@ -46,6 +46,7 @@ import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
+import { decryptBookingCustomerDataForAdmin } from '../../utils/adminGdprUtils';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';

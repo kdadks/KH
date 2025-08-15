@@ -22,6 +22,8 @@ import {
   validatePasswordResetToken as validatePasswordResetTokenUtil, 
   resetPasswordWithToken as resetPasswordWithTokenUtil 
 } from '../utils/passwordResetUtils';
+import { encryptCustomerPII, decryptCustomerPII } from '../utils/gdprUtils';
+import { withTimeout, logPerformance } from '../utils/performanceUtils';
 
 interface UserAuthProviderProps {
   children: React.ReactNode;
@@ -57,7 +59,14 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
         if (session?.user) {
           setAuthUser(session.user);
-          await loadUserProfile(session.user.id);
+          
+          // Only load customer profile if not in admin context
+          const isAdminContext = window.location.pathname.startsWith('/admin');
+          if (!isAdminContext) {
+            await loadUserProfile(session.user.id);
+          } else {
+            console.log('Skipping customer profile load for admin context during initialization');
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -75,7 +84,14 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         
         if (event === 'SIGNED_IN' && session?.user) {
           setAuthUser(session.user);
-          await loadUserProfile(session.user.id);
+          
+          // Only load customer profile if not in admin context
+          const isAdminContext = window.location.pathname.startsWith('/admin');
+          if (!isAdminContext) {
+            await loadUserProfile(session.user.id);
+          } else {
+            console.log('Skipping customer profile load for admin context');
+          }
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
           setUser(null);
@@ -96,15 +112,17 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       const { customer, error } = await getCustomerByAuthId(authUserId);
       
       if (error) {
-        console.error('Error loading user profile:', error);
+        // Don't log this as an error - admin users won't have customer records
+        console.log('No customer profile found for auth user:', authUserId, '- this is normal for admin users');
         return;
       }
 
       if (customer) {
         setUser(customer);
+        console.log('Customer profile loaded for user:', authUserId);
       } else {
-        // If no customer record found, user might need to complete profile
-        console.log('No customer record found for auth user:', authUserId);
+        // If no customer record found, user might be an admin or need to complete profile
+        console.log('No customer record found for auth user:', authUserId, '- user may be admin or need profile setup');
       }
     } catch (error) {
       console.error('Exception in loadUserProfile:', error);
@@ -194,42 +212,53 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
   // Login user
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const startTime = Date.now();
+    
     try {
       setLoading(true);
 
-      // First, find the customer by email only
-      const { data: customer, error: customerError } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single();
+      // Add timeout to prevent hanging in production
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Login timeout - please try again')), 15000)
+      );
 
-      if (customerError || !customer) {
-        return { success: false, error: 'Invalid credentials' };
-      }
+      const loginPromise = (async () => {
+        // Optimized customer query using utility function
+        const { customer, error: customerError } = await withTimeout(
+          getCustomerByEmail(email.toLowerCase()),
+          8000,
+          'Customer lookup timed out'
+        );
 
-      // Verify password using bcrypt
-      let isValidPassword = false;
-      
-      // Check if password is already hashed
-      if (isPasswordHashed(customer.password)) {
-        // Verify against hashed password
-        isValidPassword = await verifyPassword(password, customer.password);
-      } else {
-        // Handle legacy plain text passwords (for backwards compatibility during transition)
-        // Check if plain text password matches
-        isValidPassword = customer.password === password;
+        if (customerError || !customer) {
+          return { success: false, error: 'Invalid credentials' };
+        }
+
+        // Verify password using bcrypt
+        let isValidPassword = false;
         
-        // If valid, hash the password and update it in the database
+        // Check if password is already hashed
+        if (customer.password && isPasswordHashed(customer.password)) {
+          // Verify against hashed password
+          isValidPassword = await verifyPassword(password, customer.password);
+        } else if (customer.password) {
+          // Handle legacy plain text passwords (for backwards compatibility during transition)
+          // Check if plain text password matches
+          isValidPassword = customer.password === password;        // If valid, hash the password and update it in the database (do this async, don't wait)
         if (isValidPassword) {
-          const hashedPassword = await hashPassword(password);
-          await supabase
-            .from('customers')
-            .update({ password: hashedPassword })
-            .eq('id', customer.id);
-          
-          console.log('Migrated plain text password to hashed for user:', customer.email);
+          // Don't await this - let it happen in background to improve login speed
+          (async () => {
+            try {
+              const hashedPassword = await hashPassword(password);
+              await supabase
+                .from('customers')
+                .update({ password: hashedPassword })
+                .eq('id', customer.id);
+              console.log('Migrated plain text password to hashed for user:', customer.email);
+            } catch (err) {
+              console.warn('Failed to migrate password:', err);
+            }
+          })();
         }
       }
 
@@ -244,46 +273,58 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       // For plain text comparison, check against the original password
       // For hashed passwords, we need to verify against the email
       let needsPasswordChange = false;
-      if (isPasswordHashed(customer.password)) {
+      if (customer.password && isPasswordHashed(customer.password)) {
         // For hashed passwords, check if the plain password was the email
         needsPasswordChange = password === customer.email;
-      } else {
+      } else if (customer.password) {
         // For plain text passwords (legacy), direct comparison
         needsPasswordChange = customer.password === customer.email;
       }
       
       if (needsPasswordChange && customer.must_change_password !== true) {
-        const { error: flagError } = await supabase
-          .from('customers')
-          .update({ must_change_password: true })
-          .eq('id', customer.id);
-        
-        if (!flagError) {
-          customer.must_change_password = true; // Update local data
-        }
+        // Don't await this - update flag in background
+        (async () => {
+          try {
+            await supabase
+              .from('customers')
+              .update({ must_change_password: true })
+              .eq('id', customer.id);
+            customer.must_change_password = true; // Update local data
+          } catch (err) {
+            console.warn('Failed to update password change flag:', err);
+          }
+        })();
       }
       
-      // Set the authenticated user data
+      // Set the authenticated user data immediately
       setUser(customer);
       
-      // Update last login time
-      const { error: updateError } = await supabase
-        .from('customers')
-        .update({ 
-          last_login: new Date().toISOString(),
-          first_login: false 
-        })
-        .eq('id', customer.id);
-
-      if (updateError) {
-        console.warn('Failed to update last login:', updateError);
-      }
+      // Update last login time in background - don't wait for it
+      (async () => {
+        try {
+          await supabase
+            .from('customers')
+            .update({ 
+              last_login: new Date().toISOString(),
+              first_login: false 
+            })
+            .eq('id', customer.id);
+        } catch (err) {
+          console.warn('Failed to update last login:', err);
+        }
+      })();
 
       return { success: true };
+      })();
+
+      // Race between login and timeout
+      return await Promise.race([loginPromise, timeoutPromise]);
+
     } catch (error) {
       console.error('Exception in login:', error);
       return { success: false, error: 'Unexpected error occurred during login' };
     } finally {
+      logPerformance('User Login', startTime);
       setLoading(false);
     }
   };
@@ -394,6 +435,52 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     }
   };
 
+  // Record GDPR consent
+  const recordConsent = async (consentType: string, consentGiven: boolean): Promise<{ success: boolean; error?: string }> => {
+    if (!user?.id) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    try {
+      const { error } = await supabase.rpc('record_consent', {
+        p_customer_id: user.id,
+        p_consent_type: consentType,
+        p_consent_given: consentGiven,
+        p_consent_method: 'web_form',
+        p_legal_basis: 'consent',
+        p_purpose: `${consentType} consent updated via user portal`,
+        p_data_categories: consentType === 'marketing' ? ['email', 'preferences'] : ['personal_data'],
+        p_retention_period: '7 years',
+        p_ip_address: null,
+        p_user_agent: navigator.userAgent
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      // Update local user state
+      if (consentType === 'marketing') {
+        setUser(prev => prev ? { 
+          ...prev, 
+          marketing_consent: consentGiven,
+          marketing_consent_date: consentGiven ? new Date().toISOString() : prev.marketing_consent_date
+        } : null);
+      } else if (consentType === 'privacy') {
+        setUser(prev => prev ? { 
+          ...prev, 
+          privacy_consent_given: consentGiven,
+          privacy_consent_date: consentGiven ? new Date().toISOString() : prev.privacy_consent_date
+        } : null);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Exception in recordConsent:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  };
+
   const contextValue: UserAuthContext = useMemo(() => ({
     user,
     authUser,
@@ -407,8 +494,9 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     requestPasswordReset,
     resetPassword,
     validateResetToken,
-    refreshUser
-  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser]);
+    refreshUser,
+    recordConsent
+  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser, recordConsent]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -21,5 +21,29 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: false,  // Disabled since we're using custom auth
     persistSession: false,   // Disabled since we're using custom auth
     detectSessionInUrl: false
+  },
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'kh-therapy-app'
+    },
+    // Add production optimizations
+    ...(import.meta.env.PROD && {
+      fetch: (url, options = {}) => {
+        return fetch(url, {
+          ...options,
+          keepalive: true,
+          // Add timeout for production
+          signal: AbortSignal.timeout(30000)
+        });
+      }
+    })
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 2 // Limit realtime events for performance
+    }
   }
 });
