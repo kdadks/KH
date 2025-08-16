@@ -434,16 +434,6 @@ export class PDFInvoiceGenerator {
     const totalPaidAmount = invoiceData.financial.totalPaid || 0;
     const depositAmount = invoiceData.financial.depositPaid || 0;
     
-    console.log('PDF Generator Payment Debug:', {
-      invoiceNumber: invoiceData.invoiceNumber,
-      totalInvoiceAmount,
-      totalPaidAmount,
-      depositAmount,
-      additionalPayments: totalPaidAmount - depositAmount,
-      actualDueAmount: totalInvoiceAmount - totalPaidAmount,
-      financialData: invoiceData.financial
-    });
-    
     // Payment Breakdown Section - only show if there are payments
     if (totalPaidAmount > 0) {
       currentY += 4;
@@ -483,15 +473,8 @@ export class PDFInvoiceGenerator {
     
     // Calculate actual due amount with better precision
     const actualDueAmount = Math.round((totalInvoiceAmount - totalPaidAmount) * 100) / 100;
-    const balancePaid = Math.max(0, totalPaidAmount - depositAmount);
 
-    console.log('Payment Debug:', {
-      totalInvoiceAmount,
-      totalPaidAmount,
-      depositAmount,
-      balancePaid,
-      actualDueAmount
-    });    // Show amount due or paid status with precise comparison
+    // Show amount due or paid status with precise comparison
     if (actualDueAmount >= 0.01) {
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');

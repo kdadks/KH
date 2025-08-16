@@ -156,8 +156,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         showError('Timeout Error', 'Data loading is taking too long. Please check your connection.');
       }, 30000); // 30 second timeout instead of 15
       
-      console.log('📊 Starting data fetch...');
-      
       // Fetch data in parallel for better performance
       const [invoiceResult, customerResult, serviceResult] = await Promise.allSettled([
         supabase
@@ -186,16 +184,9 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Clear timeout since queries completed
       clearTimeout(timeoutId);
       
-      console.log('📊 Data fetch results:', {
-        invoices: invoiceResult.status,
-        customers: customerResult.status,
-        services: serviceResult.status
-      });
-
       // Process invoice data
       if (invoiceResult.status === 'fulfilled' && !invoiceResult.value.error) {
         setInvoices(invoiceResult.value.data || []);
-        console.log('✅ Invoices loaded:', invoiceResult.value.data?.length || 0);
       } else {
         console.error('❌ Invoice error:', invoiceResult.status === 'fulfilled' ? invoiceResult.value.error : invoiceResult.reason);
         showError('Invoice Load Error', 'Failed to load invoices');
@@ -204,7 +195,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Process customer data
       if (customerResult.status === 'fulfilled' && !customerResult.value.error) {
         setCustomers(customerResult.value.data || []);
-        console.log('✅ Customers loaded:', customerResult.value.data?.length || 0);
       } else {
         console.error('❌ Customer error:', customerResult.status === 'fulfilled' ? customerResult.value.error : customerResult.reason);
         showError('Customer Load Error', 'Failed to load customers');
@@ -213,13 +203,11 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Process service data
       if (serviceResult.status === 'fulfilled' && !serviceResult.value.error) {
         setServices(serviceResult.value.data || []);
-        console.log('✅ Services loaded:', serviceResult.value.data?.length || 0);
       } else {
         console.error('❌ Service error:', serviceResult.status === 'fulfilled' ? serviceResult.value.error : serviceResult.reason);
         showError('Service Load Error', 'Failed to load services');
       }
 
-      console.log('✅ Data fetch completed successfully');
     } catch (err) {
       console.error('❌ Critical error in fetchData:', err);
       showError('Data Fetch Error', 'Failed to fetch data. Please try again.');
@@ -833,10 +821,16 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }
 
     try {
-      console.log('🚀 Admin downloadInvoicePDF called for:', invoice.invoice_number);
+      // Check for required data
+      const customerId = invoice.customer_id;
+      if (!customerId) {
+        showError('Download Error', 'Customer information missing for this invoice');
+        return;
+      }
       
       // Use the unified payment-aware PDF download function
-      const result = await downloadInvoicePDFWithPayments(invoice.id, invoice.customer_id);
+      // @ts-ignore - customerId is checked above, TypeScript type guard not working
+      const result = await downloadInvoicePDFWithPayments(invoice.id, customerId);
 
       if (result.success) {
         showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
