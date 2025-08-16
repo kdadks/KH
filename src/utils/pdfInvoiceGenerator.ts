@@ -429,20 +429,6 @@ export class PDFInvoiceGenerator {
       currentY += 8;
     }
     
-    // Add separator line before total
-    this.doc.setDrawColor(this.COLORS.secondary);
-    this.doc.setLineWidth(0.5);
-    this.doc.line(labelX, currentY + 2, rightX, currentY + 2);
-    currentY += 10;
-    
-    // Total
-    this.doc.setFontSize(14);
-    this.doc.setFont('helvetica', 'bold');
-    this.doc.setTextColor(this.COLORS.primary);
-    this.doc.text('Total:', labelX, currentY);
-    this.doc.text(this.formatCurrency(invoiceData.financial.total, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
-    currentY += 12;
-    
     // Payment calculations
     const totalInvoiceAmount = invoiceData.financial.total;
     const totalPaidAmount = invoiceData.financial.totalPaid || 0;
