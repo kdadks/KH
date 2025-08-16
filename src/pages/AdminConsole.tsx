@@ -13,7 +13,8 @@ import {
   LogOut,
   FileText,
   Users,
-  RefreshCw
+  RefreshCw,
+  CreditCard
 } from 'lucide-react';
 import { Dashboard } from '../components/admin/Dashboard';
 import { Services } from '../components/admin/Services';
@@ -21,6 +22,7 @@ import { Bookings } from '../components/admin/Bookings';
 import { Availability } from '../components/admin/Availability';
 import { Reports } from '../components/admin/Reports';
 import InvoiceManagement from '../components/admin/InvoiceManagement';
+import PaymentManagement from '../components/admin/PaymentManagement';
 import CustomerManagement from '../components/admin/CustomerManagement';
 import { BookingFormData, Package as PackageType, Customer, Invoice, Service } from '../components/admin/types';
 import { getBookingsWithCustomers } from '../utils/customerBookingUtils';
@@ -43,7 +45,7 @@ const AdminConsole = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // State management
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments'>('dashboard');
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [newPackage, setNewPackage] = useState<PackageType>({ 
     name: '', 
@@ -123,7 +125,7 @@ const AdminConsole = () => {
     // Set loading state briefly for visual feedback
     if (tab !== activeTab) {
       setIsLoading(true);
-      setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers');
+      setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers' | 'payments');
       // Clear loading state after a brief delay to allow components to render
       setTimeout(() => setIsLoading(false), 100);
     }
@@ -627,11 +629,12 @@ const AdminConsole = () => {
               { id: 'availability', label: 'Availability', icon: Clock },
               { id: 'customers', label: 'Customers', icon: Users },
               { id: 'invoices', label: 'Invoices', icon: FileText },
+              { id: 'payments', label: 'Payments', icon: CreditCard },
               { id: 'reports', label: 'Reports', icon: TrendingUp }
             ].map(tab => (
               <button
                 key={tab.id}
-        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports')}
+        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments')}
                 className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
@@ -710,6 +713,9 @@ const AdminConsole = () => {
             services={allServices}
             onRefresh={() => handleManualRefresh('invoices')}
           />
+        )}
+        {activeTab === 'payments' && (
+          <PaymentManagement />
         )}
         {activeTab === 'reports' && (
           <Reports allBookings={allBookings} />
