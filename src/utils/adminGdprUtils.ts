@@ -36,7 +36,7 @@ export const decryptCustomerDataForAdmin = (customer: any) => {
       try {
         decryptedCustomer[field] = decryptSensitiveData(decryptedCustomer[field]);
       } catch (error) {
-        console.warn(`Failed to decrypt ${field} for customer ${customer.id}:`, error);
+        console.warn(`Failed to decrypt ${field} for customer ${customer.id}:`, error instanceof Error ? error.message : error);
         // Keep original value if decryption fails
       }
     }

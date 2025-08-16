@@ -33,11 +33,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       : booking.customer_name || booking.name || 'Unknown';
   };
 
-  // Helper function to get customer phone from decrypted data
-  const getCustomerPhone = (booking: BookingFormData): string => {
-    return booking.customer_details?.phone || booking.customer_phone || booking.phone || 'No phone';
-  };
-
   // ---------- Date helpers & normalization ----------
   const toDateOnlyString = (d: Date) => d.toISOString().split('T')[0];
   const parseDate = (raw?: string) => {
