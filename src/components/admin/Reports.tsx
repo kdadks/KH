@@ -14,6 +14,7 @@ import {
 import { BookingFormData, Invoice } from './types';
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
+import { decryptCustomerPII } from '../../utils/gdprUtils';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -343,18 +344,24 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
 
     // Invoices sheet
     if (reportData.filteredInvoices.length > 0) {
-      const exportInvoices = reportData.filteredInvoices.map((inv, idx) => ({
-        S_No: idx + 1,
-        Invoice_Number: inv.invoice_number,
-        Customer: inv.customer ? `${inv.customer.first_name} ${inv.customer.last_name}` : '',
-        Date: inv.invoice_date,
-        Due_Date: inv.due_date,
-        Status: inv.status,
-        Amount: inv.total_amount,
-        Payment_Date: inv.payment_date || '',
-        Payment_Method: inv.payment_method || '',
-        Notes: inv.notes || ''
-      }));
+      const exportInvoices = reportData.filteredInvoices.map((inv, idx) => {
+        // Decrypt customer data for export
+        const decryptedCustomer = inv.customer ? decryptCustomerPII(inv.customer) : null;
+        const customerName = decryptedCustomer ? `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() : '';
+        
+        return {
+          S_No: idx + 1,
+          Invoice_Number: inv.invoice_number,
+          Customer: customerName,
+          Date: inv.invoice_date,
+          Due_Date: inv.due_date,
+          Status: inv.status,
+          Amount: inv.total_amount,
+          Payment_Date: inv.payment_date || '',
+          Payment_Method: inv.payment_method || '',
+          Notes: inv.notes || ''
+        };
+      });
       const invoicesWS = XLSX.utils.json_to_sheet(exportInvoices);
       XLSX.utils.book_append_sheet(wb, invoicesWS, 'Invoices');
     }
@@ -1048,7 +1055,10 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {reportData.filteredInvoices.map((inv, idx) => {
-                      const customerName = inv.customer ? `${inv.customer.first_name} ${inv.customer.last_name}` : '—';
+                      // Decrypt customer data for display
+                      const decryptedCustomer = inv.customer ? decryptCustomerPII(inv.customer) : null;
+                      const customerName = decryptedCustomer ? `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() : '—';
+                      
                       const getStatusColor = (status: string) => {
                         switch (status) {
                           case 'paid': return 'bg-green-100 text-green-800';
