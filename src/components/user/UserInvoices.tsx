@@ -51,6 +51,15 @@ const UserInvoices: React.FC = () => {
 
   const handleDownloadInvoice = async (invoice: UserInvoice) => {
     try {
+      // Calculate total paid amount from successful payments only
+      const totalPaidAmount = invoice.payments?.reduce((total, payment) => {
+        // Only count payments that are successfully paid
+        if (payment.status === 'paid') {
+          return total + (payment.amount || 0);
+        }
+        return total;
+      }, 0) || 0;
+
       // Transform UserInvoice to the format expected by the service
       const invoiceData = {
         id: invoice.id,
@@ -63,6 +72,7 @@ const UserInvoices: React.FC = () => {
         vat_amount: invoice.vat_amount,
         total_amount: invoice.total_amount,
         total: invoice.total_amount, // Map total_amount to total for compatibility
+        total_paid: totalPaidAmount, // Add calculated total paid
         notes: invoice.notes,
         currency: 'EUR'
       };

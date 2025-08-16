@@ -18,6 +18,7 @@ interface ExistingInvoice {
   vat_amount?: number;
   discount_amount?: number;
   deposit_paid?: number;
+  total_paid?: number;    // Total amount paid so far
   total: number;
   notes?: string;
   currency?: string;
@@ -103,6 +104,7 @@ export function transformInvoiceData(
       vatAmount: invoice.vat_amount,
       discountAmount: invoice.discount_amount,
       depositPaid: invoice.deposit_paid,
+      totalPaid: invoice.total_paid || 0,
       total: invoice.total,
       currency: invoice.currency || 'EUR'
     },

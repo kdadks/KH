@@ -55,6 +55,7 @@ export interface InvoiceData {
     vatAmount?: number;
     discountAmount?: number;
     depositPaid?: number;
+    totalPaid?: number;      // Total amount paid so far
     total: number;
     currency: string;
   };
@@ -396,9 +397,6 @@ export class PDFInvoiceGenerator {
    * Build financial summary section
    */
   private buildFinancialSummary(invoiceData: InvoiceData): void {
-    // Extract deposit amount from notes if present
-    const depositAmount = this.extractDepositFromNotes(invoiceData.notes);
-    
     const finalY = (this.doc as any).lastAutoTable.finalY + 20;
     const pageWidth = this.doc.internal.pageSize.width;
     const rightX = pageWidth - this.MARGINS.right;
@@ -431,18 +429,7 @@ export class PDFInvoiceGenerator {
       currentY += 8;
     }
     
-    // Deposit paid (if applicable) - check both financial data and notes
-    const finalDepositAmount = invoiceData.financial.depositPaid || depositAmount;
-    
-    if (finalDepositAmount && finalDepositAmount > 0) {
-      this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('Deposit Paid:', labelX, currentY);
-      this.doc.text(`-${this.formatCurrency(finalDepositAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
-      this.doc.setTextColor(this.COLORS.dark);
-      currentY += 8;
-    }
-    
-    // Add separator line
+    // Add separator line before total
     this.doc.setDrawColor(this.COLORS.secondary);
     this.doc.setLineWidth(0.5);
     this.doc.line(labelX, currentY + 2, rightX, currentY + 2);
@@ -456,22 +443,46 @@ export class PDFInvoiceGenerator {
     this.doc.text(this.formatCurrency(invoiceData.financial.total, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
     currentY += 12;
     
-    // Calculate and show due amount
-    // Note: The total already reflects deposit deductions, so due amount = total
-    // (unless there are additional payments beyond the deposit)
-    const dueAmount = invoiceData.financial.total;
+    // Payment calculations
+    const totalInvoiceAmount = invoiceData.financial.total;
+    const totalPaidAmount = invoiceData.financial.totalPaid || 0;
     
-    if (dueAmount > 0) {
+    // Show payments if any have been made
+    if (totalPaidAmount > 0) {
+      this.doc.setFontSize(10);
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setTextColor(this.COLORS.success);
+      this.doc.text('Amount Paid:', labelX, currentY);
+      this.doc.text(`-${this.formatCurrency(totalPaidAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+      currentY += 8;
+    }
+    
+    // Calculate actual due amount
+    const actualDueAmount = totalInvoiceAmount - totalPaidAmount;
+    
+    // Show amount due or paid status
+    if (actualDueAmount > 0.01) { // Using 0.01 to handle floating point precision
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setTextColor(this.COLORS.danger);
       this.doc.text('Amount Due:', labelX, currentY);
-      this.doc.text(this.formatCurrency(dueAmount, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
-    } else if (dueAmount === 0) {
+      this.doc.text(this.formatCurrency(actualDueAmount, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
+      
+      // Update status to reflect actual payment state
+      if (totalPaidAmount > 0) {
+        invoiceData.status = 'partial';
+      } else {
+        invoiceData.status = actualDueAmount > 0 && new Date(invoiceData.dueDate) < new Date() ? 'overdue' : 'sent';
+      }
+    } else {
+      // Invoice is fully paid
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('PAID IN FULL', labelX, currentY);
+      this.doc.text('PAID IN FULL', rightX - 40, currentY, { align: 'center' });
+      
+      // Update status to paid
+      invoiceData.status = 'paid';
     }
   }
 
@@ -488,21 +499,6 @@ export class PDFInvoiceGenerator {
     }
     
     // Notes section removed - payment details are now in the totals section
-  }
-
-  /**
-   * Extract deposit amount from invoice notes
-   */
-  private extractDepositFromNotes(notes?: string): number {
-    if (!notes) return 0;
-    
-    // Look for pattern: "Deposit Deducted: €XX.XX"
-    const depositMatch = notes.match(/Deposit Deducted:\s*€(\d+\.?\d*)/);
-    if (depositMatch && depositMatch[1]) {
-      return parseFloat(depositMatch[1]);
-    }
-    
-    return 0;
   }
 
   /**
