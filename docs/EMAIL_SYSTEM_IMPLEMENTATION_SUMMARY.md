@@ -41,7 +41,7 @@ Successfully implemented a complete SMTP-based email system replacing EmailJS wi
 ### 6. SMTP Authentication Resolution
 - **Issue**: "i just created a new booking with deposit payment complete, but i didnot receieve any email"
 - **Resolution**: Resolved SMTP authentication issues through extensive debugging and environment variable configuration
-- **Key Solution**: Proper password escaping for special characters (`SMTP_PASS='Butter#1092'`)
+- **Key Solution**: Proper password escaping for special characters in .env configuration
 
 ## Technical Configuration
 
@@ -50,7 +50,7 @@ Successfully implemented a complete SMTP-based email system replacing EmailJS wi
 - **Port**: 465 (SSL)
 - **Authentication**: SSL/TLS
 - **Username**: khtherapy@khtherapy.ie
-- **Password**: Butter#1092 (properly escaped in .env)
+- **Password**: [Configured in .env file]
 
 ### Email Templates Implemented
 1. **Welcome Email**: Sent for new bookings
@@ -60,7 +60,7 @@ Successfully implemented a complete SMTP-based email system replacing EmailJS wi
 ### Environment Variables
 ```
 SMTP_USER=khtherapy@khtherapy.ie
-SMTP_PASS='Butter#1092'
+SMTP_PASS='[your_smtp_password]'
 ```
 
 ## Testing Results ✅
