@@ -66,36 +66,74 @@ export interface PaymentGateway {
  */
 export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
   try {
-    const { data, error } = await supabase
+    // First, let's try a simpler approach by getting payment requests and customers separately
+    const { data: paymentRequestsData, error: prError } = await supabase
       .from('payment_requests')
-      .select(`
-        *,
-        customers:customer_id (
-          name,
-          email
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching payment requests:', error);
+    if (prError) {
+      console.error('Error fetching payment requests:', prError);
       return [];
     }
 
-    return data?.map(pr => ({
-      id: pr.id,
-      customer_id: pr.customer_id,
-      customer_name: pr.customers?.name || 'Unknown',
-      customer_email: pr.customers?.email || 'Unknown',
-      service_name: pr.service_name || 'Unknown Service',
-      amount: pr.amount,
-      currency: pr.currency || 'EUR',
-      status: pr.status,
-      due_date: pr.due_date,
-      created_at: pr.created_at,
-      booking_id: pr.booking_id,
-      invoice_id: pr.invoice_id
-    })) || [];
+    if (!paymentRequestsData || paymentRequestsData.length === 0) {
+      return [];
+    }
+
+    // Get unique customer IDs
+    const customerIds = [...new Set(paymentRequestsData.map(pr => pr.customer_id))];
+    
+    // Fetch customer data
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name, email')
+      .in('id', customerIds);
+
+    if (customersError) {
+      console.error('Error fetching customers:', customersError);
+      // Return payment requests without customer names if customer fetch fails
+      return paymentRequestsData.map(pr => ({
+        id: pr.id,
+        customer_id: pr.customer_id,
+        customer_name: 'Unknown',
+        customer_email: 'Unknown',
+        service_name: pr.service_name || 'Unknown Service',
+        amount: pr.amount || 0,
+        currency: pr.currency || 'EUR',
+        status: pr.status || 'pending',
+        due_date: pr.due_date,
+        created_at: pr.created_at,
+        booking_id: pr.booking_id,
+        invoice_id: pr.invoice_id
+      }));
+    }
+
+    // Create customer lookup map
+    const customerMap = new Map();
+    customersData?.forEach(customer => {
+      customerMap.set(customer.id, customer);
+    });
+
+    // Combine payment requests with customer data
+    return paymentRequestsData.map(pr => {
+      const customer = customerMap.get(pr.customer_id);
+      return {
+        id: pr.id,
+        customer_id: pr.customer_id,
+        customer_name: customer?.name || 'Unknown',
+        customer_email: customer?.email || 'Unknown',
+        service_name: pr.service_name || 'Unknown Service',
+        amount: pr.amount || 0,
+        currency: pr.currency || 'EUR',
+        status: pr.status || 'pending',
+        due_date: pr.due_date,
+        created_at: pr.created_at,
+        booking_id: pr.booking_id,
+        invoice_id: pr.invoice_id
+      };
+    });
+
   } catch (error) {
     console.error('Error in getAllPaymentRequests:', error);
     return [];
@@ -129,40 +167,77 @@ export const getAllPayments = async (): Promise<Payment[]> => {
  */
 export const getInvoicesWithPaymentTracking = async (): Promise<InvoiceWithPayments[]> => {
   try {
-    const { data, error } = await supabase
+    // First get all invoices
+    const { data: invoicesData, error: invoicesError } = await supabase
       .from('invoices')
-      .select(`
-        *,
-        customers:customer_id (
-          name
-        ),
-        payments:payment_requests (
-          amount,
-          status
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching invoices with payments:', error);
+    if (invoicesError) {
+      console.error('Error fetching invoices:', invoicesError);
       return [];
     }
 
-    return data?.map(invoice => {
-      const paidPayments = invoice.payments?.filter(p => p.status === 'paid') || [];
-      const paidAmount = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    if (!invoicesData || invoicesData.length === 0) {
+      return [];
+    }
+
+    // Get unique customer IDs
+    const customerIds = [...new Set(invoicesData.map(inv => inv.customer_id))];
+    
+    // Fetch customer data
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name')
+      .in('id', customerIds);
+
+    if (customersError) {
+      console.error('Error fetching customers for invoices:', customersError);
+    }
+
+    // Get payment requests for these invoices
+    const invoiceIds = invoicesData.map(inv => inv.id);
+    const { data: paymentRequestsData, error: prError } = await supabase
+      .from('payment_requests')
+      .select('invoice_id, amount, status')
+      .in('invoice_id', invoiceIds);
+
+    if (prError) {
+      console.error('Error fetching payment requests for invoices:', prError);
+    }
+
+    // Create lookup maps
+    const customerMap = new Map();
+    customersData?.forEach(customer => {
+      customerMap.set(customer.id, customer);
+    });
+
+    const paymentsByInvoice = new Map();
+    paymentRequestsData?.forEach(pr => {
+      if (!paymentsByInvoice.has(pr.invoice_id)) {
+        paymentsByInvoice.set(pr.invoice_id, []);
+      }
+      paymentsByInvoice.get(pr.invoice_id).push(pr);
+    });
+
+    return invoicesData.map(invoice => {
+      const customer = customerMap.get(invoice.customer_id);
+      const payments = paymentsByInvoice.get(invoice.id) || [];
+      const paidAmount = payments
+        .filter((p: any) => p.status === 'paid')
+        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
       
       return {
         id: invoice.id,
         customer_id: invoice.customer_id,
-        customer_name: invoice.customers?.name || 'Unknown',
+        customer_name: customer?.name || 'Unknown',
         total_amount: invoice.total_amount,
         paid_amount: paidAmount,
         remaining_amount: invoice.total_amount - paidAmount,
         status: invoice.status,
         created_at: invoice.created_at
       };
-    }) || [];
+    });
   } catch (error) {
     console.error('Error in getInvoicesWithPaymentTracking:', error);
     return [];
@@ -174,19 +249,10 @@ export const getInvoicesWithPaymentTracking = async (): Promise<InvoiceWithPayme
  */
 export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithoutPayment[]> => {
   try {
-    // First get all bookings with customer info
-    const { data: bookings, error: bookingsError } = await supabase
+    // First get all bookings
+    const { data: bookingsData, error: bookingsError } = await supabase
       .from('bookings')
-      .select(`
-        id,
-        package_name,
-        status,
-        booking_date,
-        customers:customer_id (
-          name,
-          email
-        )
-      `)
+      .select('id, package_name, status, booking_date, customer_id')
       .order('booking_date', { ascending: false });
 
     if (bookingsError) {
@@ -194,8 +260,12 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
       return [];
     }
 
+    if (!bookingsData || bookingsData.length === 0) {
+      return [];
+    }
+
     // Get all payment requests to check which bookings already have them
-    const { data: paymentRequests, error: prError } = await supabase
+    const { data: paymentRequestsData, error: prError } = await supabase
       .from('payment_requests')
       .select('booking_id')
       .not('booking_id', 'is', null);
@@ -205,18 +275,46 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
       return [];
     }
 
-    const bookingIdsWithPayments = new Set(paymentRequests?.map(pr => pr.booking_id) || []);
+    const bookingIdsWithPayments = new Set(paymentRequestsData?.map(pr => pr.booking_id) || []);
 
-    return bookings?.filter(booking => !bookingIdsWithPayments.has(booking.id))
-      .map(booking => ({
+    // Filter bookings without payment requests
+    const bookingsWithoutPayments = bookingsData.filter(booking => 
+      !bookingIdsWithPayments.has(booking.id)
+    );
+
+    if (bookingsWithoutPayments.length === 0) {
+      return [];
+    }
+
+    // Get customer data for the filtered bookings
+    const customerIds = [...new Set(bookingsWithoutPayments.map(b => b.customer_id))];
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name, email')
+      .in('id', customerIds);
+
+    if (customersError) {
+      console.error('Error fetching customers for bookings:', customersError);
+    }
+
+    // Create customer lookup map
+    const customerMap = new Map();
+    customersData?.forEach(customer => {
+      customerMap.set(customer.id, customer);
+    });
+
+    return bookingsWithoutPayments.map(booking => {
+      const customer = customerMap.get(booking.customer_id);
+      return {
         id: booking.id,
-        customer_name: booking.customers?.name || 'Unknown',
-        customer_email: booking.customers?.email || 'Unknown',
+        customer_name: customer?.name || 'Unknown',
+        customer_email: customer?.email || 'Unknown',
         package_name: booking.package_name,
         status: booking.status,
         booking_date: booking.booking_date,
         has_payment_request: false
-      })) || [];
+      };
+    });
   } catch (error) {
     console.error('Error in getBookingsWithoutPaymentRequests:', error);
     return [];
@@ -269,13 +367,7 @@ export const createManualPaymentRequest = async (requestData: {
         booking_id: requestData.booking_id,
         created_at: new Date().toISOString()
       }])
-      .select(`
-        *,
-        customers:customer_id (
-          name,
-          email
-        )
-      `)
+      .select('*')
       .single();
 
     if (error) {
@@ -283,11 +375,22 @@ export const createManualPaymentRequest = async (requestData: {
       return null;
     }
 
+    // Fetch customer data separately
+    const { data: customerData, error: customerError } = await supabase
+      .from('customers')
+      .select('name, email')
+      .eq('id', requestData.customer_id)
+      .single();
+
+    if (customerError) {
+      console.error('Error fetching customer data:', customerError);
+    }
+
     return {
       id: data.id,
       customer_id: data.customer_id,
-      customer_name: data.customers?.name || 'Unknown',
-      customer_email: data.customers?.email || 'Unknown',
+      customer_name: customerData?.name || 'Unknown',
+      customer_email: customerData?.email || 'Unknown',
       service_name: data.service_name,
       amount: data.amount,
       currency: data.currency,
