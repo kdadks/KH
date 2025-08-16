@@ -60,6 +60,18 @@ const UserInvoices: React.FC = () => {
         return total;
       }, 0) || 0;
 
+      // Round to handle floating point precision issues
+      const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
+
+      console.log('UserInvoice Payment Debug:', {
+        invoiceId: invoice.id,
+        invoiceTotal: invoice.total_amount,
+        paymentsCount: invoice.payments?.length || 0,
+        paidPayments: invoice.payments?.filter(p => p.status === 'paid').length || 0,
+        totalPaidAmount,
+        roundedTotalPaid
+      });
+
       // Transform UserInvoice to the format expected by the service
       const invoiceData = {
         id: invoice.id,
@@ -72,7 +84,7 @@ const UserInvoices: React.FC = () => {
         vat_amount: invoice.vat_amount,
         total_amount: invoice.total_amount,
         total: invoice.total_amount, // Map total_amount to total for compatibility
-        total_paid: totalPaidAmount, // Add calculated total paid
+        total_paid: roundedTotalPaid, // Add calculated total paid (rounded)
         notes: invoice.notes,
         currency: 'EUR'
       };
@@ -118,7 +130,16 @@ const UserInvoices: React.FC = () => {
         category: 'Service' // Add default category
       }));
 
-      console.log('Downloading invoice with data:', { invoiceData, customerData, transformedItems });
+      console.log('Downloading invoice with detailed data:', { 
+        invoiceData, 
+        customerData, 
+        transformedItems,
+        paymentBreakdown: {
+          totalInvoice: invoice.total_amount,
+          totalPaid: roundedTotalPaid,
+          due: invoice.total_amount - roundedTotalPaid
+        }
+      });
 
       // Use the PDF service
       const result = await downloadInvoicePDF(invoiceData, customerData, transformedItems);

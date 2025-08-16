@@ -446,22 +446,42 @@ export class PDFInvoiceGenerator {
     // Payment calculations
     const totalInvoiceAmount = invoiceData.financial.total;
     const totalPaidAmount = invoiceData.financial.totalPaid || 0;
+    const depositAmount = invoiceData.financial.depositPaid || 0;
     
-    // Show payments if any have been made
-    if (totalPaidAmount > 0) {
+    // Show deposit if applicable (separate from other payments)
+    if (depositAmount > 0) {
       this.doc.setFontSize(10);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('Amount Paid:', labelX, currentY);
-      this.doc.text(`-${this.formatCurrency(totalPaidAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+      this.doc.text('Deposit Paid:', labelX, currentY);
+      this.doc.text(`-${this.formatCurrency(depositAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
       currentY += 8;
     }
     
-    // Calculate actual due amount
-    const actualDueAmount = totalInvoiceAmount - totalPaidAmount;
+    // Show additional payments if any (excluding deposit)
+    const additionalPayments = totalPaidAmount - depositAmount;
+    if (additionalPayments > 0) {
+      this.doc.setFontSize(10);
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setTextColor(this.COLORS.success);
+      this.doc.text('Payments Made:', labelX, currentY);
+      this.doc.text(`-${this.formatCurrency(additionalPayments, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+      currentY += 8;
+    }
     
-    // Show amount due or paid status
-    if (actualDueAmount > 0.01) { // Using 0.01 to handle floating point precision
+    // Calculate actual due amount with better precision
+    const actualDueAmount = Math.round((totalInvoiceAmount - totalPaidAmount) * 100) / 100;
+    
+    console.log('Payment Debug:', {
+      totalInvoiceAmount,
+      totalPaidAmount,
+      depositAmount,
+      additionalPayments,
+      actualDueAmount
+    });
+    
+    // Show amount due or paid status with precise comparison
+    if (actualDueAmount >= 0.01) {
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setTextColor(this.COLORS.danger);
@@ -475,7 +495,7 @@ export class PDFInvoiceGenerator {
         invoiceData.status = actualDueAmount > 0 && new Date(invoiceData.dueDate) < new Date() ? 'overdue' : 'sent';
       }
     } else {
-      // Invoice is fully paid
+      // Invoice is fully paid (actualDueAmount < 0.01)
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setTextColor(this.COLORS.success);
