@@ -315,9 +315,20 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     // Filtered bookings sheet (normalized export)
     const exportBookings = reportData.filteredBookings.map((b, idx) => {
       const { date, time } = deriveDateTime(b);
+      
+      // Build customer name from various possible sources
+      let customerName = '';
+      if (b.customer_details?.first_name && b.customer_details?.last_name) {
+        customerName = `${b.customer_details.first_name} ${b.customer_details.last_name}`;
+      } else if (b.customer_name) {
+        customerName = b.customer_name;
+      } else if (b.name) {
+        customerName = b.name;
+      }
+      
       return {
         S_No: idx + 1,
-        Customer: b.customer_name || b.name || '',
+        Customer: customerName,
         Contact_Phone: b.customer_phone || b.phone || '',
         Contact_Email: b.customer_email || b.email || '',
         Service: b.package_name || b.service || '',
@@ -441,9 +452,20 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       doc.text('Bookings Detail', 20, afterServicesY);
       const bookingRows = reportData.filteredBookings.map((b, i) => {
         const { date, time } = deriveDateTime(b);
+        
+        // Build customer name from various possible sources
+        let customerName = '';
+        if (b.customer_details?.first_name && b.customer_details?.last_name) {
+          customerName = `${b.customer_details.first_name} ${b.customer_details.last_name}`;
+        } else if (b.customer_name) {
+          customerName = b.customer_name;
+        } else if (b.name) {
+          customerName = b.name;
+        }
+        
         return [
           i + 1,
-          b.customer_name || b.name || '',
+          customerName,
             (b.customer_phone || b.phone || ''),
             (b.customer_email || b.email || ''),
           b.package_name || b.service || '',
@@ -974,7 +996,17 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                       const phone = b.customer_phone || b.phone;
                       const email = b.customer_email || b.email;
                       const service = b.package_name || b.service || '—';
-                      const customerName = b.customer_name || b.name || '—';
+                      
+                      // Build customer name from various possible sources
+                      let customerName = '—';
+                      if (b.customer_details?.first_name && b.customer_details?.last_name) {
+                        customerName = `${b.customer_details.first_name} ${b.customer_details.last_name}`;
+                      } else if (b.customer_name) {
+                        customerName = b.customer_name;
+                      } else if (b.name) {
+                        customerName = b.name;
+                      }
+                      
                       const { date } = deriveDateTime(b);
                       return (
                         <tr key={idx} className="hover:bg-gray-50">
