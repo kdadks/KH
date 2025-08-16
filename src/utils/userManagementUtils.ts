@@ -188,7 +188,7 @@ export const changeUserPassword = async (
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
-    console.log(`🔍 Starting to load invoices and payments for customer: ${customerId}`);
+    console.log(`🔍 [${new Date().toLocaleTimeString()}] Starting to load invoices and payments for customer: ${customerId}`);
     
     // First, get all invoices for this customer
     const { data: invoicesData, error: invoicesError } = await supabase

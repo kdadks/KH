@@ -50,6 +50,8 @@ const UserInvoices: React.FC = () => {
   };
 
   const handleDownloadInvoice = async (invoice: UserInvoice) => {
+    console.log('🚀 UserInvoices handleDownloadInvoice called for:', invoice.invoice_number);
+    
     try {
       // Separate deposits from other payments based on booking_id
       let depositAmount = 0;
