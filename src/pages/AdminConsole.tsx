@@ -35,6 +35,7 @@ import {
 import {
   getAllPaymentRequests,
   getAllPayments,
+  getRecentPayments,
   getAllPaymentGateways,
   getPaymentStatistics
 } from '../utils/paymentManagementUtils';
@@ -70,6 +71,7 @@ const AdminConsole = () => {
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [allPaymentRequests, setAllPaymentRequests] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [allRecentPayments, setAllRecentPayments] = useState<any[]>([]);
   const [allPaymentGateways, setAllPaymentGateways] = useState<any[]>([]);
   const [paymentStatistics, setPaymentStatistics] = useState<any>(null);
   const [filterDate, setFilterDate] = useState('');
@@ -354,7 +356,6 @@ const AdminConsole = () => {
   const fetchAllCustomers = async () => {
     try {
       setIsLoading(true);
-      console.log('📊 Fetching customers...');
       
       // Add timeout protection
       const timeoutId = setTimeout(() => {
@@ -390,7 +391,6 @@ const AdminConsole = () => {
       }
       
       setAllCustomers(decryptedCustomers);
-      console.log('✅ Customers loaded:', decryptedCustomers?.length || 0);
     } catch (error) {
       console.error('❌ Exception in fetchAllCustomers:', error);
       showError('Connection Error', 'Unable to fetch customer data. Please check your internet connection and try again.');
@@ -404,7 +404,6 @@ const AdminConsole = () => {
   const fetchAllInvoices = async () => {
     try {
       setIsLoading(true);
-      console.log('📊 Fetching invoices...');
       
       // Add timeout protection
       const timeoutId = setTimeout(() => {
@@ -441,7 +440,6 @@ const AdminConsole = () => {
       });
       
       setAllInvoices(decryptedInvoices);
-      console.log('✅ Invoices loaded:', decryptedInvoices?.length || 0);
     } catch (error) {
       console.error('❌ Exception in fetchAllInvoices:', error);
       showError('Connection Error', 'Unable to fetch invoice data. Please check your internet connection and try again.');
@@ -506,31 +504,28 @@ const AdminConsole = () => {
   const fetchAllPaymentData = async () => {
     try {
       setIsLoading(true);
-      console.log('📊 Fetching payment data...');
       
       // Fetch payment data in parallel for better performance
       const [
         paymentRequestsData,
         paymentsData,
+        recentPaymentsData,
         gatewaysData,
         statisticsData
       ] = await Promise.all([
         getAllPaymentRequests(),
         getAllPayments(),
+        getRecentPayments(5),
         getAllPaymentGateways(),
         getPaymentStatistics()
       ]);
       
       setAllPaymentRequests(paymentRequestsData || []);
       setAllPayments(paymentsData || []);
+      setAllRecentPayments(recentPaymentsData || []);
       setAllPaymentGateways(gatewaysData || []);
       setPaymentStatistics(statisticsData);
       
-      console.log('✅ Payment data loaded:', {
-        requests: paymentRequestsData?.length || 0,
-        payments: paymentsData?.length || 0,
-        gateways: gatewaysData?.length || 0
-      });
     } catch (error) {
       console.error('❌ Error fetching payment data:', error);
       showError('Payment Data Error', 'Failed to load payment data. Some features may not be available.');
@@ -772,6 +767,7 @@ const AdminConsole = () => {
           <PaymentManagement 
             paymentRequests={allPaymentRequests}
             payments={allPayments}
+            recentPayments={allRecentPayments}
             gateways={allPaymentGateways}
             statistics={paymentStatistics}
             onRefresh={() => handleManualRefresh('payments')}

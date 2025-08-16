@@ -76,16 +76,6 @@ export function transformInvoiceData(
   customer: ExistingCustomer,
   items: ExistingInvoiceItem[]
 ): InvoiceData {
-  console.log('🔄 Transforming invoice data:', {
-    invoice_number: invoice.invoice_number,
-    total: invoice.total,
-    deposit_paid: invoice.deposit_paid,
-    total_paid: invoice.total_paid,
-    hasDeposit: !!invoice.deposit_paid,
-    hasTotalPaid: !!invoice.total_paid,
-    rawInvoiceObject: invoice // Show the entire object to see what fields are available
-  });
-
   return {
     // Header Information
     invoiceNumber: invoice.invoice_number,

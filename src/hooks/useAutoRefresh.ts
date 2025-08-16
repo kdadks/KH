@@ -22,11 +22,8 @@ export const useAutoRefresh = ({
   const throttledOnDataChange = useCallback(() => {
     const now = Date.now();
     if (now - lastRefreshRef.current > throttleMs) {
-      console.log(`🔄 Auto-refresh triggered for ${table} (throttled)`);
       lastRefreshRef.current = now;
       onDataChange();
-    } else {
-      console.log(`⏸️ Auto-refresh throttled for ${table}`);
     }
   }, [onDataChange, table, throttleMs]);
   
@@ -54,11 +51,8 @@ export const useAutoRefresh = ({
       )
       .subscribe();
 
-    console.log(`📡 Auto-refresh enabled for ${table}`);
-
     // Cleanup subscription
     return () => {
-      console.log(`📡 Auto-refresh disabled for ${table}`);
       subscription.unsubscribe();
     };
   }, [table, handleDataChange, enabled]);

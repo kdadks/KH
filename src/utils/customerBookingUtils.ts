@@ -225,11 +225,6 @@ export const createBookingWithCustomer = async (
     let paymentRequest = null;
     if (customer.id) {
       try {
-        console.log('🎯 Attempting to create payment request for service:', bookingData.package_name);
-        console.log('📊 Customer ID:', customer.id);
-        console.log('📅 Booking date:', bookingData.booking_date);
-        console.log('🆔 Booking ID:', booking.id);
-        
         paymentRequest = await createPaymentRequest(
           customer.id,
           bookingData.package_name,
@@ -245,8 +240,6 @@ export const createBookingWithCustomer = async (
             console.error('Failed to send payment request email:', emailError);
             // Fallback: Send welcome email
             await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
-          } else {
-            console.log('📧 Payment request email sent successfully');
           }
         }
       } catch (paymentError) {
@@ -280,8 +273,6 @@ export const createBookingWithCustomer = async (
  */
 export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | null; error: string | null }> => {
   try {
-    console.log('🔍 About to execute join query...');
-    
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -290,10 +281,6 @@ export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | nu
       `)
       .order('created_at', { ascending: false })
       .limit(1000); // Add limit for performance
-
-    console.log('🔍 Join query completed');
-    console.log('📊 Query result data:', data);
-    console.log('❌ Query result error:', error);
 
     if (error) {
       console.error('Error details:', {
