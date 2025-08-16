@@ -89,6 +89,7 @@ export interface UserPayment {
   id: number;
   invoice_id: number;
   customer_id: number;
+  booking_id?: string; // UUID type to match bookings.id
   sumup_transaction_id?: string;
   amount: number;
   currency: string;

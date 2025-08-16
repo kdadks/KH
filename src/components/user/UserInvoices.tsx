@@ -51,17 +51,14 @@ const UserInvoices: React.FC = () => {
 
   const handleDownloadInvoice = async (invoice: UserInvoice) => {
     try {
-      // Separate deposits from other payments
+      // Separate deposits from other payments based on booking_id
       let depositAmount = 0;
       let otherPaymentsAmount = 0;
       
       invoice.payments?.forEach(payment => {
         if (payment.status === 'paid') {
-          // More comprehensive check for deposit payments
-          const isDeposit = payment.notes?.toLowerCase().includes('payment request') || 
-                           payment.notes?.toLowerCase().includes('deposit') ||
-                           payment.sumup_checkout_id ||
-                           payment.payment_method === 'sumup';
+          // Deposits are payments that have booking_id but no invoice_id (paid before invoice generation)
+          const isDeposit = payment.booking_id && !payment.invoice_id;
           
           if (isDeposit) {
             depositAmount += payment.amount || 0;
@@ -70,21 +67,6 @@ const UserInvoices: React.FC = () => {
           }
         }
       });
-
-      // For testing: If no deposits identified but there are payments, 
-      // treat the first payment as deposit
-      if (depositAmount === 0 && invoice.payments && invoice.payments.length > 0) {
-        const firstPaidPayment = invoice.payments.find(p => p.status === 'paid');
-        if (firstPaidPayment) {
-          depositAmount = firstPaidPayment.amount || 0;
-          otherPaymentsAmount = (invoice.payments?.reduce((total, payment) => {
-            if (payment.status === 'paid' && payment.id !== firstPaidPayment.id) {
-              return total + (payment.amount || 0);
-            }
-            return total;
-          }, 0) || 0);
-        }
-      }
 
       const totalPaidAmount = depositAmount + otherPaymentsAmount;
 
@@ -95,6 +77,7 @@ const UserInvoices: React.FC = () => {
 
       console.log('UserInvoice Payment Debug:', {
         invoiceId: invoice.id,
+        invoiceBookingId: invoice.booking_id,
         invoiceTotal: invoice.total_amount,
         paymentsCount: invoice.payments?.length || 0,
         paidPayments: invoice.payments?.filter(p => p.status === 'paid').length || 0,
@@ -105,13 +88,13 @@ const UserInvoices: React.FC = () => {
           id: p.id,
           amount: p.amount,
           status: p.status,
+          booking_id: p.booking_id,
+          invoice_id: p.invoice_id,
           notes: p.notes,
           payment_method: p.payment_method,
           sumup_checkout_id: p.sumup_checkout_id,
-          isDeposit: p.notes?.toLowerCase().includes('payment request') || 
-                    p.notes?.toLowerCase().includes('deposit') ||
-                    p.sumup_checkout_id ||
-                    p.payment_method === 'sumup'
+          isDeposit: p.booking_id && !p.invoice_id,
+          classification: p.booking_id && !p.invoice_id ? 'DEPOSIT' : 'ADDITIONAL_PAYMENT'
         }))
       });
 

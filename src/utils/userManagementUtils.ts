@@ -208,6 +208,7 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
         id,
         invoice_id,
         customer_id,
+        booking_id,
         amount,
         currency,
         status,
@@ -239,11 +240,22 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
         daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
       }
       
-      // Find payments for this invoice
-      const invoicePayments = paymentsData?.filter(payment => payment.invoice_id === invoice.id) || [];
+      // Find payments for this invoice by booking_id (for deposits) OR invoice_id (for additional payments)
+      const invoicePayments = paymentsData?.filter(payment => {
+        // Match by booking_id (for deposits) if invoice has booking_id
+        if (invoice.booking_id && payment.booking_id === invoice.booking_id) {
+          return true;
+        }
+        // Match by invoice_id (for additional payments)
+        if (payment.invoice_id === invoice.id) {
+          return true;
+        }
+        return false;
+      }) || [];
       
       console.log(`📋 Loading invoice ${invoice.invoice_number}:`, {
         id: invoice.id,
+        booking_id: invoice.booking_id,
         total_amount: invoice.total_amount,
         status: invoice.status,
         paymentsCount: invoicePayments.length,
@@ -251,9 +263,12 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
           id: p.id,
           amount: p.amount,
           status: p.status,
+          booking_id: p.booking_id,
+          invoice_id: p.invoice_id,
           notes: p.notes,
           payment_method: p.payment_method,
-          sumup_checkout_id: p.sumup_checkout_id
+          sumup_checkout_id: p.sumup_checkout_id,
+          matchedBy: (invoice.booking_id && p.booking_id === invoice.booking_id) ? 'booking_id' : 'invoice_id'
         }))
       });
       
