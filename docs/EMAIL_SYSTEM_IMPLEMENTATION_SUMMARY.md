@@ -49,7 +49,7 @@ Successfully implemented a complete SMTP-based email system replacing EmailJS wi
 - **Server**: smtp.hostinger.com
 - **Port**: 465 (SSL)
 - **Authentication**: SSL/TLS
-- **Username**: khtherapy@khtherapy.ie
+- **Username**: [company_email@domain.ie]
 - **Password**: [Configured in .env file]
 
 ### Email Templates Implemented
@@ -59,13 +59,13 @@ Successfully implemented a complete SMTP-based email system replacing EmailJS wi
 
 ### Environment Variables
 ```
-SMTP_USER=khtherapy@khtherapy.ie
+SMTP_USER=[company_email@domain.ie]
 SMTP_PASS='[your_smtp_password]'
 ```
 
 ## Testing Results ✅
 - Email delivery confirmed with HTTP 200 status responses
-- Message IDs generated successfully (e.g., `<c4accc7c-21de-0200-5722-b417a175af37@khtherapy.ie>`)
+- Message IDs generated successfully (e.g., `<message-id@domain.ie>`)
 - Both payment_request and welcome emails delivered to test recipient
 - Authentication working correctly with Hostinger SMTP
 
