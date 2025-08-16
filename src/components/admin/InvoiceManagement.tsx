@@ -25,7 +25,7 @@ import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData, Service } from './types';
 import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
-import { downloadInvoicePDF as downloadInvoicePDFService, sendInvoiceByEmail } from '../../services/invoiceService';
+import { downloadInvoicePDF as downloadInvoicePDFService, downloadInvoicePDFWithPayments, sendInvoiceByEmail } from '../../services/invoiceService';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 
 interface InvoiceManagementProps {
@@ -835,103 +835,19 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     try {
       console.log('🚀 Admin downloadInvoicePDF called for:', invoice.invoice_number);
       
-      // Load payments for this invoice to calculate deposit and total paid amounts
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('payments')
-        .select(`
-          id,
-          invoice_id,
-          customer_id,
-          booking_id,
-          amount,
-          currency,
-          status,
-          payment_method,
-          sumup_checkout_id,
-          sumup_payment_type,
-          payment_date,
-          notes,
-          created_at
-        `)
-        .eq('customer_id', invoice.customer_id);
+      // Use the unified payment-aware PDF download function
+      const result = await downloadInvoicePDFWithPayments(invoice.id, invoice.customer_id);
 
-      if (paymentsError) {
-        console.error('Error fetching payments for admin PDF:', paymentsError);
-        // Continue without payment data rather than failing
+      if (result.success) {
+        showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
+      } else {
+        showError('Download Error', result.error || 'Failed to download invoice');
       }
-
-      console.log('💳 Admin: Loaded payments for customer:', paymentsData?.length || 0);
-
-      // Filter payments for this invoice by booking_id or invoice_id
-      const invoicePayments = paymentsData?.filter(payment => {
-        // Match by booking_id (for deposits) if invoice has booking_id
-        if (invoice.booking_id && payment.booking_id === invoice.booking_id) {
-          return true;
-        }
-        // Match by invoice_id (for additional payments)
-        if (payment.invoice_id === invoice.id) {
-          return true;
-        }
-        return false;
-      }) || [];
-
-      // Calculate deposit and other payments
-      let depositAmount = 0;
-      let otherPaymentsAmount = 0;
-      
-      invoicePayments.forEach(payment => {
-        if (payment.status === 'paid') {
-          // Deposits are payments that have booking_id but no invoice_id
-          const isDeposit = payment.booking_id && !payment.invoice_id;
-          
-          if (isDeposit) {
-            depositAmount += payment.amount || 0;
-          } else {
-            otherPaymentsAmount += payment.amount || 0;
-          }
-        }
-      });
-
-      const totalPaidAmount = depositAmount + otherPaymentsAmount;
-
-      // Round to handle floating point precision issues
-      const roundedDepositAmount = Math.round(depositAmount * 100) / 100;
-      const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
-
-      console.log('Admin Payment Debug:', {
-        invoiceId: invoice.id,
-        invoiceBookingId: invoice.booking_id,
-        paymentsCount: invoicePayments.length,
-        depositAmount: roundedDepositAmount,
-        otherPaymentsAmount: Math.round(otherPaymentsAmount * 100) / 100,
-        totalPaidAmount: roundedTotalPaid,
-        paymentBreakdown: invoicePayments.map(p => ({
-          id: p.id,
-          amount: p.amount,
-          status: p.status,
-          booking_id: p.booking_id,
-          invoice_id: p.invoice_id,
-          classification: p.booking_id && !p.invoice_id ? 'DEPOSIT' : 'ADDITIONAL_PAYMENT'
-        }))
-      });
-
-      // Transform Invoice to the format expected by the service
-      const invoiceData = {
-        id: invoice.id,
-        invoice_number: invoice.invoice_number,
-        customer_id: invoice.customer_id,
-        invoice_date: invoice.invoice_date,
-        due_date: invoice.due_date,
-        status: invoice.status,
-        subtotal: invoice.subtotal,
-        vat_amount: invoice.vat_amount,
-        total_amount: invoice.total_amount,
-        total: invoice.total_amount, // Map total_amount to total for compatibility
-        total_paid: roundedTotalPaid, // Add calculated total paid
-        deposit_paid: roundedDepositAmount, // Add calculated deposit amount
-        notes: invoice.notes,
-        currency: 'EUR'
-      };
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      showError('Download Error', 'An unexpected error occurred while downloading the invoice');
+    }
+  };
 
       // Transform customer data
       const customerData = {

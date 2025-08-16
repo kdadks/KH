@@ -17,6 +17,7 @@ import {
   createSimpleInvoiceData,
   validateInvoiceDataForTransformation 
 } from '../utils/invoiceDataTransformer';
+import { supabase } from '../supabaseClient';
 
 // Service response types
 export interface InvoiceServiceResponse<T = any> {
@@ -488,6 +489,190 @@ export async function downloadInvoicePDF(
   options?: InvoiceGenerationOptions
 ) {
   return invoiceService.downloadInvoicePDF(invoice, customer, items, options);
+}
+
+/**
+ * Unified payment-aware invoice PDF download function
+ * Handles payment calculation and PDF generation for both admin and user components
+ */
+export async function downloadInvoicePDFWithPayments(
+  invoiceId: number,
+  customerId: number,
+  options?: InvoiceGenerationOptions
+) {
+  try {
+    // Load invoice data
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('id', invoiceId)
+      .single();
+
+    if (invoiceError || !invoice) {
+      return {
+        success: false,
+        error: `Invoice not found: ${invoiceError?.message || 'Unknown error'}`
+      };
+    }
+
+    // Load customer data
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', customerId)
+      .single();
+
+    if (customerError || !customer) {
+      return {
+        success: false,
+        error: `Customer not found: ${customerError?.message || 'Unknown error'}`
+      };
+    }
+
+    // Load invoice items
+    const { data: items, error: itemsError } = await supabase
+      .from('invoice_items')
+      .select('*')
+      .eq('invoice_id', invoiceId);
+
+    if (itemsError) {
+      console.warn('Error loading invoice items:', itemsError);
+    }
+
+    // Load payments for payment calculation
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select(`
+        id,
+        invoice_id,
+        customer_id,
+        booking_id,
+        amount,
+        currency,
+        status,
+        payment_method,
+        sumup_checkout_id,
+        sumup_payment_type,
+        payment_date,
+        notes,
+        created_at
+      `)
+      .eq('customer_id', customerId);
+
+    if (paymentsError) {
+      console.warn('Error loading payments:', paymentsError);
+    }
+
+    // Filter payments for this invoice by booking_id or invoice_id
+    const invoicePayments = paymentsData?.filter((payment: any) => {
+      // Match by booking_id (for deposits) if invoice has booking_id
+      if (invoice.booking_id && payment.booking_id === invoice.booking_id) {
+        return true;
+      }
+      // Match by invoice_id (for additional payments)
+      if (payment.invoice_id === invoice.id) {
+        return true;
+      }
+      return false;
+    }) || [];
+
+    // Calculate deposit and other payments
+    let depositAmount = 0;
+    let otherPaymentsAmount = 0;
+    
+    invoicePayments.forEach((payment: any) => {
+      if (payment.status === 'paid') {
+        // Deposits are payments that have booking_id but no invoice_id
+        const isDeposit = payment.booking_id && !payment.invoice_id;
+        
+        if (isDeposit) {
+          depositAmount += payment.amount || 0;
+        } else {
+          otherPaymentsAmount += payment.amount || 0;
+        }
+      }
+    });
+
+    const totalPaidAmount = depositAmount + otherPaymentsAmount;
+
+    // Round to handle floating point precision issues
+    const roundedDepositAmount = Math.round(depositAmount * 100) / 100;
+    const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
+
+    console.log('Unified Payment Debug:', {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+      invoiceBookingId: invoice.booking_id,
+      paymentsCount: invoicePayments.length,
+      depositAmount: roundedDepositAmount,
+      otherPaymentsAmount: Math.round(otherPaymentsAmount * 100) / 100,
+      totalPaidAmount: roundedTotalPaid
+    });
+
+    // Transform data for PDF service
+    const invoiceData = {
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      customer_id: invoice.customer_id,
+      invoice_date: invoice.invoice_date,
+      due_date: invoice.due_date,
+      status: invoice.status,
+      subtotal: invoice.subtotal,
+      vat_amount: invoice.vat_amount,
+      total_amount: invoice.total_amount,
+      total: invoice.total_amount,
+      total_paid: roundedTotalPaid,
+      deposit_paid: roundedDepositAmount,
+      notes: invoice.notes,
+      currency: 'EUR'
+    };
+
+    const customerData = {
+      id: customer.id,
+      name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.email || 'Customer',
+      email: customer.email,
+      phone: customer.phone,
+      address: [
+        customer.address_line_1,
+        customer.address_line_2,
+        customer.city,
+        customer.county,
+        customer.eircode
+      ].filter(Boolean).join(', ') || ''
+    };
+
+    // Transform items or create default
+    let itemsData = items || [];
+    if (!itemsData || itemsData.length === 0) {
+      itemsData = [{
+        id: 1,
+        invoice_id: invoice.id,
+        description: `Service - Invoice ${invoice.invoice_number}`,
+        quantity: 1,
+        unit_price: invoice.subtotal,
+        total_price: invoice.subtotal
+      }];
+    }
+
+    const transformedItems = itemsData.map((item: any) => ({
+      id: item.id,
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_price: item.total_price,
+      category: 'Service'
+    }));
+
+    // Generate PDF
+    return await downloadInvoicePDF(invoiceData, customerData, transformedItems, options);
+
+  } catch (error) {
+    console.error('Error in unified PDF download:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
 }
 
 export async function sendInvoiceByEmail(
