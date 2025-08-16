@@ -188,6 +188,8 @@ export const changeUserPassword = async (
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
+    console.log(`🔍 Starting to load invoices and payments for customer: ${customerId}`);
+    
     // First, get all invoices for this customer
     const { data: invoicesData, error: invoicesError } = await supabase
       .from('invoices')
@@ -200,6 +202,15 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
       console.error('Error fetching user invoices:', invoicesError);
       return { invoices: [], error: invoicesError.message };
     }
+
+    console.log(`📄 Raw invoices data:`, invoicesData?.map(inv => ({
+      id: inv.id,
+      invoice_number: inv.invoice_number,
+      booking_id: inv.booking_id,
+      customer_id: inv.customer_id,
+      total_amount: inv.total_amount,
+      status: inv.status
+    })));
 
     // Then, get all payments for this customer
     const { data: paymentsData, error: paymentsError } = await supabase
@@ -227,7 +238,18 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
       // Continue without payments data rather than failing completely
     }
 
-    console.log(`🔍 Loaded ${invoicesData?.length || 0} invoices and ${paymentsData?.length || 0} payments for customer ${customerId}`);
+    console.log(`� Raw payments data:`, paymentsData?.map(pay => ({
+      id: pay.id,
+      invoice_id: pay.invoice_id,
+      booking_id: pay.booking_id,
+      customer_id: pay.customer_id,
+      amount: pay.amount,
+      status: pay.status,
+      payment_method: pay.payment_method,
+      notes: pay.notes?.substring(0, 50) + '...'
+    })));
+
+    console.log(`�🔍 Loaded ${invoicesData?.length || 0} invoices and ${paymentsData?.length || 0} payments for customer ${customerId}`);
 
     // Add overdue calculation and combine invoices with their payments
     const invoices = invoicesData?.map(invoice => {
