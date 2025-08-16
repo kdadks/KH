@@ -412,10 +412,10 @@ const BookingPage: React.FC = () => {
             customer,
             paymentCompleted: false
           });
-          setSuccessMsg('Booking created successfully! Please complete your payment to confirm.');
+          // Removed duplicate success message - booking creation is already shown in the UI
         } else {
           console.warn('⚠️ BookingPage - No payment request was created for this booking');
-          setSuccessMsg('Booking submitted successfully! We will contact you to confirm your appointment.');
+          setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
           // Send email notification for bookings without payment requests
           await sendBookingEmail(data);
           reset(); // Clear the form after successful booking

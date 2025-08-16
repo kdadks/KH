@@ -24,6 +24,23 @@ import {
  */
 async function getServicePriceFromDatabase(serviceName: string): Promise<number | null> {
   try {
+    // First check if this service should skip payment request creation
+    const skipPatterns = [
+      /contact\s+for\s+quote/i,
+      /€\d+\s*\/\s*class/i,
+      /€\d+\s*per\s*class/i,
+      /€\d+\s*\/\s*session/i,
+      /€\d+\s*per\s*session/i
+    ];
+    
+    // Check if service matches any skip pattern
+    for (const pattern of skipPatterns) {
+      if (pattern.test(serviceName)) {
+        console.log('⏭️ Database lookup skipped - service requires quote or is per-session:', serviceName);
+        return null;
+      }
+    }
+    
     // Extract base service name (e.g., "Ultimate Health")
     const baseServiceName = extractBaseServiceName(serviceName);
     
@@ -55,13 +72,44 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
 }
 
 /**
- * Fallback function to extract price from service name (legacy support)
+ * Extracts price from service name if it represents a fixed booking amount
  * @param serviceName - The full service name with price
- * @returns The extracted price or null if not found
+ * @returns The extracted price or null if not found or not a fixed booking amount
  */
 function extractPriceFromServiceName(serviceName: string): number | null {
-  const priceMatch = serviceName.match(/€(\d+)/);
-  return priceMatch ? parseInt(priceMatch[1]) : null;
+  // Skip payment request creation for services with these patterns:
+  // - "Contact for Quote" - indicates pricing needs to be discussed
+  // - "/class" or "per class" - indicates per-session pricing, not a booking package
+  // - "/session" or "per session" - indicates per-session pricing
+  
+  const skipPatterns = [
+    /contact\s+for\s+quote/i,
+    /€\d+\s*\/\s*class/i,
+    /€\d+\s*per\s*class/i,
+    /€\d+\s*\/\s*session/i,
+    /€\d+\s*per\s*session/i
+  ];
+  
+  // Check if service matches any skip pattern
+  for (const pattern of skipPatterns) {
+    if (pattern.test(serviceName)) {
+      console.log('⏭️ Skipping payment request - service requires quote or is per-session:', serviceName);
+      return null;
+    }
+  }
+  
+  // Look for fixed package pricing like "Ultimate Health (€150)"
+  // This pattern indicates a fixed booking package that requires payment
+  const priceMatch = serviceName.match(/€(\d+)(?!\s*\/|\s*per)/);
+  
+  if (priceMatch) {
+    const price = parseInt(priceMatch[1]);
+    console.log('✅ Found fixed package price:', price, 'for service:', serviceName);
+    return price;
+  }
+  
+  console.log('⏭️ No fixed package price found for service:', serviceName);
+  return null;
 }
 
 /**
@@ -75,7 +123,7 @@ export async function createPaymentRequest(
   bookingId?: string | null, // Changed to string (UUID)
   isInvoicePaymentRequest?: boolean, // New parameter to distinguish invoice payments
   customAmount?: number // New parameter for custom amounts (used for invoice payments)
-): Promise<PaymentRequest> {
+): Promise<PaymentRequest | null> {
   try {
     console.log('🎯 Creating payment request:', {
       customerId,
@@ -110,11 +158,10 @@ export async function createPaymentRequest(
         console.log('✅ Database pricing lookup successful:', baseCost);
       }
       
-      // If all methods fail, use a default cost
+      // If pricing cannot be determined or service requires quote, don't create payment request
       if (baseCost === null) {
-        console.error('Could not determine pricing for service:', serviceName);
-        baseCost = 75; // Default fallback
-        console.log('⚠️ Using fallback price:', baseCost);
+        console.log('⏭️ No payment request created - service requires quote or is per-session pricing:', serviceName);
+        return null; // Return null to indicate no payment request should be created
       }
       
       // Calculate deposit using configurable percentage (20%)
