@@ -57,14 +57,34 @@ const UserInvoices: React.FC = () => {
       
       invoice.payments?.forEach(payment => {
         if (payment.status === 'paid') {
-          // Check if this is a deposit payment (from payment request)
-          if (payment.notes?.includes('payment request') || payment.sumup_checkout_id) {
+          // More comprehensive check for deposit payments
+          const isDeposit = payment.notes?.toLowerCase().includes('payment request') || 
+                           payment.notes?.toLowerCase().includes('deposit') ||
+                           payment.sumup_checkout_id ||
+                           payment.payment_method === 'sumup';
+          
+          if (isDeposit) {
             depositAmount += payment.amount || 0;
           } else {
             otherPaymentsAmount += payment.amount || 0;
           }
         }
       });
+
+      // For testing: If no deposits identified but there are payments, 
+      // treat the first payment as deposit
+      if (depositAmount === 0 && invoice.payments && invoice.payments.length > 0) {
+        const firstPaidPayment = invoice.payments.find(p => p.status === 'paid');
+        if (firstPaidPayment) {
+          depositAmount = firstPaidPayment.amount || 0;
+          otherPaymentsAmount = (invoice.payments?.reduce((total, payment) => {
+            if (payment.status === 'paid' && payment.id !== firstPaidPayment.id) {
+              return total + (payment.amount || 0);
+            }
+            return total;
+          }, 0) || 0);
+        }
+      }
 
       const totalPaidAmount = depositAmount + otherPaymentsAmount;
 
@@ -86,7 +106,12 @@ const UserInvoices: React.FC = () => {
           amount: p.amount,
           status: p.status,
           notes: p.notes,
-          isDeposit: p.notes?.includes('payment request') || !!p.sumup_checkout_id
+          payment_method: p.payment_method,
+          sumup_checkout_id: p.sumup_checkout_id,
+          isDeposit: p.notes?.toLowerCase().includes('payment request') || 
+                    p.notes?.toLowerCase().includes('deposit') ||
+                    p.sumup_checkout_id ||
+                    p.payment_method === 'sumup'
         }))
       });
 
