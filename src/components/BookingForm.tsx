@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { useToast } from './shared/toastContext';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
 import { createSumUpCheckoutUrl } from '../utils/paymentUtils';
+import { 
+  sendBookingNotificationWithPaymentStatus, 
+  sendSimpleBookingConfirmation,
+  BookingWithPaymentData,
+  BookingConfirmationData 
+} from '../utils/emailUtils';
 
 interface PaymentState {
   showPayment: boolean;
@@ -10,6 +16,7 @@ interface PaymentState {
   customer: any;
   checkoutUrl?: string;
   paymentCompleted: boolean;
+  paymentFailed: boolean;
 }
 
 const BookingForm: React.FC = () => {
@@ -27,7 +34,8 @@ const BookingForm: React.FC = () => {
     paymentRequest: null,
     booking: null,
     customer: null,
-    paymentCompleted: false
+    paymentCompleted: false,
+    paymentFailed: false
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,13 +83,42 @@ const BookingForm: React.FC = () => {
           paymentRequest,
           booking,
           customer,
-          paymentCompleted: false
+          paymentCompleted: false,
+          paymentFailed: false
         });
         showSuccess('Booking Created!', 'Please complete the deposit payment to confirm your booking.');
       } else {
-        console.log('⚠️ No payment request generated, using fallback');
+        console.log('⚠️ No payment request generated, sending confirmation email');
+        
+        // Send booking confirmation email without payment
+        if (booking && customer) {
+          try {
+            const bookingConfirmationData: BookingConfirmationData = {
+              customer_name: `${customer.first_name} ${customer.last_name}`,
+              customer_email: customer.email,
+              service_name: booking.package_name || packageName,
+              appointment_date: booking.booking_date || new Date().toISOString().split('T')[0],
+              appointment_time: booking.timeslot_start_time || 'To be scheduled',
+              total_amount: 0, // No payment required
+              booking_reference: `KH-${booking.id}`,
+              therapist_name: 'KH Therapy Team',
+              clinic_address: 'Dublin, Ireland',
+              special_instructions: booking.notes || 'We will contact you to schedule your appointment'
+            };
+
+            const emailSent = await sendSimpleBookingConfirmation(customer.email, bookingConfirmationData);
+            if (emailSent) {
+              console.log('✅ Booking confirmation email sent successfully');
+            } else {
+              console.warn('⚠️ Failed to send booking confirmation email');
+            }
+          } catch (emailError) {
+            console.error('❌ Error sending booking confirmation email:', emailError);
+          }
+        }
+        
         // Fallback to old behavior if no payment request
-        showSuccess('Booking Submitted!', 'Contact Physiotherapist for more details about rate card for services.');
+        showSuccess('Booking Submitted!', 'Check your email for booking confirmation. We will contact you to schedule your appointment.');
         resetForm();
       }
     } catch (error) {
@@ -119,18 +156,99 @@ const BookingForm: React.FC = () => {
     // Poll for payment completion
     const interval = setInterval(() => {
       // In a real implementation, you'd check the payment status via API
-      // For now, we'll simulate a successful payment after 30 seconds
+      // For now, we'll simulate payment behavior after some time
       // This should be replaced with actual payment status checking
       setTimeout(() => {
         clearInterval(interval);
-        handlePaymentSuccess();
+        // For demo purposes, randomly succeed or fail (90% success rate)
+        const isSuccess = Math.random() > 0.1;
+        if (isSuccess) {
+          handlePaymentSuccess();
+        } else {
+          handlePaymentFailure();
+        }
       }, 30000);
     }, 5000);
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentFailure = async () => {
+    setPaymentState(prev => ({ ...prev, paymentFailed: true }));
+    
+    // Send payment failure email
+    if (paymentState.booking && paymentState.customer && paymentState.paymentRequest) {
+      try {
+        const bookingWithPaymentData: BookingWithPaymentData = {
+          customer_name: `${paymentState.customer.first_name} ${paymentState.customer.last_name}`,
+          customer_email: paymentState.customer.email,
+          service_name: paymentState.booking.package_name,
+          appointment_date: paymentState.booking.booking_date || new Date().toISOString().split('T')[0],
+          appointment_time: paymentState.booking.timeslot_start_time || 'To be scheduled',
+          booking_reference: `KH-${paymentState.booking.id}`,
+          payment_status: 'failed',
+          payment_amount: paymentState.paymentRequest.amount,
+          transaction_id: undefined,
+          next_steps: 'Please try again or contact us for assistance. Your booking is still reserved for 24 hours.',
+          therapist_name: 'KH Therapy Team',
+          clinic_address: 'Dublin, Ireland',
+          special_instructions: paymentState.booking.notes || undefined
+        };
+
+        const emailSent = await sendBookingNotificationWithPaymentStatus(
+          bookingWithPaymentData.customer_email, 
+          bookingWithPaymentData
+        );
+        
+        if (emailSent) {
+          console.log('✅ Payment failure email sent successfully');
+        } else {
+          console.warn('⚠️ Failed to send payment failure email');
+        }
+      } catch (emailError) {
+        console.error('❌ Error sending payment failure email:', emailError);
+      }
+    }
+    
+    showError('Payment Failed', 'Your payment could not be processed. Please try again or contact us for assistance.');
+  };
+
+  const handlePaymentSuccess = async () => {
     setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
-    showSuccess('Payment Successful!', 'Your booking is confirmed. Check your email for next steps.');
+    
+    // Send payment completion email
+    if (paymentState.booking && paymentState.customer && paymentState.paymentRequest) {
+      try {
+        const bookingWithPaymentData: BookingWithPaymentData = {
+          customer_name: `${paymentState.customer.first_name} ${paymentState.customer.last_name}`,
+          customer_email: paymentState.customer.email,
+          service_name: paymentState.booking.package_name,
+          appointment_date: paymentState.booking.booking_date || new Date().toISOString().split('T')[0],
+          appointment_time: paymentState.booking.timeslot_start_time || 'To be scheduled',
+          booking_reference: `KH-${paymentState.booking.id}`,
+          payment_status: 'completed',
+          payment_amount: paymentState.paymentRequest.amount,
+          transaction_id: `SUMUP-${Date.now()}`, // This should come from actual payment response
+          next_steps: 'We will contact you within 24 hours to schedule your appointment. Thank you for choosing KH Therapy!',
+          therapist_name: 'KH Therapy Team',
+          clinic_address: 'Dublin, Ireland',
+          special_instructions: paymentState.booking.notes || undefined
+        };
+
+        const emailSent = await sendBookingNotificationWithPaymentStatus(
+          bookingWithPaymentData.customer_email, 
+          bookingWithPaymentData
+        );
+        
+        if (emailSent) {
+          console.log('✅ Payment completion email sent successfully');
+        } else {
+          console.warn('⚠️ Failed to send payment completion email');
+        }
+      } catch (emailError) {
+        console.error('❌ Error sending payment completion email:', emailError);
+      }
+    }
+    
+    showSuccess('Payment Successful!', 'Your booking is confirmed. Check your email for confirmation and next steps.');
   };
 
   const resetForm = () => {
@@ -146,12 +264,13 @@ const BookingForm: React.FC = () => {
       paymentRequest: null,
       booking: null,
       customer: null,
-      paymentCompleted: false
+      paymentCompleted: false,
+      paymentFailed: false
     });
   };
 
   // Render payment interface
-  if (paymentState.showPayment && !paymentState.paymentCompleted) {
+  if (paymentState.showPayment && !paymentState.paymentCompleted && !paymentState.paymentFailed) {
     return (
       <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-lg">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Complete Your Booking</h2>
@@ -237,6 +356,58 @@ const BookingForm: React.FC = () => {
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
           >
             Make Another Booking
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Render payment failure message with retry option
+  if (paymentState.paymentFailed) {
+    return (
+      <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-lg">
+        <div className="text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+            <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Failed</h2>
+          <p className="text-gray-600 mb-6">
+            Your payment could not be processed. Don't worry, your booking is still reserved for 24 hours.
+          </p>
+        </div>
+
+        <div className="bg-red-50 rounded-lg p-4 mb-6">
+          <h3 className="font-semibold text-red-900 mb-3">What to do next:</h3>
+          <ul className="space-y-2 text-sm text-red-800">
+            <li className="flex items-start">
+              <span className="inline-block w-5 h-5 bg-red-100 text-red-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">1</span>
+              Check your email for instructions and booking details
+            </li>
+            <li className="flex items-start">
+              <span className="inline-block w-5 h-5 bg-red-100 text-red-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">2</span>
+              Try the payment again or contact us for assistance
+            </li>
+            <li className="flex items-start">
+              <span className="inline-block w-5 h-5 bg-red-100 text-red-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">3</span>
+              Your booking reference: <strong>KH-{paymentState.booking?.id}</strong>
+            </li>
+          </ul>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            onClick={handlePayNow}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            Try Payment Again - €{paymentState.paymentRequest?.amount}
+          </button>
+          <button
+            onClick={resetForm}
+            className="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            Start Over
           </button>
         </div>
       </div>

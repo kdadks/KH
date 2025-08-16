@@ -2,14 +2,16 @@ const nodemailer = require('nodemailer');
 
 // SMTP Configuration
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: 'smtp.hostinger.com',
-    port: 465, // SSL/TLS port
-    secure: true, // Use SSL
+    port: 465,
+    secure: true, // Use SSL directly on port 465
     auth: {
       user: process.env.SMTP_USER, // info@khtherapy.ie
       pass: process.env.SMTP_PASS  // Your email password
-    }
+    },
+    debug: true, // Enable debug output
+    logger: true // Log to console
   });
 };
 
@@ -269,6 +271,179 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'booking_with_payment_completed':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Booking Confirmed - Payment Received</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Great news! Your booking has been confirmed and your payment has been successfully processed.</p>
+              
+              <div class="details">
+                <h3>Booking Details:</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+              </div>
+              
+              <div class="details">
+                <h3>Payment Details:</h3>
+                <p><strong>Amount Paid:</strong> €${data.payment_amount}</p>
+                ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${data.transaction_id}</p>` : ''}
+                <p><strong>Status:</strong> <span style="color: #16a34a; font-weight: bold;">Payment Successful</span></p>
+              </div>
+              
+              ${data.next_steps ? `
+                <div class="details">
+                  <h3>Next Steps:</h3>
+                  <p>${data.next_steps}</p>
+                </div>
+              ` : `
+                <div class="details">
+                  <h3>Next Steps:</h3>
+                  <p>Your appointment is confirmed. Please arrive 10 minutes early and bring any relevant medical documents.</p>
+                  <p>If you need to reschedule or have any questions, please contact us at least 24 hours in advance.</p>
+                </div>
+              `}
+              
+              ${data.special_instructions ? `
+                <div class="details">
+                  <h3>Special Instructions:</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <p>We look forward to seeing you!</p>
+            </div>
+            <div class="footer">
+              <p>KH Therapy | info@khtherapy.ie</p>
+              <p>For any questions or changes, please contact us.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    case 'booking_with_payment_failed':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Booking Created - Payment Required</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Your booking has been created, but we encountered an issue with your payment. Don't worry - your appointment slot is temporarily reserved.</p>
+              
+              <div class="details">
+                <h3>Booking Details:</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+              </div>
+              
+              <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
+                <h3>Payment Status:</h3>
+                <p><strong>Amount Due:</strong> €${data.payment_amount}</p>
+                <p><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">Payment Failed</span></p>
+                <p>Please retry your payment to confirm your booking.</p>
+              </div>
+              
+              <div class="details">
+                <h3>What happens next?</h3>
+                <p>• Your appointment slot is reserved for 24 hours</p>
+                <p>• Please complete payment to confirm your booking</p>
+                <p>• You can retry payment by contacting us directly</p>
+                <p>• If payment is not received within 24 hours, your slot may be released</p>
+              </div>
+              
+              <p style="text-align: center;">
+                <a href="mailto:info@khtherapy.ie?subject=Payment Retry - ${data.booking_reference}" class="button">Contact Us to Retry Payment</a>
+              </p>
+            </div>
+            <div class="footer">
+              <p>KH Therapy | info@khtherapy.ie</p>
+              <p>Need help? Contact us immediately to secure your appointment.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    case 'booking_confirmation_no_payment':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Booking Confirmation</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Thank you for booking with KH Therapy! Your appointment request has been received.</p>
+              
+              <div class="details">
+                <h3>Booking Details:</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+              </div>
+              
+              <div class="details">
+                <h3>General Instructions:</h3>
+                <p>• Please arrive 10 minutes early for your appointment</p>
+                <p>• Bring any relevant medical documents or reports</p>
+                <p>• Wear comfortable clothing that allows easy movement</p>
+                <p>• Please contact us at least 24 hours in advance if you need to reschedule</p>
+              </div>
+              
+              <div class="details">
+                <h3>Payment Information:</h3>
+                <p>Payment can be made at the time of your appointment. We accept:</p>
+                <p>• Cash</p>
+                <p>• Card payments</p>
+                <p>• Bank transfer</p>
+                <p>For questions about rates and services, please contact us directly.</p>
+              </div>
+              
+              ${data.special_instructions ? `
+                <div class="details">
+                  <h3>Special Instructions:</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <p>We look forward to helping you with your physiotherapy needs!</p>
+            </div>
+            <div class="footer">
+              <p>KH Therapy | info@khtherapy.ie</p>
+              <p>For any questions or changes, please contact us.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     default:
       return `
         <!DOCTYPE html>
@@ -295,10 +470,27 @@ const getEmailTemplate = (type, data) => {
 
 // Main handler function
 exports.handler = async (event, context) => {
+  // CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+  };
+
+  // Handle preflight OPTIONS request
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    };
+  }
+
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers,
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
@@ -311,12 +503,18 @@ exports.handler = async (event, context) => {
     if (!emailType || !recipientEmail || !data) {
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ error: 'Missing required fields: emailType, recipientEmail, data' })
       };
     }
 
     // Create transporter
     const transporter = createTransporter();
+    
+    // Verify SMTP connection first
+    console.log('Verifying SMTP connection...');
+    await transporter.verify();
+    console.log('SMTP connection verified successfully');
 
     // Generate email content
     const htmlContent = getEmailTemplate(emailType, data);
@@ -340,11 +538,7 @@ exports.handler = async (event, context) => {
 
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST'
-      },
+      headers,
       body: JSON.stringify({ 
         success: true, 
         messageId: result.messageId,
@@ -357,11 +551,7 @@ exports.handler = async (event, context) => {
     
     return {
       statusCode: 500,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST'
-      },
+      headers,
       body: JSON.stringify({ 
         success: false, 
         error: error.message || 'Failed to send email' 
