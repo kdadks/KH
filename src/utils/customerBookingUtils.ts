@@ -233,13 +233,32 @@ export const createBookingWithCustomer = async (
           booking.id // bookingId
         );
 
-        // Step 5: Send payment request email notification
+        // Step 5: Send emails in proper order
+        // Always send welcome email first
+        console.log('📧 Sending welcome email...');
+        try {
+          const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+          if (welcomeResult.success) {
+            console.log('✅ Welcome email sent successfully');
+          } else {
+            console.error('❌ Failed to send welcome email:', welcomeResult.error);
+          }
+        } catch (welcomeEmailError) {
+          console.error('❌ Welcome email failed:', welcomeEmailError);
+        }
+
+        // Then send payment request email if payment is required
         if (paymentRequest) {
-          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-          if (!emailSuccess) {
-            console.error('Failed to send payment request email:', emailError);
-            // Fallback: Send welcome email
-            await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+          console.log('📧 Sending payment request email...');
+          try {
+            const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
+            if (emailSuccess) {
+              console.log('✅ Payment request email sent successfully');
+            } else {
+              console.error('❌ Failed to send payment request email:', emailError);
+            }
+          } catch (emailError) {
+            console.error('❌ Payment request email failed:', emailError);
           }
         }
       } catch (paymentError) {
@@ -250,8 +269,19 @@ export const createBookingWithCustomer = async (
           serviceName: bookingData.package_name,
           customerId: customer.id
         });
-        // Fallback: Send welcome email if payment request fails
-        await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+        // Fallback: Send welcome email only if payment request creation fails
+        console.log('📧 Sending fallback welcome email...');
+        try {
+          const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+          if (welcomeResult.success) {
+            console.log('✅ Fallback welcome email sent successfully');
+          } else {
+            console.error('❌ Failed to send fallback welcome email:', welcomeResult.error);
+          }
+        } catch (welcomeEmailError) {
+          console.error('❌ Fallback welcome email failed:', welcomeEmailError);
+          // Continue without email - don't block the booking process
+        }
       }
     }
 

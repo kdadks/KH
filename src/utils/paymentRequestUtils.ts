@@ -438,11 +438,12 @@ export async function sendPaymentRequestNotification(
     const emailResult = await sendPaymentRequestEmail(
       paymentRequest.customer.email,
       {
-        customerName: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`,
+        customer_name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`,
         amount: paymentRequest.amount,
-        currency: paymentRequest.currency || 'EUR',
-        dueDate: paymentRequest.payment_due_date,
-        paymentUrl: `${window.location.origin}/dashboard/payments?request=${paymentRequestId}`
+        service_name: paymentRequest.description || 'Therapy Session',
+        due_date: paymentRequest.payment_due_date,
+        payment_url: `${window.location.origin}/dashboard/payments?request=${paymentRequestId}`,
+        invoice_number: paymentRequest.reference_number || `PR-${paymentRequestId}`
       }
     );
 
@@ -497,11 +498,10 @@ export async function sendPaymentConfirmation(
     const emailResult = await sendPaymentConfirmationEmail(
       payment.customer.email,
       {
-        customerName: `${payment.customer.first_name} ${payment.customer.last_name}`,
+        customer_name: `${payment.customer.first_name} ${payment.customer.last_name}`,
+        transaction_id: payment.sumup_transaction_id || payment.id.toString(),
         amount: payment.amount,
-        currency: payment.currency || 'EUR',
-        transactionId: payment.sumup_transaction_id || payment.id.toString(),
-        paymentDate: payment.payment_date || payment.updated_at
+        service_name: payment.description || 'Therapy Session'
       }
     );
 

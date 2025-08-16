@@ -1,6 +1,8 @@
 // New email utility using Netlify Functions with SMTP
 // This replaces the EmailJS implementation with a server-side solution
 
+import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+
 export interface EmailData {
   customer_name: string;
   customer_email?: string;
@@ -54,12 +56,45 @@ export interface PasswordResetData extends EmailData {
   reset_url: string;
 }
 
+export interface BookingWithPaymentData extends EmailData {
+  service_name: string;
+  appointment_date: string;
+  appointment_time: string;
+  booking_reference: string;
+  payment_status: 'completed' | 'failed' | 'pending';
+  payment_amount?: number;
+  transaction_id?: string;
+  next_steps?: string;
+  therapist_name?: string;
+  clinic_address?: string;
+  special_instructions?: string;
+}
+
 // Get the base URL for the Netlify function
 const getBaseUrl = () => {
+  // In production, use same origin
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
-  return process.env.VITE_SITE_URL || 'http://localhost:5173';
+  return process.env.VITE_SITE_URL || 'https://khtherapy.netlify.app';
+};
+
+// Generate proper email subject based on email type
+const generateEmailSubject = (emailType: string, customerName: string): string => {
+  switch (emailType) {
+    case 'booking_welcome':
+      return `Welcome to KH Therapy - Booking Confirmation`;
+    case 'payment_request':
+      return `Payment Request - KH Therapy Services`;
+    case 'payment_confirmation':
+      return `Payment Received - Thank You ${customerName}`;
+    case 'booking_reminder':
+      return `Appointment Reminder - KH Therapy`;
+    case 'admin_notification':
+      return `Admin Notification - KH Therapy`;
+    default:
+      return `KH Therapy - ${emailType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
+  }
 };
 
 // Generic email sending function
@@ -70,7 +105,27 @@ const sendEmail = async (
   customSubject?: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${getBaseUrl()}/.netlify/functions/send-email`, {
+    const baseUrl = getBaseUrl();
+    
+    // Decrypt customer name for proper display
+    let displayCustomerName = data.customer_name;
+    if (data.customer_name && isDataEncrypted(data.customer_name)) {
+      try {
+        displayCustomerName = decryptSensitiveData(data.customer_name);
+      } catch (error) {
+        console.warn('Failed to decrypt customer name, using original:', error);
+      }
+    }
+    
+    // Generate proper email subject
+    const emailSubject = customSubject || generateEmailSubject(emailType, displayCustomerName);
+    
+    console.log(`📧 Sending ${emailType} email to ${recipientEmail}`);
+    console.log('📧 Customer:', displayCustomerName);
+    console.log('📧 Subject:', emailSubject);
+    console.log('📧 Email data:', { ...data, customer_name: displayCustomerName });
+    
+    const response = await fetch(`${baseUrl}/.netlify/functions/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -78,22 +133,36 @@ const sendEmail = async (
       body: JSON.stringify({
         emailType,
         recipientEmail,
-        data,
-        subject: customSubject
+        data: { ...data, customer_name: displayCustomerName }, // Use decrypted name
+        subject: emailSubject
       }),
     });
-
-    const result = await response.json();
+    
+    // Check if response has content before parsing JSON
+    const responseText = await response.text();
+    
+    let result;
+    try {
+      result = responseText ? JSON.parse(responseText) : {};
+    } catch (parseError) {
+      console.error('Failed to parse email function response:', parseError);
+      console.error('Response text was:', responseText);
+      return false;
+    }
     
     if (!response.ok) {
       console.error(`Failed to send ${emailType} email:`, result.error);
       return false;
     }
 
-    console.log(`${emailType} email sent successfully to ${recipientEmail}`);
     return true;
   } catch (error) {
     console.error(`Error sending ${emailType} email:`, error);
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return false;
   }
 };
@@ -102,8 +171,6 @@ const sendEmail = async (
 export const initializeEmailService = (): boolean => {
   // No initialization needed for SMTP service
   // Just verify we have the necessary environment setup
-  const baseUrl = getBaseUrl();
-  console.log('Email service initialized with base URL:', baseUrl);
   return true;
 };
 
@@ -242,6 +309,30 @@ export const sendPaymentConfirmationEmail = async (
     payment_date: new Date().toLocaleDateString(),
     service_name: confirmationData.service_name
   }, 'Payment Confirmation');
+};
+
+// Booking with payment status email
+export const sendBookingWithPaymentEmail = async (
+  customerEmail: string,
+  bookingData: BookingWithPaymentData
+): Promise<boolean> => {
+  let emailType = 'booking_with_payment_completed';
+  
+  if (bookingData.payment_status === 'failed') {
+    emailType = 'booking_with_payment_failed';
+  } else if (bookingData.payment_status === 'pending') {
+    emailType = 'booking_with_payment_pending';
+  }
+  
+  return sendEmail(emailType, customerEmail, bookingData);
+};
+
+// Booking confirmation without payment
+export const sendBookingConfirmationWithoutPayment = async (
+  customerEmail: string,
+  bookingData: BookingConfirmationData
+): Promise<boolean> => {
+  return sendEmail('booking_confirmation_no_payment', customerEmail, bookingData);
 };
 
 // Backward compatibility exports (these will replace the existing EmailJS functions)

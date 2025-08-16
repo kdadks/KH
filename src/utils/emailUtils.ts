@@ -9,7 +9,9 @@ import {
   sendPaymentRequestEmail as smtpSendPaymentRequest,
   sendPaymentConfirmationEmail as smtpSendPaymentConfirmation,
   sendInvoiceNotificationEmail as smtpSendInvoiceNotification,
-  sendPasswordResetEmail as smtpSendPasswordReset
+  sendPasswordResetEmail as smtpSendPasswordReset,
+  sendBookingWithPaymentEmail,
+  sendBookingConfirmationWithoutPayment
 } from './emailSMTP';
 
 // Email template interfaces (keeping for backward compatibility)
@@ -64,6 +66,22 @@ export interface PasswordResetEmailData {
   customer_email: string;
   customer_name: string;
   reset_url: string;
+}
+
+export interface BookingWithPaymentData {
+  customer_name: string;
+  customer_email: string;
+  service_name: string;
+  appointment_date: string;
+  appointment_time: string;
+  booking_reference: string;
+  payment_status: 'completed' | 'failed' | 'pending';
+  payment_amount?: number;
+  transaction_id?: string;
+  next_steps?: string;
+  therapist_name?: string;
+  clinic_address?: string;
+  special_instructions?: string;
 }
 
 // Initialize Email Service (now using SMTP instead of EmailJS)
@@ -142,12 +160,16 @@ export const sendAdminNotificationEmail = async (data: AdminNotificationData): P
 };
 
 // Welcome email
-export const sendWelcomeEmail = async (customerName: string, customerEmail: string): Promise<boolean> => {
+export const sendWelcomeEmail = async (customerName: string, customerEmail: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    return await smtpSendWelcome(customerName, customerEmail);
+    const result = await smtpSendWelcome(customerName, customerEmail);
+    return { success: result };
   } catch (error) {
     console.error('Error sending welcome email:', error);
-    return false;
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 };
 
@@ -162,9 +184,9 @@ export const sendPaymentRequestEmail = async (
     payment_url?: string;
     invoice_number?: string;
   }
-): Promise<boolean> => {
+): Promise<{ success: boolean; error?: string }> => {
   try {
-    return await smtpSendPaymentRequest(customerEmail, {
+    const result = await smtpSendPaymentRequest(customerEmail, {
       customer_name: data.customer_name,
       amount: data.amount,
       service_name: data.service_name,
@@ -172,9 +194,14 @@ export const sendPaymentRequestEmail = async (
       payment_url: data.payment_url,
       invoice_number: data.invoice_number
     });
+    
+    return { success: result };
   } catch (error) {
     console.error('Error sending payment request email:', error);
-    return false;
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 };
 
@@ -187,17 +214,22 @@ export const sendPaymentConfirmationEmail = async (
     amount: number;
     service_name?: string;
   }
-): Promise<boolean> => {
+): Promise<{ success: boolean; error?: string }> => {
   try {
-    return await smtpSendPaymentConfirmation(customerEmail, {
+    const result = await smtpSendPaymentConfirmation(customerEmail, {
       customer_name: data.customer_name,
       transaction_id: data.transaction_id,
       amount: data.amount,
       service_name: data.service_name
     });
+    
+    return { success: result };
   } catch (error) {
     console.error('Error sending payment confirmation email:', error);
-    return false;
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 };
 
@@ -276,7 +308,8 @@ export const sendBatchEmails = async (
             result = await sendBookingReminderEmail(recipient.data);
             break;
           case 'welcome':
-            result = await sendWelcomeEmail(recipient.data.customer_name, recipient.email);
+            const welcomeResult = await sendWelcomeEmail(recipient.data.customer_name, recipient.email);
+            result = welcomeResult.success;
             break;
           default:
             console.error('Unknown email type:', emailType);
@@ -342,4 +375,53 @@ export const validateEmailConfiguration = (): { isValid: boolean; missingConfig:
     isValid: true,
     missingConfig: []
   };
+};
+
+// Enhanced booking confirmation with payment status
+export const sendBookingNotificationWithPaymentStatus = async (
+  customerEmail: string,
+  bookingData: BookingWithPaymentData
+): Promise<boolean> => {
+  try {
+    return await sendBookingWithPaymentEmail(customerEmail, {
+      customer_name: bookingData.customer_name,
+      service_name: bookingData.service_name,
+      appointment_date: bookingData.appointment_date,
+      appointment_time: bookingData.appointment_time,
+      booking_reference: bookingData.booking_reference,
+      payment_status: bookingData.payment_status,
+      payment_amount: bookingData.payment_amount,
+      transaction_id: bookingData.transaction_id,
+      next_steps: bookingData.next_steps,
+      therapist_name: bookingData.therapist_name,
+      clinic_address: bookingData.clinic_address,
+      special_instructions: bookingData.special_instructions
+    });
+  } catch (error) {
+    console.error('Error sending booking notification with payment status:', error);
+    return false;
+  }
+};
+
+// Booking confirmation without payment
+export const sendSimpleBookingConfirmation = async (
+  customerEmail: string,
+  bookingData: BookingConfirmationData
+): Promise<boolean> => {
+  try {
+    return await sendBookingConfirmationWithoutPayment(customerEmail, {
+      customer_name: bookingData.customer_name,
+      service_name: bookingData.service_name,
+      appointment_date: bookingData.appointment_date,
+      appointment_time: bookingData.appointment_time,
+      total_amount: bookingData.total_amount,
+      booking_reference: bookingData.booking_reference,
+      therapist_name: bookingData.therapist_name,
+      clinic_address: bookingData.clinic_address,
+      special_instructions: bookingData.special_instructions
+    });
+  } catch (error) {
+    console.error('Error sending booking confirmation without payment:', error);
+    return false;
+  }
 };
