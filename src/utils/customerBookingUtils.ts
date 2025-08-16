@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { hashPassword } from './passwordUtils';
 import { createPaymentRequest, sendPaymentRequestNotification } from './paymentRequestUtils';
 import { sendWelcomeEmail } from './emailUtils';
+import { encryptSensitiveData, decryptSensitiveData, isDataEncrypted } from './gdprUtils';
 
 export interface Customer {
   id?: number;
@@ -71,16 +72,27 @@ export const findOrCreateCustomer = async (customerData: {
       const updateData: Partial<Customer> = {};
       let needsUpdate = false;
 
-      if (existingCustomer.first_name !== customerData.firstName.trim()) {
-        updateData.first_name = customerData.firstName.trim();
+      // Decrypt existing data for comparison
+      const decryptedFirstName = isDataEncrypted(existingCustomer.first_name) 
+        ? decryptSensitiveData(existingCustomer.first_name) 
+        : existingCustomer.first_name;
+      const decryptedLastName = isDataEncrypted(existingCustomer.last_name) 
+        ? decryptSensitiveData(existingCustomer.last_name) 
+        : existingCustomer.last_name;
+      const decryptedPhone = existingCustomer.phone && isDataEncrypted(existingCustomer.phone) 
+        ? decryptSensitiveData(existingCustomer.phone) 
+        : existingCustomer.phone;
+
+      if (decryptedFirstName !== customerData.firstName.trim()) {
+        updateData.first_name = encryptSensitiveData(customerData.firstName.trim());
         needsUpdate = true;
       }
-      if (existingCustomer.last_name !== customerData.lastName.trim()) {
-        updateData.last_name = customerData.lastName.trim();
+      if (decryptedLastName !== customerData.lastName.trim()) {
+        updateData.last_name = encryptSensitiveData(customerData.lastName.trim());
         needsUpdate = true;
       }
-      if (customerData.phone && existingCustomer.phone !== customerData.phone.trim()) {
-        updateData.phone = customerData.phone.trim();
+      if (customerData.phone && decryptedPhone !== customerData.phone.trim()) {
+        updateData.phone = encryptSensitiveData(customerData.phone.trim());
         needsUpdate = true;
       }
 
@@ -94,13 +106,35 @@ export const findOrCreateCustomer = async (customerData: {
 
         if (updateError) {
           console.error('Error updating customer:', updateError);
-          return { customer: existingCustomer, error: null }; // Return existing customer if update fails
+          // Return decrypted version of existing customer
+          const decryptedExistingCustomer = { ...existingCustomer };
+          decryptedExistingCustomer.first_name = decryptedFirstName;
+          decryptedExistingCustomer.last_name = decryptedLastName;
+          decryptedExistingCustomer.phone = decryptedPhone;
+          return { customer: decryptedExistingCustomer, error: null };
         }
 
-        return { customer: updatedCustomer, error: null };
+        // Return decrypted version of updated customer
+        const decryptedUpdatedCustomer = { ...updatedCustomer };
+        decryptedUpdatedCustomer.first_name = isDataEncrypted(updatedCustomer.first_name) 
+          ? decryptSensitiveData(updatedCustomer.first_name) 
+          : updatedCustomer.first_name;
+        decryptedUpdatedCustomer.last_name = isDataEncrypted(updatedCustomer.last_name) 
+          ? decryptSensitiveData(updatedCustomer.last_name) 
+          : updatedCustomer.last_name;
+        decryptedUpdatedCustomer.phone = updatedCustomer.phone && isDataEncrypted(updatedCustomer.phone) 
+          ? decryptSensitiveData(updatedCustomer.phone) 
+          : updatedCustomer.phone;
+
+        return { customer: decryptedUpdatedCustomer, error: null };
       }
 
-      return { customer: existingCustomer, error: null };
+      // Return decrypted version of existing customer
+      const decryptedExistingCustomer = { ...existingCustomer };
+      decryptedExistingCustomer.first_name = decryptedFirstName;
+      decryptedExistingCustomer.last_name = decryptedLastName;
+      decryptedExistingCustomer.phone = decryptedPhone;
+      return { customer: decryptedExistingCustomer, error: null };
     }
 
     // Customer doesn't exist, create a new one with default password same as email (hashed)
@@ -108,10 +142,10 @@ export const findOrCreateCustomer = async (customerData: {
     const hashedDefaultPassword = await hashPassword(defaultPassword);
     
     const newCustomerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'> = {
-      first_name: customerData.firstName.trim(),
-      last_name: customerData.lastName.trim(),
+      first_name: encryptSensitiveData(customerData.firstName.trim()),
+      last_name: encryptSensitiveData(customerData.lastName.trim()),
       email: customerData.email.toLowerCase().trim(),
-      phone: customerData.phone?.trim() || undefined,
+      phone: customerData.phone?.trim() ? encryptSensitiveData(customerData.phone.trim()) : undefined,
       country: 'Ireland',
       is_active: true,
       password: hashedDefaultPassword, // Store hashed password
@@ -130,7 +164,13 @@ export const findOrCreateCustomer = async (customerData: {
       return { customer: null, error: createError.message };
     }
 
-    return { customer: newCustomer, error: null };
+    // Return decrypted version of new customer
+    const decryptedNewCustomer = { ...newCustomer };
+    decryptedNewCustomer.first_name = customerData.firstName.trim();
+    decryptedNewCustomer.last_name = customerData.lastName.trim();
+    decryptedNewCustomer.phone = customerData.phone?.trim() || undefined;
+
+    return { customer: decryptedNewCustomer, error: null };
 
   } catch (error) {
     console.error('Exception in findOrCreateCustomer:', error);
@@ -265,7 +305,25 @@ export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | nu
       return { bookings: null, error: error.message };
     }
 
-    return { bookings: data || [], error: null };
+    // Decrypt customer data for admin viewing
+    const decryptedBookings = data?.map(booking => {
+      if (booking.customers) {
+        // Decrypt customer PII fields
+        const customer = booking.customers;
+        if (customer.first_name && isDataEncrypted(customer.first_name)) {
+          customer.first_name = decryptSensitiveData(customer.first_name);
+        }
+        if (customer.last_name && isDataEncrypted(customer.last_name)) {
+          customer.last_name = decryptSensitiveData(customer.last_name);
+        }
+        if (customer.phone && isDataEncrypted(customer.phone)) {
+          customer.phone = decryptSensitiveData(customer.phone);
+        }
+      }
+      return booking;
+    });
+
+    return { bookings: decryptedBookings || [], error: null };
 
   } catch (error) {
     console.error('Exception in getBookingsWithCustomers:', {

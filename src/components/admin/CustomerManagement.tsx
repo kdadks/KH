@@ -17,6 +17,7 @@ import { supabase } from '../../supabaseClient';
 import { Customer } from './types';
 import { getCustomerDisplayName, validateCustomerName } from './utils/customerUtils';
 import { decryptCustomersArrayForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
+import { encryptSensitiveData } from '../../utils/gdprUtils';
 
 interface CustomerManagementProps {
   onCustomerSelect?: (customer: Customer) => void;
@@ -190,19 +191,45 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
 
     try {
       if (editingCustomer) {
-        // Update existing customer
+        // Update existing customer - encrypt sensitive data
+        const encryptedUpdateData = { ...formData };
+        
+        // Encrypt sensitive fields before updating
+        if (encryptedUpdateData.first_name) {
+          encryptedUpdateData.first_name = encryptSensitiveData(encryptedUpdateData.first_name);
+        }
+        if (encryptedUpdateData.last_name) {
+          encryptedUpdateData.last_name = encryptSensitiveData(encryptedUpdateData.last_name);
+        }
+        if (encryptedUpdateData.phone) {
+          encryptedUpdateData.phone = encryptSensitiveData(encryptedUpdateData.phone);
+        }
+        
         const { error } = await supabase
           .from('customers')
-          .update(formData)
+          .update(encryptedUpdateData)
           .eq('id', editingCustomer.id);
 
         if (error) throw error;
         setSuccess('Customer updated successfully');
       } else {
-        // Create new customer
+        // Create new customer - encrypt sensitive data
+        const encryptedFormData = { ...formData };
+        
+        // Encrypt sensitive fields before creating
+        if (encryptedFormData.first_name) {
+          encryptedFormData.first_name = encryptSensitiveData(encryptedFormData.first_name);
+        }
+        if (encryptedFormData.last_name) {
+          encryptedFormData.last_name = encryptSensitiveData(encryptedFormData.last_name);
+        }
+        if (encryptedFormData.phone) {
+          encryptedFormData.phone = encryptSensitiveData(encryptedFormData.phone);
+        }
+        
         const { error } = await supabase
           .from('customers')
-          .insert([formData]);
+          .insert([encryptedFormData]);
 
         if (error) throw error;
         setSuccess('Customer created successfully');
