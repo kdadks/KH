@@ -367,6 +367,8 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
   // Change password
   const changePassword = useCallback(async (passwordData: UserPasswordChangeData): Promise<{ success: boolean; error?: string }> => {
     try {
+      console.log('changePassword called with user:', user?.id, 'must_change_password:', user?.must_change_password);
+      
       if (!user?.id) {
         return { success: false, error: 'Not authenticated' };
       }
@@ -374,6 +376,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       // Hash the new password before storing it
       const hashedPassword = await hashPassword(passwordData.newPassword);
       
+      console.log('Updating password in database for user:', user.id);
       const { error: updateError } = await supabase
         .from('customers')
         .update({ 
@@ -387,8 +390,12 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         return { success: false, error: updateError.message };
       }
 
+      console.log('Database update successful, updating local user state...');
       // Update local user state
-      setUser({ ...user, must_change_password: false });
+      const updatedUser = { ...user, must_change_password: false };
+      console.log('About to set user state to:', updatedUser);
+      setUser(updatedUser);
+      console.log('setUser called - React should re-render now');
 
       return { success: true };
     } catch (error) {

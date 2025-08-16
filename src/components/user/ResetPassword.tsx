@@ -25,13 +25,16 @@ const ResetPassword: React.FC = () => {
   useEffect(() => {
     const validateToken = async () => {
       if (!token) {
-        setError('Invalid reset link');
+        setError('Invalid reset link - no token provided');
         setIsValidating(false);
         return;
       }
 
       try {
+        console.log('Validating reset token:', token);
         const result = await validateResetToken(token);
+        console.log('Token validation result:', result);
+        
         if (result.success && result.customerEmail) {
           setIsTokenValid(true);
           setCustomerEmail(result.customerEmail);
@@ -39,6 +42,7 @@ const ResetPassword: React.FC = () => {
           setError(result.error || 'Invalid or expired reset link');
         }
       } catch (err) {
+        console.error('Error validating token:', err);
         setError('Failed to validate reset link');
       } finally {
         setIsValidating(false);
@@ -76,17 +80,25 @@ const ResetPassword: React.FC = () => {
         confirmPassword: confirmPassword
       };
 
+      console.log('Attempting password reset...');
       const result = await resetPassword(resetData);
+      console.log('Password reset result:', result);
+      
       if (result.success) {
+        console.log('Password reset successful, redirecting...');
         setIsSuccess(true);
         // Redirect to login after 3 seconds
         setTimeout(() => {
-          navigate('/my-account');
+          navigate('/my-account', { 
+            replace: true, 
+            state: { fromPasswordReset: true } 
+          });
         }, 3000);
       } else if (result.error) {
         setError(result.error);
       }
     } catch (err) {
+      console.error('Exception during password reset:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -195,7 +207,10 @@ const ResetPassword: React.FC = () => {
 
             {/* Manual redirect button */}
             <button
-              onClick={() => navigate('/my-account')}
+              onClick={() => navigate('/my-account', { 
+                replace: true,
+                state: { fromPasswordReset: true }
+              })}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
             >
               Go to Sign In

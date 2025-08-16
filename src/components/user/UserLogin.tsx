@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import { useLocation } from 'react-router-dom';
 import ForgotPassword from './ForgotPassword';
 
 const UserLogin: React.FC = () => {
@@ -9,8 +10,20 @@ const UserLogin: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showResetSuccess, setShowResetSuccess] = useState(false);
   
   const { login } = useUserAuth();
+  const location = useLocation();
+
+  // Check if we're coming from a password reset
+  useEffect(() => {
+    if (location.state?.fromPasswordReset) {
+      setShowResetSuccess(true);
+      // Hide the message after 5 seconds
+      const timer = setTimeout(() => setShowResetSuccess(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +75,17 @@ const UserLogin: React.FC = () => {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            {showResetSuccess && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">
+                <div className="flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Your password has been successfully reset. Please sign in with your new password.
+                </div>
+              </div>
+            )}
+            
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-600 text-sm">
                 {error}

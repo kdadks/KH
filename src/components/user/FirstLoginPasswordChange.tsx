@@ -53,18 +53,24 @@ const FirstLoginPasswordChange: React.FC<FirstLoginPasswordChangeProps> = ({
 
     setLoading(true);
     try {
+      console.log('Starting password change...');
       const result = await changePassword({
         newPassword: passwords.newPassword,
         confirmPassword: passwords.confirmPassword
       });
 
+      console.log('Password change result:', result);
+
       if (result.success) {
         showSuccess('Password Updated', 'Your password has been successfully changed');
+        console.log('Password change successful, calling onPasswordChanged...');
         onPasswordChanged();
       } else {
+        console.error('Password change failed:', result.error);
         showError('Password Change Failed', result.error || 'Failed to update password');
       }
-    } catch {
+    } catch (err) {
+      console.error('Exception during password change:', err);
       showError('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);
