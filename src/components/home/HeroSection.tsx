@@ -3,8 +3,8 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import Button from '../shared/Button';
+import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
-import { useToast } from '../shared/toastContext';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 
 interface Service {
@@ -18,14 +18,113 @@ interface Service {
   priceType?: string;
 }
 
+interface PaymentState {
+  showPayment: boolean;
+  paymentRequest: any;
+  booking: any;
+  customer: any;
+  paymentCompleted: boolean;
+}
+
 const HeroSection: React.FC = () => {
-  // Removed unused visibility state
+  // Form and UI states
   interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; }
-  const { showSuccess, showError } = useToast();
   const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const [successMsg, setSuccessMsg] = useState('');
+  
+  // Payment states
+  const [paymentState, setPaymentState] = useState<PaymentState>({
+    showPayment: false,
+    paymentRequest: null,
+    booking: null,
+    customer: null,
+    paymentCompleted: false
+  });
+  const [countdown, setCountdown] = useState<number>(20);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+
+  // Helper functions
+  const resetFormAfterSuccess = () => {
+    reset();
+    setSuccessMsg('');
+    setCountdown(20);
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    setPaymentProcessing(false);
+    setPaymentState({
+      showPayment: false,
+      paymentRequest: null,
+      booking: null,
+      customer: null,
+      paymentCompleted: false
+    });
+  };
+
+  const resetForm = () => {
+    reset();
+    setSuccessMsg('');
+    setCountdown(20);
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    setPaymentProcessing(false);
+    setPaymentState({
+      showPayment: false,
+      paymentRequest: null,
+      booking: null,
+      customer: null,
+      paymentCompleted: false
+    });
+  };
+
+  // Handle countdown reaching zero - just reset form instead of redirecting
+  useEffect(() => {
+    if (countdown === 0 && paymentState.paymentCompleted) {
+      resetFormAfterSuccess();
+    }
+  }, [countdown, paymentState.paymentCompleted]);
+
+  // Handle countdown timer
+  useEffect(() => {
+    let countdownInterval: NodeJS.Timeout | null = null;
+    
+    if (paymentState.paymentCompleted && countdown > 0) {
+      countdownInterval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+    };
+  }, [paymentState.paymentCompleted, countdown]);
+
+  // Handle escape key to close modals
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (showPaymentModal || paymentState.paymentCompleted || paymentState.showPayment)) {
+        if (paymentState.paymentCompleted) {
+          resetFormAfterSuccess();
+        } else {
+          resetForm();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [showPaymentModal, paymentState.paymentCompleted, paymentState.showPayment]);
 
   // Fetch services from database on component mount
   useEffect(() => {
@@ -115,17 +214,36 @@ const HeroSection: React.FC = () => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(booking),
       });
-      showSuccess('Booking Confirmed!', 'Confirmation email sent successfully.');
+      // Removed duplicate success toast - success is already shown in main UI
     } catch {
-      showSuccess('Booking Confirmed!', 'Booking saved but email notification failed.');
+      // Removed duplicate success toast - success is already shown in main UI
     }
     setSendingEmail(false);
   };
 
   const onSubmit = async (data: BookingFormData) => {
     setSendingEmail(true);
-    
+    setSuccessMsg('');
+
     try {
+      // Check for existing pending/confirmed bookings to prevent duplicates
+      const { data: existingBookings, error: checkError } = await supabase
+        .from('bookings')
+        .select('id, status, created_at')
+        .eq('customer_email', data.email)
+        .eq('package_name', data.service)
+        .in('status', ['pending', 'confirmed', 'paid'])
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+
+      if (checkError) {
+        console.error('Error checking existing bookings:', checkError);
+      } else if (existingBookings && existingBookings.length > 0) {
+        const recentBooking = existingBookings[0];
+        setSuccessMsg(`You already have a ${recentBooking.status} booking for this service. Please contact us if you need to make changes.`);
+        setSendingEmail(false);
+        return;
+      }
+
       // Prepare customer data
       const customerData = {
         firstName: data.firstName,
@@ -134,7 +252,7 @@ const HeroSection: React.FC = () => {
         phone: data.phone
       };
 
-      // Prepare booking data
+      // Prepare booking data for hero section (quick appointment)
       const bookingData = {
         package_name: data.service,
         booking_date: new Date().toISOString(), // Set current date and time
@@ -142,29 +260,112 @@ const HeroSection: React.FC = () => {
         status: 'pending'
       };
 
+      console.log('📝 HeroSection - About to create booking with:', {
+        customerData,
+        bookingData,
+        serviceValue: data.service
+      });
+
       // Create booking with customer integration
-      const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
+      const { booking, customer, paymentRequest, error } = await createBookingWithCustomer(customerData, bookingData);
 
       if (error) {
-        console.error('Booking creation error:', error);
-        throw new Error(error);
+        console.error('❌ HeroSection - Booking creation failed:', error);
+        setSuccessMsg('Booking failed: ' + error);
+        setSendingEmail(false);
+        return;
       }
 
       if (booking && customer) {
-        // Send email notification
-        await sendBookingEmail(data);
+        console.log('✅ HeroSection - Booking created successfully:', { 
+          booking, 
+          customer, 
+          paymentRequest: paymentRequest ? 'Created' : 'Not created',
+          paymentRequestDetails: paymentRequest 
+        });
         
-        // Reset form on success
-        reset();
+        if (paymentRequest) {
+          console.log('💳 Payment request created, showing payment interface');
+          // Show payment interface with Pay Now button (like main booking page)
+          setPaymentState({
+            showPayment: true,
+            paymentRequest,
+            booking,
+            customer,
+            paymentCompleted: false
+          });
+          // Removed duplicate success message - booking creation is already shown in the UI
+        } else {
+          console.warn('⚠️ HeroSection - No payment request was created for this booking');
+          setSuccessMsg('Booking submitted successfully! We will contact you to confirm your appointment.');
+          // Send email notification for bookings without payment requests
+          await sendBookingEmail(data);
+          reset(); // Clear the form after successful booking
+        }
       }
-      
     } catch (error) {
       console.error('Error submitting hero booking:', error);
-      showError('Booking Failed', 'Error submitting booking. Please try again.');
+      setSuccessMsg('An error occurred while submitting your booking. Please try again.');
     } finally {
       setSendingEmail(false);
     }
-  };  return (
+  };
+
+  const handlePayNow = async () => {
+    try {
+      // Open the PaymentModal with the payment request
+      if (paymentState.paymentRequest && paymentState.customer) {
+        // Ensure customer data is properly structured
+        const customerData = paymentState.customer;
+        
+        // Transform the payment request to match PaymentRequestWithCustomer structure
+        const paymentRequestWithCustomer = {
+          ...paymentState.paymentRequest,
+          customer: {
+            first_name: customerData.first_name || '',
+            last_name: customerData.last_name || '',
+            email: customerData.email || ''
+          },
+          service_name: paymentState.booking?.package_name,
+          booking_date: paymentState.booking?.booking_date
+        };
+        
+        console.log('Opening PaymentModal with:', paymentRequestWithCustomer);
+        
+        setSelectedPaymentRequest(paymentRequestWithCustomer);
+        setShowPaymentModal(true);
+        // Clear any previous messages when opening modal
+        setSuccessMsg('');
+      } else {
+        console.error('Missing payment request or customer data:', { 
+          paymentRequest: paymentState.paymentRequest, 
+          customer: paymentState.customer 
+        });
+        setSuccessMsg('Payment Error: Missing payment information. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error opening payment modal:', error);
+      setSuccessMsg('Payment Error: Failed to open payment interface. Please try again.');
+    }
+  };
+
+  const handlePaymentModalComplete = () => {
+    // Prevent duplicate completion calls
+    if (paymentProcessing || paymentState.paymentCompleted) return;
+    
+    setPaymentProcessing(true);
+    
+    // Close the payment modal
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    
+    // Clear any lingering messages and update payment state to completed
+    setSuccessMsg('');
+    setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
+    setCountdown(20);
+  };
+
+  return (
   <section className="relative pt-16 pb-12 md:pt-24 md:pb-20 overflow-hidden bg-gray-100">
       {/* Light grey background applied via Tailwind class */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -256,6 +457,8 @@ const HeroSection: React.FC = () => {
               <p className="text-neutral-600 mt-2">Quick appointment booking</p>
             </div>
             
+            {/* Main Booking Form - Only show if not in payment flow */}
+            {!paymentState.showPayment && !paymentState.paymentCompleted && (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -312,7 +515,83 @@ const HeroSection: React.FC = () => {
                   By booking, you agree to our <a href="/terms-of-service" className="text-primary-600 hover:underline">Terms of Service</a> and <a href="/privacy-policy" className="text-primary-600 hover:underline">Privacy Policy</a>.
                 </p>
             </form>
+            )}
+
+            {/* Success/Status Message */}
+            {successMsg && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-blue-800 text-sm">{successMsg}</p>
+              </div>
+            )}
+
+
+
+            {/* Payment Interface - Only show when payment is required but not yet completed */}
+            {paymentState.showPayment && !paymentState.paymentCompleted && (
+              <div className="mt-6 p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="text-center">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                    <p className="text-green-800 font-medium">✅ Booking Created Successfully!</p>
+                    <p className="text-green-600 text-sm mt-1">
+                      Service: {paymentState.booking?.package_name}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <h3 className="font-semibold text-blue-900 mb-2">Payment Required</h3>
+                    <p className="text-blue-800 text-sm mb-3">
+                      A deposit payment of <strong>€{paymentState.paymentRequest?.amount}</strong> is required to confirm your booking.
+                    </p>
+                    <Button
+                      onClick={handlePayNow}
+                      variant="primary"
+                      className="w-full"
+                    >
+                      Pay Now - €{paymentState.paymentRequest?.amount}
+                    </Button>
+                  </div>
+
+                  <div className="text-center">
+                    <button
+                      onClick={resetForm}
+                      className="text-gray-500 hover:text-gray-700 text-sm underline"
+                    >
+                      Cancel and start over
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Success Countdown */}
+            {paymentState.paymentCompleted && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-green-900">Payment Completed Successfully!</h3>
+                    <p className="text-green-700 mt-1">Your booking is confirmed. We will contact you soon.</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-green-600">Form will reset in:</p>
+                    <p className="text-2xl font-bold text-green-900">{countdown}s</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
+
+          {/* PaymentModal */}
+          {showPaymentModal && selectedPaymentRequest && (
+            <PaymentModal
+              isOpen={showPaymentModal}
+              onClose={() => {
+                setShowPaymentModal(false);
+                setSelectedPaymentRequest(null);
+              }}
+              paymentRequest={selectedPaymentRequest}
+              onPaymentComplete={handlePaymentModalComplete}
+            />
+          )}
           
         </div>
       </div>
