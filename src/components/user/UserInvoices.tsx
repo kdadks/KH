@@ -169,6 +169,14 @@ const UserInvoices: React.FC = () => {
         }
       });
 
+      console.log('📤 About to call downloadInvoicePDF with data:', {
+        invoiceData,
+        hasDepositPaid: !!invoiceData.deposit_paid,
+        hasTotalPaid: !!invoiceData.total_paid,
+        depositPaidValue: invoiceData.deposit_paid,
+        totalPaidValue: invoiceData.total_paid
+      });
+
       // Use the PDF service
       const result = await downloadInvoicePDF(invoiceData, customerData, transformedItems);
 

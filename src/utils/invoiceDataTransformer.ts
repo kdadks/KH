@@ -82,7 +82,8 @@ export function transformInvoiceData(
     deposit_paid: invoice.deposit_paid,
     total_paid: invoice.total_paid,
     hasDeposit: !!invoice.deposit_paid,
-    hasTotalPaid: !!invoice.total_paid
+    hasTotalPaid: !!invoice.total_paid,
+    rawInvoiceObject: invoice // Show the entire object to see what fields are available
   });
 
   return {
