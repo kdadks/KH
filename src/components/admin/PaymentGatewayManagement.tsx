@@ -63,12 +63,20 @@ export const PaymentGatewayManagement: React.FC<PaymentGatewayManagementProps> =
   const [editingGateway, setEditingGateway] = useState<PaymentGatewayType | null>(null);
   const [formData, setFormData] = useState<GatewayFormData>(initialFormData);
   const [showSecrets, setShowSecrets] = useState<{[key: string]: boolean}>({});
+  const [showFormApiKey, setShowFormApiKey] = useState(false);
+  const [showFormSecretKey, setShowFormSecretKey] = useState(false);
+  const [showFormClientId, setShowFormClientId] = useState(false);
+  const [showFormMerchantId, setShowFormMerchantId] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleCreateNew = () => {
     setEditingGateway(null);
     setFormData(initialFormData);
+    setShowFormApiKey(false);
+    setShowFormSecretKey(false);
+    setShowFormClientId(false);
+    setShowFormMerchantId(false);
     setIsModalOpen(true);
   };
 
@@ -86,6 +94,10 @@ export const PaymentGatewayManagement: React.FC<PaymentGatewayManagementProps> =
       client_id: gateway.client_id || '',
       is_active: gateway.is_active
     });
+    setShowFormApiKey(false);
+    setShowFormSecretKey(false);
+    setShowFormClientId(false);
+    setShowFormMerchantId(false);
     setIsModalOpen(true);
   };
 
@@ -267,6 +279,57 @@ export const PaymentGatewayManagement: React.FC<PaymentGatewayManagementProps> =
                     </div>
                   </div>
 
+                  {gateway.secret_key && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Secret Key:</span>
+                      <div className="flex items-center">
+                        <span className="font-mono text-xs">
+                          {showSecrets[gateway.id] ? gateway.secret_key : maskSecret(gateway.secret_key)}
+                        </span>
+                        <button
+                          onClick={() => toggleSecretVisibility(gateway.id)}
+                          className="ml-2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showSecrets[gateway.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {gateway.merchant_id && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Merchant Code:</span>
+                      <div className="flex items-center">
+                        <span className="font-mono text-xs">
+                          {showSecrets[gateway.id] ? gateway.merchant_id : maskSecret(gateway.merchant_id)}
+                        </span>
+                        <button
+                          onClick={() => toggleSecretVisibility(gateway.id)}
+                          className="ml-2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showSecrets[gateway.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {gateway.client_id && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Client ID:</span>
+                      <div className="flex items-center">
+                        <span className="font-mono text-xs">
+                          {showSecrets[gateway.id] ? gateway.client_id : maskSecret(gateway.client_id)}
+                        </span>
+                        <button
+                          onClick={() => toggleSecretVisibility(gateway.id)}
+                          className="ml-2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showSecrets[gateway.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {gateway.webhook_url && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Webhook:</span>
@@ -378,26 +441,44 @@ export const PaymentGatewayManagement: React.FC<PaymentGatewayManagementProps> =
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   API Key * <Key className="inline w-3 h-3 ml-1" />
                 </label>
-                <input
-                  type="password"
-                  value={formData.api_key}
-                  onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter API key"
-                />
+                <div className="relative">
+                  <input
+                    type={showFormApiKey ? "text" : "password"}
+                    value={formData.api_key}
+                    onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter API key"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFormApiKey(!showFormApiKey)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {showFormApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Secret Key <Shield className="inline w-3 h-3 ml-1" />
                 </label>
-                <input
-                  type="password"
-                  value={formData.secret_key}
-                  onChange={(e) => setFormData(prev => ({ ...prev, secret_key: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter secret key (if required)"
-                />
+                <div className="relative">
+                  <input
+                    type={showFormSecretKey ? "text" : "password"}
+                    value={formData.secret_key}
+                    onChange={(e) => setFormData(prev => ({ ...prev, secret_key: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter secret key (if required)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFormSecretKey(!showFormSecretKey)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {showFormSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {/* Additional Configuration */}
@@ -419,13 +500,22 @@ export const PaymentGatewayManagement: React.FC<PaymentGatewayManagementProps> =
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Client ID
                   </label>
-                  <input
-                    type="text"
-                    value={formData.client_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, client_id: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="PayPal Client ID"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showFormClientId ? "text" : "password"}
+                      value={formData.client_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, client_id: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="PayPal Client ID"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormClientId(!showFormClientId)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showFormClientId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -434,13 +524,22 @@ export const PaymentGatewayManagement: React.FC<PaymentGatewayManagementProps> =
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Merchant Code
                   </label>
-                  <input
-                    type="text"
-                    value={formData.merchant_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, merchant_id: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="SumUp Merchant Code"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showFormMerchantId ? "text" : "password"}
+                      value={formData.merchant_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, merchant_id: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="SumUp Merchant Code"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormMerchantId(!showFormMerchantId)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showFormMerchantId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 
