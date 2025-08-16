@@ -16,11 +16,19 @@
 
 import crypto from 'crypto-js';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-// Configuration - UPDATE THESE VALUES
-const SUPABASE_URL = 'https://hlmqgghrrmvstbmvwsni.supabase.co';
-const SUPABASE_ANON_KEY ='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhsbXFnZ2hycm12c3RibXZ3c25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxNzU0MTgsImV4cCI6MjA2ODc1MTQxOH0.3qjmIl_2T9sJR71uuo_QM58t2gyAoF-6HnVCdfBgj6o';
-const ENCRYPTION_KEY = 'e8887bee1e9d193180231ad1a5592369c251b6218c09fe873235bfce784a51ed'; // Generated secure encryption key
+// Load environment variables
+dotenv.config();
+
+// Configuration - loaded from environment variables
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const ENCRYPTION_KEY = process.env.VITE_ENCRYPTION_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !ENCRYPTION_KEY) {
+  throw new Error('Missing required environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_ENCRYPTION_KEY must be set');
+}
 
 // Supabase client setup
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
