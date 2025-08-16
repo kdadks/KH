@@ -51,16 +51,26 @@ const UserInvoices: React.FC = () => {
 
   const handleDownloadInvoice = async (invoice: UserInvoice) => {
     try {
-      // Calculate total paid amount from successful payments only
-      const totalPaidAmount = invoice.payments?.reduce((total, payment) => {
-        // Only count payments that are successfully paid
+      // Separate deposits from other payments
+      let depositAmount = 0;
+      let otherPaymentsAmount = 0;
+      
+      invoice.payments?.forEach(payment => {
         if (payment.status === 'paid') {
-          return total + (payment.amount || 0);
+          // Check if this is a deposit payment (from payment request)
+          if (payment.notes?.includes('payment request') || payment.sumup_checkout_id) {
+            depositAmount += payment.amount || 0;
+          } else {
+            otherPaymentsAmount += payment.amount || 0;
+          }
         }
-        return total;
-      }, 0) || 0;
+      });
+
+      const totalPaidAmount = depositAmount + otherPaymentsAmount;
 
       // Round to handle floating point precision issues
+      const roundedDepositAmount = Math.round(depositAmount * 100) / 100;
+      const roundedOtherPayments = Math.round(otherPaymentsAmount * 100) / 100;
       const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
 
       console.log('UserInvoice Payment Debug:', {
@@ -68,8 +78,16 @@ const UserInvoices: React.FC = () => {
         invoiceTotal: invoice.total_amount,
         paymentsCount: invoice.payments?.length || 0,
         paidPayments: invoice.payments?.filter(p => p.status === 'paid').length || 0,
-        totalPaidAmount,
-        roundedTotalPaid
+        depositAmount: roundedDepositAmount,
+        otherPaymentsAmount: roundedOtherPayments,
+        totalPaidAmount: roundedTotalPaid,
+        paymentBreakdown: invoice.payments?.map(p => ({
+          id: p.id,
+          amount: p.amount,
+          status: p.status,
+          notes: p.notes,
+          isDeposit: p.notes?.includes('payment request') || !!p.sumup_checkout_id
+        }))
       });
 
       // Transform UserInvoice to the format expected by the service
@@ -85,6 +103,7 @@ const UserInvoices: React.FC = () => {
         total_amount: invoice.total_amount,
         total: invoice.total_amount, // Map total_amount to total for compatibility
         total_paid: roundedTotalPaid, // Add calculated total paid (rounded)
+        deposit_paid: roundedDepositAmount, // Add calculated deposit amount
         notes: invoice.notes,
         currency: 'EUR'
       };
@@ -136,6 +155,8 @@ const UserInvoices: React.FC = () => {
         transformedItems,
         paymentBreakdown: {
           totalInvoice: invoice.total_amount,
+          depositPaid: roundedDepositAmount,
+          otherPayments: roundedOtherPayments,
           totalPaid: roundedTotalPaid,
           due: invoice.total_amount - roundedTotalPaid
         }

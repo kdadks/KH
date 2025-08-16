@@ -448,6 +448,14 @@ export class PDFInvoiceGenerator {
     const totalPaidAmount = invoiceData.financial.totalPaid || 0;
     const depositAmount = invoiceData.financial.depositPaid || 0;
     
+    console.log('PDF Generator Payment Debug:', {
+      totalInvoiceAmount,
+      totalPaidAmount,
+      depositAmount,
+      additionalPayments: totalPaidAmount - depositAmount,
+      actualDueAmount: totalInvoiceAmount - totalPaidAmount
+    });
+    
     // Show deposit if applicable (separate from other payments)
     if (depositAmount > 0) {
       this.doc.setFontSize(10);
@@ -459,28 +467,36 @@ export class PDFInvoiceGenerator {
     }
     
     // Show additional payments if any (excluding deposit)
-    const additionalPayments = totalPaidAmount - depositAmount;
+    const additionalPayments = Math.max(0, totalPaidAmount - depositAmount);
     if (additionalPayments > 0) {
       this.doc.setFontSize(10);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('Payments Made:', labelX, currentY);
+      this.doc.text('Additional Payments:', labelX, currentY);
       this.doc.text(`-${this.formatCurrency(additionalPayments, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+      currentY += 8;
+    }
+    
+    
+    // Add separator line if any payments were shown
+    if (depositAmount > 0 || additionalPayments > 0) {
+      currentY += 4;
+      this.doc.setDrawColor(this.COLORS.secondary);
+      this.doc.setLineWidth(0.3);
+      this.doc.line(labelX, currentY, rightX, currentY);
       currentY += 8;
     }
     
     // Calculate actual due amount with better precision
     const actualDueAmount = Math.round((totalInvoiceAmount - totalPaidAmount) * 100) / 100;
-    
+
     console.log('Payment Debug:', {
       totalInvoiceAmount,
       totalPaidAmount,
       depositAmount,
       additionalPayments,
       actualDueAmount
-    });
-    
-    // Show amount due or paid status with precise comparison
+    });    // Show amount due or paid status with precise comparison
     if (actualDueAmount >= 0.01) {
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');
