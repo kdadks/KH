@@ -188,36 +188,47 @@ export const changeUserPassword = async (
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
-    // Get all invoices for this customer - show both sent and paid invoices
-    const { data: invoicesData, error } = await supabase
+    // First, get all invoices for this customer
+    const { data: invoicesData, error: invoicesError } = await supabase
       .from('invoices')
-      .select(`
-        *,
-        payments!payments_invoice_id_fkey(
-          id,
-          invoice_id,
-          customer_id,
-          amount,
-          currency,
-          status,
-          payment_method,
-          sumup_checkout_id,
-          sumup_payment_type,
-          payment_date,
-          notes,
-          created_at
-        )
-      `)
+      .select('*')
       .eq('customer_id', parseInt(customerId))
       .in('status', ['sent', 'paid']) // Include both sent and paid invoices
       .order('invoice_date', { ascending: false }); // Most recent first
 
-    if (error) {
-      console.error('Error fetching user invoices:', error);
-      return { invoices: [], error: error.message };
+    if (invoicesError) {
+      console.error('Error fetching user invoices:', invoicesError);
+      return { invoices: [], error: invoicesError.message };
     }
 
-    // Add overdue calculation and days overdue to invoices
+    // Then, get all payments for this customer
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select(`
+        id,
+        invoice_id,
+        customer_id,
+        amount,
+        currency,
+        status,
+        payment_method,
+        sumup_checkout_id,
+        sumup_payment_type,
+        payment_date,
+        notes,
+        created_at
+      `)
+      .eq('customer_id', parseInt(customerId))
+      .order('created_at', { ascending: false });
+
+    if (paymentsError) {
+      console.error('Error fetching user payments:', paymentsError);
+      // Continue without payments data rather than failing completely
+    }
+
+    console.log(`🔍 Loaded ${invoicesData?.length || 0} invoices and ${paymentsData?.length || 0} payments for customer ${customerId}`);
+
+    // Add overdue calculation and combine invoices with their payments
     const invoices = invoicesData?.map(invoice => {
       const isOverdue = invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date();
       let daysOverdue = 0;
@@ -228,24 +239,29 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
         daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
       }
       
+      // Find payments for this invoice
+      const invoicePayments = paymentsData?.filter(payment => payment.invoice_id === invoice.id) || [];
+      
       console.log(`📋 Loading invoice ${invoice.invoice_number}:`, {
         id: invoice.id,
         total_amount: invoice.total_amount,
         status: invoice.status,
-        paymentsCount: invoice.payments?.length || 0,
-        payments: invoice.payments?.map((p: any) => ({
+        paymentsCount: invoicePayments.length,
+        payments: invoicePayments.map((p: any) => ({
           id: p.id,
           amount: p.amount,
           status: p.status,
           notes: p.notes,
-          payment_method: p.payment_method
+          payment_method: p.payment_method,
+          sumup_checkout_id: p.sumup_checkout_id
         }))
       });
       
       return {
         ...invoice,
         is_overdue: isOverdue,
-        days_overdue: daysOverdue
+        days_overdue: daysOverdue,
+        payments: invoicePayments
       };
     }) || [];
 
