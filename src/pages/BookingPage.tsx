@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { useForm } from 'react-hook-form';
-import { Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, X } from 'lucide-react';
 import SEOHead from '../components/utils/SEOHead';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
+import PaymentModal from '../components/shared/PaymentModal';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
 
 interface BookingFormData {
@@ -30,8 +32,18 @@ interface Service {
   priceType?: string;
 }
 
+interface PaymentState {
+  showPayment: boolean;
+  paymentRequest: any;
+  booking: any;
+  customer: any;
+  checkoutUrl?: string;
+  paymentCompleted: boolean;
+}
+
 const BookingPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<BookingFormData>();
+  const navigate = useNavigate();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
@@ -39,9 +51,42 @@ const BookingPage: React.FC = () => {
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [paymentState, setPaymentState] = useState<PaymentState>({
+    showPayment: false,
+    paymentRequest: null,
+    booking: null,
+    customer: null,
+    paymentCompleted: false
+  });
+  const [countdown, setCountdown] = useState<number>(20);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
 
   // Watch the service field to trigger time slot updates
   const watchedService = watch('service');
+
+  // Handle countdown reaching zero
+  useEffect(() => {
+    if (countdown === 0 && paymentState.paymentCompleted) {
+      redirectToHome();
+    }
+  }, [countdown, paymentState.paymentCompleted]);
+
+  // Handle escape key to close modals
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (paymentState.showPayment || paymentState.paymentCompleted)) {
+        if (paymentState.paymentCompleted) {
+          redirectToHome();
+        } else {
+          resetForm();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [paymentState.showPayment, paymentState.paymentCompleted]);
 
   // Memoize time slot rendering to prevent excessive re-renders
   const timeSlotOptions = useMemo(() => {
@@ -276,6 +321,24 @@ const BookingPage: React.FC = () => {
     setSuccessMsg('');
 
     try {
+      // Check for existing pending/confirmed bookings to prevent duplicates
+      const { data: existingBookings, error: checkError } = await supabase
+        .from('bookings')
+        .select('id, status, created_at, booking_date')
+        .eq('customer_email', data.email)
+        .eq('package_name', data.service)
+        .in('status', ['pending', 'confirmed', 'paid'])
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+
+      if (checkError) {
+        console.error('Error checking existing bookings:', checkError);
+      } else if (existingBookings && existingBookings.length > 0) {
+        const recentBooking = existingBookings[0];
+        setSuccessMsg(`You already have a ${recentBooking.status} booking for this service. Please contact us if you need to make changes.`);
+        setSendingEmail(false);
+        return;
+      }
+
       // Map form data to booking data
       // Combine date and time into ISO string for booking_date
       let bookingDateTime = data.date;
@@ -339,15 +402,24 @@ const BookingPage: React.FC = () => {
           paymentRequestDetails: paymentRequest 
         });
         
-        if (!paymentRequest) {
+        if (paymentRequest) {
+          console.log('💳 Payment request created, showing payment interface');
+          // Show payment interface for immediate payment
+          setPaymentState({
+            showPayment: true,
+            paymentRequest,
+            booking,
+            customer,
+            paymentCompleted: false
+          });
+          setSuccessMsg('Booking created successfully! Please complete your payment to confirm.');
+        } else {
           console.warn('⚠️ BookingPage - No payment request was created for this booking');
+          setSuccessMsg('Booking submitted successfully! We will contact you to confirm your appointment.');
+          // Send email notification for bookings without payment requests
+          await sendBookingEmail(data);
+          reset(); // Clear the form after successful booking
         }
-        
-        setSuccessMsg('Booking submitted successfully! We will contact you to confirm your appointment.');
-        
-        // Send email notification
-        await sendBookingEmail(data);
-        reset(); // Clear the form after successful booking
       }
     } catch (error) {
       console.error('Error submitting booking:', error);
@@ -355,6 +427,89 @@ const BookingPage: React.FC = () => {
     } finally {
       setSendingEmail(false);
     }
+  };
+
+  const handlePayNow = async () => {
+    try {
+      // Open the PaymentModal with the payment request
+      if (paymentState.paymentRequest && paymentState.customer) {
+        // Ensure customer data is properly structured
+        const customerData = paymentState.customer;
+        
+        // Transform the payment request to match PaymentRequestWithCustomer structure
+        const paymentRequestWithCustomer = {
+          ...paymentState.paymentRequest,
+          customer: {
+            first_name: customerData.first_name || customerData.firstName || '',
+            last_name: customerData.last_name || customerData.lastName || '',
+            email: customerData.email || ''
+          },
+          service_name: paymentState.booking?.package_name,
+          booking_date: paymentState.booking?.booking_date
+        };
+        
+        console.log('Opening PaymentModal with:', paymentRequestWithCustomer);
+        
+        setSelectedPaymentRequest(paymentRequestWithCustomer);
+        setShowPaymentModal(true);
+        setSuccessMsg('Opening secure payment modal...');
+      } else {
+        console.error('Missing payment request or customer data:', { 
+          paymentRequest: paymentState.paymentRequest, 
+          customer: paymentState.customer 
+        });
+        setSuccessMsg('Payment Error: Missing payment information. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error opening payment modal:', error);
+      setSuccessMsg('Payment Error: Failed to open payment interface. Please try again.');
+    }
+  };
+
+  const handlePaymentModalComplete = async () => {
+    // Close the payment modal
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    
+    // Show success state
+    handlePaymentSuccess();
+  };
+
+  const handlePaymentSuccess = () => {
+    setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
+    setSuccessMsg('Payment completed successfully! Your booking is confirmed.');
+    setCountdown(20);
+    
+    // Start countdown timer
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const redirectToHome = () => {
+    resetForm();
+    navigate('/');
+  };
+
+  const resetForm = () => {
+    reset();
+    setSuccessMsg('');
+    setCountdown(20);
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    setPaymentState({
+      showPayment: false,
+      paymentRequest: null,
+      booking: null,
+      customer: null,
+      paymentCompleted: false
+    });
   };
 
   return (
@@ -372,7 +527,128 @@ const BookingPage: React.FC = () => {
             subtitle="Schedule your physiotherapy session with our experienced specialists."
             centered={true}
           />
-          
+
+          {/* Payment Success Modal */}
+          {paymentState.paymentCompleted && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto transform animate-slideUp">
+                <div className="p-6 md:p-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold text-gray-900">Booking Confirmed! 🎉</h2>
+                    <button
+                      onClick={redirectToHome}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="h-6 w-6" />
+                    </button>
+                  </div>
+                  
+                  <div className="text-center mb-6">
+                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                      <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-600 mb-6">
+                      Your payment has been processed and your booking is confirmed.
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <h3 className="font-semibold text-gray-900 mb-3">What's Next?</h3>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li className="flex items-start">
+                        <span className="inline-block w-5 h-5 bg-blue-100 text-blue-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">1</span>
+                        Check your email for booking confirmation and receipt
+                      </li>
+                      <li className="flex items-start">
+                        <span className="inline-block w-5 h-5 bg-blue-100 text-blue-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">2</span>
+                        We'll contact you to schedule your appointment
+                      </li>
+                      <li className="flex items-start">
+                        <span className="inline-block w-5 h-5 bg-blue-100 text-blue-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">3</span>
+                        <div>
+                          <strong>Access your dashboard:</strong>
+                          <div className="ml-1 mt-1">
+                            <a href="/my-account" className="text-blue-600 hover:text-blue-800 underline">
+                              Login here
+                            </a> using your email: <strong>{paymentState.customer?.email}</strong>
+                          </div>
+                          <div className="text-xs text-gray-500 ml-1 mt-1">
+                            (Check your email for temporary password if this is your first booking)
+                          </div>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="text-center">
+                    <Button onClick={redirectToHome} variant="primary" className="w-full">
+                      Return to Home
+                    </Button>
+                    <p className="text-xs text-gray-500 mt-2">
+                      This modal will close automatically in <span className="font-medium text-blue-600">{countdown}</span> seconds
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Modal */}
+          {paymentState.showPayment && !paymentState.paymentCompleted && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto transform animate-slideUp">
+                <div className="p-6 md:p-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold text-gray-800">Complete Your Payment</h2>
+                    <button
+                      onClick={resetForm}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="h-6 w-6" />
+                    </button>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                      <p className="text-green-800 font-medium">✅ Booking Created Successfully!</p>
+                      <p className="text-green-600 text-sm mt-1">
+                        Service: {paymentState.booking?.package_name}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <h3 className="font-semibold text-blue-900 mb-2">Payment Required</h3>
+                      <p className="text-blue-800 text-sm mb-3">
+                        A deposit payment of <strong>€{paymentState.paymentRequest?.amount}</strong> is required to confirm your booking.
+                      </p>
+                      <Button
+                        onClick={handlePayNow}
+                        variant="primary"
+                        className="w-full"
+                      >
+                        Pay Now - €{paymentState.paymentRequest?.amount}
+                      </Button>
+                    </div>
+
+                    <div className="text-center">
+                      <button
+                        onClick={resetForm}
+                        className="text-gray-500 hover:text-gray-700 text-sm underline"
+                      >
+                        Cancel and start over
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Booking Form - Only show if not in payment flow */}
+          {!paymentState.showPayment && (
+          <>
           <div className="bg-white rounded-lg shadow-md p-6 md:p-8 mt-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -531,7 +807,7 @@ const BookingPage: React.FC = () => {
               </div>
             </form>
           </div>
-          
+
           <div className="mt-12 bg-primary-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-neutral-800 mb-2">Important Information</h3>
             <ul className="list-disc list-inside space-y-2 text-neutral-600">
@@ -541,8 +817,23 @@ const BookingPage: React.FC = () => {
               <li>24-hour cancellation notice required to avoid charges</li>
             </ul>
           </div>
+          </>
+          )}
         </Container>
       </div>
+
+      {/* PaymentModal */}
+      {showPaymentModal && selectedPaymentRequest && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedPaymentRequest(null);
+          }}
+          paymentRequest={selectedPaymentRequest}
+          onPaymentComplete={handlePaymentModalComplete}
+        />
+      )}
     </>
   );
 };

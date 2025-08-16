@@ -9,6 +9,7 @@ import {
 } from '../types/paymentTypes';
 import { sendPaymentRequestEmail, sendPaymentConfirmationEmail } from './emailUtils';
 import { PAYMENT_CONFIG } from '../config/paymentConfig';
+import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
 import { 
   fetchServicePricing, 
   getServicePrice, 
@@ -192,7 +193,7 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
       throw new Error(`Failed to get payment requests: ${error.message}`);
     }
 
-    // Extract service name from notes field
+    // Extract service name from notes field and decrypt customer data
     const processedData = data.map(request => {
       let serviceName = 'Service Payment';
       
@@ -203,10 +204,22 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
           serviceName = depositMatch[1].trim();
         }
       }
+
+      // Decrypt customer data if encrypted
+      const customer = request.customer;
+      if (customer) {
+        if (customer.first_name && isDataEncrypted(customer.first_name)) {
+          customer.first_name = decryptSensitiveData(customer.first_name);
+        }
+        if (customer.last_name && isDataEncrypted(customer.last_name)) {
+          customer.last_name = decryptSensitiveData(customer.last_name);
+        }
+      }
       
       return {
         ...request,
-        service_name: serviceName
+        service_name: serviceName,
+        customer: customer
       } as PaymentRequestWithCustomer;
     });
 
@@ -243,10 +256,24 @@ export async function getCustomerPayments(customerId: number): Promise<PaymentWi
       throw new Error(`Failed to get payments: ${error.message}`);
     }
 
-    return data.map(payment => ({
-      ...payment,
-      invoice_number: payment.invoice?.invoice_number
-    })) as PaymentWithCustomer[];
+    return data.map(payment => {
+      // Decrypt customer data if encrypted
+      const customer = payment.customer;
+      if (customer) {
+        if (customer.first_name && isDataEncrypted(customer.first_name)) {
+          customer.first_name = decryptSensitiveData(customer.first_name);
+        }
+        if (customer.last_name && isDataEncrypted(customer.last_name)) {
+          customer.last_name = decryptSensitiveData(customer.last_name);
+        }
+      }
+
+      return {
+        ...payment,
+        invoice_number: payment.invoice?.invoice_number,
+        customer: customer
+      };
+    }) as PaymentWithCustomer[];
   } catch (error) {
     console.error('Error getting customer payments:', error);
     throw error;
@@ -587,9 +614,22 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
                    cleanTargetService.includes(cleanRequestService) ||
                    cleanRequestService === cleanTargetService)) {
                 console.log('✅ Service match found!');
+                
+                // Decrypt customer data if encrypted
+                const customer = payment.customer;
+                if (customer) {
+                  if (customer.first_name && isDataEncrypted(customer.first_name)) {
+                    customer.first_name = decryptSensitiveData(customer.first_name);
+                  }
+                  if (customer.last_name && isDataEncrypted(customer.last_name)) {
+                    customer.last_name = decryptSensitiveData(customer.last_name);
+                  }
+                }
+                
                 matchingPayments.push({
                   ...payment,
-                  invoice_number: payment.invoice?.invoice_number
+                  invoice_number: payment.invoice?.invoice_number,
+                  customer: customer
                 });
               }
             }

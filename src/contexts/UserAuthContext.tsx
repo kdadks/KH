@@ -22,7 +22,6 @@ import {
   validatePasswordResetToken as validatePasswordResetTokenUtil, 
   resetPasswordWithToken as resetPasswordWithTokenUtil 
 } from '../utils/passwordResetUtils';
-import { encryptCustomerPII, decryptCustomerPII } from '../utils/gdprUtils';
 import { withTimeout, logPerformance } from '../utils/performanceUtils';
 
 interface UserAuthProviderProps {

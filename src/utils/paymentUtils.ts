@@ -78,15 +78,18 @@ export const createSumUpCheckoutUrl = async (
     if (import.meta.env.DEV && SUMUP_MERCHANT_CODE === 'DEMO-MERCHANT-001') {
       console.log('Creating demo SumUp checkout for development');
       
-      const demoCheckoutUrl = `https://gateway.sumup.com/gateway/checkout?` +
-        `amount=${Math.round(amount * 100)}&currency=${currency}&` +
-        `description=${encodeURIComponent(description)}&` +
-        `checkout_reference=${checkoutReference}&` +
-        `merchant_code=DEMO-MERCHANT-001&` +
-        `return_url=${encodeURIComponent(`${window.location.origin}/payment-success`)}&` +
-        `cancel_url=${encodeURIComponent(`${window.location.origin}/payment-cancelled`)}`;
-
-      return demoCheckoutUrl;
+      // For demo purposes, create a working demo page URL
+      // This could be a local demo page or a sandbox environment
+      console.warn('Demo mode: SumUp checkout would open with:', {
+        amount: amount,
+        currency,
+        description,
+        checkoutReference,
+        customerEmail
+      });
+      
+      // Return a demo URL that simulates payment success
+      return `data:text/html,<html><body><h1>Demo Payment Page</h1><p>Amount: €${amount}</p><p>Description: ${description}</p><p><a href='javascript:window.close()'>Complete Demo Payment</a></p></body></html>`;
     }
 
     if (!SUMUP_MERCHANT_CODE || SUMUP_MERCHANT_CODE === 'DEMO-MERCHANT-001') {

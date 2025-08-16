@@ -69,9 +69,9 @@ export const getCustomerByEmail = async (email: string): Promise<{ customer: Use
       return { customer: null };
     }
 
-    // For login purposes, we don't need to decrypt all PII data immediately
-    // Only decrypt when needed to improve performance
-    return { customer: data };
+    // Decrypt customer PII data for user display
+    const decryptedCustomer = decryptCustomerPII(data);
+    return { customer: decryptedCustomer };
   } catch (error) {
     console.error('Exception in getCustomerByEmail:', error);
     return { customer: null, error: 'Unexpected error occurred' };
@@ -93,6 +93,12 @@ export const getCustomerById = async (customerId: number): Promise<{ customer: U
     if (error && error.code !== 'PGRST116') {
       console.error('Error fetching customer by ID:', error);
       return { customer: null, error: error.message };
+    }
+
+    if (data) {
+      // Decrypt customer PII data for display
+      const decryptedCustomer = decryptCustomerPII(data);
+      return { customer: decryptedCustomer };
     }
 
     return { customer: data };
