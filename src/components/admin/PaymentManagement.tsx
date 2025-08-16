@@ -33,18 +33,36 @@ import {
   PaymentGateway as PaymentGatewayType
 } from '../../utils/paymentManagementUtils';
 
-export const PaymentManagement: React.FC = () => {
+interface PaymentManagementProps {
+  paymentRequests?: PaymentRequestType[];
+  payments?: PaymentType[];
+  recentPayments?: PaymentType[];
+  bookings?: BookingWithoutPayment[];
+  gateways?: PaymentGatewayType[];
+  statistics?: any;
+  onRefresh?: () => void;
+}
+
+export const PaymentManagement: React.FC<PaymentManagementProps> = ({
+  paymentRequests: propPaymentRequests,
+  payments: propPayments,
+  recentPayments: propRecentPayments,
+  bookings: propBookings,
+  gateways: propGateways,
+  statistics: propStatistics,
+  onRefresh
+}) => {
   const { showSuccess, showError } = useToast();
   
-  // State management
+  // State management - Initialize with props if available
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'requests' | 'payments' | 'bookings' | 'gateways'>('overview');
-  const [paymentRequests, setPaymentRequests] = useState<PaymentRequestType[]>([]);
-  const [payments, setPayments] = useState<PaymentType[]>([]);
-  const [recentPayments, setRecentPayments] = useState<PaymentType[]>([]);
-  const [bookings, setBookings] = useState<BookingWithoutPayment[]>([]);
-  const [gateways, setGateways] = useState<PaymentGatewayType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statistics, setStatistics] = useState<any>(null);
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequestType[]>(propPaymentRequests || []);
+  const [payments, setPayments] = useState<PaymentType[]>(propPayments || []);
+  const [recentPayments, setRecentPayments] = useState<PaymentType[]>(propRecentPayments || []);
+  const [bookings, setBookings] = useState<BookingWithoutPayment[]>(propBookings || []);
+  const [gateways, setGateways] = useState<PaymentGatewayType[]>(propGateways || []);
+  const [loading, setLoading] = useState(!propPaymentRequests); // Only show loading if no data provided
+  const [statistics, setStatistics] = useState<any>(propStatistics || null);
   
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,22 +75,29 @@ export const PaymentManagement: React.FC = () => {
   const [selectedBooking, setSelectedBooking] = useState<BookingWithoutPayment | null>(null);
   const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayType | null>(null);
 
-  // Load data on component mount
+  // Load data on component mount - only if not provided via props
   useEffect(() => {
-    loadAllData();
-  }, []);
+    if (!propPaymentRequests || !propPayments || !propGateways) {
+      loadAllData();
+    } else {
+      setLoading(false); // Data is already provided via props
+    }
+  }, [propPaymentRequests, propPayments, propGateways]);
 
   const loadAllData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
-        loadPaymentRequests(),
-        loadPayments(),
-        loadRecentPayments(),
-        loadBookings(),
-        loadGateways(),
-        loadStatistics()
-      ]);
+      // Only fetch data not provided via props
+      const promises = [];
+      
+      if (!propPaymentRequests) promises.push(loadPaymentRequests());
+      if (!propPayments) promises.push(loadPayments());
+      if (!propRecentPayments) promises.push(loadRecentPayments());
+      if (!propBookings) promises.push(loadBookings());
+      if (!propGateways) promises.push(loadGateways());
+      if (!propStatistics) promises.push(loadStatistics());
+      
+      await Promise.all(promises);
     } catch (error) {
       console.error('Error loading payment data:', error);
       showError('Error', 'Failed to load payment data');
@@ -132,6 +157,16 @@ export const PaymentManagement: React.FC = () => {
       setStatistics(stats);
     } catch (error) {
       console.error('Error loading statistics:', error);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      // Use parent's refresh function if available
+      onRefresh();
+    } else {
+      // Fallback to local data loading
+      await loadAllData();
     }
   };
 

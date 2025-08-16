@@ -32,6 +32,12 @@ import {
   decryptBookingCustomerDataForAdmin, 
   logAdminDataAccess 
 } from '../utils/adminGdprUtils';
+import {
+  getAllPaymentRequests,
+  getAllPayments,
+  getAllPaymentGateways,
+  getPaymentStatistics
+} from '../utils/paymentManagementUtils';
 
 const AdminConsole = () => {
   const { showError, showSuccess } = useToast();
@@ -62,6 +68,10 @@ const AdminConsole = () => {
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
+  const [allPaymentRequests, setAllPaymentRequests] = useState<any[]>([]);
+  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [allPaymentGateways, setAllPaymentGateways] = useState<any[]>([]);
+  const [paymentStatistics, setPaymentStatistics] = useState<any>(null);
   const [filterDate, setFilterDate] = useState('');
   const [filterRange, setFilterRange] = useState<{start: string; end: string} | null>(null);
 
@@ -175,6 +185,9 @@ const AdminConsole = () => {
     if (isLoggedIn && allInvoices.length === 0) {
       fetchAllInvoices();
     }
+    if (isLoggedIn && allPaymentRequests.length === 0) {
+      fetchAllPaymentData();
+    }
   }, [isLoggedIn]); // Only depend on login state, not active tab
 
   // Login handler
@@ -197,7 +210,8 @@ const AdminConsole = () => {
           fetchAllBookings(), 
           fetchAllServices(), 
           fetchAllCustomers(), 
-          fetchAllInvoices()
+          fetchAllInvoices(),
+          fetchAllPaymentData()
         ]);
       } else {
         setLoginError('Login failed.');
@@ -322,6 +336,9 @@ const AdminConsole = () => {
       }
       if (!dataType || dataType === 'invoices') {
         await fetchAllInvoices();
+      }
+      if (!dataType || dataType === 'payments') {
+        await fetchAllPaymentData();
       }
       
       showSuccess('Refresh Complete', 'Data has been refreshed successfully.');
@@ -482,6 +499,43 @@ const AdminConsole = () => {
       }
     } catch (error) {
       console.error('Exception in fetchAllServices:', error);
+    }
+  };
+
+  // Fetch all payment-related data
+  const fetchAllPaymentData = async () => {
+    try {
+      setIsLoading(true);
+      console.log('📊 Fetching payment data...');
+      
+      // Fetch payment data in parallel for better performance
+      const [
+        paymentRequestsData,
+        paymentsData,
+        gatewaysData,
+        statisticsData
+      ] = await Promise.all([
+        getAllPaymentRequests(),
+        getAllPayments(),
+        getAllPaymentGateways(),
+        getPaymentStatistics()
+      ]);
+      
+      setAllPaymentRequests(paymentRequestsData || []);
+      setAllPayments(paymentsData || []);
+      setAllPaymentGateways(gatewaysData || []);
+      setPaymentStatistics(statisticsData);
+      
+      console.log('✅ Payment data loaded:', {
+        requests: paymentRequestsData?.length || 0,
+        payments: paymentsData?.length || 0,
+        gateways: gatewaysData?.length || 0
+      });
+    } catch (error) {
+      console.error('❌ Error fetching payment data:', error);
+      showError('Payment Data Error', 'Failed to load payment data. Some features may not be available.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -715,7 +769,13 @@ const AdminConsole = () => {
           />
         )}
         {activeTab === 'payments' && (
-          <PaymentManagement />
+          <PaymentManagement 
+            paymentRequests={allPaymentRequests}
+            payments={allPayments}
+            gateways={allPaymentGateways}
+            statistics={paymentStatistics}
+            onRefresh={() => handleManualRefresh('payments')}
+          />
         )}
         {activeTab === 'reports' && (
           <Reports allBookings={allBookings} />
