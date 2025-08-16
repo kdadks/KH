@@ -182,6 +182,7 @@ export async function createPaymentRequest(
       customer_id: customerId,
       invoice_id: invoiceId,
       booking_id: bookingId,
+      service_name: serviceName, // Add service_name to the database insert
       amount: finalAmount,
       currency: PAYMENT_CONFIG.DEFAULT_CURRENCY,
       payment_due_date: dueDate.toISOString(),

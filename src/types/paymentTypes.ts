@@ -112,6 +112,7 @@ export interface CreatePaymentRequestData {
   customer_id: number;
   invoice_id?: number | null;
   booking_id?: string | null; // UUID type to match bookings.id
+  service_name?: string; // Add service_name field
   amount: number;
   currency?: string;
   payment_due_date?: string;

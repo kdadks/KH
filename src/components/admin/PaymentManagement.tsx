@@ -11,7 +11,6 @@ import {
   Clock,
   Settings,
   FileText,
-  DollarSign,
   TrendingUp
 } from 'lucide-react';
 import { useToast } from '../shared/toastContext';
@@ -21,7 +20,7 @@ import PaymentGatewayManagement from './PaymentGatewayManagement';
 import { 
   getAllPaymentRequests,
   getAllPayments,
-  getInvoicesWithPaymentTracking,
+  getRecentPayments,
   getBookingsWithoutPaymentRequests,
   getAllPaymentGateways,
   getPaymentStatistics,
@@ -30,7 +29,6 @@ import {
   deletePaymentRequest,
   PaymentRequest as PaymentRequestType,
   Payment as PaymentType,
-  InvoiceWithPayments,
   BookingWithoutPayment,
   PaymentGateway as PaymentGatewayType
 } from '../../utils/paymentManagementUtils';
@@ -39,10 +37,10 @@ export const PaymentManagement: React.FC = () => {
   const { showSuccess, showError } = useToast();
   
   // State management
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'requests' | 'payments' | 'invoices' | 'bookings' | 'gateways'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'requests' | 'payments' | 'bookings' | 'gateways'>('overview');
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequestType[]>([]);
   const [payments, setPayments] = useState<PaymentType[]>([]);
-  const [invoices, setInvoices] = useState<InvoiceWithPayments[]>([]);
+  const [recentPayments, setRecentPayments] = useState<PaymentType[]>([]);
   const [bookings, setBookings] = useState<BookingWithoutPayment[]>([]);
   const [gateways, setGateways] = useState<PaymentGatewayType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +68,7 @@ export const PaymentManagement: React.FC = () => {
       await Promise.all([
         loadPaymentRequests(),
         loadPayments(),
-        loadInvoices(),
+        loadRecentPayments(),
         loadBookings(),
         loadGateways(),
         loadStatistics()
@@ -101,12 +99,12 @@ export const PaymentManagement: React.FC = () => {
     }
   };
 
-  const loadInvoices = async () => {
+  const loadRecentPayments = async () => {
     try {
-      const allInvoices = await getInvoicesWithPaymentTracking();
-      setInvoices(allInvoices);
+      const recentPaymentsData = await getRecentPayments(5);
+      setRecentPayments(recentPaymentsData);
     } catch (error) {
-      console.error('Error loading invoices:', error);
+      console.error('Error loading recent payments:', error);
     }
   };
 
@@ -178,13 +176,6 @@ export const PaymentManagement: React.FC = () => {
             <Plus className="w-4 h-4 mr-2" />
             Create Payment Request
           </button>
-          <button
-            onClick={() => setShowGatewayModal(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center"
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            Manage Gateways
-          </button>
         </div>
       </div>
 
@@ -195,7 +186,6 @@ export const PaymentManagement: React.FC = () => {
             { id: 'overview', label: 'Overview', icon: TrendingUp },
             { id: 'requests', label: 'Payment Requests', icon: FileText },
             { id: 'payments', label: 'Payments', icon: CreditCard },
-            { id: 'invoices', label: 'Invoice Tracking', icon: FileText },
             { id: 'bookings', label: 'Pending Bookings', icon: Clock },
             { id: 'gateways', label: 'Payment Gateways', icon: Settings }
           ].map(tab => (
@@ -219,7 +209,7 @@ export const PaymentManagement: React.FC = () => {
       {activeSubTab === 'overview' && (
         <div className="space-y-6">
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <div className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -228,6 +218,18 @@ export const PaymentManagement: React.FC = () => {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Requests</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.totalRequests}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+              <div className="flex items-center">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <span className="text-purple-600 font-bold text-lg">€</span>
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Total Requested</p>
+                  <p className="text-2xl font-bold text-gray-900">€{stats.totalAmount?.toFixed(2) || '0.00'}</p>
                 </div>
               </div>
             </div>
@@ -250,8 +252,8 @@ export const PaymentManagement: React.FC = () => {
                   <CheckCircle className="w-6 h-6 text-green-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Payment Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.paymentRate}%</p>
+                  <p className="text-sm font-medium text-gray-600">Total Paid</p>
+                  <p className="text-2xl font-bold text-gray-900">€{stats.paidAmount?.toFixed(2) || '0.00'}</p>
                 </div>
               </div>
             </div>
@@ -259,7 +261,7 @@ export const PaymentManagement: React.FC = () => {
             <div className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center">
                 <div className="p-2 bg-red-100 rounded-lg">
-                  <DollarSign className="w-6 h-6 text-red-600" />
+                  <span className="text-red-600 font-bold text-lg">€</span>
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Outstanding</p>
@@ -275,7 +277,31 @@ export const PaymentManagement: React.FC = () => {
               <h3 className="text-lg font-medium text-gray-900">Recent Payment Activity</h3>
             </div>
             <div className="p-6">
-              <p className="text-gray-500">No recent activity to display</p>
+              {recentPayments.length === 0 ? (
+                <p className="text-gray-500">No recent payment activity to display</p>
+              ) : (
+                <div className="space-y-4">
+                  {recentPayments.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className="p-2 bg-green-100 rounded-full">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{payment.customer_name}</p>
+                          <p className="text-sm text-gray-500">{payment.service_name}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-gray-900">€{payment.amount.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(payment.payment_date || payment.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -378,10 +404,10 @@ export const PaymentManagement: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {request.service_name}
+                          {request.service_name || 'No service specified'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {request.currency}{request.amount.toFixed(2)}
+                          €{request.amount.toFixed(2)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -394,7 +420,7 @@ export const PaymentManagement: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(request.due_date).toLocaleDateString()}
+                          {request.due_date ? new Date(request.due_date).toLocaleDateString() : 'No due date'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
@@ -419,18 +445,98 @@ export const PaymentManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Other tabs would be implemented similarly */}
+      {/* Payments Tab */}
       {activeSubTab === 'payments' && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Payments</h3>
-          <p className="text-gray-500">Payment tracking functionality will be implemented here</p>
-        </div>
-      )}
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">All Payments</h3>
+            <p className="text-sm text-gray-600">Complete payment history sorted by most recent</p>
+          </div>
 
-      {activeSubTab === 'invoices' && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Invoice Payment Tracking</h3>
-          <p className="text-gray-500">Invoice payment tracking functionality will be implemented here</p>
+          {/* Payments Table */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Service
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment Method
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Transaction ID
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {payments.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                        No payments found
+                      </td>
+                    </tr>
+                  ) : (
+                    payments.map((payment) => (
+                      <tr key={payment.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {payment.customer_name || 'Unknown Customer'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {payment.customer_email || 'Unknown Email'}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {payment.service_name || 'Payment'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          €{payment.amount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {payment.payment_method || 'Unknown'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            payment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {payment.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {payment.payment_date ? 
+                            new Date(payment.payment_date).toLocaleString() : 
+                            new Date(payment.created_at).toLocaleString()
+                          }
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                          {payment.transaction_id || 'N/A'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
