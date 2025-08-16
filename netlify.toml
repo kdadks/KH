@@ -3,6 +3,6 @@
   command = "npm run predeploy"
   publish = "dist"
 
-# Uncomment and configure if using Netlify Functions
-#[functions]
-#  directory = "netlify/functions"
+# Netlify Functions configuration
+[functions]
+  directory = "netlify/functions"

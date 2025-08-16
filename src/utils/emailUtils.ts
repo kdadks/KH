@@ -1,14 +1,18 @@
-import emailjs from 'emailjs-com';
+// Import the new SMTP email service
+import {
+  initializeEmailService,
+  sendBookingConfirmationEmail as smtpSendBookingConfirmation,
+  sendPaymentReceiptEmail as smtpSendPaymentReceipt,
+  sendBookingReminderEmail as smtpSendBookingReminder,
+  sendAdminNotificationEmail as smtpSendAdminNotification,
+  sendWelcomeEmail as smtpSendWelcome,
+  sendPaymentRequestEmail as smtpSendPaymentRequest,
+  sendPaymentConfirmationEmail as smtpSendPaymentConfirmation,
+  sendInvoiceNotificationEmail as smtpSendInvoiceNotification,
+  sendPasswordResetEmail as smtpSendPasswordReset
+} from './emailSMTP';
 
-// EmailJS Configuration - Using Vite environment variables
-const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || '';
-const EMAILJS_TEMPLATE_BOOKING_CONFIRMATION = import.meta.env.VITE_EMAILJS_TEMPLATE_BOOKING_CONFIRMATION || '';
-const EMAILJS_TEMPLATE_BOOKING_REMINDER = import.meta.env.VITE_EMAILJS_TEMPLATE_BOOKING_REMINDER || '';
-const EMAILJS_TEMPLATE_PAYMENT_RECEIPT = import.meta.env.VITE_EMAILJS_TEMPLATE_PAYMENT_RECEIPT || '';
-const EMAILJS_TEMPLATE_ADMIN_NOTIFICATION = import.meta.env.VITE_EMAILJS_TEMPLATE_ADMIN_NOTIFICATION || '';
-const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || '';
-
-// Email template interfaces
+// Email template interfaces (keeping for backward compatibility)
 export interface BookingConfirmationData {
   customer_name: string;
   customer_email: string;
@@ -28,8 +32,17 @@ export interface PaymentReceiptData {
   transaction_id: string;
   payment_amount: number;
   payment_date: string;
-  service_description: string;
-  booking_reference: string;
+  service_name?: string;
+}
+
+export interface PaymentRequestData {
+  customer_name: string;
+  customer_email: string;
+  amount: number;
+  service_name: string;
+  due_date: string;
+  payment_url?: string;
+  invoice_number?: string;
 }
 
 export interface BookingReminderData {
@@ -38,246 +51,270 @@ export interface BookingReminderData {
   service_name: string;
   appointment_date: string;
   appointment_time: string;
-  therapist_name?: string;
-  clinic_address?: string;
   booking_reference: string;
 }
 
 export interface AdminNotificationData {
-  admin_email: string;
-  notification_type: 'new_booking' | 'payment_received' | 'cancellation';
-  customer_name: string;
-  service_name: string;
-  appointment_date: string;
-  appointment_time: string;
-  booking_reference: string;
-  additional_info?: string;
+  notification_type: string;
+  message: string;
+  details?: Record<string, any>;
 }
 
 export interface PasswordResetEmailData {
-  customer_name: string;
   customer_email: string;
+  customer_name: string;
   reset_url: string;
-  expires_in_hours: number;
 }
 
-// Initialize EmailJS
+// Initialize Email Service (now using SMTP instead of EmailJS)
 export const initializeEmailJS = (): boolean => {
-  if (!EMAILJS_PUBLIC_KEY) {
-    console.log('EmailJS public key not configured - email sending will be skipped');
-    return false;
-  }
-  
-  try {
-    emailjs.init(EMAILJS_PUBLIC_KEY);
-    console.log('EmailJS initialized successfully');
-    return true;
-  } catch (error) {
-    console.error('Failed to initialize EmailJS:', error);
-    return false;
-  }
+  // Initialize the SMTP email service
+  return initializeEmailService();
 };
 
-// Send booking confirmation email
+// Booking confirmation email
 export const sendBookingConfirmationEmail = async (data: BookingConfirmationData): Promise<boolean> => {
   try {
-    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_BOOKING_CONFIRMATION) {
-      throw new Error('EmailJS booking confirmation template not configured');
-    }
-
-    const templateParams = {
-      to_email: data.customer_email,
-      to_name: data.customer_name,
+    return await smtpSendBookingConfirmation(data.customer_email, {
+      customer_name: data.customer_name,
       service_name: data.service_name,
       appointment_date: data.appointment_date,
       appointment_time: data.appointment_time,
-      total_amount: `€${data.total_amount.toFixed(2)}`,
+      total_amount: data.total_amount,
       booking_reference: data.booking_reference,
-      therapist_name: data.therapist_name || 'KH Therapy Team',
-      clinic_address: data.clinic_address || 'Dublin, Ireland',
-      special_instructions: data.special_instructions || 'None',
-      year: new Date().getFullYear()
-    };
-
-    const response = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_BOOKING_CONFIRMATION,
-      templateParams
-    );
-
-    console.log('Booking confirmation email sent:', response.status, response.text);
-    return response.status === 200;
+      therapist_name: data.therapist_name,
+      clinic_address: data.clinic_address,
+      special_instructions: data.special_instructions
+    });
   } catch (error) {
     console.error('Error sending booking confirmation email:', error);
     return false;
   }
 };
 
-// Send payment receipt email
+// Payment receipt email
 export const sendPaymentReceiptEmail = async (data: PaymentReceiptData): Promise<boolean> => {
   try {
-    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_PAYMENT_RECEIPT) {
-      throw new Error('EmailJS payment receipt template not configured');
-    }
-
-    const templateParams = {
-      to_email: data.customer_email,
-      to_name: data.customer_name,
+    return await smtpSendPaymentReceipt(data.customer_email, {
+      customer_name: data.customer_name,
       transaction_id: data.transaction_id,
-      payment_amount: `€${data.payment_amount.toFixed(2)}`,
+      payment_amount: data.payment_amount,
       payment_date: data.payment_date,
-      service_description: data.service_description,
-      booking_reference: data.booking_reference,
-      year: new Date().getFullYear()
-    };
-
-    const response = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_PAYMENT_RECEIPT,
-      templateParams
-    );
-
-    console.log('Payment receipt email sent:', response.status, response.text);
-    return response.status === 200;
+      service_name: data.service_name
+    });
   } catch (error) {
     console.error('Error sending payment receipt email:', error);
     return false;
   }
 };
 
-// Send booking reminder email
+// Booking reminder email
 export const sendBookingReminderEmail = async (data: BookingReminderData): Promise<boolean> => {
   try {
-    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_BOOKING_REMINDER) {
-      throw new Error('EmailJS booking reminder template not configured');
-    }
-
-    const templateParams = {
-      to_email: data.customer_email,
-      to_name: data.customer_name,
+    return await smtpSendBookingReminder(data.customer_email, {
+      customer_name: data.customer_name,
       service_name: data.service_name,
       appointment_date: data.appointment_date,
       appointment_time: data.appointment_time,
-      therapist_name: data.therapist_name || 'KH Therapy Team',
-      clinic_address: data.clinic_address || 'Dublin, Ireland',
-      booking_reference: data.booking_reference,
-      year: new Date().getFullYear()
-    };
-
-    const response = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_BOOKING_REMINDER,
-      templateParams
-    );
-
-    console.log('Booking reminder email sent:', response.status, response.text);
-    return response.status === 200;
+      booking_reference: data.booking_reference
+    });
   } catch (error) {
     console.error('Error sending booking reminder email:', error);
     return false;
   }
 };
 
-// Send admin notification email
+// Admin notification email
 export const sendAdminNotificationEmail = async (data: AdminNotificationData): Promise<boolean> => {
   try {
-    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ADMIN_NOTIFICATION) {
-      throw new Error('EmailJS admin notification template not configured');
-    }
-
-    const templateParams = {
-      to_email: data.admin_email,
+    // Use a default admin email or get from environment
+    const adminEmail = 'info@khtherapy.ie'; // This should be configurable
+    return await smtpSendAdminNotification(adminEmail, {
+      customer_name: 'Admin',
       notification_type: data.notification_type,
-      customer_name: data.customer_name,
-      service_name: data.service_name,
-      appointment_date: data.appointment_date,
-      appointment_time: data.appointment_time,
-      booking_reference: data.booking_reference,
-      additional_info: data.additional_info || '',
-      timestamp: new Date().toLocaleString('en-IE'),
-      year: new Date().getFullYear()
-    };
-
-    const response = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_ADMIN_NOTIFICATION,
-      templateParams
-    );
-
-    console.log('Admin notification email sent:', response.status, response.text);
-    return response.status === 200;
+      message: data.message,
+      details: data.details
+    });
   } catch (error) {
     console.error('Error sending admin notification email:', error);
     return false;
   }
 };
 
-// Send welcome email for new user accounts
+// Welcome email
 export const sendWelcomeEmail = async (customerName: string, customerEmail: string): Promise<boolean> => {
   try {
-    // Using booking confirmation template for welcome email with adjusted content
-    const templateParams = {
-      to_email: customerEmail,
-      to_name: customerName,
-      service_name: 'Account Registration',
-      appointment_date: 'Welcome to KH Therapy',
-      appointment_time: 'Your account has been created',
-      total_amount: '',
-      booking_reference: `Welcome Package for ${customerName}`,
-      therapist_name: 'KH Therapy Team',
-      clinic_address: 'Dublin, Ireland',
-      special_instructions: 'You can now access your customer portal to view bookings, invoices, and manage your appointments.',
-      year: new Date().getFullYear()
-    };
-
-    const response = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_BOOKING_CONFIRMATION,
-      templateParams
-    );
-
-    console.log('Welcome email sent:', response.status, response.text);
-    return response.status === 200;
+    return await smtpSendWelcome(customerName, customerEmail);
   } catch (error) {
     console.error('Error sending welcome email:', error);
     return false;
   }
 };
 
-// Batch email sending with rate limiting
+// Payment request email
+export const sendPaymentRequestEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    amount: number;
+    service_name: string;
+    due_date: string;
+    payment_url?: string;
+    invoice_number?: string;
+  }
+): Promise<boolean> => {
+  try {
+    return await smtpSendPaymentRequest(customerEmail, {
+      customer_name: data.customer_name,
+      amount: data.amount,
+      service_name: data.service_name,
+      due_date: data.due_date,
+      payment_url: data.payment_url,
+      invoice_number: data.invoice_number
+    });
+  } catch (error) {
+    console.error('Error sending payment request email:', error);
+    return false;
+  }
+};
+
+// Payment confirmation email
+export const sendPaymentConfirmationEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    transaction_id: string;
+    amount: number;
+    service_name?: string;
+  }
+): Promise<boolean> => {
+  try {
+    return await smtpSendPaymentConfirmation(customerEmail, {
+      customer_name: data.customer_name,
+      transaction_id: data.transaction_id,
+      amount: data.amount,
+      service_name: data.service_name
+    });
+  } catch (error) {
+    console.error('Error sending payment confirmation email:', error);
+    return false;
+  }
+};
+
+// Invoice notification email
+export const sendInvoiceNotificationEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    invoice_number: string;
+    amount: number;
+    due_date: string;
+    payment_url?: string;
+  }
+): Promise<boolean> => {
+  try {
+    return await smtpSendInvoiceNotification(customerEmail, {
+      customer_name: data.customer_name,
+      invoice_number: data.invoice_number,
+      amount: data.amount,
+      due_date: data.due_date,
+      payment_url: data.payment_url
+    });
+  } catch (error) {
+    console.error('Error sending invoice notification email:', error);
+    return false;
+  }
+};
+
+// Password reset email
+export const sendPasswordResetEmail = async (data: PasswordResetEmailData): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const result = await smtpSendPasswordReset(data.customer_email, {
+      customer_name: data.customer_name,
+      reset_url: data.reset_url
+    });
+    
+    return { success: result };
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to send password reset email' 
+    };
+  }
+};
+
+// Batch email sending function
 export const sendBatchEmails = async (
-  emails: Array<() => Promise<boolean>>,
-  delayMs: number = 1000
-): Promise<{ sent: number; failed: number }> => {
-  let sent = 0;
+  emailType: string,
+  recipients: { email: string; data: any }[],
+  options?: { delay?: number; batchSize?: number }
+): Promise<{ success: number; failed: number }> => {
+  const delay = options?.delay || 1000; // 1 second delay between emails
+  const batchSize = options?.batchSize || 5; // Process 5 emails at a time
+  
+  let success = 0;
   let failed = 0;
 
-  for (let i = 0; i < emails.length; i++) {
-    try {
-      const success = await emails[i]();
-      if (success) {
-        sent++;
+  // Process emails in batches
+  for (let i = 0; i < recipients.length; i += batchSize) {
+    const batch = recipients.slice(i, i + batchSize);
+    
+    // Process batch in parallel
+    const batchPromises = batch.map(async (recipient) => {
+      try {
+        let result = false;
+        
+        switch (emailType) {
+          case 'booking_confirmation':
+            result = await sendBookingConfirmationEmail(recipient.data);
+            break;
+          case 'payment_receipt':
+            result = await sendPaymentReceiptEmail(recipient.data);
+            break;
+          case 'booking_reminder':
+            result = await sendBookingReminderEmail(recipient.data);
+            break;
+          case 'welcome':
+            result = await sendWelcomeEmail(recipient.data.customer_name, recipient.email);
+            break;
+          default:
+            console.error('Unknown email type:', emailType);
+            return false;
+        }
+        
+        return result;
+      } catch (error) {
+        console.error(`Failed to send ${emailType} email to ${recipient.email}:`, error);
+        return false;
+      }
+    });
+
+    // Wait for batch to complete
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    // Count results
+    batchResults.forEach((result) => {
+      if (result.status === 'fulfilled' && result.value) {
+        success++;
       } else {
         failed++;
       }
-    } catch (error) {
-      console.error(`Failed to send email ${i + 1}:`, error);
-      failed++;
-    }
+    });
 
-    // Add delay between emails to avoid rate limiting
-    if (i < emails.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+    // Add delay between batches (except for the last batch)
+    if (i + batchSize < recipients.length) {
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
-  return { sent, failed };
+  return { success, failed };
 };
 
-// Format date for emails
+// Email formatting utilities
 export const formatEmailDate = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-IE', {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  return dateObj.toLocaleDateString('en-IE', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -285,215 +322,24 @@ export const formatEmailDate = (date: Date | string): string => {
   });
 };
 
-// Format time for emails
 export const formatEmailTime = (time: string): string => {
-  return time; // Already in HH:MM format typically
+  // Handle different time formats
+  if (time.includes(':')) {
+    const [hours, minutes] = time.split(':');
+    const hour24 = parseInt(hours, 10);
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    return `${hour12}:${minutes} ${ampm}`;
+  }
+  return time;
 };
 
-// Payment Request Email Interface
-export interface PaymentRequestData {
-  customerName: string;
-  amount: number;
-  currency: string;
-  dueDate?: string | null;
-  paymentUrl: string;
-}
-
-// Payment Confirmation Email Interface  
-export interface PaymentConfirmationData {
-  customerName: string;
-  amount: number;
-  currency: string;
-  transactionId: string;
-  paymentDate: string;
-}
-
-// Send payment request email
-export const sendPaymentRequestEmail = async (
-  customerEmail: string,
-  data: PaymentRequestData
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    if (!initializeEmailJS()) {
-      return { success: false, error: 'EmailJS not configured' };
-    }
-
-    const templateParams = {
-      to_email: customerEmail,
-      customer_name: data.customerName,
-      payment_amount: `${data.currency} ${data.amount.toFixed(2)}`,
-      due_date: data.dueDate ? formatEmailDate(data.dueDate) : 'No due date',
-      payment_url: data.paymentUrl,
-      company_name: 'ITWala Physiotherapy',
-      year: new Date().getFullYear().toString()
-    };
-
-    await emailjs.send(
-      EMAILJS_SERVICE_ID!,
-      'template_payment_request', // Payment request template ID
-      templateParams,
-      EMAILJS_PUBLIC_KEY
-    );
-
-    console.log('Payment request email sent successfully to:', customerEmail);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to send payment request email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-};
-
-// Send payment confirmation email
-export const sendPaymentConfirmationEmail = async (
-  customerEmail: string, 
-  data: PaymentConfirmationData
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    if (!initializeEmailJS()) {
-      return { success: false, error: 'EmailJS not configured' };
-    }
-
-    const templateParams = {
-      to_email: customerEmail,
-      customer_name: data.customerName,
-      payment_amount: `${data.currency} ${data.amount.toFixed(2)}`,
-      transaction_id: data.transactionId,
-      payment_date: formatEmailDate(data.paymentDate),
-      company_name: 'ITWala Physiotherapy',
-      year: new Date().getFullYear().toString()
-    };
-
-    await emailjs.send(
-      EMAILJS_SERVICE_ID!,
-      'template_payment_confirmation', // Payment confirmation template ID
-      templateParams,
-      EMAILJS_PUBLIC_KEY
-    );
-
-    console.log('Payment confirmation email sent successfully to:', customerEmail);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to send payment confirmation email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-};
-
-// Send invoice notification email (simplified version)
-export const sendInvoiceNotificationEmail = async (
-  customerEmail: string,
-  data: {
-    customerName: string;
-    invoiceNumber: string;
-    invoiceAmount: string;
-    dueDate: string;
-    companyName: string;
-  }
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    if (!initializeEmailJS()) {
-      return { success: false, error: 'EmailJS not configured - skipping email' };
-    }
-
-    if (!EMAILJS_SERVICE_ID) {
-      return { success: false, error: 'EmailJS service ID not configured' };
-    }
-
-    const templateParams = {
-      to_email: customerEmail,
-      to_name: data.customerName,
-      invoice_number: data.invoiceNumber,
-      invoice_amount: data.invoiceAmount,
-      due_date: data.dueDate,
-      company_name: data.companyName,
-      year: new Date().getFullYear().toString()
-    };
-
-    await emailjs.send(
-      EMAILJS_SERVICE_ID!,
-      'template_invoice_notification', // Invoice notification template ID
-      templateParams,
-      EMAILJS_PUBLIC_KEY
-    );
-
-    console.log('Invoice notification email sent successfully to:', customerEmail);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to send invoice notification email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-};
-
-// Validate email configuration
+// Email configuration validation
 export const validateEmailConfiguration = (): { isValid: boolean; missingConfig: string[] } => {
-  const requiredConfig = [
-    { key: 'EMAILJS_SERVICE_ID', value: EMAILJS_SERVICE_ID },
-    { key: 'EMAILJS_PUBLIC_KEY', value: EMAILJS_PUBLIC_KEY },
-    { key: 'EMAILJS_TEMPLATE_BOOKING_CONFIRMATION', value: EMAILJS_TEMPLATE_BOOKING_CONFIRMATION },
-    { key: 'EMAILJS_TEMPLATE_PAYMENT_RECEIPT', value: EMAILJS_TEMPLATE_PAYMENT_RECEIPT }
-  ];
-
-  const missingConfig = requiredConfig
-    .filter(config => !config.value)
-    .map(config => config.key);
-
+  // For SMTP, we just need to verify the function is available
+  // The actual SMTP configuration is handled server-side
   return {
-    isValid: missingConfig.length === 0,
-    missingConfig
+    isValid: true,
+    missingConfig: []
   };
-};
-
-// Send password reset email
-export const sendPasswordResetEmail = async (data: PasswordResetEmailData): Promise<{ success: boolean; error?: string }> => {
-  try {
-    if (!initializeEmailJS()) {
-      return { success: false, error: 'EmailJS not configured' };
-    }
-
-    if (!EMAILJS_SERVICE_ID) {
-      return { success: false, error: 'EmailJS service ID not configured' };
-    }
-
-    const templateParams = {
-      to_email: data.customer_email,
-      to_name: data.customer_name,
-      reset_url: data.reset_url,
-      expires_in_hours: data.expires_in_hours.toString(),
-      company_name: 'KH Therapy',
-      year: new Date().getFullYear().toString(),
-      // Using booking confirmation template structure for now
-      service_name: 'Password Reset Request',
-      appointment_date: 'Reset your password',
-      appointment_time: `This link expires in ${data.expires_in_hours} hour(s)`,
-      total_amount: '',
-      booking_reference: 'Password Reset',
-      therapist_name: 'KH Therapy Support Team',
-      clinic_address: 'Dublin, Ireland',
-      special_instructions: `Click the following link to reset your password: ${data.reset_url}`
-    };
-
-    await emailjs.send(
-      EMAILJS_SERVICE_ID!,
-      EMAILJS_TEMPLATE_BOOKING_CONFIRMATION, // Using existing template with custom content
-      templateParams,
-      EMAILJS_PUBLIC_KEY
-    );
-
-    console.log('Password reset email sent successfully to:', data.customer_email);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to send password reset email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
 };
