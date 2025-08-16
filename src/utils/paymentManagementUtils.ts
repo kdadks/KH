@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient';
 
 export interface PaymentRequest {
-  id: string;
+  id: number; // Changed from string to number to match SERIAL
   customer_id: number;
   customer_name: string;
   customer_email: string;
@@ -11,13 +11,13 @@ export interface PaymentRequest {
   status: 'pending' | 'paid' | 'failed' | 'cancelled';
   due_date: string;
   created_at: string;
-  booking_id?: string;
+  booking_id?: string; // UUID as string
   invoice_id?: number;
 }
 
 export interface Payment {
-  id: string;
-  payment_request_id: string;
+  id: string; // UUID
+  payment_request_id: number; // Changed from string to number
   amount: number;
   currency: string;
   status: 'completed' | 'failed' | 'pending';
@@ -108,7 +108,7 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
 export const getAllPayments = async (): Promise<Payment[]> => {
   try {
     const { data, error } = await supabase
-      .from('payments')
+      .from('payments_tracking') // Updated to use the new table name
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -306,7 +306,7 @@ export const createManualPaymentRequest = async (requestData: {
  * Update payment request status
  */
 export const updatePaymentRequestStatus = async (
-  requestId: string,
+  requestId: number, // Changed from string to number
   status: 'pending' | 'paid' | 'failed' | 'cancelled'
 ): Promise<boolean> => {
   try {
@@ -330,7 +330,7 @@ export const updatePaymentRequestStatus = async (
 /**
  * Delete a payment request
  */
-export const deletePaymentRequest = async (requestId: string): Promise<boolean> => {
+export const deletePaymentRequest = async (requestId: number): Promise<boolean> => { // Changed from string to number
   try {
     const { error } = await supabase
       .from('payment_requests')
