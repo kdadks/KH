@@ -81,7 +81,7 @@ const BookingForm: React.FC = () => {
       } else {
         console.log('⚠️ No payment request generated, using fallback');
         // Fallback to old behavior if no payment request
-        showSuccess('Booking Submitted!', 'We will contact you soon to confirm your appointment.');
+        showSuccess('Booking Submitted!', 'Contact Physiotherapist for more details about rate card for services.');
         resetForm();
       }
     } catch (error) {
