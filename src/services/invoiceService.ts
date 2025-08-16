@@ -599,16 +599,6 @@ export async function downloadInvoicePDFWithPayments(
     const roundedDepositAmount = Math.round(depositAmount * 100) / 100;
     const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
 
-    console.log('Unified Payment Debug:', {
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoice_number,
-      invoiceBookingId: invoice.booking_id,
-      paymentsCount: invoicePayments.length,
-      depositAmount: roundedDepositAmount,
-      otherPaymentsAmount: Math.round(otherPaymentsAmount * 100) / 100,
-      totalPaidAmount: roundedTotalPaid
-    });
-
     // Transform data for PDF service
     const invoiceData = {
       id: invoice.id,

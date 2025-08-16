@@ -187,7 +187,6 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
         customer_id,
         invoice_id
       `)
-      .eq('status', 'paid') // Only get completed payments
       .order('created_at', { ascending: false })
       .limit(limit);
 

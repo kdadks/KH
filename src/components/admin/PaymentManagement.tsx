@@ -77,12 +77,12 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
 
   // Load data on component mount - only if not provided via props
   useEffect(() => {
-    if (!propPaymentRequests || !propPayments || !propGateways) {
+    if (!propPaymentRequests || !propPayments || !propRecentPayments || !propGateways) {
       loadAllData();
     } else {
       setLoading(false); // Data is already provided via props
     }
-  }, [propPaymentRequests, propPayments, propGateways]);
+  }, [propPaymentRequests, propPayments, propRecentPayments, propGateways]);
 
   const loadAllData = async () => {
     setLoading(true);
