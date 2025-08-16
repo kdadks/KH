@@ -259,9 +259,9 @@ GRANT SELECT ON payment_statistics TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_bookings_without_payment_requests() TO authenticated;
 GRANT EXECUTE ON FUNCTION get_invoices_with_payment_tracking() TO authenticated;
 
--- Step 18: Insert default gateway (optional - you can remove this or update the API key)
-INSERT INTO payment_gateways (name, provider, environment, api_key, is_active) 
-VALUES ('Default SumUp Gateway', 'sumup', 'sandbox', 'replace-with-your-sumup-api-key', false)
+-- Step 18: Insert default SumUp gateway with your merchant code
+INSERT INTO payment_gateways (name, provider, environment, api_key, merchant_id, is_active) 
+VALUES ('SumUp Demo Gateway', 'sumup', 'sandbox', 'demo-api-key-replace-with-real', 'DEMO-MERCHANT-001', false)
 ON CONFLICT DO NOTHING;
 
 -- Success message
