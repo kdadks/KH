@@ -191,7 +191,23 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
     // Get all invoices for this customer - show both sent and paid invoices
     const { data: invoicesData, error } = await supabase
       .from('invoices')
-      .select('*')
+      .select(`
+        *,
+        payments!payments_invoice_id_fkey(
+          id,
+          invoice_id,
+          customer_id,
+          amount,
+          currency,
+          status,
+          payment_method,
+          sumup_checkout_id,
+          sumup_payment_type,
+          payment_date,
+          notes,
+          created_at
+        )
+      `)
       .eq('customer_id', parseInt(customerId))
       .in('status', ['sent', 'paid']) // Include both sent and paid invoices
       .order('invoice_date', { ascending: false }); // Most recent first
@@ -211,6 +227,20 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
         const dueDate = new Date(invoice.due_date);
         daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
       }
+      
+      console.log(`📋 Loading invoice ${invoice.invoice_number}:`, {
+        id: invoice.id,
+        total_amount: invoice.total_amount,
+        status: invoice.status,
+        paymentsCount: invoice.payments?.length || 0,
+        payments: invoice.payments?.map((p: any) => ({
+          id: p.id,
+          amount: p.amount,
+          status: p.status,
+          notes: p.notes,
+          payment_method: p.payment_method
+        }))
+      });
       
       return {
         ...invoice,
