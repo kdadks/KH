@@ -100,7 +100,6 @@ const UserInvoices: React.FC = () => {
         status: invoice.status,
         subtotal: invoice.subtotal,
         vat_amount: invoice.vat_amount,
-        total_amount: invoice.total_amount,
         total: invoice.total_amount, // Map total_amount to total for compatibility
         total_paid: roundedTotalPaid, // Add calculated total paid (rounded)
         deposit_paid: roundedDepositAmount, // Add calculated deposit amount

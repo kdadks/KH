@@ -55,6 +55,7 @@ interface LegacyInvoice {
   vat_amount?: number;
   discount_amount?: number;
   deposit_paid?: number;
+  total_paid?: number;  // Total amount paid so far
   total: number;
   notes?: string;
   currency?: string;

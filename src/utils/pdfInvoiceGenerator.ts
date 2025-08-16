@@ -449,11 +449,13 @@ export class PDFInvoiceGenerator {
     const depositAmount = invoiceData.financial.depositPaid || 0;
     
     console.log('PDF Generator Payment Debug:', {
+      invoiceNumber: invoiceData.invoiceNumber,
       totalInvoiceAmount,
       totalPaidAmount,
       depositAmount,
       additionalPayments: totalPaidAmount - depositAmount,
-      actualDueAmount: totalInvoiceAmount - totalPaidAmount
+      actualDueAmount: totalInvoiceAmount - totalPaidAmount,
+      financialData: invoiceData.financial
     });
     
     // Show deposit if applicable (separate from other payments)

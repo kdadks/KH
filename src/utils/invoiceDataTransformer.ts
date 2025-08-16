@@ -76,6 +76,15 @@ export function transformInvoiceData(
   customer: ExistingCustomer,
   items: ExistingInvoiceItem[]
 ): InvoiceData {
+  console.log('🔄 Transforming invoice data:', {
+    invoice_number: invoice.invoice_number,
+    total: invoice.total,
+    deposit_paid: invoice.deposit_paid,
+    total_paid: invoice.total_paid,
+    hasDeposit: !!invoice.deposit_paid,
+    hasTotalPaid: !!invoice.total_paid
+  });
+
   return {
     // Header Information
     invoiceNumber: invoice.invoice_number,
@@ -103,7 +112,7 @@ export function transformInvoiceData(
       vatRate: invoice.vat_rate,
       vatAmount: invoice.vat_amount,
       discountAmount: invoice.discount_amount,
-      depositPaid: invoice.deposit_paid,
+      depositPaid: invoice.deposit_paid || 0,
       totalPaid: invoice.total_paid || 0,
       total: invoice.total,
       currency: invoice.currency || 'EUR'
