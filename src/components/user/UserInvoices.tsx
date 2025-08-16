@@ -83,13 +83,35 @@ const UserInvoices: React.FC = () => {
         ].filter(Boolean).join(', ') || ''
       };
 
-      // Transform items if available
-      const itemsData = invoice.items || [];
+      // Transform items if available, or create a default item
+      let itemsData = invoice.items || [];
+      
+      // If no items exist, create a default item based on the invoice total
+      if (!itemsData || itemsData.length === 0) {
+        itemsData = [{
+          id: 1,
+          invoice_id: invoice.id,
+          description: `Service - Invoice ${invoice.invoice_number}`,
+          quantity: 1,
+          unit_price: invoice.subtotal,
+          total_price: invoice.subtotal
+        }];
+      }
 
-      console.log('Downloading invoice with data:', { invoiceData, customerData, itemsData });
+      // Ensure items have the correct format for the PDF service
+      const transformedItems = itemsData.map(item => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+        category: 'Service' // Add default category
+      }));
+
+      console.log('Downloading invoice with data:', { invoiceData, customerData, transformedItems });
 
       // Use the PDF service
-      const result = await downloadInvoicePDF(invoiceData, customerData, itemsData);
+      const result = await downloadInvoicePDF(invoiceData, customerData, transformedItems);
 
       if (result.success) {
         showSuccess('Invoice Downloaded', `Invoice ${invoice.invoice_number} has been downloaded successfully`);
