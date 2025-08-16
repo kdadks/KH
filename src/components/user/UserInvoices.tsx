@@ -3,7 +3,7 @@ import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getUserInvoices } from '../../utils/userManagementUtils';
 import { UserInvoice } from '../../types/userManagement';
 import { useToast } from '../shared/toastContext';
-import jsPDF from 'jspdf';
+import { downloadInvoicePDF } from '../../services/invoiceService';
 import { 
   FileText, 
   Download, 
@@ -58,70 +58,44 @@ const UserInvoices: React.FC = () => {
 
   const handleDownloadInvoice = async (invoice: UserInvoice) => {
     try {
-      // Create PDF invoice
-      const pdf = new jsPDF();
-      
-      // Header
-      pdf.setFontSize(20);
-      pdf.text('INVOICE', 20, 20);
-      
-      // Company info
-      pdf.setFontSize(12);
-      pdf.text('KH Therapy', 20, 35);
-      pdf.text('Professional Physiotherapy Services', 20, 42);
-      
-      // Invoice details
-      pdf.setFontSize(14);
-      pdf.text('Invoice Details', 20, 60);
-      
-      pdf.setFontSize(10);
-      pdf.text(`Invoice Number: ${invoice.invoice_number}`, 20, 75);
-      pdf.text(`Invoice Date: ${new Date(invoice.invoice_date).toLocaleDateString()}`, 20, 82);
-      pdf.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString()}`, 20, 89);
-      pdf.text(`Status: ${invoice.status}`, 20, 96);
-      
-      // Amount details
-      pdf.setFontSize(12);
-      pdf.text('Amount Details', 20, 115);
-      pdf.setFontSize(10);
-      pdf.text(`Subtotal: ${formatCurrency(invoice.subtotal)}`, 20, 130);
-      if (invoice.vat_amount) {
-        pdf.text(`VAT: ${formatCurrency(invoice.vat_amount)}`, 20, 137);
+      // Transform UserInvoice to the format expected by the service
+      const invoiceData = {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        customer_id: invoice.customer_id,
+        invoice_date: invoice.invoice_date,
+        due_date: invoice.due_date,
+        status: invoice.status,
+        subtotal: invoice.subtotal,
+        vat_amount: invoice.vat_amount,
+        total_amount: invoice.total_amount,
+        total: invoice.total_amount, // Map total_amount to total for compatibility
+        notes: invoice.notes,
+        currency: 'EUR'
+      };
+
+      // For user invoices, we need basic customer info
+      const customerData = {
+        id: invoice.customer_id,
+        name: 'Customer', // UserInvoice doesn't include customer details
+        email: '', // Will be handled by service
+      };
+
+      // Transform items if available
+      const itemsData = invoice.items || [];
+
+      // Use the new PDF service
+      const result = await downloadInvoicePDF(invoiceData, customerData, itemsData);
+
+      if (result.success) {
+        showSuccess('Invoice Downloaded', 'Invoice has been downloaded successfully');
+      } else {
+        showError('Download Failed', result.error || 'Failed to download invoice PDF');
       }
-      pdf.setFontSize(12);
-      pdf.text(`Total: ${formatCurrency(invoice.total_amount)}`, 20, 150);
-      
-      // Items if available
-      let yPos = 170;
-      if (invoice.items && invoice.items.length > 0) {
-        pdf.setFontSize(12);
-        pdf.text('Items:', 20, yPos);
-        pdf.setFontSize(10);
-        yPos += 15;
-        invoice.items.forEach((item, index) => {
-          pdf.text(`${index + 1}. ${item.description} (x${item.quantity}) - ${formatCurrency(item.total_price)}`, 20, yPos);
-          yPos += 7;
-        });
-      }
-      
-      // Notes if available
-      if (invoice.notes) {
-        pdf.setFontSize(10);
-        pdf.text(`Notes: ${invoice.notes}`, 20, yPos + 10);
-      }
-      
-      // Footer
-      pdf.setFontSize(8);
-      pdf.text('Thank you for your business!', 20, 280);
-      pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, 287);
-      
-      // Save the PDF
-      pdf.save(`invoice_${invoice.invoice_number.replace('/', '-')}.pdf`);
-      
-      showSuccess('Invoice Downloaded', 'Invoice has been downloaded successfully');
+
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      showError('Download Failed', 'Failed to download invoice PDF');
+      console.error('Error downloading invoice:', error);
+      showError('Download Failed', 'An unexpected error occurred while downloading the invoice');
     }
   };
 

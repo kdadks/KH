@@ -27,11 +27,9 @@ interface CustomerManagementProps {
 }
 
 const CustomerManagement: React.FC<CustomerManagementProps> = ({ 
-  onCustomerSelect, 
+  onCustomerSelect,
   selectedCustomerId,
-  customers: propCustomers,
-  setCustomers: setPropCustomers,
-  onRefresh
+  customers: propCustomers
 }) => {
   const [customers, setCustomers] = useState<Customer[]>(propCustomers || []);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
@@ -122,14 +120,6 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       setError(`Failed to fetch customers: ${errorMessage}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Helper to update both local and parent state
-  const updateCustomers = (newCustomers: Customer[]) => {
-    setCustomers(newCustomers);
-    if (setPropCustomers) {
-      setPropCustomers(newCustomers);
     }
   };
 

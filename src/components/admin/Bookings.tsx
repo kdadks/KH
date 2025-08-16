@@ -19,7 +19,6 @@ import {
   List,
   Grid3x3,
   Plus,
-  CreditCard,
   Euro
 } from 'lucide-react';
 import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar';
@@ -70,8 +69,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   filterDate,
   setFilterDate,
   filterRange,
-  setFilterRange,
-  onRefresh
+  setFilterRange
 }) => {
   const { showSuccess, showError } = useToast();
   
@@ -352,11 +350,6 @@ export const Bookings: React.FC<BookingsProps> = ({
       console.error('Error checking payment status:', error);
       return { paymentRequest: null, payment: null };
     }
-  };
-
-  const checkBookingPaymentRequest = async (booking: BookingFormData) => {
-    const status = await checkBookingPaymentStatus(booking);
-    return status.paymentRequest;
   };
 
   const handleCreatePaymentRequest = async (booking: BookingFormData) => {

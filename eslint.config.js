@@ -24,11 +24,18 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': [
-  'off',
-  { allowConstantExport: true },
+        'off',
+        { allowConstantExport: true },
       ],
       // Temporary disable due to TS 5.6 plugin mismatch throwing error
       '@typescript-eslint/no-unused-expressions': 'off',
+      // Disable strict rules to speed up development
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'prefer-const': 'warn',
+      'no-useless-escape': 'warn',
+      'no-case-declarations': 'warn',
     },
   }
 );

@@ -79,7 +79,7 @@ const UserProfile: React.FC = () => {
       } else {
         showError('Update Failed', error || 'Failed to update profile');
       }
-    } catch (error) {
+    } catch {
       showError('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -116,7 +116,7 @@ const UserProfile: React.FC = () => {
       } else {
         showError('Password Change Failed', error || 'Failed to change password');
       }
-    } catch (error) {
+    } catch {
       showError('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);

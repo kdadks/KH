@@ -64,40 +64,35 @@ const imageToBase64 = (imagePath: string, quality: number = 0.85, maxWidth: numb
  * Add company logos to PDF header
  */
 export const addCompanyLogos = async (doc: jsPDF, x: number = 14, y: number = 10) => {
-  let logoLoaded = false;
-  let khLogoLoaded = false;
+  let invoiceLogoLoaded = false;
   
   try {
-    // Try to load and add Logo.png with high quality and transparency preservation
+    // Try to load and add Invoice Logo.png with reasonable dimensions for PDF header
     try {
-      const logoBase64 = await imageToBase64('/Logo.png', 0.9, 120); // Higher quality, larger max width
-      doc.addImage(logoBase64, 'PNG', x, y, 15, 15); // Use PNG to preserve transparency
-      logoLoaded = true;
-      console.log('✅ Logo.png loaded successfully');
-    } catch (logoError) {
-      console.warn('❌ Could not load Logo.png:', logoError);
+      const invoiceLogoBase64 = await imageToBase64('/Invoice Logo.png', 0.9, 300); // High quality
+      
+      // Set reasonable dimensions for PDF header: 50x50 pixels (much smaller than 200x200)
+      const logoWidth = 50;
+      const logoHeight = 50;
+      
+      // Add logo at top left position with appropriate 50x50px dimensions
+      doc.addImage(invoiceLogoBase64, 'PNG', x, y, logoWidth, logoHeight);
+      invoiceLogoLoaded = true;
+      console.log('✅ Invoice Logo.png loaded successfully with 50x50px dimensions');
+    } catch (invoiceLogoError) {
+      console.warn('❌ Could not load Invoice Logo.png:', invoiceLogoError);
     }
     
-    // Try to load and add KHtherapy.png with high quality
-    try {
-      const khLogoBase64 = await imageToBase64('/KHtherapy.png', 0.9, 240); // Higher quality, larger max width
-      doc.addImage(khLogoBase64, 'PNG', x + 20, y, 40, 15); // Use PNG to preserve transparency
-      khLogoLoaded = true;
-      console.log('✅ KHtherapy.png loaded successfully');
-    } catch (khLogoError) {
-      console.warn('❌ Could not load KHtherapy.png:', khLogoError);
-    }
-    
-    // Only add text fallback if NO images loaded successfully
-    if (!logoLoaded && !khLogoLoaded) {
-      console.log('⚠️ Using text fallback for header logos');
+    // Only add text fallback if Invoice Logo failed to load
+    if (!invoiceLogoLoaded) {
+      console.log('⚠️ Using text fallback for header logo');
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.text('KH Therapy', x, y + 22);
     }
     
   } catch (error) {
-    console.error('❌ Error adding company logos:', error);
+    console.error('❌ Error adding company logo:', error);
     // Fallback to text only if there's a general error
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
@@ -108,7 +103,7 @@ export const addCompanyLogos = async (doc: jsPDF, x: number = 14, y: number = 10
 /**
  * Add IAPT logo to PDF footer with original dimensions and thank you text
  */
-export const addIAPTLogo = async (doc: jsPDF, _x: number = 95, y: number = 250) => {
+export const addIAPTLogo = async (doc: jsPDF, y: number = 250) => {
   let logoLoaded = false;
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -148,9 +143,17 @@ export const addIAPTLogo = async (doc: jsPDF, _x: number = 95, y: number = 250) 
     const spacing = 8; // Space between logo and text
     const totalFooterHeight = logoHeight + spacing + textHeight;
     
-    // Ensure we don't go beyond the page bottom
-    const maxLogoY = pageHeight - bottomMargin - totalFooterHeight;
-    const finalLogoY = Math.min(y, maxLogoY);
+    // If Y position is explicitly provided (not default), respect it, otherwise use safe positioning
+    let finalLogoY;
+    if (y !== 250) {
+      // Explicit positioning provided - respect it with minimal safety margin
+      const minSafetyMargin = 5; // Just 5px to prevent going off page
+      finalLogoY = Math.min(y, pageHeight - logoHeight - minSafetyMargin);
+    } else {
+      // Default positioning - use safe calculation
+      const maxLogoY = pageHeight - bottomMargin - totalFooterHeight;
+      finalLogoY = Math.min(y, maxLogoY);
+    }
     
     // Center the logo horizontally
     const centeredX = (pageWidth - logoWidth) / 2;
@@ -169,8 +172,11 @@ export const addIAPTLogo = async (doc: jsPDF, _x: number = 95, y: number = 250) 
     const textX = (pageWidth - textWidth) / 2;
     const textY = finalLogoY + logoHeight + spacing;
     
+    // More flexible text positioning for explicit Y positions
+    const textBoundary = y !== 250 ? pageHeight - 5 : pageHeight - bottomMargin;
+    
     // Add the text if it fits within bounds
-    if (textY < pageHeight - bottomMargin) {
+    if (textY < textBoundary) {
       doc.text(thankYouText, textX, textY);
       console.log('✅ Thank you text added successfully');
     } else {

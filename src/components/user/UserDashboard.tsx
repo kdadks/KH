@@ -25,7 +25,7 @@ interface UserDashboardProps {
 }
 
 const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabChange }) => {
-  const { showSuccess, showError } = useToast();
+  const { showSuccess } = useToast();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequestWithCustomer[]>([]);
   const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(true);
   const [dismissedNotifications, setDismissedNotifications] = useState<number[]>([]);

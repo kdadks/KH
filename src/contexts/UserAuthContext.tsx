@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { 
   UserCustomer, 
   UserAuthContext, 
@@ -79,7 +79,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
     // Listen to Supabase auth changes for admin login detection
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: any, session: any) => {
+      async (event: string, session: Session | null) => {
         console.log('Auth state changed:', event, session?.user?.id);
         
         if (event === 'SIGNED_IN' && session?.user) {
@@ -130,7 +130,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
   };
 
   // Register new user
-  const register = async (data: UserRegistrationData): Promise<{ success: boolean; error?: string }> => {
+  const register = useCallback(async (data: UserRegistrationData): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
 
@@ -208,10 +208,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Login user
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     const startTime = Date.now();
     
     try {
@@ -327,10 +327,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       logPerformance('User Login', startTime);
       setLoading(false);
     }
-  };
+  }, []);
 
   // Logout user
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
     try {
       // For custom authentication, we just clear the local state
       setUser(null);
@@ -338,10 +338,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     } catch (error) {
       console.error('Error during logout:', error);
     }
-  };
+  }, []);
 
   // Update user profile
-  const updateProfile = async (profileData: UserProfileUpdateData): Promise<{ success: boolean; error?: string }> => {
+  const updateProfile = useCallback(async (profileData: UserProfileUpdateData): Promise<{ success: boolean; error?: string }> => {
     try {
       if (!user?.id) {
         return { success: false, error: 'Not authenticated' };
@@ -363,10 +363,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       console.error('Exception in updateProfile:', error);
       return { success: false, error: 'Unexpected error occurred' };
     }
-  };
+  }, [user]);
 
   // Change password
-  const changePassword = async (passwordData: UserPasswordChangeData): Promise<{ success: boolean; error?: string }> => {
+  const changePassword = useCallback(async (passwordData: UserPasswordChangeData): Promise<{ success: boolean; error?: string }> => {
     try {
       if (!user?.id) {
         return { success: false, error: 'Not authenticated' };
@@ -396,14 +396,14 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       console.error('Exception in changePassword:', error);
       return { success: false, error: 'Unexpected error occurred' };
     }
-  };
+  }, [user]);
 
   // Refresh user data
-  const refreshUser = async (): Promise<void> => {
+  const refreshUser = useCallback(async (): Promise<void> => {
     if (authUser) {
       await loadUserProfile(authUser.id);
     }
-  };
+  }, [authUser]);
 
   // Request password reset
   const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {

@@ -64,7 +64,7 @@ const FirstLoginPasswordChange: React.FC<FirstLoginPasswordChangeProps> = ({
       } else {
         showError('Password Change Failed', result.error || 'Failed to update password');
       }
-    } catch (error) {
+    } catch {
       showError('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);

@@ -11,7 +11,6 @@ const supabaseUrl = envUrl || fallbackUrl;
 const supabaseAnonKey = envAnon || fallbackAnon;
 
 if (!envUrl || !envAnon) {
-  // eslint-disable-next-line no-console
   console.warn('[Supabase] Using fallback URL/key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for production.');
 }
 

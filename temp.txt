@@ -25,7 +25,9 @@ import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData, Service } from './types';
 import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
-import { downloadInvoicePDF as downloadInvoicePDFService, sendInvoiceByEmail } from '../../services/invoiceService';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { addCompanyLogos, addIAPTLogo, calculateFooterPosition, checkPDFSize } from '../../utils/pdfUtils';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 
 interface InvoiceManagementProps {
@@ -42,8 +44,10 @@ type ViewMode = 'list' | 'form' | 'preview';
 const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ 
   onClose,
   invoices: propInvoices,
+  setInvoices: setPropInvoices,
   customers: propCustomers,
-  services: propServices
+  services: propServices,
+  onRefresh
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const { showSuccess, showError } = useToast();
@@ -225,6 +229,14 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       showError('Data Fetch Error', 'Failed to fetch data. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper to update both local and parent state
+  const updateInvoices = (newInvoices: Invoice[]) => {
+    setInvoices(newInvoices);
+    if (setPropInvoices) {
+      setPropInvoices(newInvoices);
     }
   };
 
@@ -677,71 +689,253 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     setSendingInvoice(prev => ({ ...prev, [invoiceId]: true }));
 
     try {
-      // Prepare email options
-      const emailOptions = {
-        to: [invoice.customer.email],
-        subject: `Invoice ${invoice.invoice_number} - KH Therapy`,
-        includePaymentInstructions: true
-      };
-
-      // Transform Invoice to the format expected by the service
-      const invoiceData = {
-        id: invoice.id,
-        invoice_number: invoice.invoice_number,
-        customer_id: invoice.customer_id,
-        invoice_date: invoice.invoice_date,
-        due_date: invoice.due_date,
-        status: invoice.status,
-        subtotal: invoice.subtotal,
-        vat_amount: invoice.vat_amount,
-        total_amount: invoice.total_amount,
-        total: invoice.total_amount, // Map total_amount to total for compatibility
-        notes: invoice.notes,
-        currency: 'EUR'
-      };
-
-      // Transform customer data
-      const customerData = {
-        id: invoice.customer.id,
-        name: getCustomerDisplayName(invoice.customer),
-        email: invoice.customer.email || '',
-        phone: invoice.customer.phone || '',
-        address_line_1: invoice.customer.address_line_1 || '',
-        address_line_2: invoice.customer.address_line_2 || '',
-        city: invoice.customer.city || '',
-        county: invoice.customer.county || '',
-        eircode: invoice.customer.eircode || ''
-      };
-
-      // Send invoice using the new service
-      const result = await sendInvoiceByEmail(
-        invoiceData,
-        customerData,
-        invoice.items || [],
-        emailOptions
-      );
-
-      if (result.success) {
-        // Update invoice status to 'sent'
-        const { error: updateError } = await supabase
-          .from('invoices')
-          .update({ 
-            status: 'sent',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', invoice.id);
-
-        if (updateError) {
-          console.error('Update error details:', updateError);
-          throw new Error(`Failed to update invoice status: ${updateError.message}`);
+      // Generate PDF
+      const doc = new jsPDF();
+      
+      // Add company logos in header
+      await addCompanyLogos(doc, 14, 10);
+      
+      // Invoice header - top right (positioned to not overlap with 50x50 logo)
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INVOICE', 150, 22);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(invoice.invoice_number, 150, 32);
+      doc.text(`Date: ${formatDate(invoice.invoice_date)}`, 150, 42);
+      
+      // Three column layout after header - start below the logo (Y=70 to give 10px gap after 50px logo + 10px initial position)
+      const column1X = 14;      // Left column - Clinic details
+      const column2X = 70;      // Middle column - Bill To
+      const column3X = 140;     // Right column - Banking details
+      let currentY = 70;        // Start below logo
+      
+      // COLUMN 1: Clinic Address and Contact Details (Left-aligned with icons)
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('KH Therapy', column1X, currentY);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let leftY = currentY + 8;
+      doc.text('Neilstown Village Court', column1X, leftY);
+      leftY += 5;
+      doc.text('Neilstown Rd', column1X, leftY);
+      leftY += 5;
+      doc.text('Clondalkin, D22E8P2', column1X, leftY);
+      leftY += 8;
+      
+      // Phone with icon (using symbol)
+      doc.text('📞 (083) 8009404', column1X, leftY);
+      leftY += 6;
+      
+      // Email with icon (using symbol)
+      doc.text('📧 khtherapy@hotmail.com', column1X, leftY);
+      leftY += 6;
+      
+      // Website with icon (using symbol)
+      doc.text('🌐 www.khtherapy.ie', column1X, leftY);
+      
+      // COLUMN 2: Bill To Section (Center column)
+      let centerY = currentY;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('BILL TO:', column2X, centerY);
+      
+      const customer = invoice.customer as Customer;
+      if (customer) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        centerY += 8;
+        
+        doc.text(getCustomerDisplayName(customer), column2X, centerY);
+        centerY += 6;
+        
+        if (customer.email) {
+          doc.text(customer.email, column2X, centerY);
+          centerY += 6;
         }
+        
+        if (customer.phone) {
+          doc.text(customer.phone, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.address_line_1) {
+          doc.text(customer.address_line_1, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.address_line_2) {
+          doc.text(customer.address_line_2, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.city || customer.county || customer.eircode) {
+          const addressLine = [customer.city, customer.county, customer.eircode]
+            .filter(Boolean)
+            .join(', ');
+          if (addressLine) {
+            doc.text(addressLine, column2X, centerY);
+            centerY += 6;
+          }
+        }
+        
+        // Show balance due if any
+        const balanceDue = invoice.total_amount;
+        if (balanceDue > 0) {
+          centerY += 4;
+          doc.setFont('helvetica', 'bold');
+          doc.text(`Balance Due: ${formatCurrency(balanceDue)}`, column2X, centerY);
+        }
+      }
+      
+      // COLUMN 3: Banking Details (Right-aligned)
+      let rightYDownload = currentY;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Payment Details:', column3X, rightY, { align: 'left' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      rightYDownload += 8;
+      doc.text('Bank: Bank of Ireland', column3X, rightYDownload);
+      rightYDownload += 5;
+      doc.text('Account: KH Therapy', column3X, rightYDownload);
+      rightYDownload += 5;
+      doc.text('IBAN:', column3X, rightYDownload);
+      rightYDownload += 4;
+      doc.text('IE00 BOFI 1234 5678 9012 34', column3X, rightYDownload);
+      rightYDownload += 5;
+      doc.text('BIC: BOFIIE2D', column3X, rightYDownload);
+      
+      // Prepare invoice items table data
+      const tableData = (invoice.items || []).map((item: InvoiceItem) => [
+        item.description || 'Service',
+        item.quantity.toString(),
+        formatCurrency(item.unit_price),
+        formatCurrency(item.total_price)
+      ]);
+      
+      // Add invoice items table (start after the three-column layout)
+      autoTable(doc, {
+        startY: 130, // Reduced from 150 to 130 since three columns are more compact
+        head: [['Description', 'Quantity', 'Unit Price', 'Total']],
+        body: tableData,
+        styles: {
+          fontSize: 10,
+          cellPadding: 6
+        },
+        headStyles: {
+          fillColor: '#3b82f6',
+          textColor: '#ffffff',
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: '#f8fafc'
+        },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'right' },
+          3: { halign: 'right' }
+        }
+      });
+      
+      // Get the table's end Y position
+      const finalY = (doc as any).lastAutoTable.finalY || 150;
+      
+      // Totals section (right-aligned to match table border)
+      let totalsY = finalY + 20;
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      
+      // Calculate right alignment to match the table border
+      const sendDocWidth = doc.internal.pageSize.width;
+      const sendRightMargin = 14; // Same as left margin for symmetry
+      const sendLabelWidth = 50; // Increased width to prevent text overlap
+      const sendValueX = sendDocWidth - sendRightMargin; // Right edge position
+      const sendLabelX = sendValueX - sendLabelWidth; // Label position
+      
+      // Subtotal
+      const itemsSubtotal = (invoice.items || []).reduce((sum, item) => sum + item.total_price, 0);
+      doc.text('Subtotal:', sendLabelX, totalsY);
+      doc.text(formatCurrency(itemsSubtotal), sendValueX, totalsY, { align: 'right' });
+      totalsY += 10;
+      
+      // Check for deposit deduction
+      const hasDepositDeduction = invoice.notes?.includes('Deposit Deducted:');
+      const depositAmount = hasDepositDeduction 
+        ? parseFloat(invoice.notes?.match(/Deposit Deducted: €([\d.]+)/)?.[1] || '0')
+        : 0;
+      
+      // Show deposit if applicable
+      if (depositAmount > 0) {
+        doc.setTextColor(0, 128, 0);
+        doc.text('Deposit Paid:', sendLabelX, totalsY);
+        doc.text(`-${formatCurrency(depositAmount)}`, sendValueX, totalsY, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        totalsY += 10;
+      }
+      
+      // Total line with bold styling
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('Amount Due:', sendLabelX, totalsY);
+      doc.text(formatCurrency(invoice.total_amount), sendValueX, totalsY, { align: 'right' });
+      
+      // Calculate footer position to avoid overlap (reduced height since no banking details in footer)
+      const pageHeight = doc.internal.pageSize.height;
+      const minFooterY = calculateFooterPosition(totalsY + 20, pageHeight, 60);
+      
+      // Add IAPT Logo with thank you text - Positioned directly in footer area
+      await addIAPTLogo(doc, 0, minFooterY);
+      
+      // Check and log PDF file size for quality monitoring
+      const filename = `invoice_${invoice.invoice_number.replace('/', '-')}.pdf`;
+      checkPDFSize(doc, filename);
+      
+      // Send invoice notification email
+      const { sendInvoiceNotificationEmail } = await import('../../utils/emailUtils');
+      const emailData = {
+        customerName: getCustomerDisplayName(customer),
+        invoiceNumber: invoice.invoice_number,
+        invoiceAmount: formatCurrency(invoice.total_amount),
+        dueDate: formatDate(invoice.due_date),
+        companyName: 'KH Therapy'
+      };
 
-        // Refresh the data to show updated status
-        await fetchData();
+      let emailSuccess = false;
+      try {
+        const { success } = await sendInvoiceNotificationEmail(customer.email, emailData);
+        emailSuccess = success;
+      } catch (emailError) {
+        console.log('Email sending skipped - EmailJS not configured:', emailError);
+        emailSuccess = false;
+      }
+      
+      // Update invoice status to 'sent' (only using existing columns)
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ 
+          status: 'sent',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', invoice.id);
 
-        showSuccess('Invoice Sent', `Invoice ${invoice.invoice_number} has been sent to ${invoice.customer.email}. Customer will now see this invoice in their dashboard.`);
+      if (updateError) {
+        console.error('Update error details:', updateError);
+        throw new Error(`Failed to update invoice status: ${updateError.message}`);
+      }
+
+      // Refresh the data to show updated status
+      await fetchData();
+
+      if (emailSuccess) {
+        showSuccess('Invoice Sent', `Invoice ${invoice.invoice_number} has been sent to ${customer.email}. Customer will now see this invoice in their dashboard.`);
       } else {
-        showError('Email Error', result.error || 'Failed to send invoice');
+        showSuccess('Invoice Status Updated', `Invoice ${invoice.invoice_number} status updated to "sent" but email notification failed. Customer can still view it in their dashboard.`);
       }
 
     } catch (error) {
@@ -822,60 +1016,239 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   };
 
   const downloadInvoicePDF = async (invoice: Invoice) => {
-    if (!invoice) {
-      showError('Download Error', 'Invoice data not found');
-      return;
-    }
-
-    if (!invoice.customer) {
-      showError('Download Error', 'Customer information not found');
-      return;
-    }
-
+    if (!invoice) return;
+    
     try {
-      // Transform Invoice to the format expected by the service
-      const invoiceData = {
-        id: invoice.id,
-        invoice_number: invoice.invoice_number,
-        customer_id: invoice.customer_id,
-        invoice_date: invoice.invoice_date,
-        due_date: invoice.due_date,
-        status: invoice.status,
-        subtotal: invoice.subtotal,
-        vat_amount: invoice.vat_amount,
-        total_amount: invoice.total_amount,
-        total: invoice.total_amount, // Map total_amount to total for compatibility
-        notes: invoice.notes,
-        currency: 'EUR'
-      };
-
-      // Transform customer data
-      const customerData = {
-        id: invoice.customer.id,
-        name: getCustomerDisplayName(invoice.customer),
-        email: invoice.customer.email,
-        phone: invoice.customer.phone,
-        address_line_1: invoice.customer.address_line_1,
-        address_line_2: invoice.customer.address_line_2,
-        city: invoice.customer.city,
-        county: invoice.customer.county,
-        eircode: invoice.customer.eircode
-      };
-
-      const result = await downloadInvoicePDFService(
-        invoiceData,
-        customerData,
-        invoice.items || []
-      );
-
-      if (result.success) {
-        showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
-      } else {
-        showError('Download Error', result.error || 'Failed to download invoice');
+      const doc = new jsPDF();
+      
+      // Add company logos in header
+      await addCompanyLogos(doc, 14, 10);
+      
+      // Invoice header - top right (positioned to not overlap with 50x50 logo)
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INVOICE', 150, 22);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(invoice.invoice_number, 150, 32);
+      doc.text(`Date: ${formatDate(invoice.invoice_date)}`, 150, 42);
+      
+      // Three column layout after header - start below the logo (Y=70 to give 10px gap after 50px logo + 10px initial position)
+      const column1X = 14;      // Left column - Clinic details
+      const column2X = 70;      // Middle column - Bill To
+      const column3X = 140;     // Right column - Banking details
+      let currentY = 70;        // Start below logo
+      
+      // COLUMN 1: Clinic Address and Contact Details (Left-aligned with icons)
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('KH Therapy', column1X, currentY);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let leftY = currentY + 8;
+      doc.text('Neilstown Village Court', column1X, leftY);
+      leftY += 5;
+      doc.text('Neilstown Rd', column1X, leftY);
+      leftY += 5;
+      doc.text('Clondalkin, D22E8P2', column1X, leftY);
+      leftY += 8;
+      
+      // Phone with icon (using symbol)
+      doc.text('📞 (083) 8009404', column1X, leftY);
+      leftY += 6;
+      
+      // Email with icon (using symbol)
+      doc.text('📧 khtherapy@hotmail.com', column1X, leftY);
+      leftY += 6;
+      
+      // Website with icon (using symbol)
+      doc.text('🌐 www.khtherapy.ie', column1X, leftY);
+      
+      // COLUMN 2: Bill To Section (Center column)
+      let centerY = currentY;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('BILL TO:', column2X, centerY);
+      
+      const customer = invoice.customer as Customer;
+      if (customer) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        centerY += 8;
+        
+        doc.text(getCustomerDisplayName(customer), column2X, centerY);
+        centerY += 6;
+        
+        if (customer.email) {
+          doc.text(customer.email, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.phone) {
+          doc.text(customer.phone, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.address_line_1) {
+          doc.text(customer.address_line_1, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.address_line_2) {
+          doc.text(customer.address_line_2, column2X, centerY);
+          centerY += 6;
+        }
+        
+        if (customer.city || customer.county || customer.eircode) {
+          const addressLine = [customer.city, customer.county, customer.eircode]
+            .filter(Boolean)
+            .join(', ');
+          if (addressLine) {
+            doc.text(addressLine, column2X, centerY);
+            centerY += 6;
+          }
+        }
+        
+        // Show balance due if any
+        const balanceDue = invoice.total_amount;
+        if (balanceDue > 0) {
+          centerY += 4;
+          doc.setFont('helvetica', 'bold');
+          doc.text(`Balance Due: ${formatCurrency(balanceDue)}`, column2X, centerY);
+        }
       }
+      
+      // COLUMN 3: Banking Details (Right-aligned)
+      let rightYDownload = currentY;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Payment Details:', column3X, rightY, { align: 'left' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      rightYDownload += 8;
+      doc.text('Bank: Bank of Ireland', column3X, rightYDownload);
+      rightYDownload += 5;
+      doc.text('Account: KH Therapy', column3X, rightYDownload);
+      rightYDownload += 5;
+      doc.text('IBAN:', column3X, rightYDownload);
+      rightYDownload += 4;
+      doc.text('IE00 BOFI 1234 5678 9012 34', column3X, rightYDownload);
+      rightYDownload += 5;
+      doc.text('BIC: BOFIIE2D', column3X, rightYDownload);
+      
+      // Prepare invoice items table data
+      const tableData = (invoice.items || []).map((item: InvoiceItem) => [
+        item.description || 'Service',
+        item.quantity.toString(),
+        formatCurrency(item.unit_price),
+        formatCurrency(item.total_price)
+      ]);
+      
+      // Add invoice items table
+      autoTable(doc, {
+        startY: 130, // Reduced from 150 to 130 since three columns are more compact
+        head: [['Description', 'Quantity', 'Unit Price', 'Total']],
+        body: tableData,
+        styles: {
+          fontSize: 10,
+          cellPadding: 6
+        },
+        headStyles: {
+          fillColor: '#3b82f6',
+          textColor: '#ffffff',
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: '#f8fafc'
+        },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'right' },
+          3: { halign: 'right' }
+        }
+      });
+
+      // Calculate totals and payment information
+      const itemsSubtotal = (invoice.items || []).reduce((sum, item) => sum + item.total_price, 0);
+      
+      // Check payment status and details
+      const isPaymentComplete = invoice.status === 'paid';
+      const hasDepositDeduction = invoice.notes?.includes('Deposit Deducted:');
+      const depositAmount = hasDepositDeduction 
+        ? parseFloat(invoice.notes?.match(/Deposit Deducted: €([\d.]+)/)?.[1] || '0')
+        : 0;
+      
+      const totalAmount = invoice.total_amount;
+      const finalY = (doc as any).lastAutoTable.finalY + 20;
+      
+      // Totals section (right-aligned to match table border)
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      
+      // Calculate right alignment to match the table border
+      const docWidth = doc.internal.pageSize.width;
+      const rightMargin = 14; // Same as left margin for symmetry
+      const labelWidth = 50; // Increased width to prevent text overlap
+      const valueX = docWidth - rightMargin; // Right edge position
+      const labelX = valueX - labelWidth; // Label position
+      
+      let totalsY = finalY;
+      
+      // Subtotal
+      doc.text('Subtotal:', labelX, totalsY);
+      doc.text(formatCurrency(itemsSubtotal), valueX, totalsY, { align: 'right' });
+      totalsY += 10;
+      
+      // Show deposit if applicable
+      if (depositAmount > 0) {
+        doc.setTextColor(0, 128, 0);
+        doc.text('Deposit Paid:', labelX, totalsY);
+        doc.text(`-${formatCurrency(depositAmount)}`, valueX, totalsY, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        totalsY += 10;
+      }
+      
+      // Balance due or payment status
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      
+      if (isPaymentComplete) {
+        doc.setTextColor(0, 128, 0);
+        doc.text('Balance Due:', labelX, totalsY);
+        doc.text('€0.00', valueX, totalsY, { align: 'right' });
+        totalsY += 12;
+        
+        // Payment completion information
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`Paid via Transfer - ${new Date().toLocaleDateString('en-IE')}`, labelX, totalsY);
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.text('Balance Due:', labelX, totalsY);
+        doc.text(formatCurrency(totalAmount), valueX, totalsY, { align: 'right' });
+      }
+      
+      // Calculate footer position to avoid overlap (reduced height since no banking details in footer)
+      const pageHeight = doc.internal.pageSize.height;
+      const minFooterY = calculateFooterPosition(totalsY + 20, pageHeight, 50);
+      
+      // Add IAPT Logo with thank you text - Now positioned directly after totals
+      await addIAPTLogo(doc, 0, minFooterY);
+      
+      // Check and log PDF file size
+      const filename = `invoice_${invoice.invoice_number.replace('/', '-')}.pdf`;
+      checkPDFSize(doc, filename);
+      
+      // Save the PDF
+      doc.save(filename);
+      
+      showSuccess('PDF Downloaded', 'Invoice has been downloaded successfully');
     } catch (error) {
-      console.error('Error downloading invoice:', error);
-      showError('Download Error', 'An unexpected error occurred while downloading the invoice');
+      console.error('Error generating PDF:', error);
+      showError('Download Failed', 'Failed to download invoice PDF');
     }
   };
 

@@ -229,11 +229,12 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
 /**
  * Get user payment history with real data
  */
-export const getUserPaymentHistory = async (_customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
+export const getUserPaymentHistory = async (customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
   try {
     // Get payment history from invoice items or a payments table if you have one
     // For now, we'll return empty array since payment tracking might be implemented later
     // You could implement this based on your payment system
+    console.log('Getting payment history for customer:', customerId);
     const payments: PaymentHistoryItem[] = [];
 
     return { payments };

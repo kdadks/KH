@@ -25,7 +25,7 @@ const AdminLogin: React.FC = () => {
       } else {
         navigate('/admin');
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);

@@ -5,7 +5,6 @@ import { getCustomerPayments } from '../../utils/paymentRequestUtils';
 import { PaymentWithCustomer, PAYMENT_STATUS_INFO } from '../../types/paymentTypes';
 import { useToast } from '../shared/toastContext';
 import PaymentRequests from './PaymentRequests';
-import jsPDF from 'jspdf';
 import { 
   CreditCard, 
   Search,
@@ -20,7 +19,7 @@ import {
 
 const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange }) => {
   const { user } = useUserAuth();
-  const { showError, showSuccess } = useToast();
+  const { showError } = useToast();
   const [searchParams] = useSearchParams();
   
   const [payments, setPayments] = useState<PaymentWithCustomer[]>([]);
@@ -90,67 +89,6 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
       detail: { filterOverdue: true }
     });
     window.dispatchEvent(event);
-  };
-
-  const handleDownloadReceipt = async (payment: PaymentWithCustomer) => {
-    try {
-      // Create PDF receipt
-      const pdf = new jsPDF();
-      
-      // Header with consistent branding
-      pdf.setFontSize(20);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('KH Therapy', 20, 20);
-      
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('Professional Physiotherapy Services', 20, 28);
-      
-      // Receipt title
-      pdf.setFontSize(18);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('PAYMENT RECEIPT', 20, 45);
-      
-      // Company contact info
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('Neilstown Village Court, Neilstown Rd, Clondalkin, D22E8P2', 20, 55);
-      pdf.text('Phone: (083) 8009404 | Email: khtherapy@hotmail.com', 20, 62);
-      
-      // Receipt details section
-      pdf.setFontSize(14);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Receipt Details', 20, 80);
-      
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(`Receipt ID: ${payment.id}`, 20, 95);
-      pdf.text(`Invoice Number: ${payment.invoice_number}`, 20, 102);
-      pdf.text(`Payment Date: ${payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-IE') : 'N/A'}`, 20, 109);
-      pdf.text(`Amount Paid: ${formatCurrency(payment.amount)}`, 20, 116);
-      pdf.text(`Payment Method: ${payment.payment_method || 'Card Payment'}`, 20, 123);
-      pdf.text(`Status: ${payment.status.toUpperCase()}`, 20, 130);
-      
-      // Transaction details if available
-      if (payment.sumup_transaction_id) {
-        pdf.text(`Transaction ID: ${payment.sumup_transaction_id}`, 20, 137);
-      }
-      
-      // Footer section
-      const pageHeight = pdf.internal.pageSize.height;
-      pdf.setFontSize(8);
-      pdf.text('Thank you for your payment!', 20, pageHeight - 30);
-      pdf.text('IAPT Registered', 105, pageHeight - 30); // Center
-      pdf.text(`Generated on ${new Date().toLocaleDateString('en-IE')}`, 20, pageHeight - 20);
-      
-      // Save the PDF
-      pdf.save(`receipt_${payment.invoice_number}_${payment.id}.pdf`);
-      
-      showSuccess('Receipt Downloaded', 'Payment receipt has been downloaded successfully');
-    } catch (error) {
-      console.error('Error generating receipt:', error);
-      showError('Download Failed', 'Failed to download receipt');
-    }
   };
 
   // Filter payments based on search and status
@@ -334,13 +272,12 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
               {/* Table Header */}
               <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
-                <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                <div className="grid grid-cols-11 gap-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   <div className="col-span-3">Invoice</div>
                   <div className="col-span-2">Amount</div>
                   <div className="col-span-2">Method</div>
                   <div className="col-span-2">Date</div>
                   <div className="col-span-2">Status</div>
-                  <div className="col-span-1">Receipt</div>
                 </div>
               </div>
 
@@ -351,7 +288,7 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
                   
                   return (
                     <div key={payment.id} className="px-6 py-4 hover:bg-gray-50">
-                      <div className="grid grid-cols-12 gap-4 items-center">
+                      <div className="grid grid-cols-11 gap-4 items-center">
                         {/* Invoice Number */}
                         <div className="col-span-3">
                           <div className="flex items-center">
@@ -411,19 +348,6 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
                               {statusInfo.text}
                             </span>
                           </div>
-                        </div>
-
-                        {/* Receipt/Actions */}
-                        <div className="col-span-1">
-                          {payment.status === 'paid' && (
-                            <button
-                              onClick={() => handleDownloadReceipt(payment)}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
-                              title="Download Receipt"
-                            >
-                              Download
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
