@@ -25,7 +25,7 @@ import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData, Service } from './types';
 import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
-import { downloadInvoicePDF as downloadInvoicePDFService, downloadInvoicePDFWithPayments, sendInvoiceByEmail } from '../../services/invoiceService';
+import { downloadInvoicePDFWithPayments, sendInvoiceByEmail } from '../../services/invoiceService';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 
 interface InvoiceManagementProps {
@@ -837,36 +837,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       
       // Use the unified payment-aware PDF download function
       const result = await downloadInvoicePDFWithPayments(invoice.id, invoice.customer_id);
-
-      if (result.success) {
-        showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
-      } else {
-        showError('Download Error', result.error || 'Failed to download invoice');
-      }
-    } catch (error) {
-      console.error('Error downloading invoice:', error);
-      showError('Download Error', 'An unexpected error occurred while downloading the invoice');
-    }
-  };
-
-      // Transform customer data
-      const customerData = {
-        id: invoice.customer.id,
-        name: getCustomerDisplayName(invoice.customer),
-        email: invoice.customer.email,
-        phone: invoice.customer.phone,
-        address_line_1: invoice.customer.address_line_1,
-        address_line_2: invoice.customer.address_line_2,
-        city: invoice.customer.city,
-        county: invoice.customer.county,
-        eircode: invoice.customer.eircode
-      };
-
-      const result = await downloadInvoicePDFService(
-        invoiceData,
-        customerData,
-        invoice.items || []
-      );
 
       if (result.success) {
         showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
