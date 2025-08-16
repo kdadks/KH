@@ -6,13 +6,22 @@
 import { supabase } from '../supabaseClient';
 import * as CryptoJS from 'crypto-js';
 
-// Encryption key for sensitive data (should be in environment variables)
-const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'default-fallback-key-change-in-production';
+// Encryption key for sensitive data (must be set in environment variables)
+const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY;
+
+if (!ENCRYPTION_KEY) {
+  console.error('GDPR: VITE_ENCRYPTION_KEY environment variable is required for data encryption');
+}
 
 /**
  * Encrypt sensitive data using AES encryption
  */
 export const encryptSensitiveData = (data: string): string => {
+  if (!ENCRYPTION_KEY) {
+    console.error('GDPR: Cannot encrypt data - encryption key not configured');
+    return data; // Return unencrypted data as fallback
+  }
+  
   try {
     return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
   } catch (error) {
@@ -25,6 +34,11 @@ export const encryptSensitiveData = (data: string): string => {
  * Decrypt sensitive data
  */
 export const decryptSensitiveData = (encryptedData: string): string => {
+  if (!ENCRYPTION_KEY) {
+    console.error('GDPR: Cannot decrypt data - encryption key not configured');
+    return encryptedData; // Return encrypted data as fallback
+  }
+  
   try {
     const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
     return bytes.toString(CryptoJS.enc.Utf8);
