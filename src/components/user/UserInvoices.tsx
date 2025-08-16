@@ -7,7 +7,6 @@ import { downloadInvoicePDF } from '../../services/invoiceService';
 import { 
   FileText, 
   Download, 
-  Eye, 
   AlertCircle,
   Search,
   Filter,
@@ -50,12 +49,6 @@ const UserInvoices: React.FC = () => {
     }
   };
 
-  const handleViewInvoice = (invoice: UserInvoice) => {
-    // Create a modal or navigate to invoice details page
-    // For now, we'll create a simple modal showing invoice details
-    alert(`Invoice ${invoice.invoice_number}\nDate: ${new Date(invoice.invoice_date).toLocaleDateString()}\nAmount: ${formatCurrency(invoice.total_amount)}\nStatus: ${invoice.status}`);
-  };
-
   const handleDownloadInvoice = async (invoice: UserInvoice) => {
     try {
       // Transform UserInvoice to the format expected by the service
@@ -74,22 +67,34 @@ const UserInvoices: React.FC = () => {
         currency: 'EUR'
       };
 
-      // For user invoices, we need basic customer info
+      // For user invoices, we need to use the current user's information
+      // since this is their own invoice
       const customerData = {
         id: invoice.customer_id,
-        name: 'Customer', // UserInvoice doesn't include customer details
-        email: '', // Will be handled by service
+        name: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Customer',
+        email: user?.email || '',
+        phone: user?.phone || '',
+        address: [
+          user?.address_line_1,
+          user?.address_line_2,
+          user?.city,
+          user?.county,
+          user?.eircode
+        ].filter(Boolean).join(', ') || ''
       };
 
       // Transform items if available
       const itemsData = invoice.items || [];
 
-      // Use the new PDF service
+      console.log('Downloading invoice with data:', { invoiceData, customerData, itemsData });
+
+      // Use the PDF service
       const result = await downloadInvoicePDF(invoiceData, customerData, itemsData);
 
       if (result.success) {
-        showSuccess('Invoice Downloaded', 'Invoice has been downloaded successfully');
+        showSuccess('Invoice Downloaded', `Invoice ${invoice.invoice_number} has been downloaded successfully`);
       } else {
+        console.error('Download failed:', result.error);
         showError('Download Failed', result.error || 'Failed to download invoice PDF');
       }
 
@@ -248,15 +253,7 @@ const UserInvoices: React.FC = () => {
 
                     {/* Actions */}
                     <div className="col-span-1">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleViewInvoice(invoice)}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="View Invoice"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        
+                      <div className="flex items-center justify-end">
                         <button
                           onClick={() => handleDownloadInvoice(invoice)}
                           className="text-gray-600 hover:text-gray-800"
