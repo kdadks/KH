@@ -30,6 +30,12 @@ const UserPortal: React.FC = () => {
 
   // Load dashboard data when user logs in
   useEffect(() => {
+    console.log('UserPortal: User state changed:', { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      mustChangePassword: user?.must_change_password 
+    });
+    
     if (user?.id) {
       loadDashboardData();
     }
@@ -90,17 +96,7 @@ const UserPortal: React.FC = () => {
     }
   };
 
-  // Show login page if user is not authenticated
-  // With custom authentication, we only need to check the user (customer record)
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <UserLogin />
-      </div>
-    );
-  }
-
-  // Show loading spinner during authentication
+  // Show loading spinner during authentication - this should come FIRST
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -112,14 +108,27 @@ const UserPortal: React.FC = () => {
     );
   }
 
+  // Show login page if user is not authenticated
+  // With custom authentication, we only need to check the user (customer record)
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <UserLogin />
+      </div>
+    );
+  }
+
   // Check if user needs to change password on first login
   if (user?.must_change_password) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <FirstLoginPasswordChange 
           onPasswordChanged={() => {
-            // Refresh user data after password change
-            window.location.reload(); // Simple reload to refresh all auth state
+            console.log('onPasswordChanged callback triggered');
+            console.log('Current user state:', user);
+            // The changePassword function should have already updated the user state
+            // This callback is just for confirmation - no additional action needed
+            // React should automatically re-render due to the user state change
           }}
         />
       </div>
