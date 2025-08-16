@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '../supabaseClient';
-import CryptoJS from 'crypto-js';
+import * as CryptoJS from 'crypto-js';
 
 // Encryption key for sensitive data (should be in environment variables)
 const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'default-fallback-key-change-in-production';

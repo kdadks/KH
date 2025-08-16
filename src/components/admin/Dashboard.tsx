@@ -26,6 +26,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   setFilterDate, 
   setFilterRange 
 }) => {
+  // Helper function to get customer name from decrypted data
+  const getCustomerName = (booking: BookingFormData): string => {
+    return booking.customer_details?.first_name && booking.customer_details?.last_name 
+      ? `${booking.customer_details.first_name} ${booking.customer_details.last_name}`
+      : booking.customer_name || booking.name || 'Unknown';
+  };
+
+  // Helper function to get customer phone from decrypted data
+  const getCustomerPhone = (booking: BookingFormData): string => {
+    return booking.customer_details?.phone || booking.customer_phone || booking.phone || 'No phone';
+  };
+
   // ---------- Date helpers & normalization ----------
   const toDateOnlyString = (d: Date) => d.toISOString().split('T')[0];
   const parseDate = (raw?: string) => {
@@ -204,7 +216,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <Users className="w-5 h-5 text-primary-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{booking.customer_name || booking.name}</p>
+                      <p className="font-medium text-gray-900">{getCustomerName(booking)}</p>
                       <p className="text-sm text-gray-500">{booking.package_name || booking.service}</p>
                     </div>
                   </div>
