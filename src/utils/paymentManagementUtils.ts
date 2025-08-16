@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
 
 export interface PaymentRequest {
   id: number; // Changed from string to number to match SERIAL
@@ -24,6 +25,10 @@ export interface Payment {
   payment_method: string;
   transaction_id: string;
   created_at: string;
+  customer_name?: string; // Added for display
+  customer_email?: string; // Added for display
+  service_name?: string; // Added for display
+  payment_date?: string; // Added for actual payment date
 }
 
 export interface InvoiceWithPayments {
@@ -87,7 +92,7 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
     // Fetch customer data
     const { data: customersData, error: customersError } = await supabase
       .from('customers')
-      .select('id, name, email')
+      .select('id, first_name, last_name, email')
       .in('id', customerIds);
 
     if (customersError) {
@@ -109,21 +114,43 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
       }));
     }
 
-    // Create customer lookup map
+    // Create customer lookup map with decrypted data
     const customerMap = new Map();
     customersData?.forEach(customer => {
-      customerMap.set(customer.id, customer);
+      // Decrypt customer name fields
+      const decryptedFirstName = customer.first_name && isDataEncrypted(customer.first_name) 
+        ? decryptSensitiveData(customer.first_name) 
+        : customer.first_name || '';
+      const decryptedLastName = customer.last_name && isDataEncrypted(customer.last_name) 
+        ? decryptSensitiveData(customer.last_name) 
+        : customer.last_name || '';
+      
+      customerMap.set(customer.id, {
+        ...customer,
+        name: `${decryptedFirstName} ${decryptedLastName}`.trim() || 'Unknown',
+        email: customer.email || 'Unknown'
+      });
     });
 
     // Combine payment requests with customer data
     return paymentRequestsData.map(pr => {
       const customer = customerMap.get(pr.customer_id);
+      
+      // Extract service name - try service_name column first, then parse from notes
+      let serviceName = pr.service_name;
+      if (!serviceName && pr.notes) {
+        // Extract service name from notes for legacy records
+        const depositMatch = pr.notes.match(/deposit for (.+?) appointment/);
+        const paymentMatch = pr.notes.match(/Payment for (.+?) -/);
+        serviceName = depositMatch?.[1] || paymentMatch?.[1] || 'Unknown Service';
+      }
+      
       return {
         id: pr.id,
         customer_id: pr.customer_id,
         customer_name: customer?.name || 'Unknown',
         customer_email: customer?.email || 'Unknown',
-        service_name: pr.service_name || 'Unknown Service',
+        service_name: serviceName || 'Unknown Service',
         amount: pr.amount || 0,
         currency: pr.currency || 'EUR',
         status: pr.status || 'pending',
@@ -141,21 +168,201 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
 };
 
 /**
+ * Get recent payments with customer and service details
+ */
+export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> => {
+  try {
+    // Get recent payments from the main payments table (actual completed payments)
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select(`
+        id,
+        amount,
+        currency,
+        status,
+        payment_method,
+        sumup_transaction_id,
+        payment_date,
+        created_at,
+        customer_id,
+        invoice_id
+      `)
+      .eq('status', 'paid') // Only get completed payments
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (paymentsError) {
+      console.error('Error fetching recent payments:', paymentsError);
+      return [];
+    }
+
+    if (!paymentsData || paymentsData.length === 0) {
+      return [];
+    }
+
+    // Get customer details for these payments
+    const customerIds = [...new Set(paymentsData.map(p => p.customer_id))];
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, first_name, last_name, email')
+      .in('id', customerIds);
+
+    if (customersError) {
+      console.error('Error fetching customers for payments:', customersError);
+    }
+
+    // Get invoice details to determine service names
+    const invoiceIds = [...new Set(paymentsData.map(p => p.invoice_id).filter(Boolean))];
+    let invoicesData: any[] = [];
+    if (invoiceIds.length > 0) {
+      const { data: invData, error: invError } = await supabase
+        .from('invoices')
+        .select('id, service_type')
+        .in('id', invoiceIds);
+      
+      if (!invError) {
+        invoicesData = invData || [];
+      }
+    }
+
+    // Create lookup maps
+    const customerMap = new Map();
+    customersData?.forEach(customer => {
+      // Decrypt customer name fields if needed
+      const decryptedFirstName = customer.first_name && isDataEncrypted(customer.first_name) 
+        ? decryptSensitiveData(customer.first_name) 
+        : customer.first_name || '';
+      const decryptedLastName = customer.last_name && isDataEncrypted(customer.last_name) 
+        ? decryptSensitiveData(customer.last_name) 
+        : customer.last_name || '';
+      
+      customerMap.set(customer.id, {
+        name: `${decryptedFirstName} ${decryptedLastName}`.trim() || 'Unknown Customer',
+        email: customer.email || 'Unknown'
+      });
+    });
+
+    const invoiceMap = new Map();
+    invoicesData.forEach(invoice => {
+      invoiceMap.set(invoice.id, invoice.service_type || 'Payment');
+    });
+
+    // Combine payment data with customer and service information
+    return paymentsData.map(payment => ({
+      id: payment.id?.toString() || '',
+      payment_request_id: 0, // Not applicable for direct payments
+      amount: payment.amount || 0,
+      currency: payment.currency || 'EUR',
+      status: 'completed' as const,
+      payment_method: payment.payment_method || 'Unknown',
+      transaction_id: payment.sumup_transaction_id || '',
+      created_at: payment.created_at || '',
+      customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
+      customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
+      service_name: invoiceMap.get(payment.invoice_id) || 'Payment',
+      payment_date: payment.payment_date || payment.created_at
+    }));
+
+  } catch (error) {
+    console.error('Error in getRecentPayments:', error);
+    return [];
+  }
+};
+
+/**
  * Get all payments with related information
  */
 export const getAllPayments = async (): Promise<Payment[]> => {
   try {
-    const { data, error } = await supabase
-      .from('payments_tracking') // Updated to use the new table name
-      .select('*')
+    // Get payments from the main payments table (actual completed payments)
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select(`
+        id,
+        amount,
+        currency,
+        status,
+        payment_method,
+        sumup_transaction_id,
+        payment_date,
+        created_at,
+        customer_id,
+        invoice_id
+      `)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching payments:', error);
+    if (paymentsError) {
+      console.error('Error fetching payments:', paymentsError);
       return [];
     }
 
-    return data || [];
+    if (!paymentsData || paymentsData.length === 0) {
+      return [];
+    }
+
+    // Get customer details for these payments
+    const customerIds = [...new Set(paymentsData.map(p => p.customer_id))];
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, first_name, last_name, email')
+      .in('id', customerIds);
+
+    if (customersError) {
+      console.error('Error fetching customers for payments:', customersError);
+    }
+
+    // Get invoice details to determine service names
+    const invoiceIds = [...new Set(paymentsData.map(p => p.invoice_id).filter(Boolean))];
+    let invoicesData: any[] = [];
+    if (invoiceIds.length > 0) {
+      const { data: invData, error: invError } = await supabase
+        .from('invoices')
+        .select('id, service_type')
+        .in('id', invoiceIds);
+      
+      if (!invError) {
+        invoicesData = invData || [];
+      }
+    }
+
+    // Create lookup maps
+    const customerMap = new Map();
+    customersData?.forEach(customer => {
+      // Decrypt customer name fields if needed
+      const decryptedFirstName = customer.first_name && isDataEncrypted(customer.first_name) 
+        ? decryptSensitiveData(customer.first_name) 
+        : customer.first_name || '';
+      const decryptedLastName = customer.last_name && isDataEncrypted(customer.last_name) 
+        ? decryptSensitiveData(customer.last_name) 
+        : customer.last_name || '';
+      
+      customerMap.set(customer.id, {
+        name: `${decryptedFirstName} ${decryptedLastName}`.trim() || 'Unknown Customer',
+        email: customer.email || 'Unknown'
+      });
+    });
+
+    const invoiceMap = new Map();
+    invoicesData.forEach(invoice => {
+      invoiceMap.set(invoice.id, invoice.service_type || 'Payment');
+    });
+
+    // Combine payment data with customer and service information
+    return paymentsData.map(payment => ({
+      id: payment.id?.toString() || '',
+      payment_request_id: 0, // Not applicable for direct payments
+      amount: payment.amount || 0,
+      currency: payment.currency || 'EUR',
+      status: payment.status === 'paid' ? 'completed' as const : payment.status as 'completed' | 'failed' | 'pending',
+      payment_method: payment.payment_method || 'Unknown',
+      transaction_id: payment.sumup_transaction_id || '',
+      created_at: payment.created_at || '',
+      customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
+      customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
+      service_name: invoiceMap.get(payment.invoice_id) || 'Payment',
+      payment_date: payment.payment_date || payment.created_at
+    }));
+
   } catch (error) {
     console.error('Error in getAllPayments:', error);
     return [];
@@ -542,7 +749,17 @@ export const getPaymentStatistics = async () => {
     const failedRequests = paymentRequests.filter(pr => pr.status === 'failed').length;
 
     const totalAmount = paymentRequests.reduce((sum, pr) => sum + pr.amount, 0);
-    const paidAmount = paymentRequests.filter(pr => pr.status === 'paid').reduce((sum, pr) => sum + pr.amount, 0);
+    // Calculate actual paid amount from completed payments
+    const actualPaidAmount = payments
+      .filter(payment => payment.status === 'completed')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    
+    // Use the higher of the two (payment requests marked as paid vs actual payments)
+    const paidAmount = Math.max(
+      paymentRequests.filter(pr => pr.status === 'paid').reduce((sum, pr) => sum + pr.amount, 0),
+      actualPaidAmount
+    );
+    
     const outstandingAmount = totalAmount - paidAmount;
 
     const paymentRate = totalRequests > 0 ? (paidRequests / totalRequests * 100) : 0;
@@ -553,7 +770,7 @@ export const getPaymentStatistics = async () => {
       paidRequests,
       failedRequests,
       totalAmount,
-      paidAmount,
+      paidAmount: actualPaidAmount, // Show actual payments made
       outstandingAmount,
       paymentRate: parseFloat(paymentRate.toFixed(1)),
       totalPayments: payments.length,

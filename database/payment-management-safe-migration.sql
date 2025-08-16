@@ -42,13 +42,15 @@ CREATE POLICY "Allow admin access to payment gateways" ON payment_gateways
             WHERE admins.email = auth.jwt() ->> 'email'
         )
     );
-RAISE NOTICE '✓ Created RLS policy for payment_gateways';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created RLS policy for payment_gateways'; END $$;
 
 -- Step 4: Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_payment_gateways_provider ON payment_gateways(provider);
 CREATE INDEX IF NOT EXISTS idx_payment_gateways_is_active ON payment_gateways(is_active);
 CREATE INDEX IF NOT EXISTS idx_payment_gateways_environment ON payment_gateways(environment);
-RAISE NOTICE '✓ Created indexes for payment_gateways';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created indexes for payment_gateways'; END $$;
 
 -- Step 5: Create/update trigger function for updated_at
 CREATE OR REPLACE FUNCTION update_payment_gateways_updated_at()
@@ -65,7 +67,8 @@ CREATE TRIGGER payment_gateways_updated_at
     BEFORE UPDATE ON payment_gateways
     FOR EACH ROW
     EXECUTE FUNCTION update_payment_gateways_updated_at();
-RAISE NOTICE '✓ Created updated_at trigger for payment_gateways';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created updated_at trigger for payment_gateways'; END $$;
 
 -- Step 7: Enhance existing payment_requests table safely
 DO $$
@@ -156,7 +159,8 @@ CREATE POLICY "Allow admin access to payments tracking" ON payments_tracking
             WHERE admins.email = auth.jwt() ->> 'email'
         )
     );
-RAISE NOTICE '✓ Created RLS policy for payments_tracking';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created RLS policy for payments_tracking'; END $$;
 
 -- Step 11: Create indexes for payments_tracking
 CREATE INDEX IF NOT EXISTS idx_payments_tracking_payment_request_id ON payments_tracking(payment_request_id);
@@ -164,7 +168,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_tracking_status ON payments_tracking(sta
 CREATE INDEX IF NOT EXISTS idx_payments_tracking_gateway_id ON payments_tracking(gateway_id);
 CREATE INDEX IF NOT EXISTS idx_payments_tracking_transaction_id ON payments_tracking(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_payments_tracking_created_at ON payments_tracking(created_at);
-RAISE NOTICE '✓ Created indexes for payments_tracking';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created indexes for payments_tracking'; END $$;
 
 -- Step 12: Create trigger for payments_tracking updated_at
 CREATE OR REPLACE FUNCTION update_payments_tracking_updated_at()
@@ -180,7 +185,8 @@ CREATE TRIGGER payments_tracking_updated_at
     BEFORE UPDATE ON payments_tracking
     FOR EACH ROW
     EXECUTE FUNCTION update_payments_tracking_updated_at();
-RAISE NOTICE '✓ Created updated_at trigger for payments_tracking';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created updated_at trigger for payments_tracking'; END $$;
 
 -- Step 13: Create updated_at trigger for payment_requests if it doesn't exist
 DO $$
@@ -222,7 +228,8 @@ SELECT
         ELSE 0 
     END as payment_rate
 FROM payment_requests;
-RAISE NOTICE '✓ Created payment_statistics view';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created payment_statistics view'; END $$;
 
 -- Step 15: Create/replace function to get bookings without payment requests
 CREATE OR REPLACE FUNCTION get_bookings_without_payment_requests()
@@ -258,7 +265,8 @@ EXCEPTION
         RETURN;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-RAISE NOTICE '✓ Created get_bookings_without_payment_requests function';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created get_bookings_without_payment_requests function'; END $$;
 
 -- Step 16: Create/replace function to get invoices with payment tracking
 CREATE OR REPLACE FUNCTION get_invoices_with_payment_tracking()
@@ -294,14 +302,16 @@ EXCEPTION
         RETURN;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-RAISE NOTICE '✓ Created get_invoices_with_payment_tracking function';
+
+DO $$ BEGIN RAISE NOTICE '✓ Created get_invoices_with_payment_tracking function'; END $$;
 
 -- Step 17: Grant necessary permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT ON payment_statistics TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_bookings_without_payment_requests() TO authenticated;
 GRANT EXECUTE ON FUNCTION get_invoices_with_payment_tracking() TO authenticated;
-RAISE NOTICE '✓ Granted necessary permissions';
+
+DO $$ BEGIN RAISE NOTICE '✓ Granted necessary permissions'; END $$;
 
 -- Step 18: Insert default SumUp gateway safely
 DO $$
