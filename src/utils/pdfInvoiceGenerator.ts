@@ -458,45 +458,52 @@ export class PDFInvoiceGenerator {
       financialData: invoiceData.financial
     });
     
-    // Show deposit if applicable (separate from other payments)
-    if (depositAmount > 0) {
-      this.doc.setFontSize(10);
-      this.doc.setFont('helvetica', 'normal');
-      this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('Deposit Paid:', labelX, currentY);
-      this.doc.text(`-${this.formatCurrency(depositAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
-      currentY += 8;
-    }
-    
-    // Show additional payments if any (excluding deposit)
-    const additionalPayments = Math.max(0, totalPaidAmount - depositAmount);
-    if (additionalPayments > 0) {
-      this.doc.setFontSize(10);
-      this.doc.setFont('helvetica', 'normal');
-      this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('Additional Payments:', labelX, currentY);
-      this.doc.text(`-${this.formatCurrency(additionalPayments, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
-      currentY += 8;
-    }
-    
-    
-    // Add separator line if any payments were shown
-    if (depositAmount > 0 || additionalPayments > 0) {
+    // Payment Breakdown Section - only show if there are payments
+    if (totalPaidAmount > 0) {
       currentY += 4;
-      this.doc.setDrawColor(this.COLORS.secondary);
-      this.doc.setLineWidth(0.3);
-      this.doc.line(labelX, currentY, rightX, currentY);
-      currentY += 8;
+      
+      // Show deposit if applicable
+      if (depositAmount > 0) {
+        this.doc.setFontSize(10);
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setTextColor(this.COLORS.dark);
+        this.doc.text('Deposit Paid:', labelX, currentY);
+        this.doc.text(`-${this.formatCurrency(depositAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+        currentY += 8;
+      }
+      
+      // Show balance paid (additional payments excluding deposit)
+      const balancePaid = Math.max(0, totalPaidAmount - depositAmount);
+      if (balancePaid > 0) {
+        this.doc.setFontSize(10);
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setTextColor(this.COLORS.dark);
+        this.doc.text('Balance Paid:', labelX, currentY);
+        this.doc.text(`-${this.formatCurrency(balancePaid, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+        currentY += 8;
+      }
+      
+      // Add spacing before total paid
+      currentY += 4;
+      
+      // Show total paid with emphasis
+      this.doc.setFontSize(11);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setTextColor(this.COLORS.success);
+      this.doc.text('Total Paid:', labelX, currentY);
+      this.doc.text(this.formatCurrency(totalPaidAmount, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
+      currentY += 12;
     }
     
     // Calculate actual due amount with better precision
     const actualDueAmount = Math.round((totalInvoiceAmount - totalPaidAmount) * 100) / 100;
+    const balancePaid = Math.max(0, totalPaidAmount - depositAmount);
 
     console.log('Payment Debug:', {
       totalInvoiceAmount,
       totalPaidAmount,
       depositAmount,
-      additionalPayments,
+      balancePaid,
       actualDueAmount
     });    // Show amount due or paid status with precise comparison
     if (actualDueAmount >= 0.01) {
