@@ -120,11 +120,6 @@ const sendEmail = async (
     // Generate proper email subject
     const emailSubject = customSubject || generateEmailSubject(emailType, displayCustomerName);
     
-    console.log(`📧 Sending ${emailType} email to ${recipientEmail}`);
-    console.log('📧 Customer:', displayCustomerName);
-    console.log('📧 Subject:', emailSubject);
-    console.log('📧 Email data:', { ...data, customer_name: displayCustomerName });
-    
     const response = await fetch(`${baseUrl}/.netlify/functions/send-email`, {
       method: 'POST',
       headers: {
@@ -140,32 +135,20 @@ const sendEmail = async (
     
     // Check if response has content before parsing JSON
     const responseText = await response.text();
-    console.log(`📧 Response status: ${response.status}, Response text: ${responseText}`);
     
-    let result;
     try {
-      result = responseText ? JSON.parse(responseText) : {};
+      if (responseText) {
+        JSON.parse(responseText);
+      }
+      if (!response.ok) {
+        return false;
+      }
     } catch (parseError) {
-      console.error('Failed to parse email function response:', parseError);
-      console.error('Response text was:', responseText);
-      return false;
-    }
-    
-    if (!response.ok) {
-      console.error(`Failed to send ${emailType} email:`, result.error || 'Unknown error');
-      console.error('Full response:', result);
       return false;
     }
 
-    console.log(`✅ Successfully sent ${emailType} email to ${recipientEmail}`);
     return true;
   } catch (error) {
-    console.error(`Error sending ${emailType} email:`, error);
-    // Log more details about the error
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
     return false;
   }
 };
@@ -345,10 +328,6 @@ export const sendAdminBookingConfirmationEmail = async (
   adminEmail?: string
 ): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
   try {
-    console.log('📧 Starting admin booking confirmation email process...');
-    console.log('📧 Customer email:', customerEmail);
-    console.log('📧 Booking data:', bookingData);
-    
     // Prepare data with proper customer name decryption
     const decryptedCustomerName = isDataEncrypted(bookingData.customer_name) 
       ? decryptSensitiveData(bookingData.customer_name) 
@@ -362,18 +341,14 @@ export const sendAdminBookingConfirmationEmail = async (
     // Generate proper subject for booking confirmation
     const subject = generateEmailSubject('admin_booking_confirmation', decryptedCustomerName);
     
-    console.log('📧 Sending customer confirmation email...');
     // Send to customer
     const customerSuccess = await sendEmail('admin_booking_confirmation', customerEmail, emailData, subject);
-    console.log('📧 Customer email result:', customerSuccess);
     
-    console.log('📧 Sending admin notification email...');
     // Send to admin - try alternative admin email first, then fallback to info@khtherapy.ie
     const adminEmailAddress = adminEmail || 
                               process.env.VITE_ADMIN_EMAIL || 
                               'info@khtherapy.ie';
     
-    console.log('📧 Admin email address (resolved):', adminEmailAddress);
     const adminEmailData = {
       ...emailData,
       customer_name: `Admin Notification: ${decryptedCustomerName}'s booking has been confirmed`,
@@ -384,22 +359,10 @@ export const sendAdminBookingConfirmationEmail = async (
     };
     const adminSubject = `🔔 Admin Alert: Booking Confirmed - ${decryptedCustomerName} - ${emailData.service_name}`;
     
-    console.log('📧 Admin email address:', adminEmailAddress);
-    console.log('📧 Admin email data:', adminEmailData);
-    console.log('📧 Admin subject:', adminSubject);
-    
     const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
-    console.log('📧 Admin email result:', adminSuccess);
-    
-    console.log('📧 Final results:', { customerSuccess, adminSuccess });
     
     return { customerSuccess, adminSuccess };
   } catch (error) {
-    console.error('❌ Error in sendAdminBookingConfirmationEmail:', error);
-    if (error instanceof Error) {
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Error stack:', error.stack);
-    }
     return { customerSuccess: false, adminSuccess: false };
   }
 };
