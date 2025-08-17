@@ -711,13 +711,29 @@ exports.handler = async (event, context) => {
       },
       to: recipientEmail,
       subject: emailSubject,
-      html: htmlContent
+      html: htmlContent,
+      // Add headers to improve deliverability
+      headers: {
+        'X-Mailer': 'KH Therapy Booking System',
+        'X-Priority': data.is_admin_notification ? '1' : '3',
+        'X-MSMail-Priority': data.is_admin_notification ? 'High' : 'Normal',
+        'Reply-To': process.env.SMTP_USER || 'info@khtherapy.ie'
+      }
     };
 
-    // Special handling for admin notifications to avoid from/to being the same
+    // Special handling for admin notifications
     if (data.is_admin_notification && recipientEmail === (process.env.SMTP_USER || 'info@khtherapy.ie')) {
       mailOptions.from.name = 'KH Therapy Booking System';
-      console.log('📧 Admin notification detected - using special sender name');
+      mailOptions.headers['X-Admin-Notification'] = 'true';
+      mailOptions.headers['X-Booking-Reference'] = data.booking_reference || 'N/A';
+      
+      // Try using BCC as an alternative delivery method for same-domain emails
+      if (process.env.ADMIN_BCC_EMAIL) {
+        mailOptions.bcc = process.env.ADMIN_BCC_EMAIL;
+        console.log('📧 Added BCC for admin notification to:', process.env.ADMIN_BCC_EMAIL);
+      }
+      
+      console.log('📧 Admin notification detected - using special sender name and headers');
     }
 
     // Add calendar attachment for booking confirmations
@@ -740,7 +756,23 @@ exports.handler = async (event, context) => {
     }
 
     // Send email
+    console.log('📧 Sending email with options:', {
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject,
+      hasAttachments: !!mailOptions.attachments,
+      isAdminNotification: !!data.is_admin_notification
+    });
+    
     const result = await transporter.sendMail(mailOptions);
+    
+    console.log('📧 Email sent successfully:', {
+      messageId: result.messageId,
+      response: result.response,
+      accepted: result.accepted,
+      rejected: result.rejected,
+      pending: result.pending
+    });
 
     return {
       statusCode: 200,
