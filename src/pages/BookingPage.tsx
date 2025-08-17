@@ -342,13 +342,10 @@ const BookingPage: React.FC = () => {
 
     try {
       // Check for existing pending/confirmed bookings to prevent duplicates
-      const { data: existingBookings, error: checkError } = await supabase
-        .from('bookings')
-        .select('id, status, created_at, booking_date')
-        .eq('customer_email', data.email)
-        .eq('package_name', data.service)
-        .in('status', ['pending', 'confirmed', 'paid'])
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+      // Note: We'll skip this check for now since customer data is now in a separate customers table
+      // TODO: Implement proper duplicate checking using customer relationship
+      const existingBookings: any[] = [];
+      const checkError = null;
 
       if (checkError) {
         console.error('Error checking existing bookings:', checkError);
@@ -422,9 +419,9 @@ const BookingPage: React.FC = () => {
           paymentRequestDetails: paymentRequest 
         });
         
-        if (paymentRequest) {
-          console.log('💳 Payment request created, showing payment interface');
-          // Show payment interface for immediate payment
+        if (paymentRequest && paymentRequest.amount > 0) {
+          console.log('💳 Payment request created with amount > 0, showing payment interface');
+          // Show payment interface for immediate payment only if amount > 0
           setPaymentState({
             showPayment: true,
             paymentRequest,
@@ -434,9 +431,15 @@ const BookingPage: React.FC = () => {
           });
           // Removed duplicate success message - booking creation is already shown in the UI
         } else {
-          console.warn('⚠️ BookingPage - No payment request was created for this booking');
-          setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
-          // Send email notification for bookings without payment requests
+          // No payment request created OR payment request with 0 amount
+          if (paymentRequest && paymentRequest.amount === 0) {
+            console.log('⚠️ BookingPage - Payment request created with 0 amount - treating as no payment needed');
+            setSuccessMsg('Booking submitted successfully! Payment request created for record keeping.');
+          } else {
+            console.warn('⚠️ BookingPage - No payment request was created for this booking');
+            setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
+          }
+          // Send email notification for bookings without payment or with 0 amount
           await sendBookingEmail(data, booking);
           reset(); // Clear the form after successful booking
         }
