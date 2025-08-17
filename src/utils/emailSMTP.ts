@@ -368,8 +368,12 @@ export const sendAdminBookingConfirmationEmail = async (
     console.log('📧 Customer email result:', customerSuccess);
     
     console.log('📧 Sending admin notification email...');
-    // Send to admin (info@khtherapy.ie) with different approach
-    const adminEmailAddress = adminEmail || 'info@khtherapy.ie';
+    // Send to admin - try alternative admin email first, then fallback to info@khtherapy.ie
+    const adminEmailAddress = adminEmail || 
+                              process.env.VITE_ADMIN_EMAIL || 
+                              'info@khtherapy.ie';
+    
+    console.log('📧 Admin email address (resolved):', adminEmailAddress);
     const adminEmailData = {
       ...emailData,
       customer_name: `Admin Notification: ${decryptedCustomerName}'s booking has been confirmed`,
