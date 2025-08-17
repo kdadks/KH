@@ -396,39 +396,102 @@ const getEmailTemplate = (type, data) => {
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>Welcome to KH Therapy! We're excited to have you as a patient and look forward to helping you on your path to better health and wellness.</p>
+              <p>Welcome to KH Therapy! We're thrilled to have you join our community of patients. Our dedicated team of qualified physiotherapists is committed to helping you achieve your health and wellness goals through personalized, evidence-based treatment.</p>
               
               <div class="details">
-                <h3>🏥 Your Patient Portal</h3>
-                <p>Your account has been created and you now have access to:</p>
+                <h3>🏥 Your New Patient Portal</h3>
+                <p>We've created a secure online account for you that provides 24/7 access to manage your healthcare journey. Your patient portal includes:</p>
                 <ul style="margin: 15px 0; padding-left: 25px; line-height: 1.8;">
-                  <li>📅 Book appointments online</li>
-                  <li>📋 View your appointment history</li>
-                  <li>💳 Manage payment requests and invoices</li>
-                  <li>👤 Update your profile and preferences</li>
-                  <li>📞 Access our contact information</li>
+                  <li><strong>📅 Online Appointment Booking</strong> - Schedule, reschedule, or cancel appointments at your convenience</li>
+                  <li><strong>📋 Complete Medical History</strong> - View all your appointments, treatments, and progress notes</li>
+                  <li><strong>💳 Financial Management</strong> - Handle payments, view invoices, and manage billing information</li>
+                  <li><strong>📄 Document Access</strong> - Download receipts, treatment summaries, and insurance forms</li>
+                  <li><strong>👤 Profile Management</strong> - Update personal information, emergency contacts, and preferences</li>
+                  <li><strong>📞 Direct Communication</strong> - Secure messaging with your therapy team</li>
+                  <li><strong>📈 Progress Tracking</strong> - Monitor your recovery journey and treatment outcomes</li>
                 </ul>
+              </div>
+
+              <div class="payment-instructions">
+                <h3>🔐 First-Time Login Instructions</h3>
+                <p><strong>Important:</strong> Since this is your first time accessing our patient portal, please follow these steps:</p>
+                
+                <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
+                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 1: Access the Portal</h4>
+                  <p style="margin: 0;">Visit our website and click on "Patient Login" or use the button below to go directly to the login page.</p>
+                </div>
+
+                <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
+                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 2: Set Up Your Password</h4>
+                  <p style="margin: 0;"><strong>Email:</strong> ${data.customer_email || 'Your registered email address'}</p>
+                  <p style="margin: 5px 0 0 0;">Click "Forgot Password?" to create your secure password. You'll receive a password reset email with instructions.</p>
+                </div>
+
+                <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
+                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 3: Complete Your Profile</h4>
+                  <p style="margin: 0;">Once logged in, please update your profile with any missing information and review your emergency contact details.</p>
+                </div>
+
+                <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
+                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 4: Explore Your Dashboard</h4>
+                  <p style="margin: 0;">Familiarize yourself with the portal features and don't hesitate to contact us if you need assistance navigating the system.</p>
+                </div>
               </div>
               
               ${data.login_url ? `
-                <div style="text-align: center; margin: 25px 0;">
-                  <a href="${data.login_url}" class="button">🔐 Access Your Account</a>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${data.login_url}" class="button">🔐 Access Your Patient Portal</a>
                 </div>
-              ` : ''}
+              ` : `
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="https://khtherapy.netlify.app" class="button">🔐 Go to Patient Login</a>
+                </div>
+              `}
               
               <div class="highlight">
-                <p><strong>🎯 What's Next?</strong></p>
-                <p>• Schedule your first appointment through your patient portal</p>
-                <p>• Complete any required health questionnaires</p>
-                <p>• Prepare any medical documents you'd like to share</p>
+                <p><strong>🎯 Getting Started with Your Care</strong></p>
+                <p>Here's what you can do right away:</p>
+                <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.6;">
+                  <li><strong>Book Your First Appointment:</strong> Choose from available time slots that suit your schedule</li>
+                  <li><strong>Health Questionnaire:</strong> Complete any pre-appointment health assessments if required</li>
+                  <li><strong>Insurance Information:</strong> Upload your insurance cards and relevant documentation</li>
+                  <li><strong>Medical History:</strong> Provide details about your condition and previous treatments</li>
+                  <li><strong>Contact Preferences:</strong> Set how you'd like to receive appointment reminders and updates</li>
+                </ul>
+              </div>
+
+              <div class="details">
+                <h3>🤝 What to Expect</h3>
+                <p><strong>Our Commitment to You:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.6;">
+                  <li>Personalized treatment plans tailored to your specific needs and goals</li>
+                  <li>Regular progress assessments and treatment plan adjustments</li>
+                  <li>Professional, compassionate care from qualified physiotherapists</li>
+                  <li>Clear communication about your treatment and recovery process</li>
+                  <li>Flexible scheduling to accommodate your lifestyle</li>
+                  <li>Ongoing support throughout your recovery journey</li>
+                </ul>
+              </div>
+
+              <div class="highlight">
+                <p><strong>📞 Need Help or Have Questions?</strong></p>
+                <p>Our patient support team is here to assist you:</p>
+                <p>• <strong>Technical Support:</strong> Having trouble with the portal? Call us during business hours</p>
+                <p>• <strong>Appointment Questions:</strong> Need help scheduling or have concerns about your visit?</p>
+                <p>• <strong>Treatment Inquiries:</strong> Questions about our services or what to expect?</p>
+                <p><strong>We're here to help make your experience as smooth as possible!</strong></p>
               </div>
               
-              <p>If you have any questions or need assistance, please don't hesitate to contact us. We're here to help you every step of the way!</p>
+              <p>Thank you for choosing KH Therapy. We look forward to partnering with you on your journey to better health and helping you achieve your wellness goals. Your trust in our care means everything to us!</p>
             </div>
             <div class="footer">
               <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
-              <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
-              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+              <p><strong>Clinic Address:</strong> KH Therapy Clinic, Dublin, Ireland</p>
+              <p><strong>Business Hours:</strong> Monday-Friday 8:00 AM - 6:00 PM | Saturday 9:00 AM - 2:00 PM</p>
+              <p style="margin-top: 15px; font-size: 12px; color: #9ca3af;">
+                This welcome email contains important information about your patient portal access. 
+                Please save this email for your records. If you need assistance, don't hesitate to contact us.
+              </p>
             </div>
           </div>
         </body>
