@@ -228,7 +228,11 @@ export class InvoiceService {
           customer_name: customer.name,
           invoice_number: invoice.invoice_number,
           amount: invoice.total,
-          due_date: new Date(invoice.due_date).toLocaleDateString('en-IE'),
+          due_date: new Date(invoice.due_date).toLocaleDateString('en-IE', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric' 
+          }),
           service_name: items[0]?.description || 'Therapy Session'
         },
         {
