@@ -26,20 +26,17 @@ import {
   getBookingsWithoutPaymentRequests,
   getAllPaymentGateways,
   getPaymentStatistics,
-  createManualPaymentRequest,
-  updatePaymentRequestStatus,
-  deletePaymentRequest,
   PaymentRequest as PaymentRequestType,
   Payment as PaymentType,
   BookingWithoutPayment,
   PaymentGateway as PaymentGatewayType
 } from '../../utils/paymentManagementUtils';
+import { createPaymentRequest, sendPaymentRequestNotification } from '../../utils/paymentRequestUtils';
 
 interface PaymentManagementProps {
   paymentRequests?: PaymentRequestType[];
   payments?: PaymentType[];
   recentPayments?: PaymentType[];
-  bookings?: BookingWithoutPayment[];
   gateways?: PaymentGatewayType[];
   statistics?: any;
   onRefresh?: () => void;
@@ -49,7 +46,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   paymentRequests: propPaymentRequests,
   payments: propPayments,
   recentPayments: propRecentPayments,
-  bookings: propBookings,
   gateways: propGateways,
   statistics: propStatistics,
   onRefresh
@@ -61,7 +57,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequestType[]>(propPaymentRequests || []);
   const [payments, setPayments] = useState<PaymentType[]>(propPayments || []);
   const [recentPayments, setRecentPayments] = useState<PaymentType[]>(propRecentPayments || []);
-  const [bookings, setBookings] = useState<BookingWithoutPayment[]>(propBookings || []);
   const [gateways, setGateways] = useState<PaymentGatewayType[]>(propGateways || []);
   const [loading, setLoading] = useState(!propPaymentRequests); // Only show loading if no data provided
   const [statistics, setStatistics] = useState<any>(propStatistics || null);
@@ -77,9 +72,9 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   
   // Modal states
   const [showCreateRequestModal, setShowCreateRequestModal] = useState(false);
-  const [showGatewayModal, setShowGatewayModal] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<BookingWithoutPayment | null>(null);
-  const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayType | null>(null);
+  const [bookingsForPaymentRequest, setBookingsForPaymentRequest] = useState<BookingWithoutPayment[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [creatingPaymentRequest, setCreatingPaymentRequest] = useState<{[key: string]: boolean}>({});
 
   // Load data on component mount - only if not provided via props
   useEffect(() => {
@@ -104,7 +99,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       if (!propPaymentRequests) promises.push(loadPaymentRequests());
       if (!propPayments) promises.push(loadPayments());
       if (!propRecentPayments) promises.push(loadRecentPayments());
-      if (!propBookings) promises.push(loadBookings());
       if (!propGateways) promises.push(loadGateways());
       if (!propStatistics) promises.push(loadStatistics());
       
@@ -141,15 +135,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       setRecentPayments(recentPaymentsData);
     } catch (error) {
       console.error('Error loading recent payments:', error);
-    }
-  };
-
-  const loadBookings = async () => {
-    try {
-      const bookingsWithoutPayments = await getBookingsWithoutPaymentRequests();
-      setBookings(bookingsWithoutPayments);
-    } catch (error) {
-      console.error('Error loading bookings:', error);
     }
   };
 
@@ -204,6 +189,117 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   // Reset pagination when switching tabs
   const resetPagination = () => {
     setCurrentPage(1);
+  };
+
+  // Modal and Payment Request Functions
+  const loadBookingsForPaymentRequest = async () => {
+    setLoadingBookings(true);
+    try {
+      const allBookings = await getBookingsWithoutPaymentRequests();
+      
+      // Filter bookings that have pricing associated (can create payment requests)
+      const bookingsWithPricing = [];
+      
+      for (const booking of allBookings) {
+        if (booking.package_name) {
+          // Check if service has pricing - if it returns null, skip it
+          const hasFixedPricing = await checkServiceHasPricing(booking.package_name);
+          if (hasFixedPricing) {
+            bookingsWithPricing.push(booking);
+          }
+        }
+      }
+      
+      setBookingsForPaymentRequest(bookingsWithPricing);
+    } catch (error) {
+      console.error('Error loading bookings for payment request:', error);
+      showError('Error', 'Failed to load bookings');
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
+
+  // Helper function to check if a service has fixed pricing
+  const checkServiceHasPricing = async (serviceName: string): Promise<boolean> => {
+    try {
+      // Check for skip patterns that indicate no fixed pricing
+      const skipPatterns = [
+        /contact\s+for\s+quote/i,
+        /€\d+\s*\/\s*class/i,
+        /€\d+\s*per\s*class/i,
+        /€\d+\s*\/\s*session/i,
+        /€\d+\s*per\s*session/i
+      ];
+      
+      // Check if service matches any skip pattern
+      for (const pattern of skipPatterns) {
+        if (pattern.test(serviceName)) {
+          return false;
+        }
+      }
+      
+      // Look for fixed package pricing like "Ultimate Health (€150)"
+      const priceMatch = serviceName.match(/€(\d+)(?!\s*\/|\s*per)/);
+      return !!priceMatch;
+    } catch (error) {
+      console.error('Error checking service pricing:', error);
+      return false;
+    }
+  };
+
+  const handleCreatePaymentRequest = async (booking: BookingWithoutPayment) => {
+    if (!booking.customer_name || !booking.package_name) {
+      showError('Error', 'Missing customer or service information');
+      return;
+    }
+
+    const bookingId = booking.id;
+    setCreatingPaymentRequest(prev => ({ ...prev, [bookingId]: true }));
+
+    try {
+      // Use the createPaymentRequest function that will calculate the 20% deposit
+      const result = await createPaymentRequest(
+        booking.customer_id || 0, // This will need to be properly mapped
+        booking.package_name,
+        booking.booking_date || new Date().toISOString(),
+        null, // invoiceId
+        bookingId, // bookingId
+        false, // isInvoicePaymentRequest
+        undefined // customAmount (let it calculate the deposit)
+      );
+
+      if (result) {
+        // Send email notification for the payment request
+        try {
+          console.log('📧 Sending payment request email notification...');
+          const emailResult = await sendPaymentRequestNotification(result.id);
+          if (emailResult.success) {
+            showSuccess('Payment Request Created', `20% deposit payment request created and email sent to ${booking.customer_name}`);
+          } else {
+            console.error('Failed to send payment request email:', emailResult.error);
+            showSuccess('Payment Request Created', `20% deposit payment request created for ${booking.customer_name} (email sending failed)`);
+          }
+        } catch (emailError) {
+          console.error('Error sending payment request email:', emailError);
+          showSuccess('Payment Request Created', `20% deposit payment request created for ${booking.customer_name} (email sending failed)`);
+        }
+        
+        // Refresh the bookings list
+        await loadBookingsForPaymentRequest();
+      } else {
+        throw new Error('Failed to create payment request');
+      }
+    } catch (error) {
+      console.error('Error creating payment request:', error);
+      showError('Error', 'Failed to create payment request. Please try again.');
+    } finally {
+      setCreatingPaymentRequest(prev => ({ ...prev, [bookingId]: false }));
+    }
+  };
+
+  const handleShowCreateRequestModal = async () => {
+    setShowCreateRequestModal(true);
+    await loadBookingsForPaymentRequest();
   };
 
   // Pagination Component
@@ -329,7 +425,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={() => setShowCreateRequestModal(true)}
+            onClick={handleShowCreateRequestModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -736,6 +832,121 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
           setGateways={setGateways}
           onRefresh={() => loadGateways()}
         />
+      )}
+
+      {/* Create Payment Request Modal */}
+      {showCreateRequestModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-hidden">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Create Payment Requests</h2>
+              <button
+                onClick={() => setShowCreateRequestModal(false)}
+                className="text-gray-500 hover:text-gray-700 flex-shrink-0"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {loadingBookings ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Loading bookings...</span>
+              </div>
+            ) : (
+              <div className="overflow-y-auto max-h-[70vh]">
+                {bookingsForPaymentRequest.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No bookings found that require payment requests.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <table className="w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
+                            Customer
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
+                            Service
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                            Booking Date
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                            Status
+                          </th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {bookingsForPaymentRequest.map((booking) => (
+                          <tr key={booking.id}>
+                            <td className="px-3 py-4">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900 break-words">
+                                  {booking.customer_name}
+                                </div>
+                                <div className="text-sm text-gray-500 break-words">
+                                  {booking.customer_email}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 text-sm text-gray-900 break-words">
+                              {booking.package_name}
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {new Date(booking.booking_date).toLocaleDateString()}
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                booking.status === 'confirmed' 
+                                  ? 'bg-green-100 text-green-800'
+                                  : booking.status === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {booking.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-4 text-center">
+                              {creatingPaymentRequest[booking.id] ? (
+                                <div className="flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                                </div>
+                              ) : (
+                                <img 
+                                  src="/paymentrequest.png" 
+                                  alt="Create Payment Request" 
+                                  title="Create Payment Request"
+                                  className="w-8 h-8 cursor-pointer hover:opacity-70 transition-opacity duration-200 mx-auto"
+                                  onClick={() => handleCreatePaymentRequest(booking)}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowCreateRequestModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -44,6 +44,7 @@ export interface InvoiceWithPayments {
 
 export interface BookingWithoutPayment {
   id: string;
+  customer_id: number;
   customer_name: string;
   customer_email: string;
   package_name: string;
@@ -496,7 +497,7 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
     const customerIds = [...new Set(bookingsWithoutPayments.map(b => b.customer_id))];
     const { data: customersData, error: customersError } = await supabase
       .from('customers')
-      .select('id, name, email')
+      .select('id, first_name, last_name, email')
       .in('id', customerIds);
 
     if (customersError) {
@@ -506,13 +507,25 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
     // Create customer lookup map
     const customerMap = new Map();
     customersData?.forEach(customer => {
-      customerMap.set(customer.id, customer);
+      // Decrypt customer names if they are encrypted
+      const decryptedFirstName = customer.first_name && isDataEncrypted(customer.first_name) 
+        ? decryptSensitiveData(customer.first_name) 
+        : customer.first_name || '';
+      const decryptedLastName = customer.last_name && isDataEncrypted(customer.last_name) 
+        ? decryptSensitiveData(customer.last_name) 
+        : customer.last_name || '';
+      
+      customerMap.set(customer.id, {
+        name: `${decryptedFirstName} ${decryptedLastName}`.trim() || 'Unknown Customer',
+        email: customer.email || 'Unknown'
+      });
     });
 
     return bookingsWithoutPayments.map(booking => {
       const customer = customerMap.get(booking.customer_id);
       return {
         id: booking.id,
+        customer_id: booking.customer_id,
         customer_name: customer?.name || 'Unknown',
         customer_email: customer?.email || 'Unknown',
         package_name: booking.package_name,
