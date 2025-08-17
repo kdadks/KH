@@ -216,7 +216,7 @@ const getEmailTemplate = (type, data) => {
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Payment Request</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">Payment Request</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -232,7 +232,7 @@ const getEmailTemplate = (type, data) => {
               
               ${data.payment_url ? `
                 <div style="text-align: center; margin: 25px 0;">
-                  <a href="${data.payment_url}" class="button" style="color: white !important; text-decoration: none;">💳 Pay Now</a>
+                  <a href="${data.payment_url}" class="button" style="color: white !important; text-decoration: none; background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;">💳 Pay Now</a>
                 </div>
                 <div class="highlight">
                   <p><strong>🔒 Secure Payment</strong></p>

@@ -524,7 +524,9 @@ export async function sendPaymentRequestNotification(
           year: 'numeric' 
         }),
         payment_url: `${window.location.origin}/payment?request=${paymentRequestId}`,
-        invoice_number: paymentRequest.reference_number || `PR-${paymentRequestId}`
+        invoice_number: paymentRequest.service_name?.includes('Invoice ') 
+          ? paymentRequest.service_name.replace('Invoice ', '') 
+          : paymentRequest.reference_number || `PR-${paymentRequestId}`
       }
     );
 
