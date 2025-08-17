@@ -739,14 +739,22 @@ exports.handler = async (event, context) => {
         console.log('📧 Added BCC for admin notification to:', process.env.ADMIN_BCC_EMAIL);
       }
       
-      // For same-domain emails, try alternative delivery approach
-      console.log('📧 Same-domain admin notification detected - applying delivery workarounds');
+      // For same-domain emails, enhance headers but keep same sender to avoid SMTP rejection
+      console.log('📧 Same-domain admin notification detected - using enhanced headers only');
       
-      // Change sender slightly to avoid same-domain filtering
-      mailOptions.from.address = 'noreply@khtherapy.ie';
-      mailOptions.headers['Sender'] = process.env.SMTP_USER || 'info@khtherapy.ie';
+      // Enhanced headers for same-domain delivery instead of changing sender
+      mailOptions.headers['X-Priority'] = '1'; // High priority
+      mailOptions.headers['X-MSMail-Priority'] = 'High';
+      mailOptions.headers['Importance'] = 'High';
+      mailOptions.headers['X-Original-Sender'] = process.env.SMTP_USER || 'info@khtherapy.ie';
+      mailOptions.headers['Auto-Submitted'] = 'auto-generated';
+      mailOptions.headers['X-Auto-Response-Suppress'] = 'All';
+      mailOptions.headers['X-Spam-Status'] = 'No';
       
-      console.log('📧 Admin notification detected - using special sender and headers');
+      // Try to make it look less like automated email to avoid filtering
+      mailOptions.from.name = `KH Therapy Admin (${new Date().toLocaleDateString()})`;
+      
+      console.log('📧 Admin notification detected - using same sender with enhanced headers');
     }
 
     // Add calendar attachment for booking confirmations
