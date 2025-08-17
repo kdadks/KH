@@ -90,6 +90,11 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
     resetPagination();
   }, [activeSubTab]);
 
+  // Reset pagination when search/filter changes
+  useEffect(() => {
+    resetPagination();
+  }, [searchTerm, statusFilter, dateFilter]);
+
   const loadAllData = async () => {
     setLoading(true);
     try {
@@ -189,6 +194,114 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   // Reset pagination when switching tabs
   const resetPagination = () => {
     setCurrentPage(1);
+    // Reset status filter when switching tabs since different tabs have different status options
+    setStatusFilter('all');
+  };
+
+  // Filter functions for search and status filtering
+  const getFilteredPaymentRequests = () => {
+    return paymentRequests.filter(request => {
+      // Search filter - check customer name, service, and reference
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm === '' || 
+        (request.customer_name && request.customer_name.toLowerCase().includes(searchLower)) ||
+        (request.service_name && request.service_name.toLowerCase().includes(searchLower)) ||
+        (request.id && request.id.toString().includes(searchLower));
+
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || request.status === statusFilter;
+
+      // Date filter
+      let matchesDate = true;
+      if (dateFilter !== 'all' && request.created_at) {
+        const requestDate = new Date(request.created_at);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        switch (dateFilter) {
+          case 'today':
+            const requestToday = new Date(requestDate);
+            requestToday.setHours(0, 0, 0, 0);
+            matchesDate = requestToday.getTime() === today.getTime();
+            break;
+          case 'week':
+            const weekAgo = new Date(today);
+            weekAgo.setDate(today.getDate() - 7);
+            matchesDate = requestDate >= weekAgo;
+            break;
+          case 'month':
+            const monthAgo = new Date(today);
+            monthAgo.setMonth(today.getMonth() - 1);
+            matchesDate = requestDate >= monthAgo;
+            break;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  };
+
+  const getFilteredPayments = () => {
+    return payments.filter(payment => {
+      // Search filter - check customer name, service, and transaction ID
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm === '' || 
+        (payment.customer_name && payment.customer_name.toLowerCase().includes(searchLower)) ||
+        (payment.service_name && payment.service_name.toLowerCase().includes(searchLower)) ||
+        (payment.transaction_id && payment.transaction_id.toLowerCase().includes(searchLower));
+
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
+
+      // Date filter
+      let matchesDate = true;
+      if (dateFilter !== 'all' && payment.payment_date) {
+        const paymentDate = new Date(payment.payment_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        switch (dateFilter) {
+          case 'today':
+            const paymentToday = new Date(paymentDate);
+            paymentToday.setHours(0, 0, 0, 0);
+            matchesDate = paymentToday.getTime() === today.getTime();
+            break;
+          case 'week':
+            const weekAgo = new Date(today);
+            weekAgo.setDate(today.getDate() - 7);
+            matchesDate = paymentDate >= weekAgo;
+            break;
+          case 'month':
+            const monthAgo = new Date(today);
+            monthAgo.setMonth(today.getMonth() - 1);
+            matchesDate = paymentDate >= monthAgo;
+            break;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  };
+
+  // Get status options based on current tab
+  const getStatusOptions = () => {
+    if (activeSubTab === 'requests') {
+      return [
+        { value: 'all', label: 'All Status' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'paid', label: 'Paid' },
+        { value: 'failed', label: 'Failed' },
+        { value: 'cancelled', label: 'Cancelled' }
+      ];
+    } else if (activeSubTab === 'payments') {
+      return [
+        { value: 'all', label: 'All Status' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'completed', label: 'Completed' },
+        { value: 'failed', label: 'Failed' }
+      ];
+    }
+    return [{ value: 'all', label: 'All Status' }];
   };
 
   // Modal and Payment Request Functions
@@ -585,11 +698,11 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="failed">Failed</option>
-                <option value="cancelled">Cancelled</option>
+                {getStatusOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <select
                 value={dateFilter}
@@ -639,14 +752,14 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {getCurrentPageData(paymentRequests, currentPage, itemsPerPage).length === 0 ? (
+                  {getCurrentPageData(getFilteredPaymentRequests(), currentPage, itemsPerPage).length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                        {paymentRequests.length === 0 ? 'No payment requests found' : 'No payment requests on this page'}
+                        {getFilteredPaymentRequests().length === 0 ? 'No payment requests found matching your criteria' : 'No payment requests on this page'}
                       </td>
                     </tr>
                   ) : (
-                    getCurrentPageData(paymentRequests, currentPage, itemsPerPage).map((request) => (
+                    getCurrentPageData(getFilteredPaymentRequests(), currentPage, itemsPerPage).map((request) => (
                       <tr key={request.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -703,7 +816,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 totalItems={paymentRequests.length}
                 currentPage={currentPage}
                 itemsPerPage={itemsPerPage}
-                totalPages={getTotalPages(paymentRequests.length, itemsPerPage)}
+                totalPages={getTotalPages(getFilteredPaymentRequests().length, itemsPerPage)}
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
               />
@@ -715,6 +828,45 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       {/* Payments Tab */}
       {activeSubTab === 'payments' && (
         <div className="space-y-4">
+          {/* Search and Filters */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex flex-wrap gap-4">
+              <div className="flex-1 min-w-64">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search payments..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {getStatusOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">All Dates</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+              </select>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="bg-white p-4 rounded-lg shadow">
             <h3 className="text-lg font-medium text-gray-900 mb-2">All Payments</h3>
@@ -751,14 +903,14 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {getCurrentPageData(payments, currentPage, itemsPerPage).length === 0 ? (
+                  {getCurrentPageData(getFilteredPayments(), currentPage, itemsPerPage).length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
-                        {payments.length === 0 ? 'No payments found' : 'No payments on this page'}
+                        {getFilteredPayments().length === 0 ? 'No payments found matching your criteria' : 'No payments on this page'}
                       </td>
                     </tr>
                   ) : (
-                    getCurrentPageData(payments, currentPage, itemsPerPage).map((payment) => (
+                    getCurrentPageData(getFilteredPayments(), currentPage, itemsPerPage).map((payment) => (
                       <tr key={payment.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -810,7 +962,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 totalItems={payments.length}
                 currentPage={currentPage}
                 itemsPerPage={itemsPerPage}
-                totalPages={getTotalPages(payments.length, itemsPerPage)}
+                totalPages={getTotalPages(getFilteredPayments().length, itemsPerPage)}
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
               />

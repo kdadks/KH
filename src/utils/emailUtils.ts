@@ -12,7 +12,8 @@ import {
   sendPasswordResetEmail as smtpSendPasswordReset,
   sendBookingWithPaymentEmail,
   sendBookingConfirmationWithoutPayment,
-  sendAdminBookingConfirmationEmail
+  sendAdminBookingConfirmationEmail,
+  sendBookingCapturedEmail as smtpSendBookingCaptured
 } from './emailSMTP';
 
 // Email template interfaces (keeping for backward compatibility)
@@ -485,5 +486,26 @@ export const sendAdminBookingConfirmation = async (
   } catch (error) {
     console.error('Error sending admin booking confirmation:', error);
     return { customerSuccess: false, adminSuccess: false };
+  }
+};
+
+// Booking captured notification (sent when booking is first received)
+export const sendBookingCapturedNotification = async (
+  customerEmail: string,
+  bookingData: BookingConfirmationData
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    return await smtpSendBookingCaptured(customerEmail, {
+      customer_name: bookingData.customer_name,
+      service_name: bookingData.service_name,
+      appointment_date: bookingData.appointment_date,
+      appointment_time: bookingData.appointment_time,
+      booking_reference: bookingData.booking_reference,
+      clinic_address: bookingData.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
+      special_instructions: bookingData.special_instructions
+    });
+  } catch (error) {
+    console.error('Error sending booking captured notification:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 };

@@ -405,6 +405,36 @@ export const sendAdminBookingConfirmationEmail = async (
   }
 };
 
+/**
+ * Send booking captured notification email
+ */
+export const sendBookingCapturedEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    clinic_address?: string;
+    special_instructions?: string;
+  }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const result = await sendEmail(
+      'booking_captured',
+      customerEmail,
+      data,
+      `Booking Received - ${data.service_name} Appointment`
+    );
+    
+    return { success: result, error: result ? undefined : 'Failed to send booking captured email' };
+  } catch (error) {
+    console.error('Error sending booking captured email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
 // Backward compatibility exports (these will replace the existing EmailJS functions)
 export {
   initializeEmailService as initializeEmailJS
