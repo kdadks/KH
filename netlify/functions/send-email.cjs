@@ -1036,11 +1036,33 @@ exports.handler = async (event, context) => {
       // Add each attachment
       attachments.forEach(attachment => {
         if (attachment.filename && attachment.content) {
-          mailOptions.attachments.push({
-            filename: attachment.filename,
-            content: Buffer.from(attachment.content, 'base64'),
-            contentType: attachment.contentType || 'application/octet-stream'
-          });
+          try {
+            // Validate base64 content for PDFs
+            if (attachment.contentType === 'application/pdf') {
+              // Check if content starts with PDF header when converted to buffer
+              const buffer = Buffer.from(attachment.content, 'base64');
+              const pdfHeader = buffer.toString('ascii', 0, 4);
+              
+              console.log(`PDF Attachment Processing:`);
+              console.log(`- Filename: ${attachment.filename}`);
+              console.log(`- Base64 length: ${attachment.content.length}`);
+              console.log(`- Buffer size: ${buffer.length} bytes`);
+              console.log(`- PDF header: ${pdfHeader} (should be %PDF)`);
+              
+              if (pdfHeader !== '%PDF') {
+                console.warn(`Warning: PDF attachment may be corrupted - header is "${pdfHeader}" instead of "%PDF"`);
+              }
+            }
+            
+            mailOptions.attachments.push({
+              filename: attachment.filename,
+              content: Buffer.from(attachment.content, 'base64'),
+              contentType: attachment.contentType || 'application/octet-stream'
+            });
+          } catch (error) {
+            console.error(`Error processing attachment ${attachment.filename}:`, error);
+            // Skip this attachment but continue with others
+          }
         }
       });
     }
