@@ -260,6 +260,36 @@ export const createBookingWithCustomer = async (
           } catch (emailError) {
             console.error('❌ Payment request email failed:', emailError);
           }
+        } else {
+          // No payment request created (e.g., "Contact for Quote" services)
+          // Send booking confirmation without payment
+          console.log('📧 Sending booking confirmation email (no payment required)...');
+          try {
+            const { sendSimpleBookingConfirmation } = await import('./emailUtils');
+            const emailResult = await sendSimpleBookingConfirmation(
+              customerData.email,
+              {
+                customer_name: `${customerData.firstName} ${customerData.lastName}`,
+                customer_email: customerData.email,
+                service_name: bookingData.package_name,
+                appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
+                appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
+                total_amount: 0, // No amount for contact for quote
+                booking_reference: booking.id.toString(),
+                therapist_name: 'KH Therapy Team',
+                clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+                special_instructions: bookingData.notes || undefined
+              }
+            );
+            
+            if (emailResult) {
+              console.log('✅ Booking confirmation email sent successfully');
+            } else {
+              console.error('❌ Failed to send booking confirmation email');
+            }
+          } catch (emailError) {
+            console.error('❌ Booking confirmation email failed:', emailError);
+          }
         }
       } catch (paymentError) {
         console.error('❌ Error creating payment request:', {
