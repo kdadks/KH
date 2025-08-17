@@ -155,7 +155,7 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
         amount: pr.amount || 0,
         currency: pr.currency || 'EUR',
         status: pr.status || 'pending',
-        due_date: pr.due_date,
+        due_date: pr.payment_due_date, // Use payment_due_date column from database
         created_at: pr.created_at,
         booking_id: pr.booking_id,
         invoice_id: pr.invoice_id
