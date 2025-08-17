@@ -100,10 +100,10 @@ const getEmailTemplate = (type, data) => {
       .button { display: inline-block; padding: 14px 28px; background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; text-decoration: none; border-radius: 8px; margin: 15px 0; font-weight: 600; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2); transition: all 0.3s ease; }
       .button:hover { background: linear-gradient(135deg, #047857 0%, #059669 100%); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3); }
       .details { background-color: #f0fdf4; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #10B981; }
-      .details h3 { color: white; margin-top: 0; margin-bottom: 15px; font-size: 18px; }
+      .details h3 { color: #047857; margin-top: 0; margin-bottom: 15px; font-size: 18px; }
       .highlight { background-color: #d1fae5; border: 1px solid #a7f3d0; color: #065f46; padding: 15px; border-radius: 8px; margin: 15px 0; }
       .payment-instructions { background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 20px; border-radius: 10px; margin: 20px 0; }
-      .payment-instructions h3 { color: white; margin-top: 0; }
+      .payment-instructions h3 { color: #047857; margin-top: 0; }
       .bank-details { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin-top: 15px; }
       .success-icon { color: #059669; font-size: 20px; }
       .warning-icon { color: #f59e0b; font-size: 18px; }
