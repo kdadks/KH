@@ -242,6 +242,7 @@ export const sendWelcomeEmail = async (
 ): Promise<boolean> => {
   return sendEmail('welcome', customerEmail, {
     customer_name: customerName,
+    customer_email: customerEmail,
     login_url: loginUrl
   });
 };
