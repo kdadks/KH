@@ -318,9 +318,12 @@ const BookingModal: React.FC<BookingModalProps> = ({
             null, // invoiceId
             data.id // bookingId - add the booking ID to link payment request to booking
           );
-          if (paymentRequest) {
-            console.log('Payment request created successfully:', paymentRequest);
+          if (paymentRequest && paymentRequest.amount > 0) {
+            console.log('Payment request created successfully with amount > 0:', paymentRequest);
             paymentRequestCreated = true;
+          } else if (paymentRequest && paymentRequest.amount === 0) {
+            console.log('Payment request created with 0 amount - treating as no payment needed:', paymentRequest);
+            paymentRequestCreated = false; // Treat 0-amount as no payment needed
           } else {
             console.log('No payment request created - service may not require upfront payment');
           }
