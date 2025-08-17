@@ -817,3 +817,71 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
     return { amount: 0, payments: [] };
   }
 }
+
+/**
+ * Send payment failed notification email
+ */
+export async function sendPaymentFailedNotification(
+  paymentRequestId: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Get payment request with customer and booking details
+    const { data: paymentRequest, error } = await supabase
+      .from('payment_requests')
+      .select(`
+        *,
+        customer:customers!payment_requests_customer_id_fkey(
+          first_name,
+          last_name,
+          email
+        )
+      `)
+      .eq('id', paymentRequestId)
+      .single();
+
+    if (error || !paymentRequest) {
+      throw new Error('Payment request not found');
+    }
+
+    // If there's a booking_id, fetch booking details
+    let bookingDetails = null;
+    if (paymentRequest.booking_id) {
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('id', paymentRequest.booking_id)
+        .single();
+
+      if (!bookingError && booking) {
+        bookingDetails = booking;
+      }
+    }
+
+    // Import the sendBookingWithPaymentEmail function
+    const { sendBookingWithPaymentEmail } = await import('./emailSMTP');
+
+    // Send payment failed email
+    const emailResult = await sendBookingWithPaymentEmail(
+      paymentRequest.customer.email,
+      {
+        customer_name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`,
+        service_name: paymentRequest.service_name || bookingDetails?.package_name || 'Therapy Session',
+        appointment_date: bookingDetails?.booking_date ? new Date(bookingDetails.booking_date).toLocaleDateString('en-IE') : new Date().toLocaleDateString('en-IE'),
+        appointment_time: bookingDetails ? `${bookingDetails.timeslot_start_time} - ${bookingDetails.timeslot_end_time}` : 'To be confirmed',
+        booking_reference: bookingDetails?.id || paymentRequest.booking_id || `PR-${paymentRequestId}`,
+        payment_amount: paymentRequest.amount,
+        payment_status: 'failed', // This will trigger the booking_with_payment_failed template
+        therapist_name: 'KH Therapy Team',
+        clinic_address: 'Neilstown Village Court, Neilstown Rd, Clondalkin, D22E8P2'
+      }
+    );
+
+    return { success: emailResult };
+  } catch (error) {
+    console.error('Error sending payment failed notification:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}

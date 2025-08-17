@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Shield, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
 import { createSumUpCheckoutUrl } from '../../utils/paymentUtils';
-import { processPaymentRequest } from '../../utils/paymentRequestUtils';
+import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
 import { useToast } from './toastContext';
 
 interface PaymentModalProps {
@@ -53,6 +53,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           if (newTimer >= 300) {
             setCurrentStep('error');
             setErrorMessage('Payment session timed out. Please try again.');
+            // Send payment failed notification
+            handlePaymentFailure('Payment session timed out');
             return newTimer;
           }
           
@@ -97,6 +99,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setErrorMessage(errorMessage);
       setCurrentStep('error');
       
+      // Send payment failed notification
+      handlePaymentFailure(`Payment initialization failed: ${errorMessage}`);
+      
       // Provide more helpful error message in development
       if (import.meta.env.DEV) {
         showError('Payment Configuration Error', `Development error: ${errorMessage}. Check your .env file or SumUp configuration.`);
@@ -137,12 +142,32 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         setCurrentStep('error');
         setErrorMessage(result.error || 'Failed to process payment');
         showError('Payment Processing Error', result.error || 'Failed to process payment');
+        // Send payment failed notification
+        handlePaymentFailure(result.error || 'Payment processing failed');
       }
     } catch (error) {
       console.error('Error completing payment:', error);
       setCurrentStep('error');
       setErrorMessage('Failed to complete payment processing');
       showError('Payment Error', 'Failed to complete payment processing');
+      // Send payment failed notification
+      handlePaymentFailure('Failed to complete payment processing');
+    }
+  };
+
+  const handlePaymentFailure = async (reason: string) => {
+    try {
+      console.log('📧 Sending payment failed notification for payment request:', paymentRequest.id, 'Reason:', reason);
+      const emailResult = await sendPaymentFailedNotification(paymentRequest.id);
+      
+      if (emailResult.success) {
+        console.log('✅ Payment failed notification sent successfully');
+        showInfo('Notification Sent', 'We have sent you an email with instructions to retry your payment.');
+      } else {
+        console.error('❌ Failed to send payment failed notification:', emailResult.error);
+      }
+    } catch (error) {
+      console.error('Error sending payment failed notification:', error);
     }
   };
 
