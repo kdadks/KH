@@ -553,7 +553,17 @@ export class PDFInvoiceGenerator {
     
     // Generate blob and base64
     const blob = this.doc.output('blob');
-    const base64 = this.doc.output('datauristring');
+    
+    // Get base64 string without data URI prefix for email attachments
+    const base64DataUri = this.doc.output('datauristring');
+    const base64 = base64DataUri.split(',')[1]; // Remove 'data:application/pdf;base64,' prefix
+    
+    // Verify base64 conversion (log first few and last few characters for debugging)
+    console.log(`PDF Generation for ${filename}:`);
+    console.log(`- Blob size: ${blob.size} bytes`);
+    console.log(`- Base64 length: ${base64.length} characters`);
+    console.log(`- Base64 starts with: ${base64.substring(0, 20)}...`);
+    console.log(`- Base64 ends with: ...${base64.substring(base64.length - 20)}`);
     
     return {
       blob,
