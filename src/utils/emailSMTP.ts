@@ -140,6 +140,7 @@ const sendEmail = async (
     
     // Check if response has content before parsing JSON
     const responseText = await response.text();
+    console.log(`📧 Response status: ${response.status}, Response text: ${responseText}`);
     
     let result;
     try {
@@ -151,10 +152,12 @@ const sendEmail = async (
     }
     
     if (!response.ok) {
-      console.error(`Failed to send ${emailType} email:`, result.error);
+      console.error(`Failed to send ${emailType} email:`, result.error || 'Unknown error');
+      console.error('Full response:', result);
       return false;
     }
 
+    console.log(`✅ Successfully sent ${emailType} email to ${recipientEmail}`);
     return true;
   } catch (error) {
     console.error(`Error sending ${emailType} email:`, error);
@@ -342,7 +345,9 @@ export const sendAdminBookingConfirmationEmail = async (
   adminEmail?: string
 ): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
   try {
-    console.log('📧 Sending admin booking confirmation emails...');
+    console.log('📧 Starting admin booking confirmation email process...');
+    console.log('📧 Customer email:', customerEmail);
+    console.log('📧 Booking data:', bookingData);
     
     // Prepare data with proper customer name decryption
     const decryptedCustomerName = isDataEncrypted(bookingData.customer_name) 
@@ -357,8 +362,10 @@ export const sendAdminBookingConfirmationEmail = async (
     // Generate proper subject for booking confirmation
     const subject = generateEmailSubject('admin_booking_confirmation', decryptedCustomerName);
     
+    console.log('📧 Sending customer confirmation email...');
     // Send to customer
     const customerSuccess = await sendEmail('admin_booking_confirmation', customerEmail, emailData, subject);
+    console.log('📧 Customer email result:', customerSuccess);
     
     // Send to admin (info@khtherapy.ie)
     const adminEmailAddress = adminEmail || 'info@khtherapy.ie';
@@ -367,13 +374,20 @@ export const sendAdminBookingConfirmationEmail = async (
       customer_name: `Admin Notification: ${decryptedCustomerName}'s booking has been confirmed`
     };
     const adminSubject = `Booking Confirmed: ${decryptedCustomerName} - ${emailData.service_name}`;
-    const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
     
-    console.log('📧 Admin booking confirmation results:', { customerSuccess, adminSuccess });
+    console.log('📧 Sending admin notification email...');
+    const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
+    console.log('📧 Admin email result:', adminSuccess);
+    
+    console.log('📧 Final results:', { customerSuccess, adminSuccess });
     
     return { customerSuccess, adminSuccess };
   } catch (error) {
-    console.error('Error sending admin booking confirmation:', error);
+    console.error('❌ Error in sendAdminBookingConfirmationEmail:', error);
+    if (error instanceof Error) {
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
+    }
     return { customerSuccess: false, adminSuccess: false };
   }
 };
