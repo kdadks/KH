@@ -115,7 +115,7 @@ export interface CreatePaymentRequestData {
   service_name?: string; // Add service_name field
   amount: number;
   currency?: string;
-  due_date?: string; // Fixed to match database column name
+  payment_due_date?: string; // Use payment_due_date to match existing database column
   notes?: string;
   created_by_admin_email?: string;
 }

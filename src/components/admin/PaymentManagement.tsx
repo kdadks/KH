@@ -286,6 +286,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       return [
         { value: 'all', label: 'All Status' },
         { value: 'pending', label: 'Pending' },
+        { value: 'sent', label: 'Sent' },
         { value: 'paid', label: 'Paid' },
         { value: 'failed', label: 'Failed' },
         { value: 'cancelled', label: 'Cancelled' }

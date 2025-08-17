@@ -185,7 +185,7 @@ export async function createPaymentRequest(
       service_name: serviceName, // Add service_name to the database insert
       amount: finalAmount,
       currency: PAYMENT_CONFIG.DEFAULT_CURRENCY,
-      due_date: dueDate.toISOString(), // Fixed field name to match database
+      payment_due_date: dueDate.toISOString(), // Use payment_due_date to match existing database column
       notes: isInvoicePaymentRequest 
         ? `Payment for ${serviceName} - remaining balance after deposit deduction`
         : `${PAYMENT_CONFIG.DEPOSIT_PERCENTAGE * 100}% deposit for ${serviceName} appointment on ${new Date(bookingDate).toLocaleDateString()}`
