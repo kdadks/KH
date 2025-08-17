@@ -45,6 +45,7 @@ import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
+import { sendAdminBookingConfirmation } from '../../utils/emailUtils';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -291,9 +292,6 @@ export const Bookings: React.FC<BookingsProps> = ({
 
         console.log('📧 Sending booking confirmation emails for:', bookingData);
 
-        // Import the email function
-        const { sendAdminBookingConfirmation } = await import('../../utils/emailUtils');
-        
         const emailResults = await sendAdminBookingConfirmation(
           customerEmail,
           bookingData
