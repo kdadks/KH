@@ -6,3 +6,9 @@
 # Netlify Functions configuration
 [functions]
   directory = "netlify/functions"
+
+# Redirect rules for React Router (SPA)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
