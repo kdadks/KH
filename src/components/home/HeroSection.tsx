@@ -303,9 +303,9 @@ const HeroSection: React.FC = () => {
           paymentRequestDetails: paymentRequest 
         });
         
-        if (paymentRequest) {
-          console.log('💳 Payment request created, showing payment interface');
-          // Show payment interface with Pay Now button (like main booking page)
+        if (paymentRequest && paymentRequest.amount > 0) {
+          console.log('💳 Payment request created with amount > 0, showing payment interface');
+          // Show payment interface with Pay Now button only if amount > 0
           setPaymentState({
             showPayment: true,
             paymentRequest,
@@ -315,9 +315,15 @@ const HeroSection: React.FC = () => {
           });
           // Removed duplicate success message - booking creation is already shown in the UI
         } else {
-          console.warn('⚠️ HeroSection - No payment request was created for this booking');
-          setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
-          // Send email notification for bookings without payment requests
+          // No payment request created OR payment request with 0 amount
+          if (paymentRequest && paymentRequest.amount === 0) {
+            console.log('⚠️ HeroSection - Payment request created with 0 amount - treating as no payment needed');
+            setSuccessMsg('Booking submitted successfully! Payment request created for record keeping.');
+          } else {
+            console.warn('⚠️ HeroSection - No payment request was created for this booking');
+            setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
+          }
+          // Send email notification for bookings without payment or with 0 amount
           await sendBookingEmail(data, booking);
           reset(); // Clear the form after successful booking
         }
