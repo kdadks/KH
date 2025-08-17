@@ -367,15 +367,23 @@ export const sendAdminBookingConfirmationEmail = async (
     const customerSuccess = await sendEmail('admin_booking_confirmation', customerEmail, emailData, subject);
     console.log('📧 Customer email result:', customerSuccess);
     
-    // Send to admin (info@khtherapy.ie)
+    console.log('📧 Sending admin notification email...');
+    // Send to admin (info@khtherapy.ie) with different approach
     const adminEmailAddress = adminEmail || 'info@khtherapy.ie';
     const adminEmailData = {
       ...emailData,
-      customer_name: `Admin Notification: ${decryptedCustomerName}'s booking has been confirmed`
+      customer_name: `Admin Notification: ${decryptedCustomerName}'s booking has been confirmed`,
+      // Add admin-specific fields to differentiate the email
+      is_admin_notification: true,
+      original_customer_name: decryptedCustomerName,
+      notification_type: 'booking_confirmation'
     };
-    const adminSubject = `Booking Confirmed: ${decryptedCustomerName} - ${emailData.service_name}`;
+    const adminSubject = `🔔 Admin Alert: Booking Confirmed - ${decryptedCustomerName} - ${emailData.service_name}`;
     
-    console.log('📧 Sending admin notification email...');
+    console.log('📧 Admin email address:', adminEmailAddress);
+    console.log('📧 Admin email data:', adminEmailData);
+    console.log('📧 Admin subject:', adminSubject);
+    
     const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
     console.log('📧 Admin email result:', adminSuccess);
     

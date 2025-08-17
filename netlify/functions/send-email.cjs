@@ -513,58 +513,117 @@ const getEmailTemplate = (type, data) => {
       `;
 
     case 'admin_booking_confirmation':
-      return `
-        <!DOCTYPE html>
-        <html>
-        <head>${commonStyles}</head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>✅ Booking Confirmed!</h1>
-            </div>
-            <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
-              <p>Great news! Your booking has been <strong>confirmed</strong> by our team.</p>
-              
-              <div class="details">
-                <h3>📅 Appointment Details:</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
-                <p><strong>Date:</strong> ${data.appointment_date}</p>
-                <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
+      // Check if this is an admin notification vs customer confirmation
+      const isAdminNotification = data.is_admin_notification;
+      const customerName = isAdminNotification ? data.original_customer_name : data.customer_name;
+      
+      if (isAdminNotification) {
+        // Special template for admin notifications
+        return `
+          <!DOCTYPE html>
+          <html>
+          <head>${commonStyles}</head>
+          <body>
+            <div class="container">
+              <div class="header" style="background-color: #dc2626;">
+                <h1>🔔 Admin Alert: Booking Confirmed</h1>
               </div>
-              
-              ${data.special_instructions ? `
+              <div class="content">
+                <h2>Admin Notification</h2>
+                <p><strong>${customerName}'s booking has been confirmed by an administrator.</strong></p>
+                
                 <div class="details">
-                  <h3>📝 Special Instructions:</h3>
-                  <p>${data.special_instructions}</p>
+                  <h3>📅 Appointment Details:</h3>
+                  <p><strong>Customer:</strong> ${customerName}</p>
+                  <p><strong>Service:</strong> ${data.service_name}</p>
+                  <p><strong>Date:</strong> ${data.appointment_date}</p>
+                  <p><strong>Time:</strong> ${data.appointment_time}</p>
+                  <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                  <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
                 </div>
-              ` : ''}
-              
-              <div class="details">
-                <h3>📋 Important Information:</h3>
-                <p>• Please arrive 10 minutes early for your appointment</p>
-                <p>• Bring any relevant medical documents or reports</p>
-                <p>• Wear comfortable clothing suitable for physical examination</p>
-                <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
+                
+                ${data.special_instructions ? `
+                  <div class="details">
+                    <h3>📝 Special Instructions:</h3>
+                    <p>${data.special_instructions}</p>
+                  </div>
+                ` : ''}
+                
+                <div class="details" style="background-color: #fef3c7; border: 1px solid #f59e0b;">
+                  <h3>⚠️ Action Required:</h3>
+                  <p>• Customer confirmation email has been sent automatically</p>
+                  <p>• Calendar invite has been attached to customer email</p>
+                  <p>• Appointment is now confirmed in the system</p>
+                  <p>• Please ensure all necessary preparations are made</p>
+                </div>
+                
+                <p style="text-align: center; margin: 20px 0;">
+                  📧 <strong>This is an automated notification from the KH Therapy booking system.</strong>
+                </p>
               </div>
-              
-              <p style="text-align: center; margin: 20px 0;">
-                📧 <strong>A calendar invite has been attached to help you save this appointment to your calendar.</strong>
-              </p>
-              
-              <p>We look forward to seeing you for your appointment!</p>
+              <div class="footer">
+                <p>KH Therapy Booking System | Automated Notification</p>
+                <p>Dublin, Ireland</p>
+              </div>
             </div>
-            <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie | Dublin, Ireland</p>
-              <p>For questions or changes, please contact us at info@khtherapy.ie</p>
+          </body>
+          </html>
+        `;
+      } else {
+        // Original customer confirmation template
+        return `
+          <!DOCTYPE html>
+          <html>
+          <head>${commonStyles}</head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>✅ Booking Confirmed!</h1>
+              </div>
+              <div class="content">
+                <h2>Hello ${customerName},</h2>
+                <p>Great news! Your booking has been <strong>confirmed</strong> by our team.</p>
+                
+                <div class="details">
+                  <h3>📅 Appointment Details:</h3>
+                  <p><strong>Service:</strong> ${data.service_name}</p>
+                  <p><strong>Date:</strong> ${data.appointment_date}</p>
+                  <p><strong>Time:</strong> ${data.appointment_time}</p>
+                  <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                  ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                  <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
+                </div>
+                
+                ${data.special_instructions ? `
+                  <div class="details">
+                    <h3>📝 Special Instructions:</h3>
+                    <p>${data.special_instructions}</p>
+                  </div>
+                ` : ''}
+                
+                <div class="details">
+                  <h3>📋 Important Information:</h3>
+                  <p>• Please arrive 10 minutes early for your appointment</p>
+                  <p>• Bring any relevant medical documents or reports</p>
+                  <p>• Wear comfortable clothing suitable for physical examination</p>
+                  <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
+                </div>
+                
+                <p style="text-align: center; margin: 20px 0;">
+                  📧 <strong>A calendar invite has been attached to help you save this appointment to your calendar.</strong>
+                </p>
+                
+                <p>We look forward to seeing you for your appointment!</p>
+              </div>
+              <div class="footer">
+                <p>KH Therapy | info@khtherapy.ie | Dublin, Ireland</p>
+                <p>For questions or changes, please contact us at info@khtherapy.ie</p>
+              </div>
             </div>
-          </div>
-        </body>
-        </html>
-      `;
+          </body>
+          </html>
+        `;
+      }
 
     default:
       return `
@@ -647,13 +706,19 @@ exports.handler = async (event, context) => {
     // Email options
     const mailOptions = {
       from: {
-        name: 'KH Therapy',
+        name: data.is_admin_notification ? 'KH Therapy System' : 'KH Therapy',
         address: process.env.SMTP_USER || 'info@khtherapy.ie'
       },
       to: recipientEmail,
       subject: emailSubject,
       html: htmlContent
     };
+
+    // Special handling for admin notifications to avoid from/to being the same
+    if (data.is_admin_notification && recipientEmail === (process.env.SMTP_USER || 'info@khtherapy.ie')) {
+      mailOptions.from.name = 'KH Therapy Booking System';
+      console.log('📧 Admin notification detected - using special sender name');
+    }
 
     // Add calendar attachment for booking confirmations
     if (emailType === 'admin_booking_confirmation' && data.appointment_date && data.appointment_time) {
