@@ -890,7 +890,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
             </button>
             <button
               onClick={handleSubmitForm}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              disabled={!formData.booking_id}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                formData.booking_id 
+                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
               <Save size={16} />
               <span>{editingInvoice ? 'Update' : 'Create'} Invoice</span>
