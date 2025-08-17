@@ -4,8 +4,9 @@ export interface ServicePricing {
   id: number;
   name: string;
   category: string;
-  in_hour_price: string;
-  out_of_hour_price: string;
+  price?: string; // For flat pricing (e.g., "€90", "Contact for Quote")
+  in_hour_price?: string; // For time-based pricing
+  out_of_hour_price?: string; // For time-based pricing
   features?: string[];
   description?: string;
   is_active: boolean;
@@ -29,7 +30,7 @@ export async function fetchServicePricing(serviceName: string): Promise<ServiceP
   try {
     const { data, error } = await supabase
       .from('services')
-      .select('id, name, category, in_hour_price, out_of_hour_price, features, description, is_active')
+      .select('id, name, category, price, in_hour_price, out_of_hour_price, features, description, is_active')
       .eq('name', serviceName)
       .eq('is_active', true)
       .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
@@ -55,11 +56,17 @@ export async function fetchServicePricing(serviceName: string): Promise<ServiceP
  * Gets the appropriate price for a service based on time slot type
  */
 export function getServicePrice(servicePricing: ServicePricing, timeSlotType: 'in_hour' | 'out_of_hour'): number {
+  // First check if the service has a flat price (like "€90" for Pre & Post Surgery Rehab)
+  if (servicePricing.price && servicePricing.price.trim() !== '') {
+    return extractNumericPrice(servicePricing.price);
+  }
+  
+  // Otherwise, use time-based pricing
   const priceString = timeSlotType === 'in_hour' 
     ? servicePricing.in_hour_price 
     : servicePricing.out_of_hour_price;
     
-  return extractNumericPrice(priceString);
+  return extractNumericPrice(priceString || '');
 }
 
 /**
