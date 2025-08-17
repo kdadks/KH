@@ -84,20 +84,26 @@ const generateICS = (data) => {
 const getEmailTemplate = (type, data) => {
   const commonStyles = `
     <style>
-      body { font-family: 'Inter', 'Roboto', Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f9fafb; }
+      /* Email client reset and compatibility */
+      body, table, td, p, a, li, blockquote { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      img { -ms-interpolation-mode: bicubic; }
+      
+      /* Main styles */
+      body { font-family: 'Inter', 'Roboto', Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f9fafb; margin: 0; padding: 0; }
       .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border-radius: 12px; }
       .header { background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0; position: relative; }
-      .logo { max-width: 120px; height: auto; margin-bottom: 10px; background: white; padding: 8px; border-radius: 8px; }
-      .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+      .logo { max-width: 120px; height: auto; margin-bottom: 10px; border-radius: 8px; display: block; }
+      .header h1 { margin: 0; font-size: 24px; font-weight: 600; color: white !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
       .content { padding: 25px 20px; background-color: #ffffff; }
       .footer { background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 14px; color: #6b7280; border-radius: 0 0 12px 12px; border-top: 1px solid #e5e7eb; }
       .button { display: inline-block; padding: 14px 28px; background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; text-decoration: none; border-radius: 8px; margin: 15px 0; font-weight: 600; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2); transition: all 0.3s ease; }
       .button:hover { background: linear-gradient(135deg, #047857 0%, #059669 100%); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3); }
       .details { background-color: #f0fdf4; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #10B981; }
-      .details h3 { color: #047857; margin-top: 0; margin-bottom: 15px; font-size: 18px; }
+      .details h3 { color: white; margin-top: 0; margin-bottom: 15px; font-size: 18px; }
       .highlight { background-color: #d1fae5; border: 1px solid #a7f3d0; color: #065f46; padding: 15px; border-radius: 8px; margin: 15px 0; }
       .payment-instructions { background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 20px; border-radius: 10px; margin: 20px 0; }
-      .payment-instructions h3 { color: #047857; margin-top: 0; }
+      .payment-instructions h3 { color: white; margin-top: 0; }
       .bank-details { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin-top: 15px; }
       .success-icon { color: #059669; font-size: 20px; }
       .warning-icon { color: #f59e0b; font-size: 18px; }
@@ -114,10 +120,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmation</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmation</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -169,10 +175,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Receipt</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Receipt</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -213,10 +219,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Request</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Request</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -262,10 +268,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Invoice Notification</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Invoice Notification</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -289,7 +295,7 @@ const getEmailTemplate = (type, data) => {
                 </ul>
                 
                 <div class="bank-details">
-                  <h4 style="color: #047857; margin-top: 0;">🏦 Bank Transfer Details</h4>
+                  <h4 style="color: white; margin-top: 0;">🏦 Bank Transfer Details</h4>
                   <p style="margin: 8px 0;"><strong>Bank:</strong> Bank of Ireland</p>
                   <p style="margin: 8px 0;"><strong>Account Name:</strong> KH Therapy</p>
                   <p style="margin: 8px 0;"><strong>IBAN:</strong> IE00 BOFI 1234 5678 9012 34</p>
@@ -326,10 +332,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Appointment Reminder</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Appointment Reminder</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -372,10 +378,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Admin Notification</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Admin Notification</h1>
             </div>
             <div class="content">
               <h2>🔔 New ${data.notification_type}</h2>
@@ -411,10 +417,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Welcome to KH Therapy</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Welcome to KH Therapy</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -439,23 +445,23 @@ const getEmailTemplate = (type, data) => {
                 <p><strong>Important:</strong> Since this is your first time accessing our patient portal, please follow these steps:</p>
                 
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
-                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 1: Access the Portal</h4>
+                  <h4 style="color: white; margin-top: 0; margin-bottom: 10px;">Step 1: Access the Portal</h4>
                   <p style="margin: 0;">Visit our website and click on "Patient Login" or use the button below to go directly to the login page.</p>
                 </div>
 
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
-                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 2: Set Up Your Password</h4>
+                  <h4 style="color: white; margin-top: 0; margin-bottom: 10px;">Step 2: Set Up Your Password</h4>
                   <p style="margin: 0;"><strong>Email:</strong> ${data.customer_email || 'Your registered email address'}</p>
                   <p style="margin: 5px 0 0 0;">Click "Forgot Password?" to create your secure password. You'll receive a password reset email with instructions.</p>
                 </div>
 
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
-                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 3: Complete Your Profile</h4>
+                  <h4 style="color: white; margin-top: 0; margin-bottom: 10px;">Step 3: Complete Your Profile</h4>
                   <p style="margin: 0;">Once logged in, please update your profile with any missing information and review your emergency contact details.</p>
                 </div>
 
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
-                  <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;">Step 4: Explore Your Dashboard</h4>
+                  <h4 style="color: white; margin-top: 0; margin-bottom: 10px;">Step 4: Explore Your Dashboard</h4>
                   <p style="margin: 0;">Familiarize yourself with the portal features and don't hesitate to contact us if you need assistance navigating the system.</p>
                 </div>
               </div>
@@ -529,10 +535,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Password Reset</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Password Reset</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -579,10 +585,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmed - Payment Received</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmed - Payment Received</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -648,10 +654,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Created - Payment Required</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Created - Payment Required</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -705,10 +711,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmation</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmation</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -777,10 +783,10 @@ const getEmailTemplate = (type, data) => {
             <div class="container">
               <div class="header" style="background-color: #dc2626;">
                 <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                  <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                  <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                   <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
                 </div>
-                <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">🔔 Admin Alert: Booking Confirmed</h1>
+                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">🔔 Admin Alert: Booking Confirmed</h1>
               </div>
               <div class="content">
                 <h2>Admin Notification</h2>
@@ -833,10 +839,10 @@ const getEmailTemplate = (type, data) => {
             <div class="container">
               <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
                 <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                  <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                  <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                   <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
                 </div>
-                <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">✅ Booking Confirmed!</h1>
+                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">✅ Booking Confirmed!</h1>
               </div>
               <div class="content">
                 <h2>Hello ${customerName},</h2>
@@ -892,10 +898,10 @@ const getEmailTemplate = (type, data) => {
           <div class="container">
             <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
               <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
-                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; background: white; padding: 8px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;  border-radius: 8px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: #047857; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">KH Therapy</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">KH Therapy</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name || 'Customer'},</h2>
