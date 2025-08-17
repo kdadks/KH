@@ -300,17 +300,37 @@ const BookingPage: React.FC = () => {
     }
   };
 
-  const sendBookingEmail = async (booking: BookingFormData) => {
+  const sendBookingEmail = async (booking: BookingFormData, bookingRecord: any) => {
     setSendingEmail(true);
-    // Replace with your email API endpoint and logic
     try {
-      await fetch('/api/send-booking-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(booking),
-      });
-      setSuccessMsg('Booking confirmed! Confirmation email sent.');
-  } catch {
+      // Import the proper email utility
+      const { sendSimpleBookingConfirmation } = await import('../utils/emailUtils');
+      
+      // Prepare booking confirmation data
+      const bookingConfirmationData = {
+        customer_name: `${booking.firstName} ${booking.lastName}`,
+        customer_email: booking.email,
+        service_name: booking.service,
+        appointment_date: new Date(booking.date).toLocaleDateString('en-IE'),
+        appointment_time: booking.time || 'To be scheduled',
+        total_amount: 0, // No payment required for these bookings
+        booking_reference: `KH-${bookingRecord.id}`,
+        therapist_name: 'KH Therapy Team',
+        clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+        special_instructions: booking.notes || 'We will contact you to schedule your appointment'
+      };
+
+      const emailSent = await sendSimpleBookingConfirmation(booking.email, bookingConfirmationData);
+      
+      if (emailSent) {
+        console.log('✅ Booking confirmation email sent successfully');
+        setSuccessMsg('Booking confirmed! Confirmation email sent.');
+      } else {
+        console.warn('⚠️ Failed to send booking confirmation email');
+        setSuccessMsg('Booking confirmed, but failed to send email.');
+      }
+    } catch (error) {
+      console.error('❌ Error sending booking confirmation email:', error);
       setSuccessMsg('Booking confirmed, but failed to send email.');
     }
     setSendingEmail(false);
@@ -417,7 +437,7 @@ const BookingPage: React.FC = () => {
           console.warn('⚠️ BookingPage - No payment request was created for this booking');
           setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
           // Send email notification for bookings without payment requests
-          await sendBookingEmail(data);
+          await sendBookingEmail(data, booking);
           reset(); // Clear the form after successful booking
         }
       }

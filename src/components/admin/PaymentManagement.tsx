@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, 
-  Plus, 
   Search, 
   Download,
   Eye,
@@ -70,10 +69,8 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   
-  // Modal states
-  const [showCreateRequestModal, setShowCreateRequestModal] = useState(false);
+  // Bookings for payment request
   const [bookingsForPaymentRequest, setBookingsForPaymentRequest] = useState<BookingWithoutPayment[]>([]);
-  const [loadingBookings, setLoadingBookings] = useState(false);
   const [creatingPaymentRequest, setCreatingPaymentRequest] = useState<{[key: string]: boolean}>({});
 
   // Load data on component mount - only if not provided via props
@@ -81,6 +78,9 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
     if (!propPaymentRequests || !propPayments || !propRecentPayments || !propGateways) {
       loadAllData();
     } else {
+      // Even if props are provided, we still need to load pending bookings
+      // because this data is not passed as props
+      loadBookingsForPaymentRequest();
       setLoading(false); // Data is already provided via props
     }
   }, [propPaymentRequests, propPayments, propRecentPayments, propGateways]);
@@ -96,6 +96,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   }, [searchTerm, statusFilter, dateFilter]);
 
   const loadAllData = async () => {
+    console.log('🚀 Starting loadAllData...');
     setLoading(true);
     try {
       // Only fetch data not provided via props
@@ -107,12 +108,18 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       if (!propGateways) promises.push(loadGateways());
       if (!propStatistics) promises.push(loadStatistics());
       
+      // Always load bookings for payment requests as it's not provided via props
+      promises.push(loadBookingsForPaymentRequest());
+      
+      console.log(`🔄 Executing ${promises.length} data loading promises...`);
       await Promise.all(promises);
+      console.log('✅ All data loading completed');
     } catch (error) {
-      console.error('Error loading payment data:', error);
+      console.error('❌ Error loading payment data:', error);
       showError('Error', 'Failed to load payment data');
     } finally {
       setLoading(false);
+      console.log('🏁 loadAllData finished');
     }
   };
 
@@ -158,16 +165,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       setStatistics(stats);
     } catch (error) {
       console.error('Error loading statistics:', error);
-    }
-  };
-
-  const handleRefresh = async () => {
-    if (onRefresh) {
-      // Use parent's refresh function if available
-      onRefresh();
-    } else {
-      // Fallback to local data loading
-      await loadAllData();
     }
   };
 
@@ -305,58 +302,35 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   };
 
   // Modal and Payment Request Functions
-  const loadBookingsForPaymentRequest = async () => {
-    setLoadingBookings(true);
-    try {
-      const allBookings = await getBookingsWithoutPaymentRequests();
-      
-      // Filter bookings that have pricing associated (can create payment requests)
-      const bookingsWithPricing = [];
-      
-      for (const booking of allBookings) {
-        if (booking.package_name) {
-          // Check if service has pricing - if it returns null, skip it
-          const hasFixedPricing = await checkServiceHasPricing(booking.package_name);
-          if (hasFixedPricing) {
-            bookingsWithPricing.push(booking);
-          }
-        }
-      }
-      
-      setBookingsForPaymentRequest(bookingsWithPricing);
-    } catch (error) {
-      console.error('Error loading bookings for payment request:', error);
-      showError('Error', 'Failed to load bookings');
-    } finally {
-      setLoadingBookings(false);
-    }
+  // Helper function to check if a service should show payment request actions
+  const shouldShowPaymentRequestAction = (serviceName: string): boolean => {
+    if (!serviceName) return false;
+    
+    const serviceLower = serviceName.toLowerCase();
+    
+    // Check for patterns that indicate no fixed pricing
+    const skipPatterns = [
+      'contact for quote',
+      'contact for pricing',
+      'contact us for pricing',
+      'pricing on request',
+      'quote on request',
+      '€25/ class',  // This pattern indicates per-class pricing, not suitable for payment requests
+      '€25/class',
+      '€25 / class',
+      '€25 per class'
+    ];
+    
+    // If any skip pattern is found, don't show payment request action
+    return !skipPatterns.some(pattern => serviceLower.includes(pattern));
   };
 
-  // Helper function to check if a service has fixed pricing
-  const checkServiceHasPricing = async (serviceName: string): Promise<boolean> => {
+  const loadBookingsForPaymentRequest = async () => {
     try {
-      // Check for skip patterns that indicate no fixed pricing
-      const skipPatterns = [
-        /contact\s+for\s+quote/i,
-        /€\d+\s*\/\s*class/i,
-        /€\d+\s*per\s*class/i,
-        /€\d+\s*\/\s*session/i,
-        /€\d+\s*per\s*session/i
-      ];
-      
-      // Check if service matches any skip pattern
-      for (const pattern of skipPatterns) {
-        if (pattern.test(serviceName)) {
-          return false;
-        }
-      }
-      
-      // Look for fixed package pricing like "Ultimate Health (€150)"
-      const priceMatch = serviceName.match(/€(\d+)(?!\s*\/|\s*per)/);
-      return !!priceMatch;
+      const allBookings = await getBookingsWithoutPaymentRequests();
+      setBookingsForPaymentRequest(allBookings);
     } catch (error) {
-      console.error('Error checking service pricing:', error);
-      return false;
+      console.error('Error loading bookings for payment request:', error);
     }
   };
 
@@ -408,11 +382,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
     } finally {
       setCreatingPaymentRequest(prev => ({ ...prev, [bookingId]: false }));
     }
-  };
-
-  const handleShowCreateRequestModal = async () => {
-    setShowCreateRequestModal(true);
-    await loadBookingsForPaymentRequest();
   };
 
   // Pagination Component
@@ -535,15 +504,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Payment Management</h1>
           <p className="text-gray-600">Comprehensive payment tracking and gateway management</p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={handleShowCreateRequestModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Payment Request
-          </button>
         </div>
       </div>
 
@@ -972,9 +932,97 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       )}
 
       {activeSubTab === 'bookings' && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Bookings Without Payment Requests</h3>
-          <p className="text-gray-500">Bookings requiring manual payment request creation will be shown here</p>
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Pending Bookings</h3>
+            <p className="text-sm text-gray-600">Bookings that require payment request creation</p>
+          </div>
+
+          {/* Bookings Content */}
+          <div className="bg-white rounded-lg shadow p-6">
+            {bookingsForPaymentRequest.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No bookings found that require payment requests.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Customer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Service
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Booking Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {bookingsForPaymentRequest.map((booking) => (
+                      <tr key={booking.id}>
+                        <td className="px-6 py-4">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {booking.customer_name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {booking.customer_email}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {booking.package_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(booking.booking_date).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            booking.status === 'confirmed' 
+                              ? 'bg-green-100 text-green-800'
+                              : booking.status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {booking.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {!shouldShowPaymentRequestAction(booking.package_name) ? (
+                            <span className="text-xs text-gray-500 italic">
+                              Contact Physio
+                            </span>
+                          ) : creatingPaymentRequest[booking.id] ? (
+                            <div className="flex items-center justify-center">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                            </div>
+                          ) : (
+                            <img 
+                              src="/paymentrequest.png" 
+                              alt="Create Payment Request" 
+                              title="Create Payment Request"
+                              className="w-8 h-8 cursor-pointer hover:opacity-70 transition-opacity duration-200 mx-auto"
+                              onClick={() => handleCreatePaymentRequest(booking)}
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -984,121 +1032,6 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
           setGateways={setGateways}
           onRefresh={() => loadGateways()}
         />
-      )}
-
-      {/* Create Payment Request Modal */}
-      {showCreateRequestModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-hidden">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Create Payment Requests</h2>
-              <button
-                onClick={() => setShowCreateRequestModal(false)}
-                className="text-gray-500 hover:text-gray-700 flex-shrink-0"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {loadingBookings ? (
-              <div className="flex justify-center items-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-3 text-gray-600">Loading bookings...</span>
-              </div>
-            ) : (
-              <div className="overflow-y-auto max-h-[70vh]">
-                {bookingsForPaymentRequest.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">No bookings found that require payment requests.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <table className="w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
-                            Customer
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
-                            Service
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
-                            Booking Date
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
-                            Status
-                          </th>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {bookingsForPaymentRequest.map((booking) => (
-                          <tr key={booking.id}>
-                            <td className="px-3 py-4">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900 break-words">
-                                  {booking.customer_name}
-                                </div>
-                                <div className="text-sm text-gray-500 break-words">
-                                  {booking.customer_email}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 text-sm text-gray-900 break-words">
-                              {booking.package_name}
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(booking.booking_date).toLocaleDateString()}
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                booking.status === 'confirmed' 
-                                  ? 'bg-green-100 text-green-800'
-                                  : booking.status === 'pending'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {booking.status}
-                              </span>
-                            </td>
-                            <td className="px-3 py-4 text-center">
-                              {creatingPaymentRequest[booking.id] ? (
-                                <div className="flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                                </div>
-                              ) : (
-                                <img 
-                                  src="/paymentrequest.png" 
-                                  alt="Create Payment Request" 
-                                  title="Create Payment Request"
-                                  className="w-8 h-8 cursor-pointer hover:opacity-70 transition-opacity duration-200 mx-auto"
-                                  onClick={() => handleCreatePaymentRequest(booking)}
-                                />
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                onClick={() => setShowCreateRequestModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
