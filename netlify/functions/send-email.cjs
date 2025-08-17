@@ -15,6 +15,40 @@ const createTransporter = () => {
   });
 };
 
+// Calendar ICS generation function
+const generateICS = (data) => {
+  const startDate = new Date(`${data.appointment_date}T${data.appointment_time}`);
+  const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+  
+  const formatDate = (date) => {
+    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+  
+  const icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KH Therapy//Booking System//EN',
+    'BEGIN:VEVENT',
+    `UID:${data.booking_reference}@khtherapy.ie`,
+    `DTSTART:${formatDate(startDate)}`,
+    `DTEND:${formatDate(endDate)}`,
+    `SUMMARY:${data.service_name} - KH Therapy`,
+    `DESCRIPTION:${data.service_name} appointment at KH Therapy\\nBooking Reference: ${data.booking_reference}${data.special_instructions ? '\\nSpecial Instructions: ' + data.special_instructions : ''}`,
+    `LOCATION:${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}`,
+    'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT15M',
+    'DESCRIPTION:Appointment reminder',
+    'ACTION:DISPLAY',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+  
+  return icsContent;
+};
+
 // Email templates
 const getEmailTemplate = (type, data) => {
   const commonStyles = `
@@ -444,6 +478,60 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'admin_booking_confirmation':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Booking Confirmed!</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Great news! Your booking has been <strong>confirmed</strong> by our team.</p>
+              
+              <div class="details">
+                <h3>📅 Appointment Details:</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
+              </div>
+              
+              ${data.special_instructions ? `
+                <div class="details">
+                  <h3>📝 Special Instructions:</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <div class="details">
+                <h3>📋 Important Information:</h3>
+                <p>• Please arrive 10 minutes early for your appointment</p>
+                <p>• Bring any relevant medical documents or reports</p>
+                <p>• Wear comfortable clothing suitable for physical examination</p>
+                <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
+              </div>
+              
+              <p style="text-align: center; margin: 20px 0;">
+                📧 <strong>A calendar invite has been attached to help you save this appointment to your calendar.</strong>
+              </p>
+              
+              <p>We look forward to seeing you for your appointment!</p>
+            </div>
+            <div class="footer">
+              <p>KH Therapy | info@khtherapy.ie | Dublin, Ireland</p>
+              <p>For questions or changes, please contact us at info@khtherapy.ie</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     default:
       return `
         <!DOCTYPE html>
@@ -532,6 +620,18 @@ exports.handler = async (event, context) => {
       subject: emailSubject,
       html: htmlContent
     };
+
+    // Add calendar attachment for booking confirmations
+    if (emailType === 'admin_booking_confirmation' && data.appointment_date && data.appointment_time) {
+      const icsContent = generateICS(data);
+      mailOptions.attachments = [
+        {
+          filename: 'appointment.ics',
+          content: icsContent,
+          contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+        }
+      ];
+    }
 
     // Send email
     const result = await transporter.sendMail(mailOptions);

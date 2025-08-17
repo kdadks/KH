@@ -11,7 +11,8 @@ import {
   sendInvoiceNotificationEmail as smtpSendInvoiceNotification,
   sendPasswordResetEmail as smtpSendPasswordReset,
   sendBookingWithPaymentEmail,
-  sendBookingConfirmationWithoutPayment
+  sendBookingConfirmationWithoutPayment,
+  sendAdminBookingConfirmationEmail
 } from './emailSMTP';
 
 // Email template interfaces (keeping for backward compatibility)
@@ -423,5 +424,29 @@ export const sendSimpleBookingConfirmation = async (
   } catch (error) {
     console.error('Error sending booking confirmation without payment:', error);
     return false;
+  }
+};
+
+// Admin booking confirmation with calendar (sent when admin confirms a booking)
+export const sendAdminBookingConfirmation = async (
+  customerEmail: string,
+  bookingData: BookingConfirmationData,
+  adminEmail?: string
+): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
+  try {
+    return await sendAdminBookingConfirmationEmail(customerEmail, {
+      customer_name: bookingData.customer_name,
+      service_name: bookingData.service_name,
+      appointment_date: bookingData.appointment_date,
+      appointment_time: bookingData.appointment_time,
+      total_amount: bookingData.total_amount || 0,
+      booking_reference: bookingData.booking_reference,
+      therapist_name: bookingData.therapist_name || 'KH Therapy Team',
+      clinic_address: bookingData.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
+      special_instructions: bookingData.special_instructions
+    }, adminEmail);
+  } catch (error) {
+    console.error('Error sending admin booking confirmation:', error);
+    return { customerSuccess: false, adminSuccess: false };
   }
 };

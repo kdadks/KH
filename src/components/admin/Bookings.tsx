@@ -45,7 +45,6 @@ import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
-import { decryptBookingCustomerDataForAdmin } from '../../utils/adminGdprUtils';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -240,8 +239,72 @@ export const Bookings: React.FC<BookingsProps> = ({
         updatedBookings[actualIndex] = { ...updatedBookings[actualIndex], status: 'confirmed' };
         setAllBookings(updatedBookings);
       }
-      
-      showSuccess('Booking Confirmed', 'The booking has been confirmed successfully.');
+
+      // Send booking confirmation emails with calendar attachment
+      try {
+        const customerEmail = booking.customer_email || booking.email;
+        
+        if (!customerEmail) {
+          console.warn('⚠️ No customer email found for booking confirmation');
+          showSuccess('Booking Confirmed', 'The booking has been confirmed successfully. (No customer email found - please contact customer manually)');
+          return;
+        }
+
+        const bookingData = {
+          customer_name: getCustomerName(booking),
+          customer_email: customerEmail,
+          service_name: booking.package_name || booking.service || 'Therapy Session',
+          appointment_date: booking.booking_date ? 
+            booking.booking_date.split('T')[0] : 
+            booking.appointment_date || 
+            booking.date || 
+            new Date().toISOString().split('T')[0],
+          appointment_time: booking.booking_date ? 
+            booking.booking_date.split('T')[1]?.substring(0, 5) + ':00' :
+            booking.timeslot_start_time || 
+            booking.appointment_time || 
+            booking.time || 
+            'To be scheduled',
+          booking_reference: `KH-${booking.id}`,
+          therapist_name: 'KH Therapy Team',
+          clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+          special_instructions: booking.notes || 'Please arrive 10 minutes early for your appointment.',
+          total_amount: 0
+        };
+
+        console.log('📧 Sending booking confirmation emails for:', bookingData);
+
+        // Import the email function
+        const { sendAdminBookingConfirmation } = await import('../../utils/emailUtils');
+        
+        const emailResults = await sendAdminBookingConfirmation(
+          customerEmail,
+          bookingData
+        );
+
+        if (emailResults.customerSuccess) {
+          console.log('✅ Customer booking confirmation email sent successfully');
+        } else {
+          console.warn('⚠️ Failed to send customer booking confirmation email');
+        }
+
+        if (emailResults.adminSuccess) {
+          console.log('✅ Admin booking confirmation email sent successfully');
+        } else {
+          console.warn('⚠️ Failed to send admin booking confirmation email');
+        }
+
+        const successMessage = emailResults.customerSuccess && emailResults.adminSuccess 
+          ? 'Booking confirmed and confirmation emails sent to customer and admin!'
+          : emailResults.customerSuccess 
+            ? 'Booking confirmed and confirmation email sent to customer!'
+            : 'Booking confirmed! (Email sending failed - please check manually)';
+
+        showSuccess('Booking Confirmed', successMessage);
+      } catch (emailError) {
+        console.error('❌ Error sending booking confirmation emails:', emailError);
+        showSuccess('Booking Confirmed', 'The booking has been confirmed successfully. (Email sending failed - please contact customer manually)');
+      }
     } catch (error) {
       console.error('Error confirming booking:', error);
       showError('Error', 'Failed to confirm booking. Please try again.');

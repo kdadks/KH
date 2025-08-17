@@ -335,6 +335,49 @@ export const sendBookingConfirmationWithoutPayment = async (
   return sendEmail('booking_confirmation_no_payment', customerEmail, bookingData);
 };
 
+// Admin booking confirmation (sent when admin confirms a booking)
+export const sendAdminBookingConfirmationEmail = async (
+  customerEmail: string,
+  bookingData: BookingConfirmationData,
+  adminEmail?: string
+): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
+  try {
+    console.log('📧 Sending admin booking confirmation emails...');
+    
+    // Prepare data with proper customer name decryption
+    const decryptedCustomerName = isDataEncrypted(bookingData.customer_name) 
+      ? decryptSensitiveData(bookingData.customer_name) 
+      : bookingData.customer_name;
+    
+    const emailData = {
+      ...bookingData,
+      customer_name: decryptedCustomerName
+    };
+    
+    // Generate proper subject for booking confirmation
+    const subject = generateEmailSubject('admin_booking_confirmation', decryptedCustomerName);
+    
+    // Send to customer
+    const customerSuccess = await sendEmail('admin_booking_confirmation', customerEmail, emailData, subject);
+    
+    // Send to admin (info@khtherapy.ie)
+    const adminEmailAddress = adminEmail || 'info@khtherapy.ie';
+    const adminEmailData = {
+      ...emailData,
+      customer_name: `Admin Notification: ${decryptedCustomerName}'s booking has been confirmed`
+    };
+    const adminSubject = `Booking Confirmed: ${decryptedCustomerName} - ${emailData.service_name}`;
+    const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
+    
+    console.log('📧 Admin booking confirmation results:', { customerSuccess, adminSuccess });
+    
+    return { customerSuccess, adminSuccess };
+  } catch (error) {
+    console.error('Error sending admin booking confirmation:', error);
+    return { customerSuccess: false, adminSuccess: false };
+  }
+};
+
 // Backward compatibility exports (these will replace the existing EmailJS functions)
 export {
   initializeEmailService as initializeEmailJS
