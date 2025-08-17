@@ -234,6 +234,43 @@ export const sendPaymentConfirmationEmail = async (
   }
 };
 
+// Payment failed notification email
+export const sendPaymentFailedEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    payment_amount: number;
+    therapist_name?: string;
+    clinic_address?: string;
+  }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const result = await sendBookingWithPaymentEmail(customerEmail, {
+      customer_name: data.customer_name,
+      service_name: data.service_name,
+      appointment_date: data.appointment_date,
+      appointment_time: data.appointment_time,
+      booking_reference: data.booking_reference,
+      payment_amount: data.payment_amount,
+      payment_status: 'failed', // This will trigger the booking_with_payment_failed template
+      therapist_name: data.therapist_name,
+      clinic_address: data.clinic_address
+    });
+    
+    return { success: result };
+  } catch (error) {
+    console.error('Error sending payment failed email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
 // Invoice notification email
 export const sendInvoiceNotificationEmail = async (
   customerEmail: string,
