@@ -207,16 +207,35 @@ const HeroSection: React.FC = () => {
 
   // Service mapping is no longer needed as we use service names directly
 
-  const sendBookingEmail = async (booking: BookingFormData) => {
+  const sendBookingEmail = async (booking: BookingFormData, bookingRecord: any) => {
     setSendingEmail(true);
     try {
-      await fetch('/api/send-booking-email', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(booking),
-      });
-      // Removed duplicate success toast - success is already shown in main UI
-    } catch {
-      // Removed duplicate success toast - success is already shown in main UI
+      // Import the proper email utility
+      const { sendSimpleBookingConfirmation } = await import('../../utils/emailUtils');
+      
+      // Prepare booking confirmation data
+      const bookingConfirmationData = {
+        customer_name: `${booking.firstName} ${booking.lastName}`,
+        customer_email: booking.email,
+        service_name: booking.service,
+        appointment_date: new Date().toLocaleDateString('en-IE'),
+        appointment_time: 'To be scheduled',
+        total_amount: 0, // No payment required for these bookings
+        booking_reference: `KH-${bookingRecord.id}`,
+        therapist_name: 'KH Therapy Team',
+        clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+        special_instructions: 'Quick Appointment from Hero Section - We will contact you to schedule your appointment'
+      };
+
+      const emailSent = await sendSimpleBookingConfirmation(booking.email, bookingConfirmationData);
+      
+      if (emailSent) {
+        console.log('✅ Booking confirmation email sent successfully');
+      } else {
+        console.warn('⚠️ Failed to send booking confirmation email');
+      }
+    } catch (error) {
+      console.error('❌ Error sending booking confirmation email:', error);
     }
     setSendingEmail(false);
   };
@@ -299,7 +318,7 @@ const HeroSection: React.FC = () => {
           console.warn('⚠️ HeroSection - No payment request was created for this booking');
           setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
           // Send email notification for bookings without payment requests
-          await sendBookingEmail(data);
+          await sendBookingEmail(data, booking);
           reset(); // Clear the form after successful booking
         }
       }
