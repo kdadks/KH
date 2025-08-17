@@ -185,7 +185,7 @@ export async function createPaymentRequest(
       service_name: serviceName, // Add service_name to the database insert
       amount: finalAmount,
       currency: PAYMENT_CONFIG.DEFAULT_CURRENCY,
-      payment_due_date: dueDate.toISOString(),
+      due_date: dueDate.toISOString(), // Fixed field name to match database
       notes: isInvoicePaymentRequest 
         ? `Payment for ${serviceName} - remaining balance after deposit deduction`
         : `${PAYMENT_CONFIG.DEPOSIT_PERCENTAGE * 100}% deposit for ${serviceName} appointment on ${new Date(bookingDate).toLocaleDateString()}`
@@ -518,7 +518,7 @@ export async function sendPaymentRequestNotification(
         customer_name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`,
         amount: paymentRequest.amount,
         service_name: paymentRequest.service_name || paymentRequest.description || 'Therapy Session',
-        due_date: new Date(paymentRequest.payment_due_date).toLocaleDateString('en-IE', { 
+        due_date: new Date(paymentRequest.due_date).toLocaleDateString('en-IE', { 
           day: '2-digit', 
           month: '2-digit', 
           year: 'numeric' 

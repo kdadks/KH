@@ -8,7 +8,7 @@ export interface PaymentRequest {
   currency: string; // Default 'EUR'
   status: PaymentRequestStatus;
   email_sent_at?: string | null;
-  payment_due_date?: string | null;
+  due_date?: string | null; // Fixed to match database column name
   notes?: string | null;
   created_by_admin_email?: string | null;
   created_at: string;
@@ -115,7 +115,7 @@ export interface CreatePaymentRequestData {
   service_name?: string; // Add service_name field
   amount: number;
   currency?: string;
-  payment_due_date?: string;
+  due_date?: string; // Fixed to match database column name
   notes?: string;
   created_by_admin_email?: string;
 }
