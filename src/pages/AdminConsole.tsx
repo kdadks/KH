@@ -14,7 +14,8 @@ import {
   FileText,
   Users,
   RefreshCw,
-  CreditCard
+  CreditCard,
+  HelpCircle
 } from 'lucide-react';
 import { Dashboard } from '../components/admin/Dashboard';
 import { Services } from '../components/admin/Services';
@@ -52,7 +53,7 @@ const AdminConsole = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // State management
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help'>('dashboard');
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [newPackage, setNewPackage] = useState<PackageType>({ 
     name: '', 
@@ -641,6 +642,17 @@ const AdminConsole = () => {
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
               <button
+                onClick={() => setActiveTab('help')}
+                className={`p-2 rounded-lg transition-colors ${
+                  activeTab === 'help' 
+                    ? 'text-primary-600 bg-primary-50' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Help & Documentation"
+              >
+                <HelpCircle className="w-5 h-5" />
+              </button>
+              <button
                 onClick={() => setShowPasswordModal(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Change Password"
@@ -679,11 +691,12 @@ const AdminConsole = () => {
               { id: 'customers', label: 'Customers', icon: Users },
               { id: 'invoices', label: 'Invoices', icon: FileText },
               { id: 'payments', label: 'Payments', icon: CreditCard },
-              { id: 'reports', label: 'Reports', icon: TrendingUp }
+              { id: 'reports', label: 'Reports', icon: TrendingUp },
+              { id: 'help', label: 'Help', icon: HelpCircle }
             ].map(tab => (
               <button
                 key={tab.id}
-        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments')}
+        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
                 className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
@@ -775,6 +788,230 @@ const AdminConsole = () => {
         )}
         {activeTab === 'reports' && (
           <Reports allBookings={allBookings} />
+        )}
+        {activeTab === 'help' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Help & Documentation</h2>
+              <p className="text-gray-600 mt-1">Complete guide to using the KH Therapy Admin Console</p>
+            </div>
+
+            {/* Quick Navigation */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Navigation</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { id: 'dashboard', label: 'Dashboard', icon: BarChart3, description: 'Overview & statistics' },
+                  { id: 'bookings', label: 'Bookings', icon: Calendar, description: 'Manage appointments' },
+                  { id: 'package', label: 'Services', icon: Package, description: 'Therapy services' },
+                  { id: 'availability', label: 'Availability', icon: Clock, description: 'Schedule management' },
+                  { id: 'customers', label: 'Customers', icon: Users, description: 'Client information' },
+                  { id: 'invoices', label: 'Invoices', icon: FileText, description: 'Billing & invoices' },
+                  { id: 'payments', label: 'Payments', icon: CreditCard, description: 'Payment tracking' },
+                  { id: 'reports', label: 'Reports', icon: TrendingUp, description: 'Analytics & reports' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors group"
+                  >
+                    <div className="flex items-center mb-2">
+                      <tab.icon className="w-5 h-5 text-primary-600 mr-2" />
+                      <span className="font-medium text-gray-900 group-hover:text-primary-600">{tab.label}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">{tab.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Feature Overview */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Feature Overview</h3>
+              <div className="space-y-6">
+                
+                {/* Dashboard */}
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <BarChart3 className="w-5 h-5 text-blue-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Dashboard</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Get a quick overview of your clinic's current status and activity.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• View today's, weekly, and monthly booking statistics</li>
+                    <li>• Review recent bookings and customer activity</li>
+                    <li>• Quick access to key metrics with clickable stat cards</li>
+                  </ul>
+                </div>
+
+                {/* Bookings */}
+                <div className="border-l-4 border-green-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <Calendar className="w-5 h-5 text-green-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Bookings</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Manage all customer appointments and bookings.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Switch between list and calendar views</li>
+                    <li>• Confirm, cancel, or modify booking status</li>
+                    <li>• Search and filter by customer, date, status, or service</li>
+                    <li>• View encrypted customer details (automatically decrypted for admin)</li>
+                  </ul>
+                </div>
+
+                {/* Services */}
+                <div className="border-l-4 border-purple-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <Package className="w-5 h-5 text-purple-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Services</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Manage therapy services, packages, and pricing.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Add, edit, and configure therapy services</li>
+                    <li>• Manage pricing and service details</li>
+                    <li>• Configure time slots for each service</li>
+                    <li>• Bulk operations for efficient setup</li>
+                  </ul>
+                </div>
+
+                {/* Availability */}
+                <div className="border-l-4 border-yellow-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <Clock className="w-5 h-5 text-yellow-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Availability</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Manage clinic availability and view booking conflicts.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Create and manage availability time slots</li>
+                    <li>• Visual calendar showing available vs. booked times</li>
+                    <li>• Identify scheduling conflicts or overbooking</li>
+                    <li>• Multiple calendar views (month, week, day)</li>
+                  </ul>
+                </div>
+
+                {/* Customers */}
+                <div className="border-l-4 border-indigo-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <Users className="w-5 h-5 text-indigo-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Customers</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Manage customer information and records with GDPR compliance.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Secure, encrypted customer database</li>
+                    <li>• Search and filter customer records</li>
+                    <li>• Complete contact and medical information</li>
+                    <li>• GDPR-compliant data handling with audit logging</li>
+                  </ul>
+                </div>
+
+                {/* Invoices */}
+                <div className="border-l-4 border-red-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <FileText className="w-5 h-5 text-red-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Invoices</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Create, manage, and track customer invoices.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Generate invoices from confirmed bookings</li>
+                    <li>• PDF generation and email sending</li>
+                    <li>• Track payment status and due dates</li>
+                    <li>• Customer deposit tracking and balance management</li>
+                  </ul>
+                </div>
+
+                {/* Payments */}
+                <div className="border-l-4 border-teal-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <CreditCard className="w-5 h-5 text-teal-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Payments</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Monitor payment requests, transactions, and financial data.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Create and track payment requests</li>
+                    <li>• Monitor payment status and due dates</li>
+                    <li>• Payment gateway management</li>
+                    <li>• Financial overview and transaction history</li>
+                  </ul>
+                </div>
+
+                {/* Reports */}
+                <div className="border-l-4 border-orange-500 pl-4">
+                  <div className="flex items-center mb-2">
+                    <TrendingUp className="w-5 h-5 text-orange-600 mr-2" />
+                    <h4 className="font-semibold text-gray-900">Reports</h4>
+                  </div>
+                  <p className="text-gray-600 mb-2">Generate detailed analytics and reports for business insights.</p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Booking and financial analytics</li>
+                    <li>• Service breakdown and trend analysis</li>
+                    <li>• Export to Excel and PDF formats</li>
+                    <li>• Custom date range reporting</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Common Workflows */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Common Workflows</h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Daily Tasks</h4>
+                  <ol className="text-sm text-gray-600 space-y-2">
+                    <li>1. Check Dashboard for today's activity</li>
+                    <li>2. Review Bookings for today's appointments</li>
+                    <li>3. Monitor Payments for overdue requests</li>
+                    <li>4. Handle customer inquiries using Customers tab</li>
+                  </ol>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Weekly Management</h4>
+                  <ol className="text-sm text-gray-600 space-y-2">
+                    <li>1. Review Availability for upcoming week</li>
+                    <li>2. Create and send Invoices for completed services</li>
+                    <li>3. Reconcile Payments and follow up on outstanding</li>
+                    <li>4. Update Services or time slots as needed</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Security & Data Protection */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <AlertCircle className="w-5 h-5 text-blue-600 mr-2" />
+                Security & Data Protection
+              </h3>
+              <div className="space-y-3 text-sm text-gray-700">
+                <p><strong>GDPR Compliance:</strong> All customer personal data is encrypted in the database and automatically decrypted for admin viewing.</p>
+                <p><strong>Audit Logging:</strong> Admin access to customer data is logged for compliance and security auditing.</p>
+                <p><strong>Best Practices:</strong> Change your password regularly, log out when finished, and verify customer identity before accessing records.</p>
+              </div>
+            </div>
+
+            {/* Quick Tips */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Tips</h3>
+              <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <div>
+                  <h4 className="font-medium mb-2">Navigation</h4>
+                  <ul className="space-y-1">
+                    <li>• Use the refresh button (↻) to reload data</li>
+                    <li>• Click stat cards in Dashboard for quick filtering</li>
+                    <li>• Switch between list and calendar views in Bookings</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Efficiency</h4>
+                  <ul className="space-y-1">
+                    <li>• Use search and filters to find records quickly</li>
+                    <li>• Create bulk time slots for multiple services</li>
+                    <li>• Export reports for external analysis</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </main>
 
