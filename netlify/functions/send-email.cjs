@@ -84,13 +84,23 @@ const generateICS = (data) => {
 const getEmailTemplate = (type, data) => {
   const commonStyles = `
     <style>
-      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-      .header { background-color: #2563eb; color: white; padding: 20px; text-align: center; }
-      .content { padding: 20px; background-color: #f9fafb; }
-      .footer { background-color: #e5e7eb; padding: 15px; text-align: center; font-size: 14px; }
-      .button { display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 10px 0; }
-      .details { background-color: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+      body { font-family: 'Inter', 'Roboto', Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f9fafb; }
+      .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border-radius: 12px; }
+      .header { background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0; position: relative; }
+      .logo { max-width: 120px; height: auto; margin-bottom: 10px; background: white; padding: 8px; border-radius: 8px; }
+      .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+      .content { padding: 25px 20px; background-color: #ffffff; }
+      .footer { background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 14px; color: #6b7280; border-radius: 0 0 12px 12px; border-top: 1px solid #e5e7eb; }
+      .button { display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; text-decoration: none; border-radius: 8px; margin: 15px 0; font-weight: 600; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2); transition: all 0.3s ease; }
+      .button:hover { background: linear-gradient(135deg, #047857 0%, #059669 100%); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3); }
+      .details { background-color: #f0fdf4; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #10B981; }
+      .details h3 { color: #047857; margin-top: 0; margin-bottom: 15px; font-size: 18px; }
+      .highlight { background-color: #d1fae5; border: 1px solid #a7f3d0; color: #065f46; padding: 15px; border-radius: 8px; margin: 15px 0; }
+      .payment-instructions { background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 20px; border-radius: 10px; margin: 20px 0; }
+      .payment-instructions h3 { color: #047857; margin-top: 0; }
+      .bank-details { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin-top: 15px; }
+      .success-icon { color: #059669; font-size: 20px; }
+      .warning-icon { color: #f59e0b; font-size: 18px; }
     </style>
   `;
 
@@ -103,6 +113,7 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Booking Confirmation</h1>
             </div>
             <div class="content">
@@ -110,7 +121,7 @@ const getEmailTemplate = (type, data) => {
               <p>Thank you for booking with KH Therapy! Your appointment has been confirmed.</p>
               
               <div class="details">
-                <h3>Appointment Details:</h3>
+                <h3>📅 Appointment Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
@@ -121,17 +132,25 @@ const getEmailTemplate = (type, data) => {
               </div>
               
               ${data.special_instructions ? `
-                <div class="details">
-                  <h3>Special Instructions:</h3>
+                <div class="highlight">
+                  <h3>📝 Special Instructions</h3>
                   <p>${data.special_instructions}</p>
                 </div>
               ` : ''}
               
-              <p>We look forward to seeing you!</p>
+              <div class="highlight">
+                <p><strong>🎯 What's Next?</strong></p>
+                <p>• Please arrive 5-10 minutes before your appointment</p>
+                <p>• Bring any relevant medical documents or insurance cards</p>
+                <p>• Wear comfortable clothing appropriate for your treatment</p>
+              </div>
+              
+              <p>We look forward to seeing you and helping you with your physiotherapy journey!</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
               <p>If you need to reschedule or have questions, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -146,24 +165,33 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Payment Receipt</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>Thank you for your payment. Here are the details:</p>
+              <p>Thank you for your payment! Your transaction has been processed successfully.</p>
               
               <div class="details">
-                <h3>Payment Details:</h3>
+                <h3>💳 Payment Details</h3>
                 <p><strong>Transaction ID:</strong> ${data.transaction_id}</p>
                 <p><strong>Amount:</strong> €${data.payment_amount}</p>
                 <p><strong>Date:</strong> ${data.payment_date}</p>
                 <p><strong>Service:</strong> ${data.service_name || 'Therapy Session'}</p>
+                <p><strong>Status:</strong> <span class="success-icon">✅</span> Completed</p>
               </div>
               
-              <p>This serves as your official receipt.</p>
+              <div class="highlight">
+                <p><strong>📄 Receipt Information</strong></p>
+                <p>This email serves as your official receipt for tax and insurance purposes. Please keep this for your records.</p>
+              </div>
+              
+              <p>If you have any questions about this payment or need a formal invoice, please don't hesitate to contact us.</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -178,14 +206,15 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Payment Request</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>You have a new payment request from KH Therapy.</p>
+              <p>You have a new payment request from KH Therapy. Please review the details below and complete your payment at your convenience.</p>
               
               <div class="details">
-                <h3>Payment Details:</h3>
+                <h3>💰 Payment Details</h3>
                 <p><strong>Amount:</strong> €${data.amount}</p>
                 <p><strong>Service:</strong> ${data.service_name}</p>
                 <p><strong>Due Date:</strong> ${data.due_date}</p>
@@ -193,15 +222,21 @@ const getEmailTemplate = (type, data) => {
               </div>
               
               ${data.payment_url ? `
-                <p style="text-align: center;">
-                  <a href="${data.payment_url}" class="button">Pay Now</a>
-                </p>
+                <div style="text-align: center; margin: 25px 0;">
+                  <a href="${data.payment_url}" class="button">💳 Pay Now</a>
+                </div>
+                <div class="highlight">
+                  <p><strong>🔒 Secure Payment</strong></p>
+                  <p>Click the "Pay Now" button above to securely complete your payment using our encrypted payment system. All transactions are protected and processed safely.</p>
+                </div>
               ` : ''}
               
-              <p>Please complete your payment by the due date.</p>
+              <p>If you have any questions about this payment request or need assistance, please contact us.</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -216,6 +251,7 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Invoice Notification</h1>
             </div>
             <div class="content">
@@ -223,36 +259,45 @@ const getEmailTemplate = (type, data) => {
               <p>You have received a new invoice from KH Therapy. Please find the invoice attached as a PDF file.</p>
               
               <div class="details">
-                <h3>Invoice Details:</h3>
+                <h3>📄 Invoice Details</h3>
                 <p><strong>Invoice Number:</strong> ${data.invoice_number}</p>
                 <p><strong>Amount:</strong> €${data.amount}</p>
                 <p><strong>Due Date:</strong> ${data.due_date}</p>
                 <p><strong>Service:</strong> ${data.service_name || 'Therapy Session'}</p>
               </div>
               
-              <div class="details" style="background-color: #f3f4f6; border-left: 4px solid #3b82f6;">
-                <h3>Payment Instructions:</h3>
+              <div class="payment-instructions">
+                <h3>💳 Payment Instructions</h3>
                 <p>You can pay this invoice using any of the following methods:</p>
-                <ul style="margin: 10px 0; padding-left: 20px;">
-                  <li><strong>Bank Transfer:</strong> Transfer to our bank account (details in attached invoice)</li>
-                  <li><strong>Online Payment:</strong> We will send you a secure payment link if requested</li>
-                  <li><strong>In-Person:</strong> Pay during your appointment via cash or card</li>
+                <ul style="margin: 15px 0; padding-left: 25px; line-height: 1.8;">
+                  <li><strong>🏦 Bank Transfer:</strong> Transfer to our bank account (details below)</li>
+                  <li><strong>💻 Online Payment:</strong> We can send you a secure payment link if requested</li>
+                  <li><strong>🏢 In-Person:</strong> Pay during your appointment via cash or card</li>
                 </ul>
-                <p style="margin-top: 15px;"><strong>Bank Details:</strong></p>
-                <p style="margin: 5px 0;"><strong>Bank:</strong> Bank of Ireland</p>
-                <p style="margin: 5px 0;"><strong>Account Name:</strong> KH Therapy</p>
-                <p style="margin: 5px 0;"><strong>IBAN:</strong> IE00 BOFI 1234 5678 9012 34</p>
-                <p style="margin: 5px 0;"><strong>BIC:</strong> BOFIIE2D</p>
-                <p style="margin-top: 10px; font-size: 14px; color: #6b7280;">Please include your invoice number as the payment reference.</p>
+                
+                <div class="bank-details">
+                  <h4 style="color: #047857; margin-top: 0;">🏦 Bank Transfer Details</h4>
+                  <p style="margin: 8px 0;"><strong>Bank:</strong> Bank of Ireland</p>
+                  <p style="margin: 8px 0;"><strong>Account Name:</strong> KH Therapy</p>
+                  <p style="margin: 8px 0;"><strong>IBAN:</strong> IE00 BOFI 1234 5678 9012 34</p>
+                  <p style="margin: 8px 0;"><strong>BIC:</strong> BOFIIE2D</p>
+                  <p style="margin-top: 15px; font-size: 14px; color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px;">
+                    <strong>📝 Important:</strong> Please include your invoice number (${data.invoice_number}) as the payment reference.
+                  </p>
+                </div>
               </div>
               
-              <p>The invoice is attached to this email as a PDF file. Please review it carefully and contact us if you have any questions.</p>
+              <div class="highlight">
+                <p><strong>📎 Attached Documents</strong></p>
+                <p>The invoice PDF is attached to this email. Please review it carefully and contact us if you have any questions about the charges or services listed.</p>
+              </div>
               
-              <p>If you need assistance with payment or have any questions about this invoice, please don't hesitate to contact us.</p>
+              <p>If you need assistance with payment or have any questions about this invoice, please don't hesitate to contact us. We're here to help!</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie | +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
               <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -267,24 +312,35 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Appointment Reminder</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>This is a friendly reminder about your upcoming appointment.</p>
+              <p>This is a friendly reminder about your upcoming appointment with KH Therapy.</p>
               
               <div class="details">
-                <h3>Appointment Details:</h3>
+                <h3>📅 Appointment Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${data.booking_reference}</p>
               </div>
               
-              <p>We look forward to seeing you!</p>
+              <div class="highlight">
+                <p><strong>📋 Before Your Appointment</strong></p>
+                <p>• Please arrive 5-10 minutes before your scheduled time</p>
+                <p>• Bring any relevant medical documents or insurance cards</p>
+                <p>• Wear comfortable clothing appropriate for your treatment</p>
+                <p>• If you need to reschedule, please contact us as soon as possible</p>
+              </div>
+              
+              <p>We look forward to seeing you and helping you with your physiotherapy journey!</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p>If you need to reschedule or have questions, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -299,21 +355,28 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Admin Notification</h1>
             </div>
             <div class="content">
-              <h2>New ${data.notification_type}</h2>
+              <h2>🔔 New ${data.notification_type}</h2>
               <p>${data.message}</p>
               
               <div class="details">
-                <h3>Details:</h3>
+                <h3>📊 Details</h3>
                 ${Object.keys(data.details || {}).map(key => 
                   `<p><strong>${key.replace(/_/g, ' ').toUpperCase()}:</strong> ${data.details[key]}</p>`
                 ).join('')}
               </div>
+              
+              <div class="highlight">
+                <p><strong>⚡ Action Required</strong></p>
+                <p>Please review this notification and take any necessary action through the admin console.</p>
+              </div>
             </div>
             <div class="footer">
-              <p>KH Therapy Admin System</p>
+              <p><strong>KH Therapy Admin System</strong> | Generated at ${new Date().toLocaleString()}</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -328,28 +391,44 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Welcome to KH Therapy</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>Welcome to KH Therapy! We're excited to have you as a customer.</p>
+              <p>Welcome to KH Therapy! We're excited to have you as a patient and look forward to helping you on your path to better health and wellness.</p>
               
-              <p>Your account has been created and you can now:</p>
-              <ul>
-                <li>Book appointments online</li>
-                <li>View your booking history</li>
-                <li>Manage payment requests</li>
-                <li>Update your profile</li>
-              </ul>
+              <div class="details">
+                <h3>🏥 Your Patient Portal</h3>
+                <p>Your account has been created and you now have access to:</p>
+                <ul style="margin: 15px 0; padding-left: 25px; line-height: 1.8;">
+                  <li>📅 Book appointments online</li>
+                  <li>📋 View your appointment history</li>
+                  <li>💳 Manage payment requests and invoices</li>
+                  <li>👤 Update your profile and preferences</li>
+                  <li>📞 Access our contact information</li>
+                </ul>
+              </div>
               
               ${data.login_url ? `
-                <p style="text-align: center;">
-                  <a href="${data.login_url}" class="button">Access Your Account</a>
-                </p>
+                <div style="text-align: center; margin: 25px 0;">
+                  <a href="${data.login_url}" class="button">🔐 Access Your Account</a>
+                </div>
               ` : ''}
+              
+              <div class="highlight">
+                <p><strong>🎯 What's Next?</strong></p>
+                <p>• Schedule your first appointment through your patient portal</p>
+                <p>• Complete any required health questionnaires</p>
+                <p>• Prepare any medical documents you'd like to share</p>
+              </div>
+              
+              <p>If you have any questions or need assistance, please don't hesitate to contact us. We're here to help you every step of the way!</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -364,23 +443,39 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Password Reset</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>You requested a password reset for your KH Therapy account.</p>
+              <p>You requested a password reset for your KH Therapy patient account. To create a new password, please click the button below.</p>
               
               ${data.reset_url ? `
-                <p style="text-align: center;">
-                  <a href="${data.reset_url}" class="button">Reset Password</a>
-                </p>
-                <p><strong>Note:</strong> This link will expire in 24 hours.</p>
+                <div style="text-align: center; margin: 25px 0;">
+                  <a href="${data.reset_url}" class="button">🔐 Reset Password</a>
+                </div>
+                
+                <div class="highlight">
+                  <p><strong>🕒 Important Security Information</strong></p>
+                  <p>• This reset link will expire in 24 hours for your security</p>
+                  <p>• The link can only be used once</p>
+                  <p>• If you didn't request this reset, please ignore this email</p>
+                </div>
               ` : ''}
               
-              <p>If you didn't request this reset, please ignore this email.</p>
+              <div class="highlight">
+                <p><strong>🛡️ Account Security Tips</strong></p>
+                <p>• Use a strong, unique password for your account</p>
+                <p>• Never share your login credentials with others</p>
+                <p>• Contact us immediately if you suspect unauthorized access</p>
+              </div>
+              
+              <p>If you didn't request this password reset, please ignore this email and your password will remain unchanged. If you have concerns about your account security, please contact us immediately.</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p>Your account security is important to us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -395,14 +490,15 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Booking Confirmed - Payment Received</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>Great news! Your booking has been confirmed and your payment has been successfully processed.</p>
+              <p>Excellent! Your booking has been confirmed and your payment has been successfully processed. We're excited to help you on your health journey!</p>
               
               <div class="details">
-                <h3>Booking Details:</h3>
+                <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
@@ -412,37 +508,40 @@ const getEmailTemplate = (type, data) => {
               </div>
               
               <div class="details">
-                <h3>Payment Details:</h3>
+                <h3>💳 Payment Confirmation</h3>
                 <p><strong>Amount Paid:</strong> €${data.payment_amount}</p>
                 ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${data.transaction_id}</p>` : ''}
-                <p><strong>Status:</strong> <span style="color: #16a34a; font-weight: bold;">Payment Successful</span></p>
+                <p><strong>Status:</strong> <span class="success-icon">✅ Payment Successful</span></p>
               </div>
               
               ${data.next_steps ? `
-                <div class="details">
-                  <h3>Next Steps:</h3>
+                <div class="highlight">
+                  <h3>🎯 Next Steps</h3>
                   <p>${data.next_steps}</p>
                 </div>
               ` : `
-                <div class="details">
-                  <h3>Next Steps:</h3>
-                  <p>Your appointment is confirmed. Please arrive 10 minutes early and bring any relevant medical documents.</p>
-                  <p>If you need to reschedule or have any questions, please contact us at least 24 hours in advance.</p>
+                <div class="highlight">
+                  <h3>🎯 Before Your Appointment</h3>
+                  <p>• Please arrive 10 minutes early for check-in</p>
+                  <p>• Bring any relevant medical documents or insurance cards</p>
+                  <p>• Wear comfortable clothing appropriate for your treatment</p>
+                  <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
                 </div>
               `}
               
               ${data.special_instructions ? `
                 <div class="details">
-                  <h3>Special Instructions:</h3>
+                  <h3>📝 Special Instructions</h3>
                   <p>${data.special_instructions}</p>
                 </div>
               ` : ''}
               
-              <p>We look forward to seeing you!</p>
+              <p>Thank you for choosing KH Therapy. We look forward to providing you with excellent care and helping you achieve your health goals!</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
               <p>For any questions or changes, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -457,14 +556,15 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Booking Created - Payment Required</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>Your booking has been created, but we encountered an issue with your payment. Don't worry - your appointment slot is temporarily reserved.</p>
+              <p>Your booking has been created, but we encountered an issue with your payment. Don't worry - your appointment slot is temporarily reserved while we resolve this.</p>
               
               <div class="details">
-                <h3>Booking Details:</h3>
+                <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
@@ -474,27 +574,28 @@ const getEmailTemplate = (type, data) => {
               </div>
               
               <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
-                <h3>Payment Status:</h3>
+                <h3>⚠️ Payment Status</h3>
                 <p><strong>Amount Due:</strong> €${data.payment_amount}</p>
-                <p><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">Payment Failed</span></p>
+                <p><strong>Status:</strong> <span class="warning-icon">❌ Payment Failed</span></p>
                 <p>Please retry your payment to confirm your booking.</p>
               </div>
               
-              <div class="details">
-                <h3>What happens next?</h3>
+              <div class="highlight">
+                <h3>🔄 What happens next?</h3>
                 <p>• Your appointment slot is reserved for 24 hours</p>
                 <p>• Please complete payment to confirm your booking</p>
                 <p>• You can retry payment by contacting us directly</p>
                 <p>• If payment is not received within 24 hours, your slot may be released</p>
               </div>
               
-              <p style="text-align: center;">
-                <a href="mailto:info@khtherapy.ie?subject=Payment Retry - ${data.booking_reference}" class="button">Contact Us to Retry Payment</a>
-              </p>
+              <div style="text-align: center; margin: 25px 0;">
+                <a href="mailto:info@khtherapy.ie?subject=Payment Retry - ${data.booking_reference}" class="button">📞 Contact Us to Retry Payment</a>
+              </div>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
               <p>Need help? Contact us immediately to secure your appointment.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>
@@ -509,14 +610,15 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
+              <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy" class="logo" />
               <h1>Booking Confirmation</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
-              <p>Thank you for booking with KH Therapy! Your appointment request has been received.</p>
+              <p>Thank you for booking with KH Therapy! Your appointment request has been received and confirmed.</p>
               
               <div class="details">
-                <h3>Booking Details:</h3>
+                <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
@@ -525,8 +627,8 @@ const getEmailTemplate = (type, data) => {
                 ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
               </div>
               
-              <div class="details">
-                <h3>General Instructions:</h3>
+              <div class="highlight">
+                <h3>📋 General Instructions</h3>
                 <p>• Please arrive 10 minutes early for your appointment</p>
                 <p>• Bring any relevant medical documents or reports</p>
                 <p>• Wear comfortable clothing that allows easy movement</p>
@@ -534,26 +636,29 @@ const getEmailTemplate = (type, data) => {
               </div>
               
               <div class="details">
-                <h3>Payment Information:</h3>
+                <h3>💳 Payment Information</h3>
                 <p>Payment can be made at the time of your appointment. We accept:</p>
-                <p>• Cash</p>
-                <p>• Card payments</p>
-                <p>• Bank transfer</p>
+                <ul style="margin: 10px 0; padding-left: 25px; line-height: 1.6;">
+                  <li>💰 Cash payments</li>
+                  <li>💳 Card payments (Visa, Mastercard)</li>
+                  <li>🏦 Bank transfer (details available on request)</li>
+                </ul>
                 <p>For questions about rates and services, please contact us directly.</p>
               </div>
               
               ${data.special_instructions ? `
                 <div class="details">
-                  <h3>Special Instructions:</h3>
+                  <h3>📝 Special Instructions</h3>
                   <p>${data.special_instructions}</p>
                 </div>
               ` : ''}
               
-              <p>We look forward to helping you with your physiotherapy needs!</p>
+              <p>We look forward to helping you with your physiotherapy needs and supporting you on your journey to better health!</p>
             </div>
             <div class="footer">
-              <p>KH Therapy | info@khtherapy.ie</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
               <p>For any questions or changes, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
           </div>
         </body>

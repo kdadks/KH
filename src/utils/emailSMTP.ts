@@ -325,7 +325,11 @@ export const sendPaymentConfirmationEmail = async (
     customer_name: confirmationData.customer_name,
     transaction_id: confirmationData.transaction_id,
     payment_amount: confirmationData.amount,
-    payment_date: new Date().toLocaleDateString(),
+    payment_date: new Date().toLocaleDateString('en-IE', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    }),
     service_name: confirmationData.service_name
   }, 'Payment Confirmation');
 };
