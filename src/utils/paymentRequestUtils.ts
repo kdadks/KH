@@ -279,6 +279,75 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
 }
 
 /**
+ * Gets a specific payment request by ID with customer details
+ */
+export async function getPaymentRequestById(paymentRequestId: number): Promise<PaymentRequestWithCustomer | null> {
+  try {
+    const { data, error } = await supabase
+      .from('payment_requests')
+      .select(`
+        *,
+        customer:customers!payment_requests_customer_id_fkey(
+          first_name,
+          last_name,
+          email
+        )
+      `)
+      .eq('id', paymentRequestId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No matching record found
+        return null;
+      }
+      throw new Error(`Failed to get payment request: ${error.message}`);
+    }
+
+    if (!data) {
+      return null;
+    }
+
+    // Extract service name from notes field
+    let serviceName = 'Service Payment';
+    
+    if (data.notes) {
+      // Try to extract service name from notes like "20% deposit for Sports / Deep Tissue Massage - Out of Hour (€85) appointment on 8/15/2025"
+      const depositMatch = data.notes.match(/deposit for (.+?) appointment/);
+      if (depositMatch) {
+        serviceName = depositMatch[1].trim();
+      } else if (data.notes.includes('Invoice ')) {
+        // Handle invoice payment requests like "Payment for Invoice INV-202508-228 - remaining balance after deposit deduction"
+        const invoiceMatch = data.notes.match(/Payment for Invoice (INV-\d+-\d+)/);
+        if (invoiceMatch) {
+          serviceName = `Invoice ${invoiceMatch[1]}`;
+        }
+      }
+    }
+
+    // Decrypt customer data if encrypted
+    const customer = data.customer;
+    if (customer) {
+      if (customer.first_name && isDataEncrypted(customer.first_name)) {
+        customer.first_name = decryptSensitiveData(customer.first_name);
+      }
+      if (customer.last_name && isDataEncrypted(customer.last_name)) {
+        customer.last_name = decryptSensitiveData(customer.last_name);
+      }
+    }
+    
+    return {
+      ...data,
+      service_name: serviceName,
+      customer: customer
+    } as PaymentRequestWithCustomer;
+  } catch (error) {
+    console.error('Error getting payment request by ID:', error);
+    throw error;
+  }
+}
+
+/**
  * Gets customer payments with customer details
  */
 export async function getCustomerPayments(customerId: number): Promise<PaymentWithCustomer[]> {
@@ -399,6 +468,14 @@ export async function processPaymentRequest(
       console.error('Failed to update payment status:', paymentUpdateError);
     }
 
+    // Send payment confirmation email
+    try {
+      await sendPaymentConfirmation(payment.id);
+    } catch (emailError) {
+      console.error('Failed to send payment confirmation email:', emailError);
+      // Don't fail the payment processing if email fails
+    }
+
     return { success: true, payment: payment as Payment };
   } catch (error) {
     console.error('Error processing payment request:', error);
@@ -442,7 +519,7 @@ export async function sendPaymentRequestNotification(
         amount: paymentRequest.amount,
         service_name: paymentRequest.description || 'Therapy Session',
         due_date: paymentRequest.payment_due_date,
-        payment_url: `${window.location.origin}/dashboard/payments?request=${paymentRequestId}`,
+        payment_url: `${window.location.origin}/payment?request=${paymentRequestId}`,
         invoice_number: paymentRequest.reference_number || `PR-${paymentRequestId}`
       }
     );

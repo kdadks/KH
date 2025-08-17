@@ -18,6 +18,7 @@ import NeuromuscularPage from './pages/services/NeuromuscularPage';
 import ErgonomicPage from './pages/services/ErgonomicPage';
 import UserPortal from './components/UserPortal';
 import ResetPassword from './components/user/ResetPassword';
+import PaymentPage from './pages/PaymentPage';
 import { ToastProvider } from './components/shared/toastContext';
 import { UserAuthProvider } from './contexts/UserAuthContext';
 
@@ -47,6 +48,8 @@ function App() {
           </Route>
           {/* Reset password route outside the main layout */}
           <Route path="/reset-password" element={<ResetPassword />} />
+          {/* Payment page route outside the main layout */}
+          <Route path="/payment" element={<PaymentPage />} />
         </Routes>
       </UserAuthProvider>
     </ToastProvider>
