@@ -303,24 +303,73 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
       console.log('Booking created successfully:', data);
       
-      // Create payment request for the booking (20% deposit)
-      try {
-        console.log('Creating payment request for booking:', data.id);
-        const paymentRequest = await createPaymentRequest(
-          customer.id,
-          formData.service, // This contains the full service name with pricing
-          bookingData.booking_date,
-          null, // invoiceId
-          data.id // bookingId - add the booking ID to link payment request to booking
-        );
-        console.log('Payment request created successfully:', paymentRequest);
-      } catch (paymentError) {
-        console.error('Error creating payment request:', paymentError);
-        // Don't fail the booking creation, but log the error
-        showError('Payment Request Warning', 'Booking created successfully, but there was an issue creating the payment request. Please contact support.');
+      // Check if this is a service that doesn't need payment (Contact for Quote, per-session pricing, etc.)
+      const needsQuoteOrPerSession = /contact\s+for\s+quote|€\d+\s*\/\s*(class|session)|€\d+\s*per\s*(class|session)/i.test(formData.service);
+      let paymentRequestCreated = false;
+      
+      // Only create payment request for services that have fixed pricing
+      if (!needsQuoteOrPerSession) {
+        try {
+          console.log('Creating payment request for booking:', data.id);
+          const paymentRequest = await createPaymentRequest(
+            customer.id,
+            formData.service, // This contains the full service name with pricing
+            bookingData.booking_date,
+            null, // invoiceId
+            data.id // bookingId - add the booking ID to link payment request to booking
+          );
+          if (paymentRequest) {
+            console.log('Payment request created successfully:', paymentRequest);
+            paymentRequestCreated = true;
+          } else {
+            console.log('No payment request created - service may not require upfront payment');
+          }
+        } catch (paymentError) {
+          console.error('Error creating payment request:', paymentError);
+          // Don't fail the booking creation, but log the error
+          showError('Payment Request Warning', 'Booking created successfully, but there was an issue creating the payment request. Please contact support.');
+        }
       }
       
-      showSuccess('Booking Created!', 'Your booking request has been submitted successfully. You will receive a confirmation email once it\'s reviewed.');
+      // Send confirmation email for bookings without payment (like "Contact for Quote" services)
+      if (!paymentRequestCreated) {
+        try {
+          console.log('Sending booking confirmation email without payment for:', data.id);
+          const { sendSimpleBookingConfirmation } = await import('../../utils/emailUtils');
+          
+          const emailResult = await sendSimpleBookingConfirmation(
+            customer.email,
+            {
+              customer_name: `${customer.first_name} ${customer.last_name}`,
+              customer_email: customer.email,
+              service_name: formData.service,
+              appointment_date: new Date(bookingData.booking_date).toLocaleDateString('en-IE'),
+              appointment_time: formData.time.split('|')[0], // Get just the time range part
+              total_amount: 0, // No amount for contact for quote
+              booking_reference: data.id.toString(),
+              therapist_name: 'KH Therapy Team',
+              clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+              special_instructions: formData.notes || undefined
+            }
+          );
+          
+          if (emailResult) {
+            console.log('Booking confirmation email sent successfully');
+          } else {
+            console.error('Failed to send booking confirmation email');
+          }
+        } catch (emailError) {
+          console.error('Error sending booking confirmation email:', emailError);
+          // Don't fail the booking, just log the error
+        }
+      }
+      
+      // Show appropriate success message based on service type
+      if (needsQuoteOrPerSession) {
+        showSuccess('Booking Request Submitted!', 'Your booking request has been submitted successfully. We will contact you shortly to discuss pricing and confirm your appointment.');
+      } else {
+        showSuccess('Booking Created!', 'Your booking request has been submitted successfully. You will receive a confirmation email once it\'s reviewed.');
+      }
       
       // Reset form
       setFormData({
