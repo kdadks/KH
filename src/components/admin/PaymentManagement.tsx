@@ -11,7 +11,9 @@ import {
   Clock,
   Settings,
   FileText,
-  TrendingUp
+  TrendingUp,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useToast } from '../shared/toastContext';
 import PaymentGatewayManagement from './PaymentGatewayManagement';
@@ -69,6 +71,10 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
   
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  
   // Modal states
   const [showCreateRequestModal, setShowCreateRequestModal] = useState(false);
   const [showGatewayModal, setShowGatewayModal] = useState(false);
@@ -83,6 +89,11 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       setLoading(false); // Data is already provided via props
     }
   }, [propPaymentRequests, propPayments, propRecentPayments, propGateways]);
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    resetPagination();
+  }, [activeSubTab]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -168,6 +179,119 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       // Fallback to local data loading
       await loadAllData();
     }
+  };
+
+  // Pagination helper functions
+  const getTotalPages = (totalItems: number, itemsPerPage: number) => {
+    return Math.ceil(totalItems / itemsPerPage);
+  };
+
+  const getCurrentPageData = <T,>(data: T[], currentPage: number, itemsPerPage: number): T[] => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return data.slice(startIndex, endIndex);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1); // Reset to first page when changing items per page
+  };
+
+  // Reset pagination when switching tabs
+  const resetPagination = () => {
+    setCurrentPage(1);
+  };
+
+  // Pagination Component
+  const PaginationComponent = ({ 
+    currentPage, 
+    totalPages, 
+    onPageChange, 
+    itemsPerPage, 
+    onItemsPerPageChange, 
+    totalItems 
+  }: {
+    currentPage: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    itemsPerPage: number;
+    onItemsPerPageChange: (items: number) => void;
+    totalItems: number;
+  }) => {
+    if (totalPages <= 1) return null;
+
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    return (
+      <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center space-x-4">
+          <div className="text-sm text-gray-700">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-700">Items per page:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="p-2 rounded-md border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          
+          {pageNumbers.map((page) => (
+            <button
+              key={page}
+              onClick={() => onPageChange(page)}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                page === currentPage
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="p-2 rounded-md border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Use statistics from state, fallback to calculating from current data
@@ -419,14 +543,14 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paymentRequests.length === 0 ? (
+                  {getCurrentPageData(paymentRequests, currentPage, itemsPerPage).length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                        No payment requests found
+                        {paymentRequests.length === 0 ? 'No payment requests found' : 'No payment requests on this page'}
                       </td>
                     </tr>
                   ) : (
-                    paymentRequests.map((request) => (
+                    getCurrentPageData(paymentRequests, currentPage, itemsPerPage).map((request) => (
                       <tr key={request.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -476,6 +600,18 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 </tbody>
               </table>
             </div>
+
+            {/* Payment Requests Pagination */}
+            {paymentRequests.length > 0 && (
+              <PaginationComponent 
+                totalItems={paymentRequests.length}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalPages={getTotalPages(paymentRequests.length, itemsPerPage)}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
+            )}
           </div>
         </div>
       )}
@@ -519,14 +655,14 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {payments.length === 0 ? (
+                  {getCurrentPageData(payments, currentPage, itemsPerPage).length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
-                        No payments found
+                        {payments.length === 0 ? 'No payments found' : 'No payments on this page'}
                       </td>
                     </tr>
                   ) : (
-                    payments.map((payment) => (
+                    getCurrentPageData(payments, currentPage, itemsPerPage).map((payment) => (
                       <tr key={payment.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -571,6 +707,18 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 </tbody>
               </table>
             </div>
+
+            {/* Payments Pagination */}
+            {payments.length > 0 && (
+              <PaginationComponent 
+                totalItems={payments.length}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalPages={getTotalPages(payments.length, itemsPerPage)}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
+            )}
           </div>
         </div>
       )}

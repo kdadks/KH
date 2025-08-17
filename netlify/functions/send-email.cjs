@@ -208,6 +208,57 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'invoice_notification':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Invoice Notification</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>You have received a new invoice from KH Therapy. Please find the invoice attached as a PDF file.</p>
+              
+              <div class="details">
+                <h3>Invoice Details:</h3>
+                <p><strong>Invoice Number:</strong> ${data.invoice_number}</p>
+                <p><strong>Amount:</strong> €${data.amount}</p>
+                <p><strong>Due Date:</strong> ${data.due_date}</p>
+                <p><strong>Service:</strong> ${data.service_name || 'Therapy Session'}</p>
+              </div>
+              
+              <div class="details" style="background-color: #f3f4f6; border-left: 4px solid #3b82f6;">
+                <h3>Payment Instructions:</h3>
+                <p>You can pay this invoice using any of the following methods:</p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                  <li><strong>Bank Transfer:</strong> Transfer to our bank account (details in attached invoice)</li>
+                  <li><strong>Online Payment:</strong> We will send you a secure payment link if requested</li>
+                  <li><strong>In-Person:</strong> Pay during your appointment via cash or card</li>
+                </ul>
+                <p style="margin-top: 15px;"><strong>Bank Details:</strong></p>
+                <p style="margin: 5px 0;"><strong>Bank:</strong> Bank of Ireland</p>
+                <p style="margin: 5px 0;"><strong>Account Name:</strong> KH Therapy</p>
+                <p style="margin: 5px 0;"><strong>IBAN:</strong> IE00 BOFI 1234 5678 9012 34</p>
+                <p style="margin: 5px 0;"><strong>BIC:</strong> BOFIIE2D</p>
+                <p style="margin-top: 10px; font-size: 14px; color: #6b7280;">Please include your invoice number as the payment reference.</p>
+              </div>
+              
+              <p>The invoice is attached to this email as a PDF file. Please review it carefully and contact us if you have any questions.</p>
+              
+              <p>If you need assistance with payment or have any questions about this invoice, please don't hesitate to contact us.</p>
+            </div>
+            <div class="footer">
+              <p>KH Therapy | info@khtherapy.ie | +353 (0)1 234 5678</p>
+              <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     case 'booking_reminder':
       return `
         <!DOCTYPE html>
@@ -675,7 +726,7 @@ exports.handler = async (event, context) => {
 
   try {
     // Parse request body
-    const { emailType, recipientEmail, data, subject } = JSON.parse(event.body);
+    const { emailType, recipientEmail, data, subject, attachments } = JSON.parse(event.body);
 
     // Validate required fields
     if (!emailType || !recipientEmail || !data) {
@@ -760,6 +811,24 @@ exports.handler = async (event, context) => {
           }
         ];
       }
+    }
+
+    // Add general attachments if provided
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      if (!mailOptions.attachments) {
+        mailOptions.attachments = [];
+      }
+      
+      // Add each attachment
+      attachments.forEach(attachment => {
+        if (attachment.filename && attachment.content) {
+          mailOptions.attachments.push({
+            filename: attachment.filename,
+            content: Buffer.from(attachment.content, 'base64'),
+            contentType: attachment.contentType || 'application/octet-stream'
+          });
+        }
+      });
     }
 
     // Send email
