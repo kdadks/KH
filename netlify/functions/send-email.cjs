@@ -2,16 +2,14 @@ const nodemailer = require('nodemailer');
 
 // SMTP Configuration
 const createTransporter = () => {
-  return nodemailer.createTransport({
+  return nodemailer.createTransporter({
     host: 'smtp.hostinger.com',
     port: 465,
     secure: true, // Use SSL directly on port 465
     auth: {
       user: process.env.SMTP_USER, // info@khtherapy.ie
       pass: process.env.SMTP_PASS  // Your email password
-    },
-    debug: true, // Enable debug output
-    logger: true // Log to console
+    }
   });
 };
 
@@ -50,7 +48,6 @@ const generateICS = (data) => {
   
   // Validate dates
   if (isNaN(startDate.getTime())) {
-    console.error('Invalid start date:', data.appointment_date, appointmentTime);
     return ''; // Return empty string if date is invalid
   }
   
@@ -693,9 +690,7 @@ exports.handler = async (event, context) => {
     const transporter = createTransporter();
     
     // Verify SMTP connection first
-    console.log('Verifying SMTP connection...');
     await transporter.verify();
-    console.log('SMTP connection verified successfully');
 
     // Generate email content
     const htmlContent = getEmailTemplate(emailType, data);
@@ -736,11 +731,7 @@ exports.handler = async (event, context) => {
       // Try using BCC as an alternative delivery method for same-domain emails
       if (process.env.ADMIN_BCC_EMAIL) {
         mailOptions.bcc = process.env.ADMIN_BCC_EMAIL;
-        console.log('📧 Added BCC for admin notification to:', process.env.ADMIN_BCC_EMAIL);
       }
-      
-      // For same-domain emails, enhance headers but keep same sender to avoid SMTP rejection
-      console.log('📧 Same-domain admin notification detected - using enhanced headers only');
       
       // Enhanced headers for same-domain delivery instead of changing sender
       mailOptions.headers['X-Priority'] = '1'; // High priority
@@ -753,8 +744,6 @@ exports.handler = async (event, context) => {
       
       // Try to make it look less like automated email to avoid filtering
       mailOptions.from.name = `KH Therapy Admin (${new Date().toLocaleDateString()})`;
-      
-      console.log('📧 Admin notification detected - using same sender with enhanced headers');
     }
 
     // Add calendar attachment for booking confirmations
@@ -770,30 +759,11 @@ exports.handler = async (event, context) => {
             contentType: 'text/calendar; charset=utf-8; method=REQUEST'
           }
         ];
-        console.log('📅 Calendar attachment added for booking confirmation');
-      } else {
-        console.warn('⚠️ Failed to generate calendar content, sending email without attachment');
       }
     }
 
     // Send email
-    console.log('📧 Sending email with options:', {
-      from: mailOptions.from,
-      to: mailOptions.to,
-      subject: mailOptions.subject,
-      hasAttachments: !!mailOptions.attachments,
-      isAdminNotification: !!data.is_admin_notification
-    });
-    
     const result = await transporter.sendMail(mailOptions);
-    
-    console.log('📧 Email sent successfully:', {
-      messageId: result.messageId,
-      response: result.response,
-      accepted: result.accepted,
-      rejected: result.rejected,
-      pending: result.pending
-    });
 
     return {
       statusCode: 200,
@@ -806,8 +776,6 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Email sending error:', error);
-    
     return {
       statusCode: 500,
       headers,

@@ -9,7 +9,9 @@ import {
   BarChart3,
   DollarSign,
   Receipt,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { BookingFormData, Invoice } from './types';
 import { useToast } from '../shared/toastContext';
@@ -59,6 +61,10 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   const [activeMainTab, setActiveMainTab] = useState<'bookings' | 'invoices'>('bookings');
   // Manual generation flag
   const [hasGenerated, setHasGenerated] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Helper to format currency
   const formatCurrency = (amount: number) => {
@@ -66,6 +72,31 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       style: 'currency',
       currency: 'EUR'
     }).format(amount);
+  };
+
+  // Pagination helpers
+  const getTotalPages = (totalItems: number, itemsPerPage: number) => {
+    return Math.ceil(totalItems / itemsPerPage);
+  };
+
+  const getCurrentPageData = <T,>(data: T[], currentPage: number, itemsPerPage: number): T[] => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return data.slice(startIndex, endIndex);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1); // Reset to first page when changing items per page
+  };
+
+  // Reset pagination when switching tabs
+  const resetPagination = () => {
+    setCurrentPage(1);
   };
 
   // Fetch invoices from database
@@ -92,6 +123,11 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    resetPagination();
+  }, [activeMainTab]);
 
   // ---------- Helpers for normalization (mirrors Dashboard / Bookings logic) ----------
   const extractDateOnly = (b: BookingFormData): string | null => {
@@ -498,6 +534,94 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       console.error('Error exporting to PDF:', error);
       showError('Export Failed', 'Failed to export report to PDF');
     }
+  };
+
+  // Pagination Component
+  const PaginationComponent = ({ 
+    currentPage, 
+    totalPages, 
+    onPageChange, 
+    itemsPerPage, 
+    onItemsPerPageChange, 
+    totalItems 
+  }: {
+    currentPage: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    itemsPerPage: number;
+    onItemsPerPageChange: (items: number) => void;
+    totalItems: number;
+  }) => {
+    if (totalPages <= 1) return null;
+
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    return (
+      <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center space-x-4">
+          <div className="text-sm text-gray-700">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-700">Items per page:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="p-2 rounded-md border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          
+          {pageNumbers.map((page) => (
+            <button
+              key={page}
+              onClick={() => onPageChange(page)}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                page === currentPage
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="p-2 rounded-md border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Get unique services for filter (normalized and alphabetically sorted)
@@ -986,19 +1110,20 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
               reportData.filteredBookings.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No bookings match the selected filters.</div>
               ) : (
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Customer Name</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Phone</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Service</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {reportData.filteredBookings.map((b, idx) => {
+                <>
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Customer Name</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Phone</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Service</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {getCurrentPageData(reportData.filteredBookings, currentPage, itemsPerPage).map((b, idx) => {
                       const status = b.status || 'pending';
                       const phone = b.customer_phone || b.phone;
                       const email = b.customer_email || b.email;
@@ -1036,12 +1161,22 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                     })}
                   </tbody>
                 </table>
+                <PaginationComponent
+                  currentPage={currentPage}
+                  totalPages={getTotalPages(reportData.filteredBookings.length, itemsPerPage)}
+                  onPageChange={handlePageChange}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                  totalItems={reportData.filteredBookings.length}
+                />
+                </>
               )
             ) : (
               // Invoices Table
               reportData.filteredInvoices.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No invoices match the selected filters.</div>
               ) : (
+                <>
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gray-50">
                     <tr>
@@ -1054,7 +1189,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {reportData.filteredInvoices.map((inv, idx) => {
+                    {getCurrentPageData(reportData.filteredInvoices, currentPage, itemsPerPage).map((inv, idx) => {
                       // Decrypt customer data for display
                       const decryptedCustomer = inv.customer ? decryptCustomerPII(inv.customer) : null;
                       const customerName = decryptedCustomer ? `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() : '—';
@@ -1087,6 +1222,15 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                     })}
                   </tbody>
                 </table>
+                <PaginationComponent
+                  currentPage={currentPage}
+                  totalPages={getTotalPages(reportData.filteredInvoices.length, itemsPerPage)}
+                  onPageChange={handlePageChange}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                  totalItems={reportData.filteredInvoices.length}
+                />
+                </>
               )
             )}
           </div>
