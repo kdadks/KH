@@ -19,7 +19,8 @@ import {
   List,
   Grid3x3,
   Plus,
-  Euro
+  Euro,
+  Loader2
 } from 'lucide-react';
 import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar';
 import moment from 'moment';
@@ -149,6 +150,9 @@ export const Bookings: React.FC<BookingsProps> = ({
   const [bookingDepositAmounts, setBookingDepositAmounts] = useState<Map<string, number>>(new Map());
   const [loadingPaymentStatus, setLoadingPaymentStatus] = useState(false);
   
+  // Booking confirmation loading state
+  const [confirmingBookings, setConfirmingBookings] = useState<Set<string>>(new Set());
+  
   const recordsPerPage = 10;
 
   // React to external filter changes (e.g., from Dashboard stat tiles)
@@ -226,6 +230,11 @@ export const Bookings: React.FC<BookingsProps> = ({
 
   // Booking operations
   const handleConfirmBooking = async (booking: BookingFormData) => {
+    const bookingId = booking.id?.toString() || '';
+    
+    // Add booking to confirming set
+    setConfirmingBookings(prev => new Set([...prev, bookingId]));
+    
     try {
       const { error } = await supabase
         .from('bookings')
@@ -323,6 +332,13 @@ export const Bookings: React.FC<BookingsProps> = ({
     } catch (error) {
       console.error('Error confirming booking:', error);
       showError('Error', 'Failed to confirm booking. Please try again.');
+    } finally {
+      // Remove booking from confirming set
+      setConfirmingBookings(prev => {
+        const updated = new Set(prev);
+        updated.delete(bookingId);
+        return updated;
+      });
     }
   };
 
@@ -1686,11 +1702,20 @@ export const Bookings: React.FC<BookingsProps> = ({
                                   e.stopPropagation();
                                   handleConfirmBooking(booking);
                                 }}
-                                className="flex items-center justify-center w-10 h-10 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors cursor-pointer"
-                                title="Confirm Booking"
+                                disabled={confirmingBookings.has(booking.id?.toString() || '')}
+                                className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors cursor-pointer ${
+                                  confirmingBookings.has(booking.id?.toString() || '')
+                                    ? 'bg-green-200 text-green-500 cursor-not-allowed'
+                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                }`}
+                                title={confirmingBookings.has(booking.id?.toString() || '') ? "Confirming..." : "Confirm Booking"}
                                 type="button"
                               >
-                                <Check className="w-4 h-4" />
+                                {confirmingBookings.has(booking.id?.toString() || '') ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Check className="w-4 h-4" />
+                                )}
                               </button>
                             )}
                             <button
@@ -2044,9 +2069,21 @@ export const Bookings: React.FC<BookingsProps> = ({
                           handleConfirmBooking(selectedBooking);
                           setShowBookingModal(false);
                         }}
-                        className="min-w-[140px] flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        disabled={confirmingBookings.has(selectedBooking.id?.toString() || '')}
+                        className={`min-w-[140px] flex-1 py-2 px-4 rounded-lg transition-colors text-sm font-medium flex items-center justify-center ${
+                          confirmingBookings.has(selectedBooking.id?.toString() || '')
+                            ? 'bg-green-400 text-green-200 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
                       >
-                        Confirm Booking
+                        {confirmingBookings.has(selectedBooking.id?.toString() || '') ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Confirming...
+                          </>
+                        ) : (
+                          'Confirm Booking'
+                        )}
                       </button>
                     )}
                     <button

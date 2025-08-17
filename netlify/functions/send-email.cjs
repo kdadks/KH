@@ -717,7 +717,12 @@ exports.handler = async (event, context) => {
         'X-Mailer': 'KH Therapy Booking System',
         'X-Priority': data.is_admin_notification ? '1' : '3',
         'X-MSMail-Priority': data.is_admin_notification ? 'High' : 'Normal',
-        'Reply-To': process.env.SMTP_USER || 'info@khtherapy.ie'
+        'Reply-To': process.env.SMTP_USER || 'info@khtherapy.ie',
+        'Message-ID': `<${Date.now()}-${Math.random().toString(36).substr(2, 9)}@khtherapy.ie>`,
+        'Return-Path': process.env.SMTP_USER || 'info@khtherapy.ie',
+        'X-Auto-Response-Suppress': 'OOF, AutoReply',
+        'List-Unsubscribe': '<mailto:noreply@khtherapy.ie?subject=unsubscribe>',
+        'Precedence': data.is_admin_notification ? 'special-delivery' : 'bulk'
       }
     };
 
@@ -726,6 +731,7 @@ exports.handler = async (event, context) => {
       mailOptions.from.name = 'KH Therapy Booking System';
       mailOptions.headers['X-Admin-Notification'] = 'true';
       mailOptions.headers['X-Booking-Reference'] = data.booking_reference || 'N/A';
+      mailOptions.headers['X-Same-Domain-Delivery'] = 'true';
       
       // Try using BCC as an alternative delivery method for same-domain emails
       if (process.env.ADMIN_BCC_EMAIL) {
@@ -733,7 +739,14 @@ exports.handler = async (event, context) => {
         console.log('📧 Added BCC for admin notification to:', process.env.ADMIN_BCC_EMAIL);
       }
       
-      console.log('📧 Admin notification detected - using special sender name and headers');
+      // For same-domain emails, try alternative delivery approach
+      console.log('📧 Same-domain admin notification detected - applying delivery workarounds');
+      
+      // Change sender slightly to avoid same-domain filtering
+      mailOptions.from.address = 'noreply@khtherapy.ie';
+      mailOptions.headers['Sender'] = process.env.SMTP_USER || 'info@khtherapy.ie';
+      
+      console.log('📧 Admin notification detected - using special sender and headers');
     }
 
     // Add calendar attachment for booking confirmations
