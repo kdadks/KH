@@ -17,8 +17,42 @@ const createTransporter = () => {
 
 // Calendar ICS generation function
 const generateICS = (data) => {
-  const startDate = new Date(`${data.appointment_date}T${data.appointment_time}`);
+  // Parse the appointment time more robustly
+  let appointmentTime = data.appointment_time;
+  
+  // Handle different time formats that might come from the system
+  if (appointmentTime) {
+    // If it's already in HH:MM:SS format, keep it
+    if (appointmentTime.match(/^\d{2}:\d{2}:\d{2}$/)) {
+      // Already good
+    }
+    // If it's in HH:MM format, add seconds
+    else if (appointmentTime.match(/^\d{2}:\d{2}$/)) {
+      appointmentTime += ':00';
+    }
+    // If it contains extra text, try to extract time
+    else {
+      const timeMatch = appointmentTime.match(/(\d{1,2}:\d{2})/);
+      if (timeMatch) {
+        appointmentTime = timeMatch[1].padStart(5, '0') + ':00';
+      } else {
+        // Fallback to 10:00 AM
+        appointmentTime = '10:00:00';
+      }
+    }
+  } else {
+    // Default time if not provided
+    appointmentTime = '10:00:00';
+  }
+  
+  const startDate = new Date(`${data.appointment_date}T${appointmentTime}`);
   const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+  
+  // Validate dates
+  if (isNaN(startDate.getTime())) {
+    console.error('Invalid start date:', data.appointment_date, appointmentTime);
+    return ''; // Return empty string if date is invalid
+  }
   
   const formatDate = (date) => {
     return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
@@ -624,13 +658,20 @@ exports.handler = async (event, context) => {
     // Add calendar attachment for booking confirmations
     if (emailType === 'admin_booking_confirmation' && data.appointment_date && data.appointment_time) {
       const icsContent = generateICS(data);
-      mailOptions.attachments = [
-        {
-          filename: 'appointment.ics',
-          content: icsContent,
-          contentType: 'text/calendar; charset=utf-8; method=REQUEST'
-        }
-      ];
+      
+      // Only add attachment if ICS content was generated successfully
+      if (icsContent && icsContent.length > 0) {
+        mailOptions.attachments = [
+          {
+            filename: 'appointment.ics',
+            content: icsContent,
+            contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+          }
+        ];
+        console.log('📅 Calendar attachment added for booking confirmation');
+      } else {
+        console.warn('⚠️ Failed to generate calendar content, sending email without attachment');
+      }
     }
 
     // Send email
