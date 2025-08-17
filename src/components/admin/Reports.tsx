@@ -7,7 +7,7 @@ import {
   FileSpreadsheet,
   PieChart,
   BarChart3,
-  DollarSign,
+  Euro,
   Receipt,
   AlertTriangle,
   ChevronLeft,
@@ -833,7 +833,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center">
                           <div className="flex-shrink-0">
-                            <DollarSign className="h-8 w-8 text-green-600" />
+                            <Euro className="h-8 w-8 text-green-600" />
                           </div>
                           <div className="ml-4">
                             <p className="text-sm font-medium text-gray-600">Paid Invoices</p>
@@ -857,7 +857,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center">
                           <div className="flex-shrink-0">
-                            <DollarSign className="h-8 w-8 text-purple-600" />
+                            <Euro className="h-8 w-8 text-purple-600" />
                           </div>
                           <div className="ml-4">
                             <p className="text-sm font-medium text-gray-600">Total Revenue</p>
