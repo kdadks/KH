@@ -221,10 +221,11 @@ export const createBookingWithCustomer = async (
       return { booking: null, customer, error: bookingError.message };
     }
 
-    // Step 4: Create payment request for 20% deposit
+    // Step 4: Try to create payment request for 20% deposit (don't let this block email sending)
     let paymentRequest = null;
     if (customer.id) {
       try {
+        console.log('💳 Attempting to create payment request...');
         paymentRequest = await createPaymentRequest(
           customer.id,
           bookingData.package_name,
@@ -232,8 +233,20 @@ export const createBookingWithCustomer = async (
           null, // invoiceId
           booking.id // bookingId
         );
+        
+        if (paymentRequest) {
+          console.log('✅ Payment request created successfully');
+        } else {
+          console.log('⚠️ No payment request created (service may require quote or be per-session)');
+        }
+      } catch (paymentRequestError) {
+        console.error('❌ Payment request creation failed, but continuing with email sending:', paymentRequestError);
+        // Don't return here - continue with email sending even if payment request fails
+        paymentRequest = null;
+      }
 
-        // Step 5: Send emails in proper order
+      // Step 5: Send emails regardless of payment request success/failure
+      try {
         // Always send welcome email first
         console.log('📧 Sending welcome email...');
         try {
@@ -317,27 +330,9 @@ export const createBookingWithCustomer = async (
             console.error('❌ Booking confirmation email failed:', emailError);
           }
         }
-      } catch (paymentError) {
-        console.error('❌ Error creating payment request:', {
-          error: paymentError,
-          message: paymentError instanceof Error ? paymentError.message : 'Unknown error',
-          stack: paymentError instanceof Error ? paymentError.stack : undefined,
-          serviceName: bookingData.package_name,
-          customerId: customer.id
-        });
-        // Fallback: Send welcome email only if payment request creation fails
-        console.log('📧 Sending fallback welcome email...');
-        try {
-          const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
-          if (welcomeResult.success) {
-            console.log('✅ Fallback welcome email sent successfully');
-          } else {
-            console.error('❌ Failed to send fallback welcome email:', welcomeResult.error);
-          }
-        } catch (welcomeEmailError) {
-          console.error('❌ Fallback welcome email failed:', welcomeEmailError);
-          // Continue without email - don't block the booking process
-        }
+      } catch (emailError) {
+        console.error('❌ Error in email sending process:', emailError);
+        // Don't throw - just log the error and continue
       }
     }
 

@@ -32,10 +32,15 @@ export async function fetchServicePricing(serviceName: string): Promise<ServiceP
       .select('id, name, category, in_hour_price, out_of_hour_price, features, description, is_active')
       .eq('name', serviceName)
       .eq('is_active', true)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
 
     if (error) {
       console.error('Error fetching service pricing:', error.message);
+      return null;
+    }
+
+    if (!data) {
+      console.warn(`Service pricing not found for: ${serviceName}`);
       return null;
     }
 
@@ -76,9 +81,16 @@ export function determineTimeSlotType(serviceNameWithDetails: string): 'in_hour'
 /**
  * Extracts the base service name from a full service string
  * e.g., "Ultimate Health - Out of Hour (€280)" -> "Ultimate Health"
+ * e.g., "Pre & Post Surgery Rehab (€90)" -> "Pre & Post Surgery Rehab"
  */
 export function extractBaseServiceName(serviceNameWithDetails: string): string {
-  // Remove the " - In Hour" or " - Out of Hour" part and anything after
-  const baseMatch = serviceNameWithDetails.match(/^([^-]+)/);
-  return baseMatch ? baseMatch[1].trim() : serviceNameWithDetails;
+  let serviceName = serviceNameWithDetails;
+  
+  // Remove price in parentheses (e.g., "(€90)" or "(€25 / class)")
+  serviceName = serviceName.replace(/\s*\([^)]*\)\s*$/, '');
+  
+  // Remove " - In Hour" or " - Out of Hour" suffixes
+  serviceName = serviceName.replace(/\s*-\s*(In|Out of)\s+Hour\s*$/i, '');
+  
+  return serviceName.trim();
 }
