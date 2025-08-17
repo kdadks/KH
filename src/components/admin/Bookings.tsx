@@ -259,12 +259,29 @@ export const Bookings: React.FC<BookingsProps> = ({
             booking.appointment_date || 
             booking.date || 
             new Date().toISOString().split('T')[0],
-          appointment_time: booking.booking_date ? 
-            booking.booking_date.split('T')[1]?.substring(0, 5) + ':00' :
-            booking.timeslot_start_time || 
-            booking.appointment_time || 
-            booking.time || 
-            'To be scheduled',
+          appointment_time: (() => {
+            // Try different sources for appointment time
+            if (booking.booking_date && booking.booking_date.includes('T')) {
+              const timeString = booking.booking_date.split('T')[1];
+              return timeString ? timeString.substring(0, 8) : '10:00:00'; // Keep full HH:MM:SS
+            }
+            if (booking.timeslot_start_time) {
+              return booking.timeslot_start_time.length === 5 ? 
+                booking.timeslot_start_time + ':00' : 
+                booking.timeslot_start_time;
+            }
+            if (booking.appointment_time) {
+              return booking.appointment_time.length === 5 ? 
+                booking.appointment_time + ':00' : 
+                booking.appointment_time;
+            }
+            if (booking.time) {
+              return booking.time.length === 5 ? 
+                booking.time + ':00' : 
+                booking.time;
+            }
+            return '10:00:00'; // Default fallback
+          })(),
           booking_reference: `KH-${booking.id}`,
           therapist_name: 'KH Therapy Team',
           clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
