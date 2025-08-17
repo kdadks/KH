@@ -113,11 +113,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmation</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmation</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -151,7 +151,7 @@ const getEmailTemplate = (type, data) => {
               <p>We look forward to seeing you and helping you with your physiotherapy journey!</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>If you need to reschedule or have questions, please contact us.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -168,11 +168,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Payment Receipt</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Payment Receipt</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -195,7 +195,7 @@ const getEmailTemplate = (type, data) => {
               <p>If you have any questions about this payment or need a formal invoice, please don't hesitate to contact us.</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -212,11 +212,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Payment Request</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Payment Request</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -261,11 +261,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Invoice Notification</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Invoice Notification</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -308,7 +308,7 @@ const getEmailTemplate = (type, data) => {
               <p>If you need assistance with payment or have any questions about this invoice, please don't hesitate to contact us. We're here to help!</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -325,11 +325,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Appointment Reminder</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Appointment Reminder</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -354,7 +354,7 @@ const getEmailTemplate = (type, data) => {
               <p>We look forward to seeing you and helping you with your physiotherapy journey!</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>If you need to reschedule or have questions, please contact us.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -371,11 +371,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Admin Notification</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Admin Notification</h1>
             </div>
             <div class="content">
               <h2>🔔 New ${data.notification_type}</h2>
@@ -410,11 +410,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Welcome to KH Therapy</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Welcome to KH Therapy</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -507,7 +507,7 @@ const getEmailTemplate = (type, data) => {
               <p>Thank you for choosing KH Therapy. We look forward to partnering with you on your journey to better health and helping you achieve your wellness goals. Your trust in our care means everything to us!</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p><strong>Clinic Address:</strong> KH Therapy Clinic, Dublin, Ireland</p>
               <p><strong>Business Hours:</strong> Monday-Friday 8:00 AM - 6:00 PM | Saturday 9:00 AM - 2:00 PM</p>
               <p style="margin-top: 15px; font-size: 12px; color: #9ca3af;">
@@ -528,11 +528,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Password Reset</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Password Reset</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -561,7 +561,7 @@ const getEmailTemplate = (type, data) => {
               <p>If you didn't request this password reset, please ignore this email and your password will remain unchanged. If you have concerns about your account security, please contact us immediately.</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>Your account security is important to us.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -578,11 +578,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmed - Payment Received</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmed - Payment Received</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -630,7 +630,7 @@ const getEmailTemplate = (type, data) => {
               <p>Thank you for choosing KH Therapy. We look forward to providing you with excellent care and helping you achieve your health goals!</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>For any questions or changes, please contact us.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -647,11 +647,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Booking Created - Payment Required</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Booking Created - Payment Required</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -687,7 +687,7 @@ const getEmailTemplate = (type, data) => {
               </div>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>Need help? Contact us immediately to secure your appointment.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -704,11 +704,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmation</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmation</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name},</h2>
@@ -753,7 +753,7 @@ const getEmailTemplate = (type, data) => {
               <p>We look forward to helping you with your physiotherapy needs and supporting you on your journey to better health!</p>
             </div>
             <div class="footer">
-              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 (0)1 234 5678</p>
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
               <p>For any questions or changes, please contact us.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -776,11 +776,11 @@ const getEmailTemplate = (type, data) => {
           <body>
             <div class="container">
               <div class="header" style="background-color: #dc2626;">
-                <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+                <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                   <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                   <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
                 </div>
-                <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">🔔 Admin Alert: Booking Confirmed</h1>
+                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">🔔 Admin Alert: Booking Confirmed</h1>
               </div>
               <div class="content">
                 <h2>Admin Notification</h2>
@@ -832,11 +832,11 @@ const getEmailTemplate = (type, data) => {
           <body>
             <div class="container">
               <div class="header">
-                <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+                <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                   <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                   <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
                 </div>
-                <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">✅ Booking Confirmed!</h1>
+                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">✅ Booking Confirmed!</h1>
               </div>
               <div class="content">
                 <h2>Hello ${customerName},</h2>
@@ -891,11 +891,11 @@ const getEmailTemplate = (type, data) => {
         <body>
           <div class="container">
             <div class="header">
-              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 15px;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
                 <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px;" />
                 <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
               </div>
-              <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">KH Therapy</h1>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">KH Therapy</h1>
             </div>
             <div class="content">
               <h2>Hello ${data.customer_name || 'Customer'},</h2>
