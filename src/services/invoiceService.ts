@@ -207,7 +207,7 @@ export class InvoiceService {
     pdfOptions: InvoiceGenerationOptions = {}
   ): Promise<InvoiceServiceResponse> {
     try {
-      // First generate the PDF
+      // First generate the PDF for email attachment
       const pdfResult = await this.generateInvoiceForEmailAttachment(
         invoice, 
         customer, 
@@ -219,18 +219,40 @@ export class InvoiceService {
         return pdfResult;
       }
 
-      // Prepare email data
-      const emailData = this.prepareEmailData(invoice, customer, emailOptions, pdfResult.data);
+      // Use the new email service with PDF attachment
+      const { sendInvoiceNotificationEmail } = await import('../utils/emailSMTP');
+      
+      const emailResult = await sendInvoiceNotificationEmail(
+        customer.email || emailOptions.to[0],
+        {
+          customer_name: customer.name,
+          invoice_number: invoice.invoice_number,
+          amount: invoice.total,
+          due_date: new Date(invoice.due_date).toLocaleDateString('en-IE'),
+          service_name: items[0]?.description || 'Therapy Session'
+        },
+        {
+          filename: pdfResult.data.filename,
+          content: pdfResult.data.base64
+        }
+      );
 
-      // TODO: Integrate with your email service here
-      // For now, we'll return the prepared data
-      console.log('Email would be sent with:', emailData);
-
-      return {
-        success: true,
-        message: `Invoice ${invoice.invoice_number} sent to ${emailOptions.to.join(', ')}`,
-        data: emailData
-      };
+      if (emailResult.success) {
+        return {
+          success: true,
+          message: `Invoice ${invoice.invoice_number} sent successfully to ${customer.email || emailOptions.to[0]}`,
+          data: {
+            emailSent: true,
+            pdfGenerated: true,
+            filename: pdfResult.data.filename
+          }
+        };
+      } else {
+        return {
+          success: false,
+          error: emailResult.error || 'Failed to send email'
+        };
+      }
 
     } catch (error) {
       console.error('Send invoice email error:', error);

@@ -257,7 +257,7 @@ export const sendPasswordResetEmail = async (
   });
 };
 
-// Invoice notification email
+// Invoice notification email with PDF attachment
 export const sendInvoiceNotificationEmail = async (
   customerEmail: string,
   invoiceData: {
@@ -265,17 +265,50 @@ export const sendInvoiceNotificationEmail = async (
     invoice_number: string;
     amount: number;
     due_date: string;
-    payment_url?: string;
+    service_name?: string;
+  },
+  pdfAttachment?: {
+    filename: string;
+    content: string; // base64 content
   }
-): Promise<boolean> => {
-  return sendEmail('payment_request', customerEmail, {
-    customer_name: invoiceData.customer_name,
-    amount: invoiceData.amount,
-    service_name: `Invoice ${invoiceData.invoice_number}`,
-    due_date: invoiceData.due_date,
-    invoice_number: invoiceData.invoice_number,
-    payment_url: invoiceData.payment_url
-  }, `Invoice ${invoiceData.invoice_number} - Payment Due`);
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const response = await fetch('/.netlify/functions/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        emailType: 'invoice_notification',
+        recipientEmail: customerEmail,
+        subject: `Invoice ${invoiceData.invoice_number} - KH Therapy`,
+        data: {
+          customer_name: invoiceData.customer_name,
+          invoice_number: invoiceData.invoice_number,
+          amount: invoiceData.amount.toFixed(2),
+          due_date: invoiceData.due_date,
+          service_name: invoiceData.service_name || 'Therapy Session'
+        },
+        attachments: pdfAttachment ? [{
+          filename: pdfAttachment.filename,
+          content: pdfAttachment.content,
+          contentType: 'application/pdf'
+        }] : undefined
+      }),
+    });
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      const errorData = await response.text();
+      return { success: false, error: `Failed to send email: ${errorData}` };
+    }
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error sending email'
+    };
+  }
 };
 
 // Payment confirmation email
