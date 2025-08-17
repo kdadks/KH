@@ -517,16 +517,18 @@ export async function sendPaymentRequestNotification(
       {
         customer_name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`,
         amount: paymentRequest.amount,
-        service_name: paymentRequest.description || 'Therapy Session',
+        service_name: paymentRequest.service_name || paymentRequest.description || 'Therapy Session',
         due_date: new Date(paymentRequest.payment_due_date).toLocaleDateString('en-IE', { 
           day: '2-digit', 
           month: '2-digit', 
           year: 'numeric' 
         }),
         payment_url: `${window.location.origin}/payment?request=${paymentRequestId}`,
+        // Only show invoice number if this is actually an invoice payment request
+        // For 20% deposit requests, there's no invoice yet, so no invoice number should be shown
         invoice_number: paymentRequest.service_name?.includes('Invoice ') 
           ? paymentRequest.service_name.replace('Invoice ', '') 
-          : paymentRequest.reference_number || `PR-${paymentRequestId}`
+          : null // Don't show invoice number for deposit payment requests
       }
     );
 
