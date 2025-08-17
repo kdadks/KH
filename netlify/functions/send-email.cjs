@@ -889,6 +889,71 @@ const getEmailTemplate = (type, data) => {
         `;
       }
 
+    case 'booking_captured':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="max-width: 100px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="max-width: 120px; height: auto;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">📋 Booking Received!</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Thank you for your appointment request! Your booking has been <strong>received</strong> and is currently being reviewed by our physiotherapy team.</p>
+              
+              <div class="details">
+                <h3>📅 Appointment Details:</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
+              </div>
+              
+              ${data.special_instructions ? `
+                <div class="details">
+                  <h3>📝 Your Notes:</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <div class="details" style="background-color: #d1fae5; border: 1px solid #10b981;">
+                <h3>⏰ What Happens Next:</h3>
+                <p>• Our team will review your appointment request</p>
+                <p>• You'll receive a payment request for a 20% deposit shortly</p>
+                <p>• Once payment is confirmed, your appointment will be officially confirmed</p>
+                <p>• We'll send you a final confirmation with all the details</p>
+              </div>
+              
+              <div class="details" style="background-color: #ecfdf5; border: 1px solid #059669;">
+                <h3>💡 Important Notes:</h3>
+                <p>• Please ensure your contact details are correct</p>
+                <p>• If you need to make any changes, contact us immediately</p>
+                <p>• Payment secure link will be sent to this email address</p>
+                <p>• For urgent queries, call us directly</p>
+              </div>
+              
+              <p style="text-align: center; margin: 20px 0;">
+                📧 <strong>We'll be in touch soon with your payment details!</strong>
+              </p>
+              
+              <p>Thank you for choosing KH Therapy for your physiotherapy needs.</p>
+            </div>
+            <div class="footer">
+              <p>KH Therapy | info@khtherapy.ie | Dublin, Ireland</p>
+              <p>Questions? Contact us at info@khtherapy.ie</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     default:
       return `
         <!DOCTYPE html>

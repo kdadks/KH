@@ -247,6 +247,32 @@ export const createBookingWithCustomer = async (
           console.error('❌ Welcome email failed:', welcomeEmailError);
         }
 
+        // Then send booking captured notification
+        console.log('📧 Sending booking captured notification...');
+        try {
+          const { sendBookingCapturedNotification } = await import('./emailUtils');
+          const capturedResult = await sendBookingCapturedNotification(customerData.email, {
+            customer_name: `${customerData.firstName} ${customerData.lastName}`,
+            customer_email: customerData.email,
+            service_name: bookingData.package_name,
+            appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
+            appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
+            total_amount: 0, // This is just a notification, amount is handled in payment request
+            booking_reference: booking.id.toString(),
+            therapist_name: 'KH Therapy Team',
+            clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+            special_instructions: bookingData.notes || undefined
+          });
+          
+          if (capturedResult.success) {
+            console.log('✅ Booking captured notification sent successfully');
+          } else {
+            console.error('❌ Failed to send booking captured notification:', capturedResult.error);
+          }
+        } catch (capturedEmailError) {
+          console.error('❌ Booking captured notification failed:', capturedEmailError);
+        }
+
         // Then send payment request email if payment is required
         if (paymentRequest) {
           console.log('📧 Sending payment request email...');
