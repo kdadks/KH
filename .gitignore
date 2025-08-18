@@ -26,3 +26,15 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+
+# Debug and test files (prevent accidental commits)
+**/fix-payment*.sql
+**/emergency*.sql
+**/nuclear*.sql
+**/simple-payment*.sql
+**/test-payment*.sql
+**/debug*.sql
+**/test-*.sql
+debug-*.js
+test-*.js
+**/diagnose*.js
