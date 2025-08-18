@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS payment_confirmations (
 CREATE INDEX IF NOT EXISTS idx_payment_requests_customer_id ON payment_requests(customer_id);
 CREATE INDEX IF NOT EXISTS idx_payment_requests_booking_id ON payment_requests(booking_id);
 CREATE INDEX IF NOT EXISTS idx_payment_requests_status ON payment_requests(status);
-CREATE INDEX IF NOT EXISTS idx_payment_requests_due_date ON payment_requests(due_date);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_payment_due_date ON payment_requests(payment_due_date);
 
 CREATE INDEX IF NOT EXISTS idx_payment_confirmations_customer_id ON payment_confirmations(customer_id);
 CREATE INDEX IF NOT EXISTS idx_payment_confirmations_booking_id ON payment_confirmations(booking_id);

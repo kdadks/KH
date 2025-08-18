@@ -518,7 +518,7 @@ export async function sendPaymentRequestNotification(
         customer_name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`,
         amount: paymentRequest.amount,
         service_name: paymentRequest.service_name || paymentRequest.description || 'Therapy Session',
-        due_date: new Date(paymentRequest.due_date).toLocaleDateString('en-IE', { 
+        due_date: new Date(paymentRequest.payment_due_date).toLocaleDateString('en-IE', { 
           day: '2-digit', 
           month: '2-digit', 
           year: 'numeric' 
