@@ -259,35 +259,8 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
         }
       }
 
-      const result = matchesSearch && matchesStatus && matchesDate;
-      
-      // Debug logging for filter issues
-      if (statusFilter !== 'all' || dateFilter !== 'all' || searchTerm !== '') {
-        console.log(`Filter debug for request ${request.id}:`, {
-          searchTerm,
-          statusFilter,
-          dateFilter,
-          request_status: request.status,
-          request_created_at: request.created_at,
-          request_due_date: request.due_date,
-          matchesSearch,
-          matchesStatus,
-          matchesDate,
-          result
-        });
-      }
-
-      return result;
+      return matchesSearch && matchesStatus && matchesDate;
     });
-
-    // Log summary when filters are active
-    if (statusFilter !== 'all' || dateFilter !== 'all' || searchTerm !== '') {
-      console.log(`Payment requests filter summary:`, {
-        totalRequests: paymentRequests.length,
-        filteredCount: filtered.length,
-        filters: { searchTerm, statusFilter, dateFilter }
-      });
-    }
 
     return filtered;
   };
