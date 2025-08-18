@@ -26,6 +26,7 @@ export interface Customer {
   password?: string;
   must_change_password?: boolean;
   first_login?: boolean;
+  welcome_email_sent?: boolean;
 }
 
 export interface BookingData {
@@ -51,7 +52,7 @@ export const findOrCreateCustomer = async (customerData: {
   lastName: string;
   email: string;
   phone?: string;
-}): Promise<{ customer: Customer | null; error: string | null }> => {
+}): Promise<{ customer: Customer | null; error: string | null; isNewCustomer?: boolean }> => {
   try {
     // First, try to find existing customer by email
     const { data: existingCustomer, error: findError } = await supabase
@@ -126,7 +127,7 @@ export const findOrCreateCustomer = async (customerData: {
           ? decryptSensitiveData(updatedCustomer.phone) 
           : updatedCustomer.phone;
 
-        return { customer: decryptedUpdatedCustomer, error: null };
+        return { customer: decryptedUpdatedCustomer, error: null, isNewCustomer: false };
       }
 
       // Return decrypted version of existing customer
@@ -134,7 +135,7 @@ export const findOrCreateCustomer = async (customerData: {
       decryptedExistingCustomer.first_name = decryptedFirstName;
       decryptedExistingCustomer.last_name = decryptedLastName;
       decryptedExistingCustomer.phone = decryptedPhone;
-      return { customer: decryptedExistingCustomer, error: null };
+      return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
     }
 
     // Customer doesn't exist, create a new one with default password same as email (hashed)
@@ -150,7 +151,8 @@ export const findOrCreateCustomer = async (customerData: {
       is_active: true,
       password: hashedDefaultPassword, // Store hashed password
       must_change_password: true, // Force password change on first login
-      first_login: true
+      first_login: true,
+      welcome_email_sent: false // Will be set to true after welcome email is sent
     };
 
     const { data: newCustomer, error: createError } = await supabase
@@ -161,7 +163,7 @@ export const findOrCreateCustomer = async (customerData: {
 
     if (createError) {
       console.error('Error creating customer:', createError);
-      return { customer: null, error: createError.message };
+      return { customer: null, error: createError.message, isNewCustomer: false };
     }
 
     // Return decrypted version of new customer
@@ -170,11 +172,11 @@ export const findOrCreateCustomer = async (customerData: {
     decryptedNewCustomer.last_name = customerData.lastName.trim();
     decryptedNewCustomer.phone = customerData.phone?.trim() || undefined;
 
-    return { customer: decryptedNewCustomer, error: null };
+    return { customer: decryptedNewCustomer, error: null, isNewCustomer: true };
 
   } catch (error) {
     console.error('Exception in findOrCreateCustomer:', error);
-    return { customer: null, error: 'Unexpected error occurred' };
+    return { customer: null, error: 'Unexpected error occurred', isNewCustomer: false };
   }
 };
 
@@ -192,7 +194,7 @@ export const createBookingWithCustomer = async (
 ): Promise<{ booking: any | null; customer: Customer | null; paymentRequest?: any; error: string | null }> => {
   try {
     // Step 1: Find or create customer
-    const { customer, error: customerError } = await findOrCreateCustomer(customerData);
+    const { customer, error: customerError, isNewCustomer } = await findOrCreateCustomer(customerData);
     
     if (customerError || !customer) {
       return { booking: null, customer: null, error: customerError || 'Failed to create customer' };
@@ -247,17 +249,35 @@ export const createBookingWithCustomer = async (
 
       // Step 5: Send emails regardless of payment request success/failure
       try {
-        // Always send welcome email first
-        console.log('📧 Sending welcome email...');
-        try {
-          const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
-          if (welcomeResult.success) {
-            console.log('✅ Welcome email sent successfully');
-          } else {
-            console.error('❌ Failed to send welcome email:', welcomeResult.error);
+        // Only send welcome email for new customers who haven't received it yet
+        if (isNewCustomer && !customer.welcome_email_sent) {
+          console.log('📧 Sending welcome email to new customer...');
+          try {
+            const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
+            if (welcomeResult.success) {
+              console.log('✅ Welcome email sent successfully');
+              
+              // Mark welcome email as sent in database
+              try {
+                await supabase
+                  .from('customers')
+                  .update({ welcome_email_sent: true })
+                  .eq('id', customer.id);
+                console.log('✅ Welcome email status updated in database');
+              } catch (updateError) {
+                console.error('❌ Failed to update welcome email status:', updateError);
+                // Don't fail the process, just log the error
+              }
+            } else {
+              console.error('❌ Failed to send welcome email:', welcomeResult.error);
+            }
+          } catch (welcomeEmailError) {
+            console.error('❌ Welcome email failed:', welcomeEmailError);
           }
-        } catch (welcomeEmailError) {
-          console.error('❌ Welcome email failed:', welcomeEmailError);
+        } else if (isNewCustomer && customer.welcome_email_sent) {
+          console.log('ℹ️ Skipping welcome email - already sent to this new customer');
+        } else {
+          console.log('ℹ️ Skipping welcome email - existing customer');
         }
 
         // Then send booking captured notification
