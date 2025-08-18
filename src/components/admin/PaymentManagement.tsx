@@ -191,13 +191,14 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   // Reset pagination when switching tabs
   const resetPagination = () => {
     setCurrentPage(1);
-    // Reset status filter when switching tabs since different tabs have different status options
+    // Reset filters when switching tabs since different tabs have different filter options
     setStatusFilter('all');
+    setDateFilter('all');
   };
 
   // Filter functions for search and status filtering
   const getFilteredPaymentRequests = () => {
-    return paymentRequests.filter(request => {
+    const filtered = paymentRequests.filter(request => {
       // Search filter - check customer name, service, and reference
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
@@ -210,32 +211,85 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
 
       // Date filter
       let matchesDate = true;
-      if (dateFilter !== 'all' && request.created_at) {
-        const requestDate = new Date(request.created_at);
+      if (dateFilter !== 'all') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
         switch (dateFilter) {
           case 'today':
-            const requestToday = new Date(requestDate);
-            requestToday.setHours(0, 0, 0, 0);
-            matchesDate = requestToday.getTime() === today.getTime();
+            if (request.created_at) {
+              const requestDate = new Date(request.created_at);
+              requestDate.setHours(0, 0, 0, 0);
+              matchesDate = requestDate.getTime() === today.getTime();
+            } else {
+              matchesDate = false;
+            }
             break;
           case 'week':
-            const weekAgo = new Date(today);
-            weekAgo.setDate(today.getDate() - 7);
-            matchesDate = requestDate >= weekAgo;
+            if (request.created_at) {
+              const requestDate = new Date(request.created_at);
+              const weekAgo = new Date(today);
+              weekAgo.setDate(today.getDate() - 7);
+              matchesDate = requestDate >= weekAgo;
+            } else {
+              matchesDate = false;
+            }
             break;
           case 'month':
-            const monthAgo = new Date(today);
-            monthAgo.setMonth(today.getMonth() - 1);
-            matchesDate = requestDate >= monthAgo;
+            if (request.created_at) {
+              const requestDate = new Date(request.created_at);
+              const monthAgo = new Date(today);
+              monthAgo.setMonth(today.getMonth() - 1);
+              matchesDate = requestDate >= monthAgo;
+            } else {
+              matchesDate = false;
+            }
             break;
+          case 'overdue':
+            if (request.due_date && request.status !== 'paid') {
+              const dueDate = new Date(request.due_date);
+              dueDate.setHours(23, 59, 59, 999); // End of due date
+              matchesDate = dueDate < today;
+            } else {
+              matchesDate = false;
+            }
+            break;
+          default:
+            matchesDate = true;
         }
       }
 
-      return matchesSearch && matchesStatus && matchesDate;
+      const result = matchesSearch && matchesStatus && matchesDate;
+      
+      // Debug logging for filter issues
+      if (statusFilter !== 'all' || dateFilter !== 'all' || searchTerm !== '') {
+        console.log(`Filter debug for request ${request.id}:`, {
+          searchTerm,
+          statusFilter,
+          dateFilter,
+          request_status: request.status,
+          request_created_at: request.created_at,
+          request_due_date: request.due_date,
+          matchesSearch,
+          matchesStatus,
+          matchesDate,
+          result
+        });
+      }
+
+      return result;
     });
+
+    // Log summary when filters are active
+    if (statusFilter !== 'all' || dateFilter !== 'all' || searchTerm !== '') {
+      console.log(`Payment requests filter summary:`, {
+        totalRequests: paymentRequests.length,
+        filteredCount: filtered.length,
+        filters: { searchTerm, statusFilter, dateFilter }
+      });
+    }
+
+    return filtered;
   };
 
   const getFilteredPayments = () => {
@@ -252,27 +306,36 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
 
       // Date filter
       let matchesDate = true;
-      if (dateFilter !== 'all' && payment.payment_date) {
-        const paymentDate = new Date(payment.payment_date);
+      if (dateFilter !== 'all') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        switch (dateFilter) {
-          case 'today':
-            const paymentToday = new Date(paymentDate);
-            paymentToday.setHours(0, 0, 0, 0);
-            matchesDate = paymentToday.getTime() === today.getTime();
-            break;
-          case 'week':
-            const weekAgo = new Date(today);
-            weekAgo.setDate(today.getDate() - 7);
-            matchesDate = paymentDate >= weekAgo;
-            break;
-          case 'month':
-            const monthAgo = new Date(today);
-            monthAgo.setMonth(today.getMonth() - 1);
-            matchesDate = paymentDate >= monthAgo;
-            break;
+        // Use payment_date if available, otherwise fall back to created_at
+        const dateToCheck = payment.payment_date || payment.created_at;
+        
+        if (dateToCheck) {
+          const paymentDate = new Date(dateToCheck);
+          
+          switch (dateFilter) {
+            case 'today':
+              paymentDate.setHours(0, 0, 0, 0);
+              matchesDate = paymentDate.getTime() === today.getTime();
+              break;
+            case 'week':
+              const weekAgo = new Date(today);
+              weekAgo.setDate(today.getDate() - 7);
+              matchesDate = paymentDate >= weekAgo;
+              break;
+            case 'month':
+              const monthAgo = new Date(today);
+              monthAgo.setMonth(today.getMonth() - 1);
+              matchesDate = paymentDate >= monthAgo;
+              break;
+            default:
+              matchesDate = true;
+          }
+        } else {
+          matchesDate = false;
         }
       }
 
@@ -300,6 +363,24 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       ];
     }
     return [{ value: 'all', label: 'All Status' }];
+  };
+
+  // Get date filter options based on current tab
+  const getDateFilterOptions = () => {
+    const baseOptions = [
+      { value: 'all', label: 'All Dates' },
+      { value: 'today', label: 'Today' },
+      { value: 'week', label: 'This Week' },
+      { value: 'month', label: 'This Month' }
+    ];
+
+    if (activeSubTab === 'requests') {
+      // Add overdue option for payment requests since they have due dates
+      return [...baseOptions, { value: 'overdue', label: 'Overdue' }];
+    }
+
+    // For payments tab, don't include overdue option
+    return baseOptions;
   };
 
   // Modal and Payment Request Functions
@@ -670,11 +751,11 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 onChange={(e) => setDateFilter(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="all">All Dates</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="overdue">Overdue</option>
+                {getDateFilterOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -820,10 +901,11 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 onChange={(e) => setDateFilter(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="all">All Dates</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
+                {getDateFilterOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
