@@ -5,6 +5,7 @@ import {
   validateGdprCompliance 
 } from '../../utils/gdprUtils';
 import { supabase } from '../../supabaseClient';
+import { useToast } from '../shared/toastContext';
 
 interface ConsentRecord {
   id: number;
@@ -26,6 +27,7 @@ interface DataSubjectRequest {
 
 const PrivacySettings: React.FC = () => {
   const { user } = useUserAuth();
+  const { showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [consentRecords, setConsentRecords] = useState<ConsentRecord[]>([]);
   const [dataRequests, setDataRequests] = useState<DataSubjectRequest[]>([]);
@@ -123,14 +125,14 @@ const PrivacySettings: React.FC = () => {
           .update({ last_data_export_request: new Date().toISOString() })
           .eq('id', user.id);
 
-        alert('Your data has been exported successfully!');
+        showSuccess('Your data has been exported successfully!');
         loadPrivacyData();
       } else {
-        alert('Failed to export data: ' + (result.error || 'Unknown error'));
+        showError('Failed to export data: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error exporting data:', error);
-      alert('An error occurred while exporting your data.');
+      showError('An error occurred while exporting your data.');
     } finally {
       setLoading(false);
     }
@@ -162,12 +164,12 @@ const PrivacySettings: React.FC = () => {
         })
         .eq('id', user.id);
 
-      alert('Your deletion request has been submitted. We will process it within 30 days as required by GDPR.');
+      showSuccess('Your deletion request has been submitted. We will process it within 30 days as required by GDPR.');
       setShowDeleteConfirmation(false);
       loadPrivacyData();
     } catch (error) {
       console.error('Error requesting deletion:', error);
-      alert('An error occurred while submitting your deletion request.');
+      showError('An error occurred while submitting your deletion request.');
     } finally {
       setLoading(false);
     }
@@ -194,11 +196,11 @@ const PrivacySettings: React.FC = () => {
 
       if (error) throw error;
 
-      alert(`${consentType} consent has been updated successfully.`);
+      showSuccess(`${consentType} consent has been updated successfully.`);
       loadPrivacyData();
     } catch (error) {
       console.error('Error updating consent:', error);
-      alert('An error occurred while updating your consent preferences.');
+      showError('An error occurred while updating your consent preferences.');
     } finally {
       setLoading(false);
     }

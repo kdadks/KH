@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { useToast } from '../shared/toastContext';
 import { exportUserData, anonymizeCustomerData, deleteCustomerData, enforceDataRetentionPolicy } from '../../utils/gdprUtils';
 
 interface GdprRequest {
@@ -30,6 +31,7 @@ interface ComplianceIssue {
 }
 
 const GdprComplianceAdmin: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [pendingRequests, setPendingRequests] = useState<GdprRequest[]>([]);
   const [complianceIssues, setComplianceIssues] = useState<ComplianceIssue[]>([]);
   const [loading, setLoading] = useState(false);
@@ -132,11 +134,15 @@ const GdprComplianceAdmin: React.FC = () => {
 
       if (error) throw error;
 
-      alert(success ? 'Request processed successfully!' : 'Request moved to processing. Manual intervention may be required.');
+      if (success) {
+        showSuccess('Request Processed', 'GDPR request has been processed successfully.');
+      } else {
+        showError('Manual Intervention Required', 'Request moved to processing. Manual intervention may be required.');
+      }
       loadGdprData();
     } catch (error) {
       console.error('Error processing request:', error);
-      alert('Error processing request: ' + (error as Error).message);
+      showError('Processing Failed', 'Error processing request: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -157,11 +163,11 @@ const GdprComplianceAdmin: React.FC = () => {
 
       if (error) throw error;
 
-      alert('Request rejected successfully.');
+      showSuccess('Request Rejected', 'GDPR request has been rejected successfully.');
       loadGdprData();
     } catch (error) {
       console.error('Error rejecting request:', error);
-      alert('Error rejecting request: ' + (error as Error).message);
+      showError('Rejection Failed', 'Error rejecting request: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -184,14 +190,14 @@ const GdprComplianceAdmin: React.FC = () => {
       }
 
       if (result.success) {
-        alert(`Customer data ${action.toLowerCase()}d successfully.`);
+        showSuccess('Action Completed', `Customer data ${action.toLowerCase()}d successfully.`);
         loadGdprData();
       } else {
-        alert('Error: ' + (result.error || 'Unknown error'));
+        showError('Action Failed', result.error || 'Unknown error occurred');
       }
     } catch (error) {
       console.error('Error handling compliance action:', error);
-      alert('Error: ' + (error as Error).message);
+      showError('Action Error', (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -202,11 +208,11 @@ const GdprComplianceAdmin: React.FC = () => {
     try {
       const result = await enforceDataRetentionPolicy();
       setRetentionStats(result);
-      alert(`Data retention policy executed. Processed: ${result.processed}, Errors: ${result.errors}`);
+      showSuccess('Retention Policy Executed', `Data retention policy completed. Processed: ${result.processed}, Errors: ${result.errors}`);
       loadGdprData();
     } catch (error) {
       console.error('Error running retention policy:', error);
-      alert('Error running retention policy: ' + (error as Error).message);
+      showError('Retention Policy Failed', (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -340,7 +346,7 @@ const GdprComplianceAdmin: React.FC = () => {
                 <button
                   onClick={() => {
                     // Mark as reviewed but take no action
-                    alert('Customer marked for manual review.');
+                    showSuccess('Manual Review', 'Customer has been marked for manual review.');
                   }}
                   className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
                 >
