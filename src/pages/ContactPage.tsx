@@ -5,6 +5,7 @@ import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
 import { supabase } from '../supabaseClient';
+import { useToast } from '../components/shared/toastContext';
 
 interface Service {
   id: number | string;
@@ -27,6 +28,7 @@ const ContactPage: React.FC = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showSuccess } = useToast();
 
   // Fetch services from database
   useEffect(() => {
@@ -140,7 +142,7 @@ const ContactPage: React.FC = () => {
     setIsSubmitting(false);
     
     // You can add actual form submission logic here
-    alert('Message sent successfully!');
+    showSuccess('Message sent successfully!');
   };
 
   return (

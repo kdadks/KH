@@ -152,9 +152,9 @@ const AdminConsole = () => {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword.trim() });
       if (error) {
-        alert(`Password change failed: ${error.message}`);
+        showError('Password Change Failed', error.message);
       } else {
-        alert('Password updated successfully.');
+        showSuccess('Password Updated', 'Your password has been successfully changed.');
         setShowPasswordModal(false);
         setNewPassword('');
       }
