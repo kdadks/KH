@@ -108,7 +108,7 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
         amount: pr.amount || 0,
         currency: pr.currency || 'EUR',
         status: pr.status || 'pending',
-        due_date: pr.due_date,
+        due_date: pr.payment_due_date, // Use payment_due_date column from database
         created_at: pr.created_at,
         booking_id: pr.booking_id,
         invoice_id: pr.invoice_id
@@ -582,7 +582,7 @@ export const createManualPaymentRequest = async (requestData: {
         amount: requestData.amount,
         currency: requestData.currency || 'EUR',
         status: 'pending',
-        due_date: requestData.due_date,
+        payment_due_date: requestData.due_date, // Insert into payment_due_date column
         booking_id: requestData.booking_id,
         created_at: new Date().toISOString()
       }])
@@ -614,7 +614,7 @@ export const createManualPaymentRequest = async (requestData: {
       amount: data.amount,
       currency: data.currency,
       status: data.status,
-      due_date: data.due_date,
+      due_date: data.payment_due_date, // Use payment_due_date column from database
       created_at: data.created_at,
       booking_id: data.booking_id
     };
