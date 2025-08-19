@@ -169,16 +169,8 @@ export const updateUserProfile = async (customerId: number, profileData: UserPro
 
     sensitiveFields.forEach(field => {
       if (updateData[field] && !isDataEncrypted(updateData[field])) {
-        console.log(`Encrypting field: ${field}`, { original: updateData[field] });
         updateData[field] = encryptSensitiveData(updateData[field]);
-        console.log(`Encrypted field: ${field}`, { encrypted: updateData[field] });
       }
-    });
-
-    console.log('Update data being sent to Supabase:', {
-      customerId,
-      fieldCount: Object.keys(updateData).length,
-      fields: Object.keys(updateData)
     });
 
     const { error } = await supabase
