@@ -13,6 +13,12 @@ const generateResetToken = (): string => {
 // Request password reset - generates token and sends email
 export const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
   try {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return { success: false, error: 'Please enter a valid email address' };
+    }
+
     // Check if customer exists
     const { data: customer, error: customerError } = await supabase
       .from('customers')
@@ -21,7 +27,19 @@ export const requestPasswordReset = async (email: string): Promise<{ success: bo
       .eq('is_active', true)
       .single();
 
-    if (customerError || !customer) {
+    if (customerError) {
+      console.error('Error checking customer existence:', {
+        message: customerError.message,
+        details: customerError.details,
+        hint: customerError.hint,
+        code: customerError.code
+      });
+      
+      // Don't reveal if email exists or not for security
+      return { success: true }; // Always return success to prevent email enumeration
+    }
+
+    if (!customer) {
       // Don't reveal if email exists or not for security
       return { success: true }; // Always return success to prevent email enumeration
     }
@@ -42,7 +60,12 @@ export const requestPasswordReset = async (email: string): Promise<{ success: bo
       .eq('id', customer.id);
 
     if (updateError) {
-      console.error('Error storing reset token:', updateError);
+      console.error('Error storing reset token:', {
+        message: updateError.message,
+        details: updateError.details,
+        hint: updateError.hint,
+        code: updateError.code
+      });
       return { success: false, error: 'Failed to process password reset request' };
     }
 
@@ -51,12 +74,14 @@ export const requestPasswordReset = async (email: string): Promise<{ success: bo
     const emailResult = await sendPasswordResetEmail({
       customer_name: `${customer.first_name} ${customer.last_name}`,
       customer_email: customer.email,
-      reset_url: resetUrl,
-      expires_in_hours: 1
+      reset_url: resetUrl
     });
 
     if (!emailResult.success) {
-      console.error('Failed to send password reset email:', emailResult.error);
+      console.error('Failed to send password reset email:', {
+        error: emailResult.error,
+        email: customer.email
+      });
       // Clean up the token if email failed
       await supabase
         .from('customers')
