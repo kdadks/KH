@@ -8,7 +8,7 @@ import {
   PaymentHistoryItem
 } from '../types/userManagement';
 import { getCustomerPayments } from './paymentRequestUtils';
-import { decryptCustomerPII } from './gdprUtils';
+import { decryptCustomerPII, encryptSensitiveData, isDataEncrypted } from './gdprUtils';
 
 /**
  * Get customer by auth user ID
@@ -135,27 +135,65 @@ export const linkCustomerToAuthUser = async (customerId: number, authUserId: str
  */
 export const updateUserProfile = async (customerId: number, profileData: UserProfileUpdateData): Promise<{ success: boolean; error?: string }> => {
   try {
+    // Prepare the update data
+    const updateData: any = {
+      first_name: profileData.first_name,
+      last_name: profileData.last_name,
+      phone: profileData.phone,
+      address_line_1: profileData.address_line_1,
+      address_line_2: profileData.address_line_2,
+      city: profileData.city,
+      county: profileData.county,
+      eircode: profileData.eircode,
+      country: profileData.country,
+      date_of_birth: profileData.date_of_birth,
+      emergency_contact_name: profileData.emergency_contact_name,
+      emergency_contact_phone: profileData.emergency_contact_phone,
+      updated_at: new Date().toISOString()
+    };
+
+    // Encrypt sensitive fields before saving
+    const sensitiveFields = [
+      'first_name', 
+      'last_name', 
+      'phone', 
+      'address_line_1', 
+      'address_line_2', 
+      'city', 
+      'county', 
+      'eircode',
+      'date_of_birth',
+      'emergency_contact_name',
+      'emergency_contact_phone'
+    ];
+
+    sensitiveFields.forEach(field => {
+      if (updateData[field] && !isDataEncrypted(updateData[field])) {
+        console.log(`Encrypting field: ${field}`, { original: updateData[field] });
+        updateData[field] = encryptSensitiveData(updateData[field]);
+        console.log(`Encrypted field: ${field}`, { encrypted: updateData[field] });
+      }
+    });
+
+    console.log('Update data being sent to Supabase:', {
+      customerId,
+      fieldCount: Object.keys(updateData).length,
+      fields: Object.keys(updateData)
+    });
+
     const { error } = await supabase
       .from('customers')
-      .update({
-        first_name: profileData.first_name,
-        last_name: profileData.last_name,
-        phone: profileData.phone,
-        address_line_1: profileData.address_line_1,
-        address_line_2: profileData.address_line_2,
-        city: profileData.city,
-        county: profileData.county,
-        eircode: profileData.eircode,
-        country: profileData.country,
-        date_of_birth: profileData.date_of_birth,
-        emergency_contact_name: profileData.emergency_contact_name,
-        emergency_contact_phone: profileData.emergency_contact_phone,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', customerId);
 
     if (error) {
-      console.error('Error updating user profile:', error);
+      console.error('Error updating user profile:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        customerId: customerId
+      });
       return { success: false, error: error.message };
     }
 
