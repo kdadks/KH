@@ -544,15 +544,12 @@ const getEmailTemplate = (type, data) => {
               
               <div class="details">
                 <h3>🏥 Your New Patient Portal</h3>
-                <p>We've created a secure online account for you that provides 24/7 access to manage your healthcare journey. Your patient portal includes:</p>
+                <p>We've created a secure online account for you that provides 24/7 access to manage your healthcare journey. Please proceed with your first login using your booking email id as user id and same as password. Your patient portal includes:</p>
                 <ul style="margin: 15px 0; padding-left: 25px; line-height: 1.8;">
                   <li><strong>📅 Online Appointment Booking</strong> - Schedule, reschedule, or cancel appointments at your convenience</li>
-                  <li><strong>📋 Complete Medical History</strong> - View all your appointments, treatments, and progress notes</li>
+                  <li><strong>📋 Medical History</strong> - View all your appointments, treatments </li>
                   <li><strong>💳 Financial Management</strong> - Handle payments, view invoices, and manage billing information</li>
-                  <li><strong>📄 Document Access</strong> - Download receipts, treatment summaries, and insurance forms</li>
-                  <li><strong>👤 Profile Management</strong> - Update personal information, emergency contacts, and preferences</li>
-                  <li><strong>📞 Direct Communication</strong> - Secure messaging with your therapy team</li>
-                  <li><strong>📈 Progress Tracking</strong> - Monitor your recovery journey and treatment outcomes</li>
+                  <li><strong>👤 Profile Management</strong> - Update personal information, emergency contacts, and preferences</li> 
                 </ul>
               </div>
 
@@ -568,7 +565,7 @@ const getEmailTemplate = (type, data) => {
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
                   <h4 style="color: white; margin-top: 0; margin-bottom: 10px;">Step 2: Set Up Your Password</h4>
                   <p style="margin: 0;"><strong>Email:</strong> ${data.customer_email || 'Your registered email address'}</p>
-                  <p style="margin: 5px 0 0 0;">Click "Forgot Password?" to create your secure password. You'll receive a password reset email with instructions.</p>
+                  <p style="margin: 5px 0 0 0;"> Use your email address given during booking as user id and same as password.</p>
                 </div>
 
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
