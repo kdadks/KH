@@ -176,45 +176,6 @@ const BookingForm: React.FC = () => {
     }
   };
 
-  const handlePaymentFailure = async () => {
-    setPaymentState(prev => ({ ...prev, paymentFailed: true }));
-    
-    // Send payment failure email
-    if (paymentState.booking && paymentState.customer && paymentState.paymentRequest) {
-      try {
-        const bookingWithPaymentData: BookingWithPaymentData = {
-          customer_name: `${paymentState.customer.first_name} ${paymentState.customer.last_name}`,
-          customer_email: paymentState.customer.email,
-          service_name: paymentState.booking.package_name,
-          appointment_date: paymentState.booking.booking_date || new Date().toISOString().split('T')[0],
-          appointment_time: paymentState.booking.timeslot_start_time || 'To be scheduled',
-          booking_reference: `KH-${paymentState.booking.id}`,
-          payment_status: 'failed',
-          payment_amount: paymentState.paymentRequest.amount,
-          transaction_id: undefined,
-          next_steps: 'Please try again or contact us for assistance. Your booking is still reserved for 24 hours.',
-          therapist_name: 'KH Therapy Team',
-          clinic_address: 'Dublin, Ireland',
-          special_instructions: paymentState.booking.notes || undefined
-        };
-
-        const emailSent = await sendBookingNotificationWithPaymentStatus(
-          bookingWithPaymentData.customer_email, 
-          bookingWithPaymentData
-        );
-        
-        if (emailSent) {
-          console.log('✅ Payment failure email sent successfully');
-        } else {
-          console.warn('⚠️ Failed to send payment failure email');
-        }
-      } catch (emailError) {
-        console.error('❌ Error sending payment failure email:', emailError);
-      }
-    }
-    
-    showError('Payment Failed', 'Your payment could not be processed. Please try again or contact us for assistance.');
-  };
 
   const handlePaymentSuccess = async () => {
     setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
