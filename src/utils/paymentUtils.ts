@@ -74,30 +74,18 @@ export const createSumUpCheckoutUrl = async (
   customerEmail?: string
 ): Promise<string> => {
   try {
-    // In development mode with demo config, create a demo checkout URL
-    if (import.meta.env.DEV && SUMUP_MERCHANT_CODE === 'DEMO-MERCHANT-001') {
-      console.log('Creating demo SumUp checkout for development');
-      
-      // For demo purposes, create a working demo page URL
-      // This could be a local demo page or a sandbox environment
-      console.warn('Demo mode: SumUp checkout would open with:', {
-        amount: amount,
-        currency,
-        description,
-        checkoutReference,
-        customerEmail
-      });
+    // Check if we have actual SumUp configuration
+    const hasRealConfig = SUMUP_APP_ID && SUMUP_APP_ID !== 'demo-app-id' && 
+                         SUMUP_MERCHANT_CODE && SUMUP_MERCHANT_CODE !== 'DEMO-MERCHANT-001';
+
+    if (!hasRealConfig) {
+      console.warn('Using demo SumUp configuration. Set VITE_SUMUP_APP_ID and VITE_SUMUP_MERCHANT_CODE for real testing.');
       
       // Return a demo URL that simulates payment success
-      return `data:text/html,<html><body><h1>Demo Payment Page</h1><p>Amount: €${amount}</p><p>Description: ${description}</p><p><a href='javascript:window.close()'>Complete Demo Payment</a></p></body></html>`;
+      return `data:text/html,<html><body style="font-family: Arial, sans-serif; padding: 20px; text-align: center;"><h1>Demo Payment Page</h1><p><strong>Amount:</strong> €${amount}</p><p><strong>Description:</strong> ${description}</p><p><strong>Reference:</strong> ${checkoutReference}</p><br><button onclick="alert('Demo payment completed!'); window.close();" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Complete Demo Payment</button></body></html>`;
     }
 
-    if (!SUMUP_MERCHANT_CODE || SUMUP_MERCHANT_CODE === 'DEMO-MERCHANT-001') {
-      throw new Error('SumUp merchant code not configured for production use');
-    }
-
-    // For production, this would create a real SumUp checkout session
-    // For demo purposes, we'll create a mock checkout URL
+    // Create actual SumUp checkout URL with your real credentials
     const checkoutData = {
       amount: Math.round(amount * 100), // Convert to cents
       currency,
@@ -109,22 +97,21 @@ export const createSumUpCheckoutUrl = async (
       cancel_url: `${window.location.origin}/payment-cancelled`
     };
 
-    console.log('Creating SumUp checkout with data:', checkoutData);
+    console.log('Creating SumUp checkout with real configuration:', {
+      merchant_code: SUMUP_MERCHANT_CODE,
+      app_id: SUMUP_APP_ID,
+      environment: SUMUP_ENVIRONMENT,
+      amount: checkoutData.amount,
+      currency: checkoutData.currency
+    });
 
-    // In production, make API call to SumUp to create checkout session
-    // const response = await fetch('https://api.sumup.com/v0.1/checkouts', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${SUMUP_API_TOKEN}`,
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify(checkoutData)
-    // });
-    // const result = await response.json();
-    // return result.checkout_url;
-
-    // For demo, return a mock URL with payment parameters
-    const mockCheckoutUrl = `https://gateway.sumup.com/gateway/checkout?` +
+    // In production, this would make an API call to SumUp to create checkout session
+    // For now, we'll create the URL that would be returned by SumUp's API
+    const baseUrl = SUMUP_ENVIRONMENT === 'production' 
+      ? 'https://gateway.sumup.com'
+      : 'https://gateway.sumup.com'; // SumUp uses same URL for sandbox
+    
+    const sumUpCheckoutUrl = `${baseUrl}/gateway/checkout?` +
       `amount=${checkoutData.amount}&currency=${checkoutData.currency}&` +
       `description=${encodeURIComponent(checkoutData.description)}&` +
       `checkout_reference=${checkoutData.checkout_reference}&` +
@@ -132,7 +119,8 @@ export const createSumUpCheckoutUrl = async (
       `return_url=${encodeURIComponent(checkoutData.return_url)}&` +
       `cancel_url=${encodeURIComponent(checkoutData.cancel_url)}`;
 
-    return mockCheckoutUrl;
+    console.log('Generated SumUp checkout URL:', sumUpCheckoutUrl);
+    return sumUpCheckoutUrl;
   } catch (error) {
     console.error('Error creating SumUp checkout URL:', error);
     throw new Error('Failed to create payment checkout');

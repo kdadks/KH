@@ -804,3 +804,40 @@ export const getPaymentStatistics = async () => {
     };
   }
 };
+
+/**
+ * Get the active SumUp payment gateway configuration
+ */
+export const getActiveSumUpGateway = async (): Promise<{
+  api_key: string;
+  merchant_id: string;
+  environment: 'sandbox' | 'production';
+} | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('payment_gateways')
+      .select('api_key, merchant_id, environment')
+      .eq('provider', 'sumup')
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      console.error('Error fetching active SumUp gateway:', error);
+      return null;
+    }
+
+    if (!data) {
+      console.warn('No active SumUp gateway found in database');
+      return null;
+    }
+
+    return {
+      api_key: data.api_key,
+      merchant_id: data.merchant_id,
+      environment: data.environment as 'sandbox' | 'production'
+    };
+  } catch (error) {
+    console.error('Error in getActiveSumUpGateway:', error);
+    return null;
+  }
+};

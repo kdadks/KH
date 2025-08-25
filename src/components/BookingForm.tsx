@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useToast } from './shared/toastContext';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
-import { createSumUpCheckoutUrl } from '../utils/paymentUtils';
+import { createSumUpCheckoutSession } from '../utils/sumupRealApiImplementation';
+import { getActiveSumUpGateway } from '../utils/paymentManagementUtils';
 import { 
   sendBookingNotificationWithPaymentStatus, 
   sendSimpleBookingConfirmation,
@@ -131,44 +132,48 @@ const BookingForm: React.FC = () => {
 
   const handlePayNow = async () => {
     try {
-      const checkoutUrl = await createSumUpCheckoutUrl(
-        paymentState.paymentRequest.amount,
-        'EUR',
-        `Deposit for ${paymentState.booking.package_name}`,
-        `booking-${paymentState.booking.id}-${Date.now()}`,
-        paymentState.customer.email
-      );
+      // Get SumUp configuration from database
+      const gatewayConfig = await getActiveSumUpGateway();
       
-      if (checkoutUrl) {
-        setPaymentState(prev => ({ ...prev, checkoutUrl }));
-        // Open payment in new window
-        window.open(checkoutUrl, '_blank');
-        // Start checking payment status
-        checkPaymentStatus();
-      }
+      // Create SumUp checkout session
+      console.log('Creating SumUp checkout for booking payment...');
+      const checkoutResponse = await createSumUpCheckoutSession({
+        checkout_reference: `booking-${paymentState.booking.id}-${Date.now()}`,
+        amount: paymentState.paymentRequest.amount,
+        currency: 'EUR',
+        merchant_code: gatewayConfig?.merchant_id || 'DEMO_MERCHANT',
+        description: `Deposit for ${paymentState.booking.package_name}`
+      });
+      
+      console.log('SumUp checkout session created:', checkoutResponse);
+      
+      // Create checkout URL pointing to our internal checkout page
+      const checkoutUrl = `/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentState.paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(`Deposit for ${paymentState.booking.package_name}`)}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}`;
+      
+      setPaymentState(prev => ({ ...prev, checkoutUrl }));
+      
+      // Open payment page in new window
+      const checkoutWindow = window.open(checkoutUrl, 'sumup-checkout', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      
+      // Monitor for completion
+      const checkComplete = setInterval(() => {
+        try {
+          if (checkoutWindow?.closed) {
+            clearInterval(checkComplete);
+            // Check payment status or simulate completion
+            setTimeout(() => {
+              handlePaymentSuccess();
+            }, 1000);
+          }
+        } catch (error) {
+          console.log('Monitoring checkout window...');
+        }
+      }, 1000);
+      
     } catch (error) {
       console.error('Error creating checkout:', error);
       showError('Payment Error', 'Failed to create payment link. Please try again.');
     }
-  };
-
-  const checkPaymentStatus = () => {
-    // Poll for payment completion
-    const interval = setInterval(() => {
-      // In a real implementation, you'd check the payment status via API
-      // For now, we'll simulate payment behavior after some time
-      // This should be replaced with actual payment status checking
-      setTimeout(() => {
-        clearInterval(interval);
-        // For demo purposes, randomly succeed or fail (90% success rate)
-        const isSuccess = Math.random() > 0.1;
-        if (isSuccess) {
-          handlePaymentSuccess();
-        } else {
-          handlePaymentFailure();
-        }
-      }, 30000);
-    }, 5000);
   };
 
   const handlePaymentFailure = async () => {

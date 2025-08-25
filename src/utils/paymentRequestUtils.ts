@@ -10,6 +10,7 @@ import {
 import { sendPaymentRequestEmail, sendPaymentConfirmationEmail } from './emailUtils';
 import { PAYMENT_CONFIG } from '../config/paymentConfig';
 import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { getActiveSumUpGateway } from './paymentManagementUtils';
 import { 
   fetchServicePricing, 
   getServicePrice, 
@@ -511,6 +512,43 @@ export async function sendPaymentRequestNotification(
       throw new Error('Payment request not found');
     }
 
+    // Generate SumUp checkout URL for direct payment (try real API first)
+    let directPaymentUrl = '';
+    let baseUrl = '';
+    
+    // Handle URL generation - check if we're in browser context
+    try {
+      baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khtherapy.ie';
+    } catch (error) {
+      baseUrl = 'https://khtherapy.ie'; // Fallback for server-side rendering
+    }
+    
+    try {
+      const { createSumUpCheckoutSession } = await import('./sumupRealApiImplementation');
+      
+      // Get SumUp configuration from database
+      const gatewayConfig = await getActiveSumUpGateway();
+      
+      console.log('Creating real SumUp checkout for payment request email...');
+      const checkoutResponse = await createSumUpCheckoutSession({
+        checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
+        amount: paymentRequest.amount,
+        currency: 'EUR',
+        merchant_code: gatewayConfig?.merchant_id || 'DEMO_MERCHANT',
+        description: paymentRequest.service_name || 'Payment Request'
+      });
+      
+      // Create direct checkout URL
+      directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}`;
+      
+      console.log('✅ Real SumUp checkout URL created for payment request email');
+      
+    } catch (realApiError) {
+      console.log('Real SumUp API failed for email, using fallback payment page URL:', realApiError);
+      // Fallback to the existing payment page URL
+      directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
+    }
+
     // Send email notification
     const emailResult = await sendPaymentRequestEmail(
       paymentRequest.customer.email,
@@ -523,7 +561,7 @@ export async function sendPaymentRequestNotification(
           month: '2-digit', 
           year: 'numeric' 
         }),
-        payment_url: `${window.location.origin}/payment?request=${paymentRequestId}`,
+        payment_url: directPaymentUrl,
         // Only show invoice number if this is actually an invoice payment request
         // For 20% deposit requests, there's no invoice yet, so no invoice number should be shown
         invoice_number: paymentRequest.service_name?.includes('Invoice ') 
@@ -542,6 +580,8 @@ export async function sendPaymentRequestNotification(
           updated_at: new Date().toISOString()
         })
         .eq('id', paymentRequestId);
+      
+      console.log('📧 Payment request email sent with direct SumUp URL:', directPaymentUrl);
     }
 
     return emailResult;
