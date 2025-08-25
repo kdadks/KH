@@ -12,7 +12,7 @@ const HomePage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="KH THERAPY- Professional Physiotherapy & Rehabilitation Services"
+        title="KH THERAPY- Physiotherapy & Rehabilitation Services"
         description="Professional physiotherapy services with personalized care plans designed to help you move better, feel better, and live better."
         canonicalUrl="/"
       />
