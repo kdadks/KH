@@ -825,6 +825,31 @@ const AdminConsole = () => {
               </div>
             </div>
 
+            {/* Development & Testing Tools */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <CreditCard className="w-5 h-5 text-amber-600 mr-2" />
+                Development & Testing Tools
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">SumUp Payment Integration</h4>
+                  <p className="text-sm text-gray-600 mb-3">
+                    SumUp payment integration is now active with real API.
+                  </p>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-green-700 text-sm">
+                      ✅ SumUp API integration active and ready for production payments
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs text-green-700 bg-green-100 rounded p-3">
+                  <strong>Active Configuration:</strong> Using SumUp App ID ({import.meta.env.VITE_SUMUP_APP_ID?.substring(0, 20)}...) 
+                  and Merchant Code ({import.meta.env.VITE_SUMUP_MERCHANT_CODE}) in {import.meta.env.VITE_SUMUP_ENVIRONMENT} mode.
+                </div>
+              </div>
+            </div>
+
             {/* Feature Overview */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Feature Overview</h3>

@@ -19,6 +19,9 @@ import ErgonomicPage from './pages/services/ErgonomicPage';
 import UserPortal from './components/UserPortal';
 import ResetPassword from './components/user/ResetPassword';
 import PaymentPage from './pages/PaymentPage';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
+import PaymentCancelledPage from './pages/PaymentCancelledPage';
+import SumUpCheckoutPage from './pages/SumUpCheckoutPage';
 import { ToastProvider } from './components/shared/toastContext';
 import { UserAuthProvider } from './contexts/UserAuthContext';
 
@@ -50,6 +53,11 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           {/* Payment page route outside the main layout */}
           <Route path="/payment" element={<PaymentPage />} />
+          {/* Payment result pages */}
+          <Route path="/payment-success" element={<PaymentSuccessPage />} />
+          <Route path="/payment-cancelled" element={<PaymentCancelledPage />} />
+          {/* SumUp checkout page */}
+          <Route path="/sumup-checkout" element={<SumUpCheckoutPage />} />
         </Routes>
       </UserAuthProvider>
     </ToastProvider>
