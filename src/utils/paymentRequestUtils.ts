@@ -94,7 +94,6 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   // Check if service matches any skip pattern
   for (const pattern of skipPatterns) {
     if (pattern.test(serviceName)) {
-      console.log('⏭️ Skipping payment request - service requires quote or is per-session:', serviceName);
       return null;
     }
   }
@@ -105,11 +104,9 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   
   if (priceMatch) {
     const price = parseInt(priceMatch[1]);
-    console.log('✅ Found fixed package price:', price, 'for service:', serviceName);
     return price;
   }
   
-  console.log('⏭️ No fixed package price found for service:', serviceName);
   return null;
 }
 
@@ -126,53 +123,28 @@ export async function createPaymentRequest(
   customAmount?: number // New parameter for custom amounts (used for invoice payments)
 ): Promise<PaymentRequest | null> {
   try {
-    console.log('🎯 Creating payment request:', {
-      customerId,
-      serviceName,
-      bookingDate,
-      invoiceId,
-      bookingId,
-      isInvoicePaymentRequest,
-      customAmount
-    });
-
     let finalAmount: number;
 
     if (isInvoicePaymentRequest && customAmount !== undefined) {
       // For invoice payment requests, use the custom amount (no deposit calculation)
       finalAmount = customAmount;
-      console.log('💳 Invoice payment request - using full remaining amount:', finalAmount);
     } else {
       // For booking payment requests, calculate 20% deposit
       // First, try to get pricing from database
-      console.log('📊 Attempting database pricing lookup for booking deposit...');
       let baseCost: number | null = await getServicePriceFromDatabase(serviceName);
       
       // If database lookup fails, fall back to regex extraction (for backward compatibility)
       if (baseCost === null) {
-        console.warn('Database lookup failed, falling back to regex extraction');
         baseCost = extractPriceFromServiceName(serviceName);
-        if (baseCost) {
-          console.log('✅ Regex extraction successful:', baseCost);
-        }
-      } else {
-        console.log('✅ Database pricing lookup successful:', baseCost);
       }
       
       // If pricing cannot be determined or service requires quote, don't create payment request
       if (baseCost === null) {
-        console.log('⏭️ No payment request created - service requires quote or is per-session pricing:', serviceName);
         return null; // Return null to indicate no payment request should be created
       }
       
       // Calculate deposit using configurable percentage (20%)
       finalAmount = Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
-      console.log('💰 Booking deposit calculation:', {
-        serviceName,
-        base_cost: baseCost,
-        deposit_percentage: PAYMENT_CONFIG.DEPOSIT_PERCENTAGE,
-        calculated_deposit: finalAmount
-      });
     }
     
     // Set payment due date (7 days from now)
@@ -192,8 +164,6 @@ export async function createPaymentRequest(
         : `${PAYMENT_CONFIG.DEPOSIT_PERCENTAGE * 100}% deposit for ${serviceName} appointment on ${new Date(bookingDate).toLocaleDateString()}`
     };
 
-    console.log('📝 Inserting payment request data:', requestData);
-
     const { data, error } = await supabase
       .from('payment_requests')
       .insert([requestData])
@@ -211,7 +181,6 @@ export async function createPaymentRequest(
       throw new Error(`Failed to create payment request: ${error.message}`);
     }
 
-    console.log('✅ Payment request created successfully:', data);
     return data as PaymentRequest;
   } catch (error) {
     console.error('Error creating payment request:', error);
@@ -534,7 +503,6 @@ export async function sendPaymentRequestNotification(
         return { success: false, error: 'Payment gateway not configured' };
       }
       
-      console.log('Creating real SumUp checkout for payment request email...');
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
         amount: paymentRequest.amount,
@@ -546,10 +514,7 @@ export async function sendPaymentRequestNotification(
       // Create direct checkout URL with email context for proper redirect behavior
       directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
       
-      console.log('✅ Real SumUp checkout URL created for payment request email with email context');
-      
     } catch (realApiError) {
-      console.log('Real SumUp API failed for email, using fallback payment page URL:', realApiError);
       // Fallback to the existing payment page URL
       directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
     }
@@ -585,8 +550,6 @@ export async function sendPaymentRequestNotification(
           updated_at: new Date().toISOString()
         })
         .eq('id', paymentRequestId);
-      
-      console.log('📧 Payment request email sent with direct SumUp URL:', directPaymentUrl);
     }
 
     return emailResult;

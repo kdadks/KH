@@ -281,8 +281,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
         created_at: new Date().toISOString()
       };
 
-      console.log('Attempting to create booking with data:', bookingData);
-
       // Insert the booking
       const { data, error } = await supabase
         .from('bookings')
@@ -301,8 +299,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
         return;
       }
 
-      console.log('Booking created successfully:', data);
-      
       // Check if this is a service that doesn't need payment (Contact for Quote, per-session pricing, etc.)
       const needsQuoteOrPerSession = /contact\s+for\s+quote|€\d+\s*\/\s*(class|session)|€\d+\s*per\s*(class|session)/i.test(formData.service);
       let paymentRequestCreated = false;
@@ -310,12 +306,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
       // Only create payment request for services that have fixed pricing
       if (!needsQuoteOrPerSession) {
         try {
-          console.log('🔍 DEBUG: Creating payment request for booking:', data.id);
-          console.log('🔍 DEBUG: Service name being passed:', formData.service);
-          console.log('🔍 DEBUG: Service name type:', typeof formData.service);
-          console.log('🔍 DEBUG: Service name length:', formData.service.length);
-          console.log('🔍 DEBUG: needsQuoteOrPerSession result:', needsQuoteOrPerSession);
-          
           const paymentRequest = await createPaymentRequest(
             customer.id,
             formData.service, // This contains the full service name with pricing
@@ -324,31 +314,22 @@ const BookingModal: React.FC<BookingModalProps> = ({
             data.id // bookingId - add the booking ID to link payment request to booking
           );
           
-          console.log('🔍 DEBUG: Payment request result:', paymentRequest);
-          
           if (paymentRequest && paymentRequest.amount > 0) {
-            console.log('Payment request created successfully with amount > 0:', paymentRequest);
             paymentRequestCreated = true;
             
             // Send payment request email notification
             try {
-              console.log('📧 Sending payment request email notification...');
               const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
               const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
               
-              if (emailSuccess) {
-                console.log('✅ Payment request email sent successfully');
-              } else {
+              if (!emailSuccess) {
                 console.error('❌ Failed to send payment request email:', emailError);
               }
             } catch (emailError) {
               console.error('❌ Payment request email failed:', emailError);
             }
           } else if (paymentRequest && paymentRequest.amount === 0) {
-            console.log('Payment request created with 0 amount - treating as no payment needed:', paymentRequest);
             paymentRequestCreated = false; // Treat 0-amount as no payment needed
-          } else {
-            console.log('No payment request created - service may not require upfront payment');
           }
         } catch (paymentError) {
           console.error('Error creating payment request:', paymentError);
@@ -361,7 +342,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
       try {
         if (paymentRequestCreated) {
           // Send booking confirmation with payment status for services requiring payment
-          console.log('Sending booking confirmation email with payment requirement for:', data.id);
           const { sendBookingNotificationWithPaymentStatus } = await import('../../utils/emailUtils');
           
           const emailResult = await sendBookingNotificationWithPaymentStatus(
@@ -382,14 +362,11 @@ const BookingModal: React.FC<BookingModalProps> = ({
             }
           );
           
-          if (emailResult) {
-            console.log('Booking confirmation email with payment status sent successfully');
-          } else {
+          if (!emailResult) {
             console.error('Failed to send booking confirmation email with payment status');
           }
         } else {
           // Send simple booking confirmation for services without payment requirements
-          console.log('Sending simple booking confirmation email for:', data.id);
           const { sendSimpleBookingConfirmation } = await import('../../utils/emailUtils');
           
           const emailResult = await sendSimpleBookingConfirmation(
@@ -408,9 +385,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
             }
           );
           
-          if (emailResult) {
-            console.log('Simple booking confirmation email sent successfully');
-          } else {
+          if (!emailResult) {
             console.error('Failed to send simple booking confirmation email');
           }
         }
