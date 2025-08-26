@@ -615,7 +615,7 @@ const HeroSection: React.FC = () => {
               }}
               paymentRequest={selectedPaymentRequest}
               onPaymentComplete={handlePaymentModalComplete}
-              redirectAfterPayment={false} // Stay on home page after payment
+              context="booking" // Booking context - redirect to home
             />
           )}
           

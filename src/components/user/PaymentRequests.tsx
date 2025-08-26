@@ -323,7 +323,7 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
           }}
           paymentRequest={selectedPaymentRequest}
           onPaymentComplete={handlePaymentComplete}
-          redirectAfterPayment={false} // Stay on dashboard after payment
+          context="dashboard" // User dashboard context
         />
       )}
     </div>
