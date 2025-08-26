@@ -855,6 +855,7 @@ const BookingPage: React.FC = () => {
           }}
           paymentRequest={selectedPaymentRequest}
           onPaymentComplete={handlePaymentModalComplete}
+          context="booking" // Booking context - redirect to home
         />
       )}
     </>

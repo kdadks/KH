@@ -300,6 +300,7 @@ const PaymentPage: React.FC = () => {
           onClose={() => setShowPaymentModal(false)}
           paymentRequest={paymentRequest}
           onPaymentComplete={handlePaymentComplete}
+          context="email" // Email payment context - redirect to home
         />
       )}
     </div>

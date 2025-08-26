@@ -176,7 +176,9 @@ interface PaymentModalProps {
   onClose: () => void;
   paymentRequest: PaymentRequestWithCustomer;
   onPaymentComplete?: () => void;
+  onPaymentFailed?: (error: string) => void; // New prop for payment failure callback
   redirectAfterPayment?: string | false; // New prop to control redirect behavior
+  context?: 'email' | 'dashboard' | 'admin' | 'booking'; // Context to determine redirect behavior
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
@@ -184,12 +186,34 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   onClose,
   paymentRequest,
   onPaymentComplete,
-  redirectAfterPayment = '/' // Default to home page for backward compatibility
+  onPaymentFailed,
+  redirectAfterPayment,
+  context = 'booking' // Default context
 }) => {
   const { showSuccess, showError, showInfo } = useToast();
   const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error'>('confirm');
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  const getRedirectUrl = (isSuccess: boolean = true): string | null => {
+    // If redirectAfterPayment is explicitly set, use it
+    if (redirectAfterPayment !== undefined) {
+      return redirectAfterPayment !== false ? redirectAfterPayment : null;
+    }
+    
+    // Use context-based redirect logic
+    switch (context) {
+      case 'email':
+        return '/'; // Email payments redirect to home
+      case 'dashboard':
+        return isSuccess ? '/dashboard' : null; // Dashboard - stay on dashboard for success, no redirect for error
+      case 'admin':
+        return isSuccess ? '/admin' : '/admin'; // Admin context - redirect back to admin section
+      case 'booking':
+      default:
+        return '/'; // Booking payments redirect to home
+    }
+  };
 
   // Reset modal state when opened
   useEffect(() => {
@@ -243,6 +267,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       
       // Send payment failed notification
       handlePaymentFailure(`Payment initialization failed: ${errorMessage}`);
+      // Notify parent component about payment failure
+      onPaymentFailed?.(`Payment initialization failed: ${errorMessage}`);
       
       showError('Payment Error', 'Failed to initialize payment. Please try again.');
     }
@@ -274,9 +300,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         setTimeout(() => {
           onPaymentComplete?.();
           onClose();
-          // Handle redirect based on redirectAfterPayment prop
-          if (redirectAfterPayment !== false) {
-            window.location.href = redirectAfterPayment;
+          
+          // Get redirect URL for successful payment
+          const redirectUrl = getRedirectUrl(true);
+          
+          // Perform redirect if needed
+          if (redirectUrl) {
+            window.location.href = redirectUrl;
           }
         }, 2000);
       } else {
@@ -285,6 +315,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         showError('Payment Processing Error', result.error || 'Failed to process payment');
         // Send payment failed notification
         handlePaymentFailure(result.error || 'Payment processing failed');
+        // Notify parent component about payment failure
+        onPaymentFailed?.(result.error || 'Payment processing failed');
       }
     } catch (error) {
       console.error('Error completing payment:', error);
@@ -293,6 +325,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       showError('Payment Error', 'Failed to complete payment processing');
       // Send payment failed notification
       handlePaymentFailure('Failed to complete payment processing');
+      // Notify parent component about payment failure
+      onPaymentFailed?.('Failed to complete payment processing');
     }
   };
 
