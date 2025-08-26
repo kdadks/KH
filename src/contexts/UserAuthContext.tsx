@@ -214,7 +214,8 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     const startTime = Date.now();
     
     try {
-      setLoading(true);
+      console.log('UserAuthContext: Login attempt for:', email);
+      // Don't set global loading state - let the UserLogin component handle its own loading state
 
       // Add timeout to prevent hanging in production
       const timeoutPromise = new Promise<never>((_, reject) => 
@@ -222,6 +223,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       );
 
       const loginPromise = (async () => {
+        console.log('UserAuthContext: Looking up customer by email...');
         // Optimized customer query using utility function
         const { customer, error: customerError } = await withTimeout(
           getCustomerByEmail(email.toLowerCase()),
@@ -230,17 +232,24 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         );
 
         if (customerError || !customer) {
+          console.log('UserAuthContext: Customer not found or error:', customerError);
           return { success: false, error: 'Invalid credentials' };
         }
+
+        console.log('UserAuthContext: Customer found:', customer.email);
 
         // Verify password using bcrypt
         let isValidPassword = false;
         
+        console.log('UserAuthContext: Checking password validity...');
+        
         // Check if password is already hashed
         if (customer.password && isPasswordHashed(customer.password)) {
+          console.log('UserAuthContext: Password is hashed, verifying...');
           // Verify against hashed password
           isValidPassword = await verifyPassword(password, customer.password);
         } else if (customer.password) {
+          console.log('UserAuthContext: Password is plain text, comparing...');
           // Handle legacy plain text passwords (for backwards compatibility during transition)
           // Check if plain text password matches
           isValidPassword = customer.password === password;
@@ -263,7 +272,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
           }
         }
 
+      console.log('UserAuthContext: Password valid:', isValidPassword);
+
       if (!isValidPassword) {
+        console.log('UserAuthContext: Invalid password, returning error');
         return { success: false, error: 'Invalid credentials' };
       }
 
@@ -319,14 +331,17 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       })();
 
       // Race between login and timeout
-      return await Promise.race([loginPromise, timeoutPromise]);
+      const result = await Promise.race([loginPromise, timeoutPromise]);
+      console.log('UserAuthContext: Final login result:', result);
+      return result;
 
     } catch (error) {
       console.error('Exception in login:', error);
       return { success: false, error: 'Unexpected error occurred during login' };
     } finally {
+      // No need to clear loading state since we're not setting it
+      console.log('UserAuthContext: Login attempt completed');
       logPerformance('User Login', startTime);
-      setLoading(false);
     }
   }, []);
 
