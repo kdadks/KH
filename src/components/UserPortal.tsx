@@ -23,7 +23,7 @@ import {
 
 const UserPortal: React.FC = () => {
   const { user, authUser, loading: authLoading, logout } = useUserAuth();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showInfo } = useToast();
   const [activeTab, setActiveTab] = useState<UserPortalTab>('dashboard');
   const [dashboardData, setDashboardData] = useState<UserDashboardData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,12 +75,26 @@ const UserPortal: React.FC = () => {
       loadDashboardData();
     };
 
+    const handleNavigateToDashboardForPayment = () => {
+      console.log('UserPortal: Received navigateToDashboardForPayment event, switching to dashboard...');
+      // Add a brief delay to allow the booking modal to close properly
+      setTimeout(() => {
+        setActiveTab('dashboard');
+        // Also refresh dashboard data to show the new payment request
+        loadDashboardData();
+        // Show a toast notification about the payment
+        showInfo('Payment Required', 'Please complete your 20% deposit payment to confirm your booking.');
+      }, 500);
+    };
+
     window.addEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
     window.addEventListener('refreshDashboard', handleRefreshDashboard as EventListener);
+    window.addEventListener('navigateToDashboardForPayment', handleNavigateToDashboardForPayment as EventListener);
     
     return () => {
       window.removeEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
       window.removeEventListener('refreshDashboard', handleRefreshDashboard as EventListener);
+      window.removeEventListener('navigateToDashboardForPayment', handleNavigateToDashboardForPayment as EventListener);
     };
   }, [loadDashboardData]);
 
