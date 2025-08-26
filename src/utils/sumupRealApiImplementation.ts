@@ -23,6 +23,7 @@ export interface SumUpCreateCheckoutResponse {
   id: string; // UUID for the checkout session
   status: 'PENDING' | 'PAID' | 'FAILED';
   date: string; // ISO date
+  checkout_url?: string; // URL for the checkout page (development mode)
   transactions: any[];
 }
 
@@ -86,6 +87,31 @@ export const createSumUpCheckoutSession = async (
       throw new Error('SumUp gateway configuration not found. Please configure payment gateway in admin panel.');
     }
 
+    // Development mode - return mock response
+    if (gatewayConfig.api_key === 'development-mode') {
+      console.warn('🚧 Development Mode: Creating mock SumUp checkout session');
+      
+      const mockResponse: SumUpCreateCheckoutResponse = {
+        checkout_reference: checkoutData.checkout_reference,
+        amount: checkoutData.amount,
+        currency: checkoutData.currency,
+        merchant_code: gatewayConfig.merchant_id,
+        description: checkoutData.description,
+        id: `dev-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        status: 'PENDING',
+        date: new Date().toISOString(),
+        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${gatewayConfig.merchant_id}&checkout_id=dev-mock-${Date.now()}`,
+        transactions: []
+      };
+
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('🚧 Development Mode: Mock checkout session created:', mockResponse);
+      return mockResponse;
+    }
+
+    // Production mode - use real SumUp API
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
       method: 'POST',
       headers: {
@@ -137,6 +163,32 @@ export const processSumUpPayment = async (
       throw new Error('SumUp gateway configuration not found. Please configure payment gateway in admin panel.');
     }
 
+    // Development mode - return mock response
+    if (gatewayConfig.api_key === 'development-mode') {
+      console.warn('🚧 Development Mode: Processing mock SumUp payment');
+      
+      const mockResponse: SumUpProcessPaymentResponse = {
+        id: checkoutId,
+        checkout_reference: `dev-payment-${Date.now()}`,
+        amount: 0, // Will be updated based on checkout
+        currency: 'EUR',
+        status: 'PAID',
+        date: new Date().toISOString(),
+        merchant_code: gatewayConfig.merchant_id,
+        description: 'Development mode payment',
+        transaction_id: `dev-txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        transaction_code: `DEV${Date.now()}`,
+        transactions: []
+      };
+
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('🚧 Development Mode: Mock payment processed:', mockResponse);
+      return mockResponse;
+    }
+
+    // Production mode - use real SumUp API
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts/${checkoutId}`, {
       method: 'PUT',
       headers: {
@@ -179,6 +231,30 @@ export const getSumUpCheckoutStatus = async (checkoutId: string): Promise<SumUpC
       throw new Error('SumUp gateway configuration not found. Please configure payment gateway in admin panel.');
     }
 
+    // Development mode - return mock response
+    if (gatewayConfig.api_key === 'development-mode') {
+      console.warn('🚧 Development Mode: Getting mock SumUp checkout status');
+      
+      const mockResponse: SumUpCreateCheckoutResponse = {
+        checkout_reference: `dev-status-${Date.now()}`,
+        amount: 0,
+        currency: 'EUR',
+        merchant_code: gatewayConfig.merchant_id,
+        description: 'Development mode checkout status',
+        id: checkoutId,
+        status: 'PENDING',
+        date: new Date().toISOString(),
+        transactions: []
+      };
+
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log('🚧 Development Mode: Mock checkout status:', mockResponse);
+      return mockResponse;
+    }
+
+    // Production mode - use real SumUp API
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts/${checkoutId}`, {
       headers: {
         'Authorization': `Bearer ${gatewayConfig.api_key}`,
