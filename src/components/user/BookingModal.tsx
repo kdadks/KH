@@ -334,10 +334,39 @@ const BookingModal: React.FC<BookingModalProps> = ({
         }
       }
       
-      // Send confirmation email for bookings without payment (like "Contact for Quote" services)
-      if (!paymentRequestCreated) {
-        try {
-          console.log('Sending booking confirmation email without payment for:', data.id);
+      // Send appropriate confirmation email based on payment requirement
+      try {
+        if (paymentRequestCreated) {
+          // Send booking confirmation with payment status for services requiring payment
+          console.log('Sending booking confirmation email with payment requirement for:', data.id);
+          const { sendBookingNotificationWithPaymentStatus } = await import('../../utils/emailUtils');
+          
+          const emailResult = await sendBookingNotificationWithPaymentStatus(
+            customer.email,
+            {
+              customer_name: `${customer.first_name} ${customer.last_name}`,
+              customer_email: customer.email,
+              service_name: formData.service,
+              appointment_date: new Date(bookingData.booking_date).toLocaleDateString('en-IE'),
+              appointment_time: formData.time.split('|')[0], // Get just the time range part
+              booking_reference: data.id.toString(),
+              payment_status: 'pending',
+              payment_amount: undefined, // Will be set by the email template based on service
+              next_steps: 'Please complete the 20% deposit payment to confirm your booking. You can pay through your dashboard or click the payment link in your payment request email.',
+              therapist_name: 'KH Therapy Team',
+              clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+              special_instructions: formData.notes || undefined
+            }
+          );
+          
+          if (emailResult) {
+            console.log('Booking confirmation email with payment status sent successfully');
+          } else {
+            console.error('Failed to send booking confirmation email with payment status');
+          }
+        } else {
+          // Send simple booking confirmation for services without payment requirements
+          console.log('Sending simple booking confirmation email for:', data.id);
           const { sendSimpleBookingConfirmation } = await import('../../utils/emailUtils');
           
           const emailResult = await sendSimpleBookingConfirmation(
@@ -357,21 +386,27 @@ const BookingModal: React.FC<BookingModalProps> = ({
           );
           
           if (emailResult) {
-            console.log('Booking confirmation email sent successfully');
+            console.log('Simple booking confirmation email sent successfully');
           } else {
-            console.error('Failed to send booking confirmation email');
+            console.error('Failed to send simple booking confirmation email');
           }
-        } catch (emailError) {
-          console.error('Error sending booking confirmation email:', emailError);
-          // Don't fail the booking, just log the error
         }
+      } catch (emailError) {
+        console.error('Error sending booking confirmation email:', emailError);
+        // Don't fail the booking, just log the error
       }
       
       // Show appropriate success message based on service type
       if (needsQuoteOrPerSession) {
         showSuccess('Booking Request Submitted!', 'Your booking request has been submitted successfully. We will contact you shortly to discuss pricing and confirm your appointment.');
       } else {
-        showSuccess('Booking Created!', 'Your booking request has been submitted successfully. You will receive a confirmation email once it\'s reviewed.');
+        if (paymentRequestCreated) {
+          showSuccess('Booking Created!', 'Your booking has been created successfully. Please complete the 20% deposit payment to confirm your appointment.');
+          // Dispatch event to navigate to dashboard for payment
+          window.dispatchEvent(new CustomEvent('navigateToDashboardForPayment'));
+        } else {
+          showSuccess('Booking Created!', 'Your booking request has been submitted successfully. You will receive a confirmation email once it\'s reviewed.');
+        }
       }
       
       // Reset form
