@@ -16,6 +16,7 @@ const SumUpCheckoutPage: React.FC = () => {
   const cancelUrl = searchParams.get('cancel_url') || '';
   const checkoutId = searchParams.get('checkout_id') || '';
   const paymentRequestId = searchParams.get('payment_request_id') || ''; // Extract payment request ID
+  const context = searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
 
   // Card form state
   const [cardNumber, setCardNumber] = useState('');
@@ -102,8 +103,25 @@ const SumUpCheckoutPage: React.FC = () => {
           }
         }
 
-        // Redirect to success page
-        const successUrl = returnUrl || '/payment-success';
+        // Redirect to success page with context-aware behavior
+        const getContextBasedRedirect = (context: string, baseUrl: string): string => {
+          switch (context) {
+            case 'email':
+              return `${baseUrl}/`; // Email payments → Home page
+            case 'dashboard':
+              return `${baseUrl}/my-account`; // Dashboard payments → User portal
+            case 'admin':
+              return `${baseUrl}/admin`; // Admin payments → Admin section
+            case 'booking':
+            default:
+              return `${baseUrl}/payment-success`; // Booking payments → Success page
+          }
+        };
+        
+        const contextRedirectUrl = getContextBasedRedirect(context, window.location.origin);
+        const successUrl = returnUrl || contextRedirectUrl;
+        
+        console.log('🔄 Context-based redirect:', { context, redirectUrl: successUrl });
         
         if (returnUrl) {
           const successParams = new URLSearchParams({
@@ -120,15 +138,23 @@ const SumUpCheckoutPage: React.FC = () => {
           
           window.location.href = `${successUrl}?${successParams.toString()}`;
         } else {
-          navigate('/payment-success', {
-            state: {
-              transaction_id: transactionId,
-              checkout_reference: checkoutReference,
-              amount: amount,
-              currency: currency,
-              payment_request_id: paymentRequestId
-            }
-          });
+          // For email context, redirect to home with success message
+          if (context === 'email') {
+            window.location.href = `/?payment_success=true&amount=${amount}&currency=${currency}`;
+          } else if (context === 'dashboard') {
+            window.location.href = `/my-account?payment_success=true&amount=${amount}&currency=${currency}`;
+          } else {
+            // Default to payment success page
+            navigate('/payment-success', {
+              state: {
+                transaction_id: transactionId,
+                checkout_reference: checkoutReference,
+                amount: amount,
+                currency: currency,
+                payment_request_id: paymentRequestId
+              }
+            });
+          }
         }
       } else {
         // User cancelled or simulation failure
