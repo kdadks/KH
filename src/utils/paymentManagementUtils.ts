@@ -836,8 +836,21 @@ export const getActiveSumUpGateway = async (): Promise<{
         return null;
       }
       
-      if (envApiKey.includes('your-real-sumup') || envApiKey.length < 10) {
-        console.error('❌ Invalid SumUp API key detected - appears to be placeholder');
+      if (envApiKey.includes('your-real-sumup') || envApiKey.includes('dev-mode-placeholder') || envApiKey === 'development-mode') {
+        console.warn('⚠️ Using development mode - placeholder API key detected');
+        console.warn('🔑 For production, replace with real API key from SumUp developer portal');
+        console.warn('🔗 Get your API key from: https://developer.sumup.com');
+        
+        // Return config for development mode
+        return {
+          api_key: 'development-mode',
+          merchant_id: envMerchantId,
+          environment: envEnvironment as 'sandbox' | 'production'
+        };
+      }
+      
+      if (envApiKey.length < 10) {
+        console.error('❌ Invalid SumUp API key detected - too short');
         console.error('🔑 Please replace with real API key from SumUp developer portal');
         console.error('🔗 Get your API key from: https://developer.sumup.com');
         return null;
