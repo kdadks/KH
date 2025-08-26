@@ -310,7 +310,12 @@ const BookingModal: React.FC<BookingModalProps> = ({
       // Only create payment request for services that have fixed pricing
       if (!needsQuoteOrPerSession) {
         try {
-          console.log('Creating payment request for booking:', data.id);
+          console.log('🔍 DEBUG: Creating payment request for booking:', data.id);
+          console.log('🔍 DEBUG: Service name being passed:', formData.service);
+          console.log('🔍 DEBUG: Service name type:', typeof formData.service);
+          console.log('🔍 DEBUG: Service name length:', formData.service.length);
+          console.log('🔍 DEBUG: needsQuoteOrPerSession result:', needsQuoteOrPerSession);
+          
           const paymentRequest = await createPaymentRequest(
             customer.id,
             formData.service, // This contains the full service name with pricing
@@ -318,9 +323,27 @@ const BookingModal: React.FC<BookingModalProps> = ({
             null, // invoiceId
             data.id // bookingId - add the booking ID to link payment request to booking
           );
+          
+          console.log('🔍 DEBUG: Payment request result:', paymentRequest);
+          
           if (paymentRequest && paymentRequest.amount > 0) {
             console.log('Payment request created successfully with amount > 0:', paymentRequest);
             paymentRequestCreated = true;
+            
+            // Send payment request email notification
+            try {
+              console.log('📧 Sending payment request email notification...');
+              const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
+              const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
+              
+              if (emailSuccess) {
+                console.log('✅ Payment request email sent successfully');
+              } else {
+                console.error('❌ Failed to send payment request email:', emailError);
+              }
+            } catch (emailError) {
+              console.error('❌ Payment request email failed:', emailError);
+            }
           } else if (paymentRequest && paymentRequest.amount === 0) {
             console.log('Payment request created with 0 amount - treating as no payment needed:', paymentRequest);
             paymentRequestCreated = false; // Treat 0-amount as no payment needed
