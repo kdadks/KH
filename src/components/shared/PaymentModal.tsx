@@ -21,10 +21,10 @@ const SumUpPaymentForm: React.FC<SumUpPaymentFormProps> = ({
   onPaymentComplete,
   onPaymentError
 }) => {
-  const [cardNumber, setCardNumber] = useState('4000 0000 0000 0002');
-  const [expiry, setExpiry] = useState('12/25');
-  const [cvc, setCvc] = useState('123');
-  const [cardName, setCardName] = useState('Test Customer');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvc, setCvc] = useState('');
+  const [cardName, setCardName] = useState('');
   const [processing, setProcessing] = useState(false);
 
   const formatCurrency = (amount: number, currency: string = 'EUR') => {
@@ -109,7 +109,7 @@ const SumUpPaymentForm: React.FC<SumUpPaymentFormProps> = ({
             value={cardNumber}
             onChange={handleCardNumberChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="4000 0000 0000 0002"
+            placeholder="1234 5678 9012 3456"
             maxLength={19}
             disabled={processing}
           />
@@ -205,13 +205,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       // Get SumUp configuration from database
       const gatewayConfig = await getActiveSumUpGateway();
       
+      if (!gatewayConfig || !gatewayConfig.merchant_id) {
+        throw new Error('Payment gateway not configured. Please contact support.');
+      }
+      
       // Create SumUp checkout session
       console.log('Creating SumUp checkout session...');
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: `payment-request-${paymentRequest.id}-${Date.now()}`,
         amount: paymentRequest.amount,
         currency: paymentRequest.currency || 'EUR',
-        merchant_code: gatewayConfig?.merchant_id || 'DEMO_MERCHANT',
+        merchant_code: gatewayConfig.merchant_id,
         description: `Payment for ${paymentRequest.service_name || 'Service'}`
       });
       

@@ -821,16 +821,28 @@ export const getActiveSumUpGateway = async (): Promise<{
       .eq('is_active', true)
       .single();
 
-    if (error) {
-      console.error('Error fetching active SumUp gateway:', error);
+    if (error || !data) {
+      console.warn('No active SumUp gateway found in database, falling back to environment variables');
+      
+      // Fallback to environment variables if database config is not available
+      const envApiKey = import.meta.env.VITE_SUMUP_API_KEY;
+      const envMerchantId = import.meta.env.VITE_SUMUP_MERCHANT_CODE;
+      const envEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
+      
+      if (envApiKey && envMerchantId) {
+        console.log('Using SumUp configuration from environment variables');
+        return {
+          api_key: envApiKey,
+          merchant_id: envMerchantId,
+          environment: envEnvironment as 'sandbox' | 'production'
+        };
+      }
+      
+      console.error('No SumUp configuration found in database or environment variables');
       return null;
     }
 
-    if (!data) {
-      console.warn('No active SumUp gateway found in database');
-      return null;
-    }
-
+    console.log('Using SumUp configuration from database');
     return {
       api_key: data.api_key,
       merchant_id: data.merchant_id,
@@ -838,6 +850,21 @@ export const getActiveSumUpGateway = async (): Promise<{
     };
   } catch (error) {
     console.error('Error in getActiveSumUpGateway:', error);
+    
+    // Fallback to environment variables on error
+    const envApiKey = import.meta.env.VITE_SUMUP_API_KEY;
+    const envMerchantId = import.meta.env.VITE_SUMUP_MERCHANT_CODE;
+    const envEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
+    
+    if (envApiKey && envMerchantId) {
+      console.log('Using SumUp configuration from environment variables (fallback)');
+      return {
+        api_key: envApiKey,
+        merchant_id: envMerchantId,
+        environment: envEnvironment as 'sandbox' | 'production'
+      };
+    }
+    
     return null;
   }
 };
