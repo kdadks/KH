@@ -90,7 +90,6 @@ const SumUpCheckoutPage: React.FC = () => {
 
       if (paymentRequest) {
         setPaymentRequestStatus(paymentRequest.status);
-        console.log('Payment request status:', paymentRequest.status);
       }
     } catch (error) {
       console.error('Error checking payment request status:', error);
@@ -105,14 +104,6 @@ const SumUpCheckoutPage: React.FC = () => {
     
     try {
       if (success && checkoutReference) {
-        console.log('Processing payment for checkout:', checkoutReference);
-        console.log('Payment details:', {
-          amount: amount || '10.00',
-          currency: currency || 'EUR',
-          card: cardNumber.substring(0, 4) + '****',
-          paymentRequestId: paymentRequestId || 'none'
-        });
-
         // Simulate successful payment processing
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -121,8 +112,6 @@ const SumUpCheckoutPage: React.FC = () => {
         // If this is for a payment request, process the payment and send confirmation
         if (paymentRequestId) {
           try {
-            console.log('🔄 Processing payment request:', paymentRequestId);
-            
             // Import payment processing utilities
             const { processPaymentRequest } = await import('../utils/paymentRequestUtils');
             
@@ -138,10 +127,7 @@ const SumUpCheckoutPage: React.FC = () => {
               }
             );
             
-            if (paymentResult.success) {
-              console.log('✅ Payment request processed successfully');
-              console.log('📧 Payment confirmation email will be sent automatically');
-            } else {
+            if (!paymentResult.success) {
               console.error('❌ Payment request processing failed:', paymentResult.error);
             }
           } catch (paymentError) {
@@ -167,8 +153,6 @@ const SumUpCheckoutPage: React.FC = () => {
         
         const contextRedirectUrl = getContextBasedRedirect(context, window.location.origin);
         const successUrl = returnUrl || contextRedirectUrl;
-        
-        console.log('🔄 Context-based redirect:', { context, redirectUrl: successUrl });
         
         if (returnUrl) {
           const successParams = new URLSearchParams({
