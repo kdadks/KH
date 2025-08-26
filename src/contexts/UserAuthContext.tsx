@@ -243,23 +243,25 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         } else if (customer.password) {
           // Handle legacy plain text passwords (for backwards compatibility during transition)
           // Check if plain text password matches
-          isValidPassword = customer.password === password;        // If valid, hash the password and update it in the database (do this async, don't wait)
-        if (isValidPassword) {
-          // Don't await this - let it happen in background to improve login speed
-          (async () => {
-            try {
-              const hashedPassword = await hashPassword(password);
-              await supabase
-                .from('customers')
-                .update({ password: hashedPassword })
-                .eq('id', customer.id);
-              console.log('Migrated plain text password to hashed for user:', customer.email);
-            } catch (err) {
-              console.warn('Failed to migrate password:', err);
-            }
-          })();
+          isValidPassword = customer.password === password;
+          
+          // If valid, hash the password and update it in the database (do this async, don't wait)
+          if (isValidPassword) {
+            // Don't await this - let it happen in background to improve login speed
+            (async () => {
+              try {
+                const hashedPassword = await hashPassword(password);
+                await supabase
+                  .from('customers')
+                  .update({ password: hashedPassword })
+                  .eq('id', customer.id);
+                console.log('Migrated plain text password to hashed for user:', customer.email);
+              } catch (err) {
+                console.warn('Failed to migrate password:', err);
+              }
+            })();
+          }
         }
-      }
 
       if (!isValidPassword) {
         return { success: false, error: 'Invalid credentials' };
