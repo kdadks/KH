@@ -44,19 +44,6 @@ const UserPortal: React.FC = () => {
   useEffect(() => {
   }, [user, authUser, authLoading]);
 
-  // Listen for navigation events from child components
-  useEffect(() => {
-    const handleNavigateToInvoices = () => {
-      setActiveTab('invoices');
-    };
-
-    window.addEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
-    
-    return () => {
-      window.removeEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
-    };
-  }, []);
-
   const loadDashboardData = async () => {
     if (!user?.id) return;
 
@@ -76,6 +63,26 @@ const UserPortal: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Listen for navigation events from child components
+  useEffect(() => {
+    const handleNavigateToInvoices = () => {
+      setActiveTab('invoices');
+    };
+
+    const handleRefreshDashboard = () => {
+      console.log('UserPortal: Received refreshDashboard event, refreshing data...');
+      loadDashboardData();
+    };
+
+    window.addEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
+    window.addEventListener('refreshDashboard', handleRefreshDashboard as EventListener);
+    
+    return () => {
+      window.removeEventListener('navigateToInvoices', handleNavigateToInvoices as EventListener);
+      window.removeEventListener('refreshDashboard', handleRefreshDashboard as EventListener);
+    };
+  }, [loadDashboardData]);
 
   const handleLogout = async () => {
     try {

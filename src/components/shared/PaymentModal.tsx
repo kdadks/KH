@@ -301,11 +301,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           onPaymentComplete?.();
           onClose();
           
-          // Get redirect URL for successful payment
+          // For dashboard context, trigger a data refresh event instead of redirect
+          if (context === 'dashboard') {
+            // Dispatch custom event to refresh dashboard data
+            window.dispatchEvent(new CustomEvent('refreshDashboard'));
+            return;
+          }
+          
+          // Get redirect URL for successful payment (non-dashboard contexts)
           const redirectUrl = getRedirectUrl(true);
           
           // Perform redirect if needed
           if (redirectUrl) {
+            // Use window.location.href for email and booking contexts
             window.location.href = redirectUrl;
           }
         }, 2000);
