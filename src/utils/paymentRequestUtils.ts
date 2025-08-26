@@ -529,12 +529,17 @@ export async function sendPaymentRequestNotification(
       // Get SumUp configuration from database
       const gatewayConfig = await getActiveSumUpGateway();
       
+      if (!gatewayConfig || !gatewayConfig.merchant_id) {
+        console.error('Payment gateway not configured for email payment links');
+        return { success: false, error: 'Payment gateway not configured' };
+      }
+      
       console.log('Creating real SumUp checkout for payment request email...');
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
         amount: paymentRequest.amount,
         currency: 'EUR',
-        merchant_code: gatewayConfig?.merchant_id || 'DEMO_MERCHANT',
+        merchant_code: gatewayConfig.merchant_id,
         description: paymentRequest.service_name || 'Payment Request'
       });
       

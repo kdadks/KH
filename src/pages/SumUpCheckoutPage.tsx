@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CreditCard, AlertCircle } from 'lucide-react';
-import { completeSumUpPaymentFlow } from '../utils/sumupRealApiImplementation';
+import { CreditCard } from 'lucide-react';
 
 const SumUpCheckoutPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -19,10 +18,10 @@ const SumUpCheckoutPage: React.FC = () => {
   const paymentRequestId = searchParams.get('payment_request_id') || ''; // Extract payment request ID
 
   // Card form state
-  const [cardNumber, setCardNumber] = useState('4000 0000 0000 0002');
-  const [expiry, setExpiry] = useState('12/25');
-  const [cvc, setCvc] = useState('123');
-  const [cardName, setCardName] = useState('Test Customer');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvc, setCvc] = useState('');
+  const [cardName, setCardName] = useState('');
   const [processing, setProcessing] = useState(false);
 
   // Format amount for display
@@ -224,7 +223,7 @@ const SumUpCheckoutPage: React.FC = () => {
                   value={cardNumber}
                   onChange={handleCardNumberChange}
                   className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="4000 0000 0000 0002"
+                  placeholder="1234 5678 9012 3456"
                   maxLength={19}
                 />
                 <CreditCard className="absolute right-3 top-3 h-5 w-5 text-gray-400" />

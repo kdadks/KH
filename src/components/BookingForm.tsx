@@ -135,13 +135,17 @@ const BookingForm: React.FC = () => {
       // Get SumUp configuration from database
       const gatewayConfig = await getActiveSumUpGateway();
       
+      if (!gatewayConfig || !gatewayConfig.merchant_id) {
+        throw new Error('Payment gateway not configured. Please contact support.');
+      }
+      
       // Create SumUp checkout session
       console.log('Creating SumUp checkout for booking payment...');
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: `booking-${paymentState.booking.id}-${Date.now()}`,
         amount: paymentState.paymentRequest.amount,
         currency: 'EUR',
-        merchant_code: gatewayConfig?.merchant_id || 'DEMO_MERCHANT',
+        merchant_code: gatewayConfig.merchant_id,
         description: `Deposit for ${paymentState.booking.package_name}`
       });
       
