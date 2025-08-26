@@ -543,10 +543,10 @@ export async function sendPaymentRequestNotification(
         description: paymentRequest.service_name || 'Payment Request'
       });
       
-      // Create direct checkout URL
-      directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}`;
+      // Create direct checkout URL with email context for proper redirect behavior
+      directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
       
-      console.log('✅ Real SumUp checkout URL created for payment request email');
+      console.log('✅ Real SumUp checkout URL created for payment request email with email context');
       
     } catch (realApiError) {
       console.log('Real SumUp API failed for email, using fallback payment page URL:', realApiError);
