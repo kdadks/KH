@@ -31,8 +31,8 @@ const SumUpCheckoutPage: React.FC = () => {
   const [statusError, setStatusError] = useState<string | null>(null);
 
   // Format amount for display
-  const formatAmount = (amountCents: string) => {
-    const euros = parseInt(amountCents) / 100;
+  const formatAmount = (amountEuros: string) => {
+    const euros = parseFloat(amountEuros); // Amount is already in euros, not cents
     return new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: currency
