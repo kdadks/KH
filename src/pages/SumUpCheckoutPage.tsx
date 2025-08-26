@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, CheckCircle } from 'lucide-react';
 
 const SumUpCheckoutPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -24,6 +24,11 @@ const SumUpCheckoutPage: React.FC = () => {
   const [cvc, setCvc] = useState('');
   const [cardName, setCardName] = useState('');
   const [processing, setProcessing] = useState(false);
+  
+  // Payment request status checking
+  const [paymentRequestStatus, setPaymentRequestStatus] = useState<string | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   // Format amount for display
   const formatAmount = (amountCents: string) => {
@@ -51,6 +56,48 @@ const SumUpCheckoutPage: React.FC = () => {
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCardNumber(e.target.value);
     setCardNumber(formatted);
+  };
+
+  // Check payment request status on component mount to prevent double payments
+  useEffect(() => {
+    if (paymentRequestId) {
+      checkPaymentRequestStatus();
+    }
+  }, [paymentRequestId]);
+
+  const checkPaymentRequestStatus = async () => {
+    setLoadingStatus(true);
+    setStatusError(null);
+    
+    try {
+      // Import supabase client
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      const { data: paymentRequest, error } = await supabase
+        .from('payment_requests')
+        .select('id, status, service_name, amount, currency')
+        .eq('id', parseInt(paymentRequestId))
+        .single();
+
+      if (error) {
+        console.error('Error fetching payment request:', error);
+        setStatusError('Failed to verify payment status. Please try again.');
+        return;
+      }
+
+      if (paymentRequest) {
+        setPaymentRequestStatus(paymentRequest.status);
+        console.log('Payment request status:', paymentRequest.status);
+      }
+    } catch (error) {
+      console.error('Error checking payment request status:', error);
+      setStatusError('Failed to verify payment status. Please try again.');
+    } finally {
+      setLoadingStatus(false);
+    }
   };
 
   const processPayment = async (success: boolean) => {
@@ -220,127 +267,183 @@ const SumUpCheckoutPage: React.FC = () => {
             <p className="text-gray-600 text-sm">Secure Payment</p>
           </div>
 
-          {/* Test Mode Notice */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
-            <p className="text-yellow-800 text-sm">
-              <strong>TEST MODE:</strong> This is a sandbox payment. No real money will be charged.
-            </p>
-          </div>
-
-          {/* Payment Details */}
-          <div className="text-center mb-6">
-            <div className="text-3xl font-bold text-blue-700 mb-2">
-              {formatAmount(amount)}
+          {/* Loading Status Check */}
+          {paymentRequestId && loadingStatus && (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Verifying payment status...</p>
             </div>
-            <div className="text-gray-600 mb-2">{description}</div>
-            <div className="text-sm text-gray-500">Merchant: {merchantCode}</div>
-          </div>
+          )}
 
-          {/* Payment Form */}
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                Card Number
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="cardNumber"
-                  value={cardNumber}
-                  onChange={handleCardNumberChange}
-                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="1234 5678 9012 3456"
-                  maxLength={19}
-                />
-                <CreditCard className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
-              </div>
-            </div>
-
-            <div className="flex space-x-4">
-              <div className="flex-1">
-                <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 mb-1">
-                  Expiry
-                </label>
-                <input
-                  type="text"
-                  id="expiry"
-                  value={expiry}
-                  onChange={(e) => setExpiry(e.target.value)}
-                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="MM/YY"
-                  maxLength={5}
-                />
-              </div>
-              <div className="flex-1">
-                <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 mb-1">
-                  CVC
-                </label>
-                <input
-                  type="text"
-                  id="cvc"
-                  value={cvc}
-                  onChange={(e) => setCvc(e.target.value.replace(/[^0-9]/g, '').substring(0, 4))}
-                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="123"
-                  maxLength={4}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="cardName" className="block text-sm font-medium text-gray-700 mb-1">
-                Cardholder Name
-              </label>
-              <input
-                type="text"
-                id="cardName"
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="John Doe"
-              />
-            </div>
-
-            {/* Payment Buttons */}
-            <div className="space-y-3 mt-6">
+          {/* Status Error */}
+          {statusError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-red-800 text-sm">{statusError}</p>
               <button
-                onClick={() => processPayment(true)}
-                disabled={processing}
-                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                onClick={checkPaymentRequestStatus}
+                className="mt-2 text-red-600 hover:text-red-700 text-sm underline"
               >
-                {processing ? (
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Processing...
+                Try again
+              </button>
+            </div>
+          )}
+
+          {/* Already Paid State */}
+          {paymentRequestId && !loadingStatus && paymentRequestStatus === 'paid' && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-10 h-10 text-green-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-green-700 mb-2">Already Paid</h3>
+              <p className="text-gray-600 mb-4">
+                This payment request has already been completed.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                You have already paid {formatAmount(amount)} for this service.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => navigate('/my-account')}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Go to My Account
+                </button>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Return to Home
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Form - Only show if not already paid */}
+          {(!paymentRequestId || (!loadingStatus && paymentRequestStatus !== 'paid')) && !statusError && (
+            <>
+              {/* Test Mode Notice */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
+                <p className="text-yellow-800 text-sm">
+                  <strong>TEST MODE:</strong> This is a sandbox payment. No real money will be charged.
+                </p>
+              </div>
+
+              {/* Payment Details */}
+              <div className="text-center mb-6">
+                <div className="text-3xl font-bold text-blue-700 mb-2">
+                  {formatAmount(amount)}
+                </div>
+                <div className="text-gray-600 mb-2">{description}</div>
+                <div className="text-sm text-gray-500">Merchant: {merchantCode}</div>
+              </div>
+
+              {/* Payment Form */}
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                    Card Number
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="cardNumber"
+                      value={cardNumber}
+                      onChange={handleCardNumberChange}
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1234 5678 9012 3456"
+                      maxLength={19}
+                    />
+                    <CreditCard className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
                   </div>
-                ) : (
-                  `Pay ${formatAmount(amount)}`
-                )}
-              </button>
-              
-              <button
-                onClick={() => processPayment(false)}
-                disabled={processing}
-                className="w-full bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                Cancel Payment
-              </button>
-            </div>
-          </div>
+                </div>
 
-          {/* Test Card Info */}
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
-              Test cards: 4000000000000002 (Success), 4000000000000069 (Decline)
-            </p>
-          </div>
+                <div className="flex space-x-4">
+                  <div className="flex-1">
+                    <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 mb-1">
+                      Expiry
+                    </label>
+                    <input
+                      type="text"
+                      id="expiry"
+                      value={expiry}
+                      onChange={(e) => setExpiry(e.target.value)}
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="MM/YY"
+                      maxLength={5}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 mb-1">
+                      CVC
+                    </label>
+                    <input
+                      type="text"
+                      id="cvc"
+                      value={cvc}
+                      onChange={(e) => setCvc(e.target.value.replace(/[^0-9]/g, '').substring(0, 4))}
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="123"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
 
-          {/* Security Notice */}
-          <div className="mt-4 text-center">
-            <p className="text-xs text-gray-500">
-              🔒 Your payment information is secure and encrypted
-            </p>
-          </div>
+                <div>
+                  <label htmlFor="cardName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Cardholder Name
+                  </label>
+                  <input
+                    type="text"
+                    id="cardName"
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="John Doe"
+                  />
+                </div>
+
+                {/* Payment Buttons */}
+                <div className="space-y-3 mt-6">
+                  <button
+                    onClick={() => processPayment(true)}
+                    disabled={processing}
+                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {processing ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Processing...
+                      </div>
+                    ) : (
+                      `Pay ${formatAmount(amount)}`
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => processPayment(false)}
+                    disabled={processing}
+                    className="w-full bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Cancel Payment
+                  </button>
+                </div>
+              </div>
+
+              {/* Test Card Info */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">
+                  Test cards: 4000000000000002 (Success), 4000000000000069 (Decline)
+                </p>
+              </div>
+
+              {/* Security Notice */}
+              <div className="mt-4 text-center">
+                <p className="text-xs text-gray-500">
+                  🔒 Your payment information is secure and encrypted
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
