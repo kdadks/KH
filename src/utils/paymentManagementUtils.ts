@@ -829,6 +829,20 @@ export const getActiveSumUpGateway = async (): Promise<{
       const envMerchantId = import.meta.env.VITE_SUMUP_MERCHANT_CODE;
       const envEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
       
+      if (!envApiKey || !envMerchantId) {
+        console.error('❌ SumUp configuration missing in both database and environment variables');
+        console.error('📝 Please set VITE_SUMUP_API_KEY and VITE_SUMUP_MERCHANT_CODE in .env file');
+        console.error('🔗 Get your API key from: https://developer.sumup.com');
+        return null;
+      }
+      
+      if (envApiKey.includes('your-real-sumup') || envApiKey.length < 10) {
+        console.error('❌ Invalid SumUp API key detected - appears to be placeholder');
+        console.error('🔑 Please replace with real API key from SumUp developer portal');
+        console.error('🔗 Get your API key from: https://developer.sumup.com');
+        return null;
+      }
+      
       if (envApiKey && envMerchantId) {
         console.log('Using SumUp configuration from environment variables');
         return {
@@ -855,6 +869,16 @@ export const getActiveSumUpGateway = async (): Promise<{
     const envApiKey = import.meta.env.VITE_SUMUP_API_KEY;
     const envMerchantId = import.meta.env.VITE_SUMUP_MERCHANT_CODE;
     const envEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
+    
+    if (!envApiKey || !envMerchantId) {
+      console.error('❌ SumUp configuration missing in both database and environment variables');
+      return null;
+    }
+    
+    if (envApiKey.includes('your-real-sumup') || envApiKey.length < 10) {
+      console.error('❌ Invalid SumUp API key detected - appears to be placeholder');
+      return null;
+    }
     
     if (envApiKey && envMerchantId) {
       console.log('Using SumUp configuration from environment variables (fallback)');

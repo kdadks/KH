@@ -100,6 +100,11 @@ export const createSumUpCheckoutSession = async (
 
     if (!response.ok) {
       const errorData = await response.json();
+      
+      if (response.status === 401) {
+        throw new Error(`SumUp API Authentication Failed (401): Invalid API key. Please check your SumUp API credentials at https://developer.sumup.com`);
+      }
+      
       throw new Error(`SumUp API Error: ${response.status} - ${errorData.message || 'Unknown error'}`);
     }
 
@@ -143,6 +148,11 @@ export const processSumUpPayment = async (
 
     if (!response.ok) {
       const errorData = await response.json();
+      
+      if (response.status === 401) {
+        throw new Error(`SumUp API Authentication Failed (401): Invalid API key. Please check your SumUp API credentials at https://developer.sumup.com`);
+      }
+      
       throw new Error(`SumUp Payment Error: ${response.status} - ${errorData.message || 'Payment failed'}`);
     }
 
