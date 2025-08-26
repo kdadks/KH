@@ -206,7 +206,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       case 'email':
         return '/'; // Email payments redirect to home
       case 'dashboard':
-        return isSuccess ? '/dashboard' : null; // Dashboard - stay on dashboard for success, no redirect for error
+        return isSuccess ? '/my-account' : null; // Dashboard - redirect to user portal for success, no redirect for error
       case 'admin':
         return isSuccess ? '/admin' : '/admin'; // Admin context - redirect back to admin section
       case 'booking':
