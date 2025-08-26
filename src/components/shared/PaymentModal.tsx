@@ -176,13 +176,15 @@ interface PaymentModalProps {
   onClose: () => void;
   paymentRequest: PaymentRequestWithCustomer;
   onPaymentComplete?: () => void;
+  redirectAfterPayment?: string | false; // New prop to control redirect behavior
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
   paymentRequest,
-  onPaymentComplete
+  onPaymentComplete,
+  redirectAfterPayment = '/' // Default to home page for backward compatibility
 }) => {
   const { showSuccess, showError, showInfo } = useToast();
   const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error'>('confirm');
@@ -268,12 +270,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         setCurrentStep('success');
         showSuccess('Payment Successful!', 'Your payment has been processed and moved to payment history.');
         
-        // Close modal and redirect to home page after a short delay
+        // Close modal and handle redirect after a short delay
         setTimeout(() => {
           onPaymentComplete?.();
           onClose();
-          // Redirect to home page
-          window.location.href = '/';
+          // Handle redirect based on redirectAfterPayment prop
+          if (redirectAfterPayment !== false) {
+            window.location.href = redirectAfterPayment;
+          }
         }, 2000);
       } else {
         setCurrentStep('error');
