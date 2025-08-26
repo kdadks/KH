@@ -815,6 +815,82 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'booking_with_payment_pending':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking With Payment Pending</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Great news! Your booking has been successfully created. To secure your appointment, please complete the required deposit payment.</p>
+              
+              <div class="details">
+                <h3>📅 Booking Details</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+              </div>
+              
+              <div class="details" style="background-color: #fef9e7; border-left: 4px solid #f59e0b;">
+                <h3>💳 Payment Required</h3>
+                <p><strong>Deposit Amount:</strong> 20% of service fee</p>
+                <p><strong>Status:</strong> <span style="color: #f59e0b; font-weight: 600;">⏳ Payment Pending</span></p>
+                <p>A payment request has been sent to you separately. Please complete the deposit to confirm your booking.</p>
+              </div>
+              
+              <div class="highlight">
+                <h3>🔄 Next Steps</h3>
+                ${data.next_steps ? `<p>${data.next_steps}</p>` : `
+                <p>• Check your email for the payment request with secure payment link</p>
+                <p>• Complete the 20% deposit payment to confirm your booking</p>
+                <p>• You can also pay through your patient dashboard</p>
+                <p>• Your appointment slot is reserved while payment is pending</p>
+                `}
+              </div>
+              
+              <div class="details">
+                <h3>📋 Appointment Preparation</h3>
+                <p>Once your payment is confirmed:</p>
+                <ul style="margin: 10px 0; padding-left: 25px; line-height: 1.6;">
+                  <li>You'll receive a booking confirmation email</li>
+                  <li>Please arrive 10 minutes early for your appointment</li>
+                  <li>Bring any relevant medical documents or reports</li>
+                  <li>Wear comfortable clothing appropriate for treatment</li>
+                  <li>Contact us at least 24 hours in advance for any changes</li>
+                </ul>
+              </div>
+              
+              ${data.special_instructions ? `
+                <div class="details">
+                  <h3>📝 Special Instructions</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <p>Thank you for choosing KH Therapy! We look forward to providing you with excellent care and helping you achieve your health goals.</p>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p>Questions about your booking or payment? Contact us anytime.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     case 'booking_confirmation_no_payment':
       return `
         <!DOCTYPE html>
