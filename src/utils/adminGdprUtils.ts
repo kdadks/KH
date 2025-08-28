@@ -26,6 +26,7 @@ export const decryptCustomerDataForAdmin = (customer: any) => {
     'city',
     'county',
     'eircode',
+    'date_of_birth',
     'emergency_contact_name',
     'emergency_contact_phone',
     'medical_notes'

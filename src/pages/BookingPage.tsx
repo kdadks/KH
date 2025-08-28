@@ -758,7 +758,11 @@ const BookingPage: React.FC = () => {
                     {loadingServices ? (
                       <option disabled>Loading services...</option>
                     ) : (
-                      services.map((service) => (
+                      services.filter(service => {
+                        // Filter out "Contact for Quote" entries for booking forms
+                        const serviceText = service.displayName || service.name || '';
+                        return !/contact\s+for\s+quote/i.test(serviceText);
+                      }).map((service) => (
                         <option key={service.id} value={service.displayName || service.name}>
                           {service.displayName || service.name}
                         </option>

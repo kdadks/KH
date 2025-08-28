@@ -11,13 +11,15 @@ import {
   X,
   AlertCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { Customer } from './types';
 import { getCustomerDisplayName, validateCustomerName } from './utils/customerUtils';
 import { decryptCustomersArrayForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
 import { encryptSensitiveData } from '../../utils/gdprUtils';
+import * as XLSX from 'xlsx';
 
 interface CustomerManagementProps {
   onCustomerSelect?: (customer: Customer) => void;
@@ -83,6 +85,17 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
     filterCustomers();
   }, [customers, searchTerm, statusFilter]);
 
+  // Auto-dismiss success message after 5 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess('');
+      }, 5000); // 5 seconds
+
+      return () => clearTimeout(timer); // Cleanup timer on unmount or success change
+    }
+  }, [success]);
+
   const fetchCustomers = async () => {
     // Don't fetch if data is provided from parent
     if (propCustomers) return;
@@ -91,10 +104,29 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       setLoading(true);
       console.log('Fetching customers...');
       
-      // Optimized query with smaller limit and only essential fields for initial load
+      // Query with all fields needed for customer management and export
       const { data, error } = await supabase
         .from('customers')
-        .select('id, first_name, last_name, email, phone, is_active, created_at, updated_at')
+        .select(`
+          id, 
+          first_name, 
+          last_name, 
+          email, 
+          phone, 
+          address_line_1,
+          address_line_2,
+          city,
+          county,
+          eircode,
+          country,
+          date_of_birth,
+          emergency_contact_name,
+          emergency_contact_phone,
+          medical_notes,
+          is_active, 
+          created_at, 
+          updated_at
+        `)
         .order('created_at', { ascending: false }) // Most recent first
         .limit(100); // Reduced limit for faster loading
 
@@ -349,6 +381,68 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
     }
   };
 
+  const exportToExcel = () => {
+    if (!filteredCustomers.length) {
+      setError('No customers to export');
+      return;
+    }
+
+    try {
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+
+      // Prepare customer data for export (already decrypted for admin viewing)
+      const exportData = filteredCustomers.map((customer, index) => ({
+        S_No: index + 1,
+        First_Name: customer.first_name || '',
+        Last_Name: customer.last_name || '',
+        Email: customer.email || '',
+        Phone: customer.phone || '',
+        Address_Line_1: customer.address_line_1 || '',
+        Address_Line_2: customer.address_line_2 || '',
+        City: customer.city || '',
+        County: customer.county || '',
+        Eircode: customer.eircode || '',
+        Country: customer.country || '',
+        Date_of_Birth: customer.date_of_birth || '',
+        Emergency_Contact_Name: customer.emergency_contact_name || '',
+        Emergency_Contact_Phone: customer.emergency_contact_phone || '',
+        Medical_Notes: customer.medical_notes || '',
+        Status: customer.is_active ? 'Active' : 'Inactive',
+        Created_Date: customer.created_at ? new Date(customer.created_at).toLocaleDateString() : '',
+        Updated_Date: customer.updated_at ? new Date(customer.updated_at).toLocaleDateString() : ''
+      }));
+
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+
+      // Generate filename with current date
+      const filename = `customers_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Download file
+      XLSX.writeFile(wb, filename);
+
+      setSuccess(`Successfully exported ${exportData.length} customers to ${filename}`);
+      
+      // Log admin data access for GDPR compliance
+      const customerIds = filteredCustomers.map(c => c.id).filter((id): id is number => typeof id === 'number');
+      if (customerIds.length > 0) {
+        logAdminDataAccess(
+          null, // Auto-detect current admin user
+          'EXPORT_CUSTOMERS', 
+          customerIds, 
+          `Customer data export to Excel (${exportData.length} records)`
+        );
+      }
+    } catch (error) {
+      console.error('Error exporting customers:', error);
+      setError('Failed to export customers to Excel');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
@@ -367,7 +461,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
             <div className="relative">
@@ -399,6 +493,21 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
               className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Clear Filters
+            </button>
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={exportToExcel}
+              disabled={!filteredCustomers.length}
+              className={`w-full px-4 py-2 rounded-lg flex items-center justify-center text-white transition-colors ${
+                !filteredCustomers.length 
+                  ? 'bg-green-400 cursor-not-allowed opacity-60' 
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+              title={!filteredCustomers.length ? 'No customers to export' : 'Export filtered customers to Excel'}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Export Excel
             </button>
           </div>
         </div>

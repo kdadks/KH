@@ -417,6 +417,9 @@ const HeroSection: React.FC = () => {
                 <Button to="/services" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
                   Explore Services
                 </Button>
+                <Button to="/services?category=corporate-packages" size="lg" variant="primary" className="bg-primary-600 text-white hover:bg-primary-700">
+                  Corporate Packages
+                </Button>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -523,7 +526,11 @@ const HeroSection: React.FC = () => {
                    <option value="">
                      {loadingServices ? 'Loading services...' : 'Select a service'}
                    </option>
-                   {!loadingServices && services.map((service) => (
+                   {!loadingServices && services.filter(service => {
+                     // Filter out "Contact for Quote" entries for booking forms
+                     const serviceText = service.displayName || service.name || '';
+                     return !/contact\s+for\s+quote/i.test(serviceText);
+                   }).map((service) => (
                      <option key={service.id} value={service.displayName || service.name}>
                        {service.displayName || service.name}
                      </option>
