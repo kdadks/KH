@@ -31,6 +31,7 @@ export interface Customer {
 
 export interface BookingData {
   customer_id: number;
+  booking_reference?: string; // New field for human-readable booking reference (YYYY-MM-DD-000)
   package_name: string;
   booking_date?: string;
   timeslot_start_time?: string;
@@ -291,7 +292,7 @@ export const createBookingWithCustomer = async (
             appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
             appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
             total_amount: 0, // This is just a notification, amount is handled in payment request
-            booking_reference: booking.id.toString(),
+            booking_reference: booking.booking_reference || booking.id.toString(),
             therapist_name: 'KH Therapy Team',
             clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
             special_instructions: bookingData.notes || undefined
@@ -334,7 +335,7 @@ export const createBookingWithCustomer = async (
                 appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
                 appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
                 total_amount: 0, // No amount for contact for quote
-                booking_reference: booking.id.toString(),
+                booking_reference: booking.booking_reference || booking.id.toString(),
                 therapist_name: 'KH Therapy Team',
                 clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
                 special_instructions: bookingData.notes || undefined
@@ -372,9 +373,11 @@ export const createBookingWithCustomer = async (
 /**
  * Get bookings with customer details joined
  */
-export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | null; error: string | null }> => {
+export const getBookingsWithCustomers = async (forceRefresh: boolean = false): Promise<{ bookings: any[] | null; error: string | null }> => {
   try {
-    const { data, error } = await supabase
+    console.log('🔍 getBookingsWithCustomers called, forceRefresh:', forceRefresh);
+    
+    const query = supabase
       .from('bookings')
       .select(`
         *,
@@ -382,6 +385,8 @@ export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | nu
       `)
       .order('created_at', { ascending: false })
       .limit(1000); // Add limit for performance
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error details:', {
@@ -392,6 +397,16 @@ export const getBookingsWithCustomers = async (): Promise<{ bookings: any[] | nu
       });
       return { bookings: null, error: error.message };
     }
+
+    console.log('📋 Booking data fetched:', {
+      totalBookings: data?.length || 0,
+      sampleBooking: data?.[0] ? {
+        id: data[0].id,
+        booking_reference: data[0].booking_reference,
+        package_name: data[0].package_name,
+        booking_date: data[0].booking_date
+      } : null
+    });
 
     // Decrypt customer data for admin viewing
     const decryptedBookings = data?.map(booking => {

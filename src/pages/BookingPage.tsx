@@ -314,7 +314,7 @@ const BookingPage: React.FC = () => {
         appointment_date: new Date(booking.date).toLocaleDateString('en-IE'),
         appointment_time: booking.time || 'To be scheduled',
         total_amount: 0, // No payment required for these bookings
-        booking_reference: `KH-${bookingRecord.id}`,
+        booking_reference: bookingRecord.booking_reference || `KH-${bookingRecord.id}`,
         therapist_name: 'KH Therapy Team',
         clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
         special_instructions: booking.notes || 'We will contact you to schedule your appointment'

@@ -1023,7 +1023,7 @@ export async function sendPaymentFailedNotification(
         service_name: paymentRequest.service_name || bookingDetails?.package_name || 'Therapy Session',
         appointment_date: bookingDetails?.booking_date ? new Date(bookingDetails.booking_date).toLocaleDateString('en-IE') : new Date().toLocaleDateString('en-IE'),
         appointment_time: bookingDetails ? `${bookingDetails.timeslot_start_time} - ${bookingDetails.timeslot_end_time}` : 'To be confirmed',
-        booking_reference: bookingDetails?.id || paymentRequest.booking_id || `PR-${paymentRequestId}`,
+        booking_reference: bookingDetails?.booking_reference || bookingDetails?.id || paymentRequest.booking_id || `PR-${paymentRequestId}`,
         payment_amount: paymentRequest.amount,
         payment_status: 'failed', // This will trigger the booking_with_payment_failed template
         therapist_name: 'KH Therapy Team',

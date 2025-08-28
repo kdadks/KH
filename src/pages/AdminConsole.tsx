@@ -239,12 +239,19 @@ const AdminConsole = () => {
         return;
       }
       
-      // Now try the customer join query
-      const { bookings: bookingsWithCustomers, error: customerError } = await getBookingsWithCustomers();
+      // Now try the customer join query with force refresh to get latest booking_reference data
+      const { bookings: bookingsWithCustomers, error: customerError } = await getBookingsWithCustomers(true);
       
       if (!customerError && bookingsWithCustomers) {
         // Transform the data to include customer details while maintaining backward compatibility
         const transformedBookings = bookingsWithCustomers.map((booking: any) => {
+          console.log('🔍 Raw booking data before transformation:', {
+            id: booking.id,
+            booking_reference: booking.booking_reference,
+            customers: booking.customers,
+            customer_name: booking.customer_name
+          });
+          
           const transformed = {
             ...booking,
             // If customer relationship exists, use it, otherwise fall back to direct fields
@@ -257,13 +264,29 @@ const AdminConsole = () => {
             customer_details: booking.customers
           };
           
+          console.log('🔄 Transformed booking:', {
+            id: transformed.id,
+            booking_reference: transformed.booking_reference,
+            customer_details: transformed.customer_details,
+            customer_name: transformed.customer_name
+          });
+          
           return transformed;
         });
         
         // Decrypt customer data for admin viewing (GDPR compliance)
-        const decryptedBookings = transformedBookings.map(booking => 
-          decryptBookingCustomerDataForAdmin(booking)
-        );
+        const decryptedBookings = transformedBookings.map(booking => {
+          const decrypted = decryptBookingCustomerDataForAdmin(booking);
+          
+          console.log('🔐 After decryption:', {
+            id: decrypted.id,
+            booking_reference: decrypted.booking_reference,
+            customer_details: decrypted.customer_details,
+            customer_name: decrypted.customer_name
+          });
+          
+          return decrypted;
+        });
         
         // Log admin access for GDPR audit trail
         const customerIds = decryptedBookings

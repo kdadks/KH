@@ -42,6 +42,7 @@ export type ServiceTimeSlot = {
 
 export type BookingFormData = {
   id?: string;
+  booking_reference?: string; // New field for human-readable booking reference (YYYY-MM-DD-000)
   customer_name: string;
   customer_email: string;
   customer_phone: string;
