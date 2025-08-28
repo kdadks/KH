@@ -166,17 +166,132 @@ export class InvoiceService {
         };
       }
 
-      // Decrypt customer data before transforming
+      // Use the same payment calculation logic as downloadInvoicePDFWithPayments
+      // Load payments for payment calculation
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          invoice_id,
+          customer_id,
+          booking_id,
+          amount,
+          currency,
+          status,
+          payment_method,
+          sumup_checkout_id,
+          sumup_payment_type,
+          payment_date,
+          notes,
+          created_at
+        `)
+        .eq('customer_id', customer.id);
+
+      if (paymentsError) {
+        console.warn('Error loading payments:', paymentsError);
+      }
+
+      // Get booking_id from invoice (check if it exists in the actual invoice table)
+      let bookingId: string | null = null;
+      if (invoice.id) {
+        const { data: invoiceWithBooking } = await supabase
+          .from('invoices')
+          .select('booking_id')
+          .eq('id', invoice.id)
+          .single();
+        
+        bookingId = invoiceWithBooking?.booking_id || null;
+      }
+
+      // Filter payments for this invoice by booking_id or invoice_id
+      const invoicePayments = paymentsData?.filter((payment: any) => {
+        // Match by booking_id (for deposits) if invoice has booking_id
+        if (bookingId && payment.booking_id === bookingId) {
+          return true;
+        }
+        // Match by invoice_id (for additional payments)
+        if (payment.invoice_id === invoice.id) {
+          return true;
+        }
+        return false;
+      }) || [];
+
+      // Calculate deposit and other payments
+      let depositAmount = 0;
+      let otherPaymentsAmount = 0;
+      
+      invoicePayments.forEach((payment: any) => {
+        if (payment.status === 'paid') {
+          // Deposits are payments that have booking_id but no invoice_id
+          const isDeposit = payment.booking_id && !payment.invoice_id;
+          
+          if (isDeposit) {
+            depositAmount += payment.amount || 0;
+          } else {
+            otherPaymentsAmount += payment.amount || 0;
+          }
+        }
+      });
+
+      const totalPaidAmount = depositAmount + otherPaymentsAmount;
+
+      // Round to handle floating point precision issues
+      const roundedDepositAmount = Math.round(depositAmount * 100) / 100;
+      const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
+
+      // Transform data for PDF service (same structure as download function)
+      const invoiceData = {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        customer_id: invoice.customer_id,
+        invoice_date: invoice.invoice_date,
+        due_date: invoice.due_date,
+        status: invoice.status,
+        subtotal: invoice.subtotal,
+        vat_amount: invoice.vat_amount,
+        total_amount: invoice.total,
+        total: invoice.total,
+        total_paid: roundedTotalPaid,
+        deposit_paid: roundedDepositAmount,
+        notes: invoice.notes,
+        currency: invoice.currency || 'EUR'
+      };
+
+      // Decrypt customer data for PDF generation
       const decryptedCustomer = decryptCustomerPII(customer);
 
-      // Transform data
-      const invoiceData = transformInvoiceData(invoice, decryptedCustomer, items);
-      
+      const customerData = {
+        id: decryptedCustomer.id,
+        name: `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() || decryptedCustomer.email || 'Customer',
+        email: decryptedCustomer.email,
+        phone: decryptedCustomer.phone,
+        address: [
+          decryptedCustomer.address_line_1,
+          decryptedCustomer.address_line_2,
+          decryptedCustomer.city,
+          decryptedCustomer.county,
+          decryptedCustomer.eircode
+        ].filter(Boolean).join(', ') || ''
+      };
+
+      // Transform items data (same structure as download function)
+      const transformedItems = items.map(item => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+        category: item.category || 'Service'
+      }));
+
       // Generate PDF options
       const pdfOptions = { ...this.defaultOptions, ...options };
       
-      // Generate PDF for email
-      const result = await generateInvoiceForEmail(invoiceData, pdfOptions);
+      // Transform the enhanced invoice data using the standard transformer
+      const finalInvoiceData = transformInvoiceData(invoiceData, customerData, transformedItems);
+      
+      // Generate PDF for email using the same method as the downloadInvoicePDF function
+      const result = await generateInvoiceForEmail(finalInvoiceData, pdfOptions);
       
       if (result.success && result.base64 && result.filename) {
         return {
