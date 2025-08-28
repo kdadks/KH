@@ -105,7 +105,7 @@ const PaymentPage: React.FC = () => {
             </p>
             <button
               onClick={() => navigate('/dashboard')}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Go to Dashboard
@@ -128,10 +128,10 @@ const PaymentPage: React.FC = () => {
         {/* Payment Request Card */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           {/* Header */}
-          <div className="bg-blue-50 px-6 py-4 border-b">
+          <div className="bg-primary-50 px-6 py-4 border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <CreditCard className="w-6 h-6 text-blue-600 mr-3" />
+                <CreditCard className="w-6 h-6 text-primary-600 mr-3" />
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Payment Request</h2>
                   <p className="text-sm text-gray-600">#{paymentRequest.id}</p>
@@ -169,7 +169,7 @@ const PaymentPage: React.FC = () => {
                 <div className="flex gap-4 justify-center">
                   <button
                     onClick={() => navigate('/dashboard')}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     Go to Dashboard
                   </button>
@@ -193,7 +193,7 @@ const PaymentPage: React.FC = () => {
                 </p>
                 <button
                   onClick={() => navigate('/dashboard')}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
                   Go to Dashboard
                 </button>
@@ -247,12 +247,12 @@ const PaymentPage: React.FC = () => {
                 )}
 
                 {/* Security Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center space-x-2 text-blue-700">
+                <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 text-primary-700">
                     <CreditCard className="w-5 h-5" />
                     <span className="font-medium">Secure Payment</span>
                   </div>
-                  <p className="text-blue-600 text-sm mt-1">
+                  <p className="text-primary-600 text-sm mt-1">
                     Your payment is secured by SumUp with 256-bit SSL encryption and PCI compliance.
                   </p>
                 </div>
@@ -260,7 +260,7 @@ const PaymentPage: React.FC = () => {
                 {/* Pay Now Button */}
                 <button
                   onClick={handlePayNow}
-                  className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg flex items-center justify-center"
+                  className="w-full bg-primary-600 text-white py-4 px-6 rounded-lg hover:bg-primary-700 transition-colors font-semibold text-lg flex items-center justify-center"
                 >
                   <CreditCard className="w-5 h-5 mr-2" />
                   Pay Now - {formatCurrency(paymentRequest.amount, paymentRequest.currency)}

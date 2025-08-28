@@ -507,7 +507,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
               onClick={() => onPageChange(page)}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
                 page === currentPage
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
               }`}
             >
