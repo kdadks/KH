@@ -155,9 +155,15 @@ const ServicesPage: React.FC = () => {
 									</ul>
 									<button
 										className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 transition mt-auto"
-										onClick={() => navigate('/booking')}
+										onClick={() => {
+											if (pkg.category === 'Corporate Packages') {
+												navigate('/contact');
+											} else {
+												navigate('/booking');
+											}
+										}}
 									>
-										Book Now
+										{pkg.category === 'Corporate Packages' ? 'Enquire Now' : 'Book Now'}
 									</button>
 								</div>
 							))}
