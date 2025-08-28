@@ -129,6 +129,7 @@ export interface PaymentRequest {
 
 export interface UserBooking {
   id: string;
+  booking_reference?: string; // New field for human-readable booking reference (YYYY-MM-DD-000)
   customer_id: number;
   package_name: string;
   booking_date?: string;

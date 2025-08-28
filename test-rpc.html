@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Supabase RPC</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test RPC Functions</h1>
+    <button onclick="testRPC()">Test apply_default_schedule_to_range</button>
+    <div id="result"></div>
+
+    <script>
+        // Replace with your Supabase URL and anon key
+        const supabaseUrl = 'https://hlmqgghrrmvstbmvwsni.supabase.co'
+        const supabaseKey = 'YOUR_ANON_KEY_HERE' // You'll need to add this
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey)
+
+        async function testRPC() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                console.log('Testing RPC function...');
+                
+                // Test with simple date range
+                const { data, error } = await supabase.rpc('apply_default_schedule_to_range', {
+                    p_start_date: '2025-08-29',
+                    p_end_date: '2025-08-30'
+                });
+                
+                if (error) {
+                    console.error('RPC Error:', error);
+                    resultDiv.innerHTML = `<pre style="color: red;">${JSON.stringify(error, null, 2)}</pre>`;
+                } else {
+                    console.log('RPC Success:', data);
+                    resultDiv.innerHTML = `<pre style="color: green;">Success: ${data} slots created</pre>`;
+                }
+            } catch (err) {
+                console.error('Exception:', err);
+                resultDiv.innerHTML = `<pre style="color: red;">Exception: ${err.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

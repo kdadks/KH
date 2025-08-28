@@ -459,7 +459,7 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
     // First get all bookings
     const { data: bookingsData, error: bookingsError } = await supabase
       .from('bookings')
-      .select('id, package_name, status, booking_date, customer_id')
+      .select('id, booking_reference, package_name, status, booking_date, customer_id')
       .order('booking_date', { ascending: false });
 
     if (bookingsError) {

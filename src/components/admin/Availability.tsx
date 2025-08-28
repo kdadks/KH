@@ -8,18 +8,23 @@ import {
   Trash2, 
   Calendar as CalendarIcon,
   List,
-  AlertCircle
+  AlertCircle,
+  
 } from 'lucide-react';
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
 import { decryptCustomerDataForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
+import { DefaultScheduleManager } from './availability/DefaultScheduleManager';
+import { generateSchedulePreview, applyDefaultScheduleToRange } from './availability/utils';
+import type { SchedulePreview } from './availability/types';
 
 const localizer = momentLocalizer(moment);
 
 interface AvailabilitySlot {
   id?: number;
   date: string;
-  start: string;
+  start?: string; // legacy
+  start_time?: string; // new schema
   end_time: string;
 }
 
@@ -42,8 +47,15 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
   const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
-  const [slotToDelete, setSlotToDelete] = useState<AvailabilitySlot | null>(null);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [mainTab, setMainTab] = useState<'overview' | 'default'>('overview');
+  const [showDeleteDayModal, setShowDeleteDayModal] = useState(false);
+  const [dateToDeleteSlots, setDateToDeleteSlots] = useState<string>('');
+  // Edit slot modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [slotToEdit, setSlotToEdit] = useState<AvailabilitySlot | null>(null);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editError, setEditError] = useState('');
   // Multi-slots modal state
   const [showMultiSlotsModal, setShowMultiSlotsModal] = useState(false);
   const [selectedDateSlots, setSelectedDateSlots] = useState<AvailabilitySlot[]>([]);
@@ -59,14 +71,32 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const [newSlotEndTime, setNewSlotEndTime] = useState('');
   const [newSlotError, setNewSlotError] = useState('');
 
+  // Default schedule apply state
+  const [applyStartDate, setApplyStartDate] = useState('');
+  const [applyEndDate, setApplyEndDate] = useState('');
+  const [preview, setPreview] = useState<SchedulePreview | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+
   const fetchAvailabilitySlots = useCallback(async () => {
     try {
       console.log('🔍 Fetching availability slots...');
-      const { data, error } = await supabase
+      let { data, error }: any = await supabase
         .from('availability')
         .select('*')
         .order('date', { ascending: true })
-        .order('start', { ascending: true });
+        .order('start_time', { ascending: true });
+
+      if (error && error.code === '42703') {
+        // Fallback for legacy schema using 'start'
+        const fallback = await supabase
+          .from('availability')
+          .select('*')
+          .order('date', { ascending: true })
+          .order('start', { ascending: true });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) {
         console.error('❌ Error fetching availability slots:', error);
@@ -162,6 +192,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     fetchBookedSlots();
   }, [fetchAvailabilitySlots, fetchBookedSlots]);
 
+  // Helpers
+  const getSlotStart = (slot: AvailabilitySlot) => slot.start ?? slot.start_time ?? '';
+
   // Convert slots to calendar events  
   const formatTime = (t: string) => {
     if (!t) return t;
@@ -200,7 +233,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
   // Create available slot events
   const availableSlotEvents = availabilitySlots.map(slot => {
-    const startFmt = formatTime(slot.start);
+    const startFmt = formatTime(getSlotStart(slot));
     const endFmt = formatTime(slot.end_time);
     
     // Check if this slot conflicts with any booked slot
@@ -209,14 +242,14 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       if (!bookingDateTime) return false;
       
       return bookingDateTime.date === slot.date && 
-             bookingDateTime.time >= slot.start && 
+        bookingDateTime.time >= getSlotStart(slot) && 
              bookingDateTime.time < slot.end_time;
     });
 
     return {
       id: `available-${slot.id}`,
       title: isBooked ? `${startFmt} - ${endFmt} (Booked)` : `${startFmt} - ${endFmt}`,
-      start: new Date(`${slot.date}T${slot.start}`),
+      start: new Date(`${slot.date}T${getSlotStart(slot)}`),
       end: new Date(`${slot.date}T${slot.end_time}`),
       resource: slot,
       type: isBooked ? 'booked-slot' : 'available-slot',
@@ -241,7 +274,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       // Only show bookings that don't have a corresponding availability slot
       const hasAvailabilitySlot = availabilitySlots.some(slot => 
         slot.date === bookingDateTime.date &&
-        bookingDateTime.time >= slot.start &&
+        bookingDateTime.time >= getSlotStart(slot) &&
         bookingDateTime.time < slot.end_time
       );
       
@@ -304,14 +337,27 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     }
 
     try {
-      const { error } = await supabase
+      let { error }: any = await supabase
         .from('availability')
         .insert([{
           date: newSlotDate,
-          start: newSlotStartTime,
+          start_time: newSlotStartTime,
           end_time: newSlotEndTime
         }])
         .select();
+
+      if (error && error.code === '42703') {
+        // Fallback for legacy schema using 'start'
+        const retry = await supabase
+          .from('availability')
+          .insert([{
+            date: newSlotDate,
+            start: newSlotStartTime,
+            end_time: newSlotEndTime
+          }])
+          .select();
+        error = retry.error;
+      }
 
       if (error) throw error;
 
@@ -330,26 +376,19 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     }
   };
 
-  // Delete availability slot
-  const handleDeleteSlot = (slot: AvailabilitySlot) => {
-    setSlotToDelete(slot);
-    setShowDeleteConfirmModal(true);
-  };
-
-  const confirmDeleteSlot = async () => {
-    if (!slotToDelete?.id) return;
+  // Delete availability slot - now single step
+  const handleDeleteSlot = async (slot: AvailabilitySlot) => {
+    if (!slot?.id) return;
 
     try {
       const { error } = await supabase
         .from('availability')
         .delete()
-        .eq('id', slotToDelete.id);
+        .eq('id', slot.id);
 
       if (error) throw error;
 
       showSuccess('Success', 'Availability slot deleted successfully');
-      setShowDeleteConfirmModal(false);
-      setSlotToDelete(null);
       
       // Refresh the data
       await fetchAvailabilitySlots();
@@ -358,6 +397,103 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       console.error('Error deleting availability slot:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       showError('Error', `Failed to delete availability slot: ${errorMessage}`);
+    }
+  };
+
+  // Check if a date has confirmed bookings
+  const hasConfirmedBookingsOnDate = (dateStr: string): boolean => {
+    return bookedSlots.some(booking => 
+      booking.booking_date === dateStr && 
+      (booking.status === 'confirmed' || booking.status === 'completed')
+    );
+  };
+
+  // Delete all slots for a specific date
+  const handleDeleteAllDaySlots = (dateStr: string) => {
+    const slotsForDate = availabilitySlots.filter(slot => slot.date === dateStr);
+    
+    if (slotsForDate.length === 0) {
+      showError('No Slots', 'No availability slots found for this date.');
+      return;
+    }
+
+    if (hasConfirmedBookingsOnDate(dateStr)) {
+      showError('Cannot Delete', 'This date has confirmed bookings. Please cancel the bookings first to free up the slots.');
+      return;
+    }
+
+    setDateToDeleteSlots(dateStr);
+    setShowDeleteDayModal(true);
+  };
+
+  const confirmDeleteAllDaySlots = async () => {
+    if (!dateToDeleteSlots) return;
+
+    try {
+      const slotsForDate = availabilitySlots.filter(slot => slot.date === dateToDeleteSlots);
+      const slotIds = slotsForDate.map(slot => slot.id).filter(id => id !== undefined);
+
+      if (slotIds.length === 0) {
+        showError('Error', 'No valid slots found to delete.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('availability')
+        .delete()
+        .in('id', slotIds);
+
+      if (error) throw error;
+
+      showSuccess('Success', `${slotIds.length} availability slots deleted successfully`);
+      setShowDeleteDayModal(false);
+      setDateToDeleteSlots('');
+      
+      // Refresh the data
+      await fetchAvailabilitySlots();
+      await fetchBookedSlots();
+    } catch (error) {
+      console.error('Error deleting day slots:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showError('Error', `Failed to delete day slots: ${errorMessage}`);
+    }
+  };
+
+  // Save edited slot
+  const handleSaveEdit = async () => {
+    if (!slotToEdit?.id) return;
+    setEditError('');
+    if (!editStartTime || !editEndTime) {
+      setEditError('Please provide start and end time');
+      return;
+    }
+    if (editStartTime >= editEndTime) {
+      setEditError('End time must be after start time');
+      return;
+    }
+    try {
+      let { error }: any = await supabase
+        .from('availability')
+        .update({ start_time: editStartTime, end_time: editEndTime })
+        .eq('id', slotToEdit.id);
+
+      if (error && error.code === '42703') {
+        const retry = await supabase
+          .from('availability')
+          .update({ start: editStartTime, end_time: editEndTime })
+          .eq('id', slotToEdit.id);
+        error = retry.error;
+      }
+
+      if (error) throw error;
+      showSuccess('Updated', 'Availability slot updated');
+      setShowEditModal(false);
+      setSlotToEdit(null);
+      await fetchAvailabilitySlots();
+      await fetchBookedSlots();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      showError('Error', `Failed to update slot: ${msg}`);
     }
   };
 
@@ -376,6 +512,21 @@ export const Availability: React.FC<AvailabilityProps> = () => {
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
+          {/* Main Tabs */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+            <button
+              onClick={() => setMainTab('overview')}
+              className={`px-4 py-2 text-sm ${mainTab === 'overview' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setMainTab('default')}
+              className={`px-4 py-2 text-sm ${mainTab === 'default' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Default Schedule
+            </button>
+          </div>
           <button
             onClick={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}
             className={`w-full sm:w-auto flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
@@ -399,54 +550,143 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         </div>
       </div>
 
-      {/* Add Availability Form (always on top) */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Time Slot</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-            <input
-              type="date"
-              value={newSlotDate}
-              onChange={(e) => setNewSlotDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
+      {mainTab === 'overview' ? (
+        <>
+          {/* Add Availability Form (always on top) */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Time Slot</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <input
+                  type="date"
+                  value={newSlotDate}
+                  onChange={(e) => setNewSlotDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                <input
+                  type="time"
+                  value={newSlotStartTime}
+                  onChange={(e) => setNewSlotStartTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                <input
+                  type="time"
+                  value={newSlotEndTime}
+                  onChange={(e) => setNewSlotEndTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+            </div>
+            {newSlotError && (
+              <div className="mt-4 flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                <span className="text-sm text-red-700">{newSlotError}</span>
+              </div>
+            )}
+            <button
+              onClick={handleAddSlot}
+              className="mt-4 flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Time Slot
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
-            <input
-              type="time"
-              value={newSlotStartTime}
-              onChange={(e) => setNewSlotStartTime(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
+        </>
+      ) : (
+        <>
+          {/* Default Schedule Manager */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Default Schedule</h3>
+            <DefaultScheduleManager />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
-            <input
-              type="time"
-              value={newSlotEndTime}
-              onChange={(e) => setNewSlotEndTime(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
+          {/* Apply Default Schedule to Date Range */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Apply Default Schedule</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                <input
+                  type="date"
+                  value={applyStartDate}
+                  onChange={(e) => setApplyStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                <input
+                  type="date"
+                  value={applyEndDate}
+                  onChange={(e) => setApplyEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={async () => {
+                    if (!applyStartDate || !applyEndDate) return;
+                    setIsPreviewing(true);
+                    try {
+                      const p = await generateSchedulePreview(null, applyStartDate, applyEndDate, true);
+                      setPreview(p);
+                    } catch (err) {
+                      showError('Error', 'Failed to generate preview');
+                    } finally {
+                      setIsPreviewing(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200"
+                  disabled={!applyStartDate || !applyEndDate || isPreviewing}
+                >
+                  {isPreviewing ? 'Previewing…' : 'Preview'}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!applyStartDate || !applyEndDate) return;
+                    setIsApplying(true);
+                    try {
+                      const count = await applyDefaultScheduleToRange(applyStartDate, applyEndDate);
+                      showSuccess('Schedule Applied', `${count} slots created/updated`);
+                      setPreview(null);
+                      await fetchAvailabilitySlots();
+                    } catch (err) {
+                      showError('Error', 'Failed to apply default schedule');
+                    } finally {
+                      setIsApplying(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                  disabled={!applyStartDate || !applyEndDate || isApplying}
+                >
+                  {isApplying ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+            </div>
+            {preview && (
+              <div className="mt-4 p-4 border rounded-lg bg-gray-50 text-sm text-gray-700">
+                <div>
+                  Preview: {preview.totalSlots} slots across {preview.daysAffected} days
+                </div>
+                {preview.conflicts && preview.conflicts.length > 0 && (
+                  <div className="mt-2 text-red-700">
+                    {preview.conflicts.length} day(s) have existing slots that may be affected
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-        {newSlotError && (
-          <div className="mt-4 flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-            <span className="text-sm text-red-700">{newSlotError}</span>
-          </div>
-        )}
-        <button
-          onClick={handleAddSlot}
-          className="mt-4 flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Time Slot
-        </button>
-      </div>
+        </>
+      )}
 
       {/* Availability Slots Container (Calendar/List unified like Bookings) */}
+      {mainTab === 'overview' && (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
@@ -553,9 +793,13 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
                     if (event.resource?.id && event.type === 'available-slot') {
                       const slot = event.resource as AvailabilitySlot;
-                      // If multiple for date open modal, else proceed to delete confirmation
+                      // If multiple for date, open list modal; else open edit modal
                       if (!openSlotsModalIfMultiple(slot.date)) {
-                        handleDeleteSlot(slot);
+                        setSlotToEdit(slot);
+                        setEditStartTime(formatTime(getSlotStart(slot)));
+                        setEditEndTime(formatTime(slot.end_time));
+                        setEditError('');
+                        setShowEditModal(true);
                       }
                     }
                   }}
@@ -615,54 +859,92 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                         <div className="w-3 h-3 bg-emerald-600 rounded mr-2"></div>
                         Available Slots ({availabilitySlots.length})
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {availabilitySlots.map((slot) => {
-                          // Check if this slot is booked
-                          const isBooked = bookedSlots.some(booking => {
-                            const bookingDateTime = getBookingDateTime(booking);
-                            if (!bookingDateTime) return false;
-                            
-                            return bookingDateTime.date === slot.date && 
-                                   bookingDateTime.time >= slot.start && 
-                                   bookingDateTime.time < slot.end_time;
-                          });
+                      
+                      {/* Group slots by date */}
+                      {Object.entries(
+                        availabilitySlots.reduce((acc, slot) => {
+                          const date = slot.date;
+                          if (!acc[date]) acc[date] = [];
+                          acc[date].push(slot);
+                          return acc;
+                        }, {} as Record<string, AvailabilitySlot[]>)
+                      ).map(([date, slotsForDate]) => (
+                        <div key={date} className="mb-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="text-sm font-medium text-gray-700">
+                              {new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })} ({slotsForDate.length} slot{slotsForDate.length !== 1 ? 's' : ''})
+                            </h5>
+                            {slotsForDate.length > 1 && (
+                              <button
+                                onClick={() => handleDeleteAllDaySlots(date)}
+                                disabled={hasConfirmedBookingsOnDate(date)}
+                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                                  hasConfirmedBookingsOnDate(date)
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-red-600 text-white hover:bg-red-700'
+                                }`}
+                                title={hasConfirmedBookingsOnDate(date) 
+                                  ? 'Cannot delete - confirmed bookings exist'
+                                  : 'Delete all slots for this day'
+                                }
+                              >
+                                Delete All Day
+                              </button>
+                            )}
+                          </div>
                           
-                          return (
-                            <div
-                              key={slot.id || `${slot.date}-${slot.start}-${slot.end_time}`}
-                              className={`p-4 border rounded-lg relative transition-colors ${
-                                isBooked 
-                                  ? 'border-gray-300 bg-gray-50' 
-                                  : 'border-emerald-200 bg-emerald-50 hover:border-emerald-300'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className={`font-medium ${isBooked ? 'text-gray-700' : 'text-gray-900'}`}>
-                                    {slot.date}
-                                  </p>
-                                  <p className={`text-sm ${isBooked ? 'text-gray-500' : 'text-emerald-600'}`}>
-                                    {formatTime(slot.start)} - {formatTime(slot.end_time)}
-                                    {isBooked && ' (Booked)'}
-                                  </p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {slotsForDate.map((slot) => {
+                              // Check if this slot is booked
+                              const isBooked = bookedSlots.some(booking => {
+                                const bookingDateTime = getBookingDateTime(booking);
+                                if (!bookingDateTime) return false;
+                                
+                                return bookingDateTime.date === slot.date && 
+                                  bookingDateTime.time >= getSlotStart(slot) && 
+                                  bookingDateTime.time < slot.end_time;
+                              });
+                              
+                              return (
+                                <div
+                                  key={slot.id || `${slot.date}-${getSlotStart(slot)}-${slot.end_time}`}
+                                  className={`p-3 border rounded-lg relative transition-colors ${
+                                    isBooked 
+                                      ? 'border-gray-300 bg-gray-50' 
+                                      : 'border-emerald-200 bg-emerald-50 hover:border-emerald-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className={`text-sm font-medium ${isBooked ? 'text-gray-500' : 'text-emerald-600'}`}>
+                                        {formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}
+                                        {isBooked && ' (Booked)'}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <Clock className={`w-4 h-4 ${isBooked ? 'text-gray-400' : 'text-emerald-500'}`} />
+                                      {!isBooked && (
+                                        <button
+                                          onClick={() => handleDeleteSlot(slot)}
+                                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Delete availability slot"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                  <Clock className={`w-5 h-5 ${isBooked ? 'text-gray-400' : 'text-emerald-500'}`} />
-                                  {!isBooked && (
-                                    <button
-                                      onClick={() => handleDeleteSlot(slot)}
-                                      className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                      title="Delete availability slot"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -673,7 +955,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                     
                     const hasAvailabilitySlot = availabilitySlots.some(slot => 
                       slot.date === bookingDateTime.date &&
-                      bookingDateTime.time >= slot.start &&
+                      bookingDateTime.time >= getSlotStart(slot) &&
                       bookingDateTime.time < slot.end_time
                     );
                     
@@ -686,9 +968,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                           const bookingDateTime = getBookingDateTime(booking);
                           if (!bookingDateTime) return false;
                           
-                          const hasAvailabilitySlot = availabilitySlots.some(slot => 
+              const hasAvailabilitySlot = availabilitySlots.some(slot => 
                             slot.date === bookingDateTime.date &&
-                            bookingDateTime.time >= slot.start &&
+                bookingDateTime.time >= getSlotStart(slot) &&
                             bookingDateTime.time < slot.end_time
                           );
                           
@@ -703,7 +985,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                             
                             const hasAvailabilitySlot = availabilitySlots.some(slot => 
                               slot.date === bookingDateTime.date &&
-                              bookingDateTime.time >= slot.start &&
+                              bookingDateTime.time >= getSlotStart(slot) &&
                               bookingDateTime.time < slot.end_time
                             );
                             
@@ -738,36 +1020,44 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                 </div>
               )}
             </div>
-          )}
+      )}
         </div>
       </div>
+    )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirmModal && slotToDelete && (
+      {/* Edit Slot Modal */}
+      {showEditModal && slotToEdit && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center mb-4">
-              <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
-              <h3 className="text-lg font-semibold text-gray-900">Delete Availability Slot</h3>
+              <CalendarIcon className="w-6 h-6 text-primary-600 mr-3" />
+              <h3 className="text-lg font-semibold text-gray-900">Edit Availability Slot</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete this slot? This action cannot be undone.</p>
-            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-sm text-gray-700">
-              <div className="flex justify-between"><span className="text-gray-500">Date:</span><span className="font-medium text-gray-900">{slotToDelete.date}</span></div>
-              <div className="flex justify-between mt-1"><span className="text-gray-500">Time:</span><span className="font-medium text-gray-900">{slotToDelete.start} - {slotToDelete.end_time}</span></div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <input type="date" value={slotToEdit.date} disabled className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                </div>
+              </div>
+              {editError && (
+                <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                  <span className="text-sm text-red-700">{editError}</span>
+                </div>
+              )}
             </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => { setShowDeleteConfirmModal(false); setSlotToDelete(null); }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteSlot}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
-              >
-                Delete
-              </button>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button onClick={() => { setShowEditModal(false); setSlotToEdit(null); }} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200">Cancel</button>
+              <button onClick={handleSaveEdit} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700">Save</button>
             </div>
           </div>
         </div>
@@ -776,15 +1066,32 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       {showMultiSlotsModal && selectedDateSlots.length > 1 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg">
-            <div className="flex items-center mb-4">
-              <CalendarIcon className="w-6 h-6 text-primary-600 mr-3" />
-              <h3 className="text-lg font-semibold text-gray-900">Slots - {selectedDateLabel}</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <CalendarIcon className="w-6 h-6 text-primary-600 mr-3" />
+                <h3 className="text-lg font-semibold text-gray-900">Slots - {selectedDateLabel}</h3>
+              </div>
+              <button
+                onClick={() => handleDeleteAllDaySlots(selectedDateLabel)}
+                disabled={hasConfirmedBookingsOnDate(selectedDateLabel)}
+                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                  hasConfirmedBookingsOnDate(selectedDateLabel)
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+                title={hasConfirmedBookingsOnDate(selectedDateLabel) 
+                  ? 'Cannot delete - confirmed bookings exist'
+                  : 'Delete all slots for this day'
+                }
+              >
+                Delete All Day
+              </button>
             </div>
             <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
               {selectedDateSlots.map(slot => (
-                <div key={slot.id || `${slot.date}-${slot.start}-${slot.end_time}`}
+                <div key={slot.id || `${slot.date}-${getSlotStart(slot)}-${slot.end_time}`}
                   className="flex items-center justify-between border border-gray-200 rounded-md px-4 py-2">
-                  <span className="text-sm font-medium text-gray-800">{formatTime(slot.start)} - {formatTime(slot.end_time)}</span>
+                  <span className="text-sm font-medium text-gray-800">{formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}</span>
                   <button
                     onClick={() => handleDeleteSlot(slot)}
                     className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
@@ -800,6 +1107,49 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Day Confirmation Modal */}
+      {showDeleteDayModal && dateToDeleteSlots && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center mb-4">
+              <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
+              <h3 className="text-lg font-semibold text-gray-900">Delete All Day Slots</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete all availability slots for {dateToDeleteSlots}? 
+              This will delete {availabilitySlots.filter(slot => slot.date === dateToDeleteSlots).length} slots. 
+              This action cannot be undone.
+            </p>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-sm text-gray-700">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Date:</span>
+                <span className="font-medium text-gray-900">{dateToDeleteSlots}</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-gray-500">Slots to delete:</span>
+                <span className="font-medium text-gray-900">
+                  {availabilitySlots.filter(slot => slot.date === dateToDeleteSlots).length}
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => { setShowDeleteDayModal(false); setDateToDeleteSlots(''); }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteAllDaySlots}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+              >
+                Delete All
               </button>
             </div>
           </div>

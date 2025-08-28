@@ -352,7 +352,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
               service_name: formData.service,
               appointment_date: new Date(bookingData.booking_date).toLocaleDateString('en-IE'),
               appointment_time: formData.time.split('|')[0], // Get just the time range part
-              booking_reference: data.id.toString(),
+              booking_reference: data.booking_reference || data.id.toString(),
               payment_status: 'pending',
               payment_amount: undefined, // Will be set by the email template based on service
               next_steps: 'Please complete the 20% deposit payment to confirm your booking. You can pay through your dashboard or click the payment link in your payment request email.',
@@ -378,7 +378,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
               appointment_date: new Date(bookingData.booking_date).toLocaleDateString('en-IE'),
               appointment_time: formData.time.split('|')[0], // Get just the time range part
               total_amount: 0, // No amount for contact for quote
-              booking_reference: data.id.toString(),
+              booking_reference: data.booking_reference || data.id.toString(),
               therapist_name: 'KH Therapy Team',
               clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
               special_instructions: formData.notes || undefined

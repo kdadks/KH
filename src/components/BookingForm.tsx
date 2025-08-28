@@ -101,7 +101,7 @@ const BookingForm: React.FC = () => {
               appointment_date: booking.booking_date || new Date().toISOString().split('T')[0],
               appointment_time: booking.timeslot_start_time || 'To be scheduled',
               total_amount: 0, // No payment required
-              booking_reference: `KH-${booking.id}`,
+              booking_reference: booking.booking_reference || `KH-${booking.id}`,
               therapist_name: 'KH Therapy Team',
               clinic_address: 'Dublin, Ireland',
               special_instructions: booking.notes || 'We will contact you to schedule your appointment'
@@ -193,7 +193,7 @@ const BookingForm: React.FC = () => {
           service_name: paymentState.booking.package_name,
           appointment_date: paymentState.booking.booking_date || new Date().toISOString().split('T')[0],
           appointment_time: paymentState.booking.timeslot_start_time || 'To be scheduled',
-          booking_reference: `KH-${paymentState.booking.id}`,
+          booking_reference: paymentState.booking.booking_reference || `KH-${paymentState.booking.id}`,
           payment_status: 'completed',
           payment_amount: paymentState.paymentRequest.amount,
           transaction_id: `SUMUP-${Date.now()}`, // This should come from actual payment response
@@ -361,7 +361,7 @@ const BookingForm: React.FC = () => {
             </li>
             <li className="flex items-start">
               <span className="inline-block w-5 h-5 bg-red-100 text-red-600 rounded-full text-xs font-bold mr-2 mt-0.5 text-center leading-5">3</span>
-              Your booking reference: <strong>KH-{paymentState.booking?.id}</strong>
+              Your booking reference: <strong>{paymentState.booking?.booking_reference || `KH-${paymentState.booking?.id}`}</strong>
             </li>
           </ul>
         </div>
