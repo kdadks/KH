@@ -433,16 +433,18 @@ export class PDFInvoiceGenerator {
     const totalInvoiceAmount = invoiceData.financial.total;
     const totalPaidAmount = invoiceData.financial.totalPaid || 0;
     const depositAmount = invoiceData.financial.depositPaid || 0;
+    const isPaid = invoiceData.status === 'paid';
+    const isOfflinePaid = invoiceData.notes?.includes('Offline Payment Received');
     
     // Payment Breakdown Section - only show if there are payments
-    if (totalPaidAmount > 0) {
+    if (totalPaidAmount > 0 || depositAmount > 0) {
       currentY += 4;
       
       // Show deposit if applicable
       if (depositAmount > 0) {
         this.doc.setFontSize(10);
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setTextColor(this.COLORS.dark);
+        this.doc.setTextColor(this.COLORS.primary);
         this.doc.text('Deposit Paid:', labelX, currentY);
         this.doc.text(`-${this.formatCurrency(depositAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
         currentY += 8;
@@ -453,29 +455,46 @@ export class PDFInvoiceGenerator {
       if (balancePaid > 0) {
         this.doc.setFontSize(10);
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setTextColor(this.COLORS.dark);
-        this.doc.text('Balance Paid:', labelX, currentY);
-        this.doc.text(`-${this.formatCurrency(balancePaid, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+        this.doc.setTextColor(this.COLORS.success);
+        
+        // Determine payment method label
+        const paymentLabel = isOfflinePaid ? 'Offline Paid:' : 'Online Paid:';
+        
+        this.doc.text(paymentLabel, labelX, currentY);
+        this.doc.text(this.formatCurrency(balancePaid, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
         currentY += 8;
       }
       
-      // Add spacing before total paid
+      // Add spacing before final amount
       currentY += 4;
-      
-      // Show total paid with emphasis
-      this.doc.setFontSize(11);
-      this.doc.setFont('helvetica', 'bold');
-      this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('Total Paid:', labelX, currentY);
-      this.doc.text(this.formatCurrency(totalPaidAmount, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
-      currentY += 12;
     }
     
-    // Calculate actual due amount with better precision
-    const actualDueAmount = Math.round((totalInvoiceAmount - totalPaidAmount) * 100) / 100;
+    // Calculate actual due amount with proper deposit handling
+    let actualDueAmount;
+    
+    if (invoiceData.status === 'draft' || invoiceData.status === 'sent') {
+      // For draft/sent invoices, calculate amount due as: subtotal - deposit
+      // This matches the preview calculation logic exactly (uses subtotal, not total)
+      const invoiceSubtotal = invoiceData.financial.subtotal;
+      actualDueAmount = Math.max(0, invoiceSubtotal - depositAmount);
+    } else {
+      // For paid/other invoices, subtract all payments from total
+      actualDueAmount = Math.round((totalInvoiceAmount - totalPaidAmount) * 100) / 100;
+    }
 
-    // Show amount due or paid status with precise comparison
-    if (actualDueAmount >= 0.01) {
+    // For paid invoices, always show "Amount Fully Paid" regardless of calculation discrepancies
+    if (isPaid || invoiceData.status === 'paid' || actualDueAmount < 0.01) {
+      // Invoice is fully paid
+      this.doc.setFontSize(12);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setTextColor(this.COLORS.success);
+      this.doc.text('Amount Fully Paid:', labelX, currentY);
+      this.doc.text(this.formatCurrency(totalInvoiceAmount, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
+      
+      // Update status to paid
+      invoiceData.status = 'paid';
+    } else {
+      // Invoice has outstanding amount
       this.doc.setFontSize(12);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setTextColor(this.COLORS.danger);
@@ -488,15 +507,6 @@ export class PDFInvoiceGenerator {
       } else {
         invoiceData.status = actualDueAmount > 0 && new Date(invoiceData.dueDate) < new Date() ? 'overdue' : 'sent';
       }
-    } else {
-      // Invoice is fully paid (actualDueAmount < 0.01)
-      this.doc.setFontSize(12);
-      this.doc.setFont('helvetica', 'bold');
-      this.doc.setTextColor(this.COLORS.success);
-      this.doc.text('PAID IN FULL', rightX - 40, currentY, { align: 'center' });
-      
-      // Update status to paid
-      invoiceData.status = 'paid';
     }
   }
 
@@ -557,13 +567,6 @@ export class PDFInvoiceGenerator {
     // Get base64 string without data URI prefix for email attachments
     const base64DataUri = this.doc.output('datauristring');
     const base64 = base64DataUri.split(',')[1]; // Remove 'data:application/pdf;base64,' prefix
-    
-    // Verify base64 conversion (log first few and last few characters for debugging)
-    console.log(`PDF Generation for ${filename}:`);
-    console.log(`- Blob size: ${blob.size} bytes`);
-    console.log(`- Base64 length: ${base64.length} characters`);
-    console.log(`- Base64 starts with: ${base64.substring(0, 20)}...`);
-    console.log(`- Base64 ends with: ...${base64.substring(base64.length - 20)}`);
     
     return {
       blob,

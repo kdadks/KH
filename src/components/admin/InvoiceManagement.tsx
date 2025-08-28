@@ -68,6 +68,10 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     notes: ''
   });
   const [selectedBooking, setSelectedBooking] = useState<BookingFormData | null>(null);
+  const [bookingPayments, setBookingPayments] = useState<any[]>([]);
+  
+  // Invoice type selection
+  const [invoiceType, setInvoiceType] = useState<'online' | 'offline'>('online');
   
   // Deposit tracking
   const [customerDeposits, setCustomerDeposits] = useState<{amount: number, serviceName?: string}>({
@@ -259,10 +263,50 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }
   };
 
+  const fetchBookingPayments = async (bookingId: string) => {
+    try {
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          amount,
+          currency,
+          status,
+          payment_method,
+          payment_date,
+          created_at,
+          booking_id,
+          invoice_id,
+          notes
+        `)
+        .eq('booking_id', bookingId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching booking payments:', error);
+        setBookingPayments([]);
+        return;
+      }
+
+      setBookingPayments(payments || []);
+      console.log(`💳 Found ${payments?.length || 0} payments for booking ${bookingId}:`, payments);
+    } catch (error) {
+      console.error('Error fetching booking payments:', error);
+      setBookingPayments([]);
+    }
+  };
+
   const handleBookingChange = async (bookingId: string) => {
     console.log('📋 Booking selected:', bookingId);
     setFormData(prev => ({ ...prev, booking_id: bookingId }));
     
+    // Fetch payments for this booking
+    if (bookingId) {
+      await fetchBookingPayments(bookingId);
+    } else {
+      setBookingPayments([]);
+    }
+
     const booking = customerBookings.find(b => b.id === bookingId);
     setSelectedBooking(booking || null);
     
@@ -301,7 +345,16 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           if (matchingService) {
             // Determine if it's in-hour or out-of-hour based on service name first, then booking time
             const isOutOfHour = cleanServiceName.toLowerCase().includes('out of hour');
-            const isInHour = !isOutOfHour && isBookingInHour(booking);
+            const isInHourByName = cleanServiceName.toLowerCase().includes('in hour');
+            const isInHour = isInHourByName || (!isOutOfHour && isBookingInHour(booking));
+            
+            console.log('🕐 Pricing determination:', {
+              serviceName: cleanServiceName,
+              isOutOfHour,
+              isInHourByName,
+              bookingTimeInHour: isBookingInHour(booking),
+              finalIsInHour: isInHour
+            });
             
             let unitPrice = isInHour ? 
               parseFloat(matchingService.in_hour_price?.replace('€', '') || '0') :
@@ -338,13 +391,28 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
             if (formData.customer_id) {
               console.log('🏦 Fetching deposit payments for selected service...');
               const { getCustomerDepositPayments } = await import('../../utils/paymentRequestUtils');
-              const depositData = await getCustomerDepositPayments(formData.customer_id, cleanServiceName);
-              console.log('💳 Deposit found for selected service:', depositData.amount);
+              const depositData = await getCustomerDepositPayments(formData.customer_id, cleanServiceName, bookingId);
+              console.log('💳 Deposit found for selected service:', depositData.amount, 'using booking ID:', bookingId);
               
+              // Verify deposit calculation: deposit should be 20% of the unit price
+              const expectedDeposit = Math.round(unitPrice * 0.20);
+              console.log('🔍 Deposit verification - Expected:', expectedDeposit, 'Found:', depositData.amount, 'Service Price:', unitPrice);
+              
+              // Use the actual deposit amount found in payments (not calculated)
               setCustomerDeposits({
                 amount: depositData.amount,
                 serviceName: cleanServiceName
               });
+              
+              // Log discrepancy if any
+              if (depositData.amount > 0 && Math.abs(depositData.amount - expectedDeposit) > 1) {
+                console.warn('⚠️ Deposit amount discrepancy detected:', {
+                  expected: expectedDeposit,
+                  actual: depositData.amount,
+                  servicePrice: unitPrice,
+                  difference: Math.abs(depositData.amount - expectedDeposit)
+                });
+              }
             }
             
             console.log('✅ Booking-based auto-population completed successfully!');
@@ -418,6 +486,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     setSelectedBooking(null);
     setCustomerBookings([]);
     setCustomerDeposits({ amount: 0, serviceName: undefined });
+    setInvoiceType('online'); // Reset to default online type
     setFormData({
       customer_id: 0,
       booking_id: '',
@@ -432,6 +501,11 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   const handleEditInvoice = async (invoice: Invoice) => {
     setEditingInvoice(invoice);
     
+    // Determine invoice type based on existing invoice data
+    const isOfflineInvoice = invoice.status === 'paid' && 
+                           invoice.notes?.includes('Offline Payment Received');
+    setInvoiceType(isOfflineInvoice ? 'offline' : 'online');
+    
     // Fetch customer bookings for editing
     if (invoice.customer_id) {
       await fetchCustomerBookings(invoice.customer_id);
@@ -445,6 +519,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       items: invoice.items || [],
       notes: invoice.notes || ''
     });
+    
+    // Fetch payments for the booking if available
+    if (invoice.booking_id) {
+      await fetchBookingPayments(invoice.booking_id);
+    }
+    
     setViewMode('form');
   };
 
@@ -466,7 +546,31 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       }
 
       const subtotalAmount = formData.items.reduce((sum, item) => sum + item.total_price, 0);
-      const finalAmount = Math.max(0, subtotalAmount - customerDeposits.amount);
+      
+      // Calculate amounts based on invoice type
+      let finalAmount: number;
+      let invoiceStatus: string;
+      let invoiceNotes: string;
+      
+      if (invoiceType === 'offline') {
+        // Offline invoice: full amount, no deposit deduction, marked as paid
+        finalAmount = subtotalAmount;
+        invoiceStatus = editingInvoice ? editingInvoice.status : 'paid';
+        
+        // Build notes for offline invoice with deposit information
+        let offlineNotes = `${formData.notes}\n\nOffline Payment Received: €${subtotalAmount.toFixed(2)} - Full payment received offline, no amount due.`;
+        
+        if (customerDeposits.amount > 0) {
+          offlineNotes += `\n\nNote: Previous deposit of €${customerDeposits.amount.toFixed(2)} was paid online${customerDeposits.serviceName ? ` for ${customerDeposits.serviceName}` : ''}. The offline payment includes the remaining balance plus this deposit amount for a total payment of €${subtotalAmount.toFixed(2)}.`;
+        }
+        
+        invoiceNotes = offlineNotes;
+      } else {
+        // Online invoice: deposit deduction applied, draft status
+        finalAmount = Math.max(0, subtotalAmount - customerDeposits.amount);
+        invoiceStatus = editingInvoice ? editingInvoice.status : 'draft';
+        invoiceNotes = `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`;
+      }
 
       if (editingInvoice) {
         const { error: invoiceError } = await supabase
@@ -480,7 +584,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
             vat_rate: 0,
             vat_amount: 0,
             total_amount: finalAmount,
-            notes: `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`
+            status: invoiceStatus,
+            notes: invoiceNotes
           })
           .eq('id', editingInvoice.id);
 
@@ -502,7 +607,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           if (itemsError) throw itemsError;
         }
 
-        showSuccess('Invoice Updated', 'Invoice updated successfully');
+        showSuccess('Invoice Updated', `Invoice updated successfully${invoiceType === 'offline' ? ' - marked as paid with offline payment' : ''}`);
       } else {
         const invoiceNumber = generateInvoiceNumber();
         
@@ -518,8 +623,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
             vat_rate: 0,
             vat_amount: 0,
             total_amount: finalAmount,
-            status: 'draft',
-            notes: `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`
+            status: invoiceStatus,
+            notes: invoiceNotes
           })
           .select()
           .single();
@@ -540,7 +645,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           if (itemsError) throw itemsError;
         }
 
-        showSuccess('Invoice Created', 'Invoice created successfully');
+        showSuccess('Invoice Created', `Invoice created successfully${invoiceType === 'offline' ? ' - marked as paid with offline payment' : ''}`);
       }
 
       setViewMode('list');
@@ -636,18 +741,42 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   // Check if invoice has been paid by checking payments table
   const checkInvoicePaymentStatus = async (invoiceId: number) => {
     try {
-      const { data: payments, error } = await supabase
+      // Get the invoice to find its booking_id
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('booking_id, total_amount')
+        .eq('id', invoiceId)
+        .single();
+
+      if (invoiceError) {
+        console.error('Error fetching invoice for payment check:', invoiceError);
+        return 'unpaid';
+      }
+
+      // Check for payments linked to this invoice or its booking
+      let paymentsQuery = supabase
         .from('payments')
-        .select('status')
-        .eq('invoice_id', invoiceId)
+        .select('amount, status')
         .eq('status', 'paid');
+
+      if (invoice.booking_id) {
+        paymentsQuery = paymentsQuery.or(`invoice_id.eq.${invoiceId},booking_id.eq.${invoice.booking_id}`);
+      } else {
+        paymentsQuery = paymentsQuery.eq('invoice_id', invoiceId);
+      }
+
+      const { data: payments, error } = await paymentsQuery;
 
       if (error) {
         console.error('Error checking payment status:', error);
         return 'unpaid';
       }
 
-      return payments && payments.length > 0 ? 'paid' : 'unpaid';
+      // Calculate total paid amount
+      const totalPaid = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+      
+      // Consider invoice paid if total payments >= invoice total
+      return totalPaid >= (invoice.total_amount || 0) ? 'paid' : 'unpaid';
     } catch (error) {
       console.error('Error checking payment status:', error);
       return 'unpaid';
@@ -778,7 +907,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         `Invoice ${invoice.invoice_number}`, // serviceName
         invoice.due_date, // bookingDate
         invoice.id!, // invoiceId
-        null, // bookingId (not applicable for invoices)
+        invoice.booking_id, // bookingId - pass the invoice's booking_id so payments get linked properly
         true, // isInvoicePaymentRequest - this tells the function it's for an invoice
         remainingAmount // customAmount - the exact amount to be paid
       );
@@ -951,17 +1080,17 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                       </option>
                     ))}
                   </select>
-                  {!formData.customer_id && (
+                  {formData.customer_id === 0 && (
                     <p className="mt-1 text-xs text-gray-500">
                       First select a customer to see their bookings
                     </p>
                   )}
-                  {formData.customer_id && customerBookings.length === 0 && (
+                  {formData.customer_id > 0 && customerBookings.length === 0 && (
                     <p className="mt-1 text-xs text-amber-600">
                       No confirmed bookings found for this customer. Only confirmed bookings can be used for invoice generation.
                     </p>
                   )}
-                  {formData.customer_id && customerBookings.length > 0 && !formData.booking_id && (
+                  {formData.customer_id > 0 && customerBookings.length > 0 && !formData.booking_id && (
                     <p className="mt-1 text-xs text-blue-600">
                       💡 Select a booking to automatically populate the invoice item with correct pricing
                     </p>
@@ -982,6 +1111,157 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Booking Payments Section */}
+            {formData.booking_id && bookingPayments.length > 0 && (
+              <div className="bg-yellow-50 rounded-lg p-4 sm:p-5">
+                <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <CreditCard className="w-5 h-5 mr-2 text-yellow-600" />
+                  Payments for Selected Booking
+                </h4>
+                <div className="space-y-3">
+                  {bookingPayments.map((payment) => (
+                    <div key={payment.id} className="bg-white rounded-lg p-3 border border-yellow-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              payment.status === 'paid' 
+                                ? 'bg-green-100 text-green-800' 
+                                : payment.status === 'processing'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {payment.status}
+                            </span>
+                            <span className="text-sm font-medium text-gray-900">
+                              €{payment.amount?.toFixed(2) || '0.00'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              via {payment.payment_method || 'Unknown'}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs text-gray-600">
+                            <span>Booking ID: {payment.booking_id}</span>
+                            {payment.invoice_id && (
+                              <span className="ml-2">• Invoice ID: {payment.invoice_id}</span>
+                            )}
+                          </div>
+                          {payment.notes && (
+                            <div className="mt-1 text-xs text-gray-500">
+                              {payment.notes}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {payment.payment_date 
+                            ? new Date(payment.payment_date).toLocaleDateString()
+                            : new Date(payment.created_at).toLocaleDateString()
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="bg-white rounded-lg p-3 border border-yellow-300">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-gray-900">Total Paid:</span>
+                      <span className="font-bold text-green-600">
+                        €{bookingPayments
+                          .filter(p => p.status === 'paid')
+                          .reduce((sum, p) => sum + (p.amount || 0), 0)
+                          .toFixed(2)
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Invoice Type Selection Tabs */}
+            {formData.customer_id > 0 && formData.booking_id && (
+              <div className="bg-gray-50 rounded-lg p-4 sm:p-5">
+                <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <CreditCard className="w-5 h-5 mr-2 text-gray-600" />
+                  Invoice Type
+                </h4>
+                
+                {/* Show warning if editing a paid invoice */}
+                {editingInvoice && editingInvoice.status === 'paid' && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800">
+                      ⚠️ This is a paid invoice. Invoice type cannot be changed once payment is received.
+                    </p>
+                  </div>
+                )}
+                
+                <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg">
+                  <button
+                    onClick={() => setInvoiceType('online')}
+                    disabled={!!(editingInvoice && editingInvoice.status === 'paid')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      invoiceType === 'online'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : editingInvoice && editingInvoice.status === 'paid'
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Online Invoice
+                  </button>
+                  <button
+                    onClick={() => setInvoiceType('offline')}
+                    disabled={!!(editingInvoice && editingInvoice.status === 'paid')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      invoiceType === 'offline'
+                        ? 'bg-green-600 text-white shadow-sm'
+                        : editingInvoice && editingInvoice.status === 'paid'
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Offline Invoice
+                  </button>
+                </div>
+                
+                {/* Invoice Type Descriptions */}
+                <div className="mt-4 p-3 rounded-lg border">
+                  {invoiceType === 'online' ? (
+                    <div className="text-sm text-gray-700">
+                      <div className="flex items-start space-x-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                        <div>
+                          <p className="font-medium text-blue-800">Online Invoice</p>
+                          <p className="text-gray-600 mt-1">
+                            Deposit will be deducted from total amount, customer pays remaining balance online.
+                            {customerDeposits.amount > 0 && (
+                              <span className="text-green-600 font-medium">
+                                {' '}Deposit of €{customerDeposits.amount.toFixed(2)} will be deducted.
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-700">
+                      <div className="flex items-start space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                        <div>
+                          <p className="font-medium text-green-800">Offline Invoice</p>
+                          <p className="text-gray-600 mt-1">
+                            Payment received offline - full amount is marked as paid with zero balance due. 
+                            <span className="text-green-600 font-medium">
+                              {' '}Final invoice will show full payment received.
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Invoice Details Section */}
             <div className="bg-green-50 rounded-lg p-4 sm:p-5">
@@ -1122,11 +1402,11 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                     <span>{formatCurrency(formData.items.reduce((sum, item) => sum + item.total_price, 0))}</span>
                   </div>
                   
-                  {/* Deposit Deduction */}
-                  {customerDeposits.amount > 0 && (
+                  {/* Deposit Deduction - only for online invoices */}
+                  {invoiceType === 'online' && customerDeposits.amount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>
-                        Less Deposit Paid
+                        Deposit Paid
                         {customerDeposits.serviceName && (
                           <span className="text-xs text-gray-500 ml-1">
                             ({customerDeposits.serviceName})
@@ -1137,19 +1417,73 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                     </div>
                   )}
                   
-                  <hr className="border-gray-200" />
-                  <div className="flex justify-between font-medium text-lg">
-                    <span>Amount Due:</span>
-                    <span>
-                      {formatCurrency(
-                        Math.max(0, formData.items.reduce((sum, item) => sum + item.total_price, 0) - customerDeposits.amount)
+                  {/* Offline Invoice Payment */}
+                  {invoiceType === 'offline' && (
+                    <>
+                      {customerDeposits.amount > 0 && (
+                        <div className="flex justify-between text-blue-600">
+                          <span>
+                            Deposit Paid
+                            {customerDeposits.serviceName && (
+                              <span className="text-xs text-gray-500 ml-1">
+                                ({customerDeposits.serviceName})
+                              </span>
+                            )}:
+                          </span>
+                          <span>-{formatCurrency(customerDeposits.amount)}</span>
+                        </div>
                       )}
+                      <div className="flex justify-between text-green-600">
+                        <span>Offline Paid:</span>
+                        <span>{formatCurrency(formData.items.reduce((sum, item) => sum + item.total_price, 0) - customerDeposits.amount)}</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  <hr className="border-gray-200" />
+                  
+                  {/* Amount Due calculation based on invoice type */}
+                  <div className="flex justify-between font-medium text-lg">
+                    <span>{invoiceType === 'offline' ? 'Amount Fully Paid:' : 'Amount Due:'}</span>
+                    <span className={invoiceType === 'offline' ? 'text-green-600' : ''}>
+                      {invoiceType === 'offline' 
+                        ? formatCurrency(formData.items.reduce((sum, item) => sum + item.total_price, 0))
+                        : formatCurrency(
+                            Math.max(0, formData.items.reduce((sum, item) => sum + item.total_price, 0) - customerDeposits.amount)
+                          )
+                      }
                     </span>
                   </div>
                   
-                  {customerDeposits.amount > 0 && (
+                  {/* Information messages for online invoice only */}
+                  {invoiceType === 'online' && customerDeposits.amount > 0 && (
                     <div className="text-xs text-gray-600 mt-2 p-2 bg-blue-50 rounded">
-                      💡 Deposit of {formatCurrency(customerDeposits.amount)} has been automatically deducted from the total amount.
+                      <div className="flex items-start space-x-1">
+                        <span>💡</span>
+                        <div>
+                          <p>Deposit of {formatCurrency(customerDeposits.amount)} has been automatically deducted from the total amount.</p>
+                          {(() => {
+                            const subtotal = formData.items.reduce((sum, item) => sum + item.total_price, 0);
+                            const expectedDeposit = Math.round(subtotal * 0.20);
+                            const actualDeposit = customerDeposits.amount;
+                            
+                            if (subtotal > 0 && Math.abs(actualDeposit - expectedDeposit) > 1) {
+                              return (
+                                <p className="text-amber-600 mt-1">
+                                  ⚠️ Note: Expected 20% deposit would be {formatCurrency(expectedDeposit)}, but {formatCurrency(actualDeposit)} was actually paid.
+                                </p>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {invoiceType === 'online' && customerDeposits.amount === 0 && (
+                    <div className="text-xs text-amber-600 mt-2 p-2 bg-amber-50 rounded">
+                      ⚠️ No deposit payment found for this service. Full amount will be due.
                     </div>
                   )}
                 </div>
@@ -1161,6 +1495,19 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
               <h4 className="text-lg font-medium text-gray-900 mb-4">
                 Additional Notes
               </h4>
+              
+              {/* Auto-generated notes for offline invoices */}
+              {invoiceType === 'offline' && (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-800 font-medium">
+                    ✅ Offline Payment Received
+                  </p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Full payment has been received offline. No amount is due. This invoice serves as a final payment confirmation.
+                  </p>
+                </div>
+              )}
+              
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
@@ -1301,10 +1648,48 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
             <div className="w-64 space-y-2">
               {(() => {
                 const itemsSubtotal = items.reduce((sum, item) => sum + item.total_price, 0);
-                const hasDepositDeduction = previewingInvoice.notes?.includes('Deposit Deducted:');
-                const depositAmount = hasDepositDeduction 
-                  ? parseFloat(previewingInvoice.notes?.match(/Deposit Deducted: €([\d.]+)/)?.[1] || '0')
-                  : 0;
+                
+                // Enhanced deposit detection logic
+                let depositAmount = 0;
+                let hasDepositDeduction = false;
+                
+                // Check for various deposit patterns in notes
+                if (previewingInvoice.notes) {
+                  console.log('🔍 Invoice notes for deposit detection:', previewingInvoice.notes);
+                  
+                  // Pattern 1: "Deposit Deducted: €XX.XX"
+                  const depositDeductedMatch = previewingInvoice.notes.match(/Deposit Deducted: €([\d.]+)/);
+                  if (depositDeductedMatch) {
+                    depositAmount = parseFloat(depositDeductedMatch[1]);
+                    hasDepositDeduction = true;
+                    console.log('✅ Found deposit via "Deposit Deducted" pattern:', depositAmount);
+                  }
+                  
+                  // Pattern 2: "Previous deposit of €XX.XX"
+                  if (!hasDepositDeduction) {
+                    const previousDepositMatch = previewingInvoice.notes.match(/Previous deposit of €([\d.]+)/i);
+                    if (previousDepositMatch) {
+                      depositAmount = parseFloat(previousDepositMatch[1]);
+                      hasDepositDeduction = true;
+                      console.log('✅ Found deposit via "Previous deposit" pattern:', depositAmount);
+                    }
+                  }
+                  
+                  // Pattern 3: "deposit.*€XX.XX" (more general)
+                  if (!hasDepositDeduction) {
+                    const generalDepositMatch = previewingInvoice.notes.match(/deposit.*€([\d.]+)/i);
+                    if (generalDepositMatch) {
+                      depositAmount = parseFloat(generalDepositMatch[1]);
+                      hasDepositDeduction = true;
+                      console.log('✅ Found deposit via general pattern:', depositAmount);
+                    }
+                  }
+                  
+                  console.log('💰 Final deposit amount detected:', depositAmount);
+                }
+                
+                const isPaid = previewingInvoice.status === 'paid';
+                const isOfflinePaid = previewingInvoice.notes?.includes('Offline Payment Received');
 
                 return (
                   <>
@@ -1312,15 +1697,40 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                       <span>Subtotal:</span>
                       <span>{formatCurrency(itemsSubtotal)}</span>
                     </div>
+                    
                     {depositAmount > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Less Deposit Paid:</span>
+                      <div className="flex justify-between text-blue-600">
+                        <span>Deposit Paid:</span>
                         <span>-{formatCurrency(depositAmount)}</span>
                       </div>
                     )}
+                    
+                    {isPaid && isOfflinePaid && depositAmount === 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Offline Paid:</span>
+                        <span>{formatCurrency(itemsSubtotal)}</span>
+                      </div>
+                    )}
+                    
+                    {isPaid && isOfflinePaid && depositAmount > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Offline Paid:</span>
+                        <span>{formatCurrency(itemsSubtotal - depositAmount)}</span>
+                      </div>
+                    )}
+                    
                     <div className="flex justify-between text-lg font-bold border-t pt-2">
-                      <span>Amount Due:</span>
-                      <span>{formatCurrency(previewingInvoice.total_amount)}</span>
+                      {isPaid ? (
+                        <>
+                          <span className="text-green-600">Amount Fully Paid:</span>
+                          <span className="text-green-600">{formatCurrency(itemsSubtotal)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Amount Due:</span>
+                          <span>{formatCurrency(previewingInvoice.total_amount)}</span>
+                        </>
+                      )}
                     </div>
                   </>
                 );

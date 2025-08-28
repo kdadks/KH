@@ -453,56 +453,6 @@ export class InvoiceService {
     }
   }
 
-  /**
-   * Prepare email data for sending
-   */
-  private prepareEmailData(
-    invoice: LegacyInvoice,
-    customer: LegacyCustomer,
-    emailOptions: EmailInvoiceOptions,
-    pdfData: { base64: string; filename: string }
-  ) {
-    const defaultSubject = `Invoice ${invoice.invoice_number} - ${customer.name}`;
-    const defaultBody = `
-      Dear ${customer.name},
-
-      Please find attached your invoice ${invoice.invoice_number}.
-
-      Invoice Details:
-      - Invoice Number: ${invoice.invoice_number}
-      - Date: ${invoice.invoice_date}
-      - Due Date: ${invoice.due_date}
-      - Total: €${invoice.total.toFixed(2)}
-
-      ${emailOptions.includePaymentInstructions ? `
-      Payment Instructions:
-      Bank: Bank of Ireland
-      Account Name: Kingsmills Hotel Ltd
-      IBAN: IE29 BOFI 9000 0112 3456 78
-      BIC: BOFIIE2D
-      ` : ''}
-
-      Thank you for your business!
-
-      Best regards,
-      Kingsmills Hotel
-    `;
-
-    return {
-      to: emailOptions.to,
-      cc: emailOptions.cc || [],
-      bcc: emailOptions.bcc || [],
-      subject: emailOptions.subject || defaultSubject,
-      body: emailOptions.body || defaultBody,
-      attachments: [
-        {
-          filename: pdfData.filename,
-          content: pdfData.base64,
-          type: 'application/pdf'
-        }
-      ]
-    };
-  }
 
   /**
    * Clean up preview URLs to prevent memory leaks
