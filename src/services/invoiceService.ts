@@ -18,6 +18,7 @@ import {
   validateInvoiceDataForTransformation 
 } from '../utils/invoiceDataTransformer';
 import { supabase } from '../supabaseClient';
+import { decryptCustomerPII } from '../utils/gdprUtils';
 
 // Service response types
 export interface InvoiceServiceResponse<T = any> {
@@ -112,8 +113,11 @@ export class InvoiceService {
         };
       }
 
+      // Decrypt customer data before transforming
+      const decryptedCustomer = decryptCustomerPII(customer);
+
       // Transform data
-      const invoiceData = transformInvoiceData(invoice, customer, items);
+      const invoiceData = transformInvoiceData(invoice, decryptedCustomer, items);
       
       // Generate PDF options
       const pdfOptions = { ...this.defaultOptions, ...options };
@@ -162,8 +166,11 @@ export class InvoiceService {
         };
       }
 
+      // Decrypt customer data before transforming
+      const decryptedCustomer = decryptCustomerPII(customer);
+
       // Transform data
-      const invoiceData = transformInvoiceData(invoice, customer, items);
+      const invoiceData = transformInvoiceData(invoice, decryptedCustomer, items);
       
       // Generate PDF options
       const pdfOptions = { ...this.defaultOptions, ...options };
@@ -286,8 +293,11 @@ export class InvoiceService {
         };
       }
 
+      // Decrypt customer data before transforming
+      const decryptedCustomer = decryptCustomerPII(customer);
+
       // Transform data
-      const invoiceData = transformInvoiceData(invoice, customer, items);
+      const invoiceData = transformInvoiceData(invoice, decryptedCustomer, items);
       
       // Generate PDF options
       const pdfOptions = { ...this.defaultOptions, ...options };
@@ -643,17 +653,20 @@ export async function downloadInvoicePDFWithPayments(
       currency: 'EUR'
     };
 
+    // Decrypt customer data for PDF generation
+    const decryptedCustomer = decryptCustomerPII(customer);
+
     const customerData = {
-      id: customer.id,
-      name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.email || 'Customer',
-      email: customer.email,
-      phone: customer.phone,
+      id: decryptedCustomer.id,
+      name: `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() || decryptedCustomer.email || 'Customer',
+      email: decryptedCustomer.email,
+      phone: decryptedCustomer.phone,
       address: [
-        customer.address_line_1,
-        customer.address_line_2,
-        customer.city,
-        customer.county,
-        customer.eircode
+        decryptedCustomer.address_line_1,
+        decryptedCustomer.address_line_2,
+        decryptedCustomer.city,
+        decryptedCustomer.county,
+        decryptedCustomer.eircode
       ].filter(Boolean).join(', ') || ''
     };
 

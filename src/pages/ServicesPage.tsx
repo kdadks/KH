@@ -1,21 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import SectionHeading from '../components/shared/SectionHeading';
 import Container from '../components/shared/Container';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Package } from '../data/packages'; // Only import the type
 import { supabase } from '../supabaseClient';
 import SEOHead from '../components/utils/SEOHead';
 
 const ServicesPage: React.FC = () => {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
 	const [services, setServices] = useState<Package[]>([]);
 	const [categories, setCategories] = useState<string[]>([]);
 	const [activeCategory, setActiveCategory] = useState<string>('');
 	const [loading, setLoading] = useState(true);
 
+	// Helper functions for URL-friendly category names
+	const categoryToSlug = (category: string): string => {
+		return category.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+	};
+
+	const slugToCategory = (slug: string): string => {
+		// Map common slugs back to category names
+		const slugMap: { [key: string]: string } = {
+			'corporate-packages': 'Corporate Packages',
+			'individual-therapy': 'Individual Therapy',
+			'sports-therapy': 'Sports Therapy',
+			'group-sessions': 'Group Sessions'
+		};
+		return slugMap[slug] || slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+	};
+
 	useEffect(() => {
 		fetchServices();
 	}, []);
+
+	// Set active category from URL parameter
+	useEffect(() => {
+		const categoryParam = searchParams.get('category');
+		if (categoryParam) {
+			const categoryName = slugToCategory(categoryParam);
+			if (categories.includes(categoryName)) {
+				setActiveCategory(categoryName);
+			}
+		}
+	}, [searchParams, categories]);
 
 	const fetchServices = async () => {
 		try {
@@ -61,6 +89,13 @@ const ServicesPage: React.FC = () => {
 		}
 	};
 
+	// Handle tab click with URL update
+	const handleCategoryClick = (category: string) => {
+		setActiveCategory(category);
+		const slug = categoryToSlug(category);
+		navigate(`/services?category=${slug}`, { replace: true });
+	};
+
 	const filtered: Package[] = services.filter(
 		(p) => p.category === activeCategory
 	);
@@ -91,7 +126,7 @@ const ServicesPage: React.FC = () => {
 													? 'bg-primary-600 text-white border-primary-600'
 													: 'bg-neutral-100 hover:bg-neutral-200 border-transparent'
 											}`}
-											onClick={() => setActiveCategory(cat)}
+											onClick={() => handleCategoryClick(cat)}
 										>
 											{cat}
 										</button>

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import ScrollToTop from '../utils/ScrollToTop';
+import ScrollToTopButton from '../utils/ScrollToTopButton';
 import CookieConsent from '../shared/CookieConsent';
 import WhatsAppChat from '../../components/WhatsAppChat';
 
@@ -17,6 +18,7 @@ const Layout: React.FC = () => {
       <Footer />
       <CookieConsent />
       <WhatsAppChat />
+      <ScrollToTopButton />
     </div>
   );
 };
