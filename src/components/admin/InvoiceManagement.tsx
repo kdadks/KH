@@ -893,7 +893,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
               disabled={!formData.booking_id}
               className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                 formData.booking_id 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  ? 'bg-primary-600 text-white hover:bg-primary-700' 
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
@@ -1026,7 +1026,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                 </h4>
                 <button
                   onClick={addInvoiceItem}
-                  className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-1 text-sm"
+                  className="px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors flex items-center space-x-1 text-sm"
                 >
                   <Plus size={14} />
                   <span>Add Item</span>

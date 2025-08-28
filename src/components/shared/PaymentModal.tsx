@@ -150,7 +150,7 @@ const SumUpPaymentForm: React.FC<SumUpPaymentFormProps> = ({
       <button
         onClick={handlePayment}
         disabled={processing}
-        className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+        className="w-full bg-secondary-600 text-white py-3 px-6 rounded-lg hover:bg-secondary-700 transition-colors font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
         {processing ? (
           <>
@@ -411,8 +411,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           {/* Confirmation Step */}
           {currentStep === 'confirm' && (
             <div className="text-center space-y-6">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <div className="text-4xl font-bold text-blue-600 mb-2">
+              <div className="bg-primary-50 border border-primary-200 rounded-lg p-6">
+                <div className="text-4xl font-bold text-primary-600 mb-2">
                   {formatCurrency(paymentRequest.amount, paymentRequest.currency)}
                 </div>
                 <p className="text-gray-600">
@@ -449,7 +449,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
               <button
                 onClick={handleStartPayment}
-                className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg"
+                className="w-full bg-primary-600 text-white py-3 px-6 rounded-lg hover:bg-primary-700 transition-colors font-medium text-lg"
               >
                 Continue to Payment
               </button>
@@ -560,7 +560,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
               <button
                 onClick={() => setCurrentStep('confirm')}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors font-medium"
               >
                 Try Again
               </button>

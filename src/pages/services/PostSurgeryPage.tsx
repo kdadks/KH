@@ -282,7 +282,7 @@ const PostSurgeryPage: React.FC = () => {
                     target.src = "https://images.pexels.com/photos/8376268/pexels-photo-8376268.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
-                <div className="absolute -top-6 -right-6 bg-green-600 text-white p-4 rounded-lg shadow-lg">
+                <div className="absolute -top-6 -right-6 bg-secondary-600 text-white p-4 rounded-lg shadow-lg">
                   <Shield className="w-6 h-6 mb-2" />
                   <p className="font-semibold">Evidence-Based</p>
                 </div>
@@ -417,7 +417,7 @@ const PostSurgeryPage: React.FC = () => {
                   viewport={{ once: true }}
                   className="text-center"
                 >
-                  <div className="w-16 h-16 bg-green-600 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
+                  <div className="w-16 h-16 bg-secondary-600 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
                     {phase.step}
                   </div>
                   <h3 className="text-xl font-semibold mb-3 text-neutral-800">{phase.title}</h3>
@@ -429,7 +429,7 @@ const PostSurgeryPage: React.FC = () => {
         </section>
 
         {/* CTA Section */}
-        <section className="py-16 md:py-24 bg-green-600 text-white">
+        <section className="py-16 md:py-24 bg-secondary-600 text-white">
           <Container>
             <motion.div
               initial={{ opacity: 0, y: 20 }}

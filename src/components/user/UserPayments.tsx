@@ -362,13 +362,13 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-medium text-blue-900 mb-2">Need to make a payment?</h3>
-                <p className="text-blue-700">
+                <p className="text-primary-700">
                   You can pay outstanding invoices directly from your invoice page.
                 </p>
               </div>
               <button
                 onClick={() => handleViewInvoices()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
               >
                 View Invoices
               </button>

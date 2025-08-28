@@ -132,7 +132,7 @@ const AboutPage = () => {
                     </a>
                     <a 
                       href="https://www.linkedin.com/in/kelly-hodgins-547b05211/" 
-                      className="flex items-center justify-center w-12 h-12 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors group shadow-lg"
+                      className="flex items-center justify-center w-12 h-12 bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors group shadow-lg"
                       aria-label="Connect on LinkedIn"
                       target="_blank" 
                       rel="noopener noreferrer"

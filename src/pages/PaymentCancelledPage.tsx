@@ -109,7 +109,7 @@ const PaymentCancelledPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={() => window.history.back()}
-              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+              className="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Try Payment Again

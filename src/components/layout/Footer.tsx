@@ -103,7 +103,7 @@ const Footer: React.FC = () => {
               </div>
               <div className="flex items-center">
                 <Mail size={20} className="mr-3 text-primary-400" />
-                <a href="mailto:khtherapy@hotmail.com" className="text-neutral-300 hover:text-white transition-colors">khtherapy@hotmail.com</a>
+                <a href="mailto:info@khtherapy.ie" className="text-neutral-300 hover:text-white transition-colors">info@khtherapy.ie</a>
               </div>
               <div className="flex items-start">
                 <Clock size={20} className="mr-3 mt-1 text-primary-400" />

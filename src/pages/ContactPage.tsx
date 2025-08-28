@@ -302,8 +302,8 @@ const ContactPage: React.FC = () => {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Email</h4>
-                      <a href="mailto:khtherapy@hotmail.com" className="text-primary-600 hover:text-primary-700 transition-colors">
-                        khtherapy@hotmail.com
+                      <a href="mailto:info@khtherapy.ie" className="text-primary-600 hover:text-primary-700 transition-colors">
+                        info@khtherapy.ie
                       </a>
                     </div>
                   </div>

@@ -244,7 +244,7 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
                       <div className="ml-6">
                         <button
                           onClick={() => handlePayNow(request)}
-                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
+                          className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 flex items-center gap-2"
                         >
                           <Euro className="w-4 h-4" />
                           Pay Now
