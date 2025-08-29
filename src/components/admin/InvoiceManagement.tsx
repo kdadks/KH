@@ -707,7 +707,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     setViewMode('preview');
     
     // Fetch comprehensive payment data (online + offline calculation)
-    const { onlinePayments, offlinePayment } = await fetchInvoicePaymentData(invoice);
+    const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
     
     // Combine online and offline payments
     const allPayments = [...onlinePayments];
