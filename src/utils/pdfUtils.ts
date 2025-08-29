@@ -77,16 +77,12 @@ export const addCompanyLogos = async (doc: jsPDF, x: number = 14, y: number = 10
       
       // Add logo at top left position with appropriate 50x50px dimensions
       doc.addImage(invoiceLogoBase64, 'PNG', x, y, logoWidth, logoHeight);
-      invoiceLogoLoaded = true;
-      console.log('✅ Invoice Logo.png loaded successfully with 50x50px dimensions');
-    } catch (invoiceLogoError) {
+      invoiceLogoLoaded = true;    } catch (invoiceLogoError) {
       console.warn('❌ Could not load Invoice Logo.png:', invoiceLogoError);
     }
     
     // Only add text fallback if Invoice Logo failed to load
-    if (!invoiceLogoLoaded) {
-      console.log('⚠️ Using text fallback for header logo');
-      doc.setFontSize(20);
+    if (!invoiceLogoLoaded) {      doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.text('KH Therapy', x, y + 22);
     }
@@ -160,9 +156,7 @@ export const addIAPTLogo = async (doc: jsPDF, y: number = 250) => {
     
     // Add the logo with PNG format to preserve transparency
     doc.addImage(logoBase64, 'PNG', centeredX, finalLogoY, logoWidth, logoHeight);
-    logoLoaded = true;
-    console.log('✅ IAPT Logo loaded successfully');
-    
+    logoLoaded = true;    
     // Always add "Thank you for your business" text below the logo
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
@@ -177,9 +171,7 @@ export const addIAPTLogo = async (doc: jsPDF, y: number = 250) => {
     
     // Add the text if it fits within bounds
     if (textY < textBoundary) {
-      doc.text(thankYouText, textX, textY);
-      console.log('✅ Thank you text added successfully');
-    } else {
+      doc.text(thankYouText, textX, textY);    } else {
       console.warn('⚠️ Thank you text would exceed page bounds, skipping');
     }
     
@@ -187,9 +179,7 @@ export const addIAPTLogo = async (doc: jsPDF, y: number = 250) => {
     console.warn('❌ Could not load IAPT Logo.png, using text fallback:', error);
     
     // Only show fallback if logo didn't load
-    if (!logoLoaded) {
-      console.log('⚠️ Using text fallback for IAPT logo');
-      doc.setFontSize(8);
+    if (!logoLoaded) {      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(0, 0, 0);
       
@@ -204,9 +194,7 @@ export const addIAPTLogo = async (doc: jsPDF, y: number = 250) => {
       const thankYouText = 'Thank you for your business';
       const thankYouTextWidth = doc.getTextWidth(thankYouText);
       const thankYouX = (pageWidth - thankYouTextWidth) / 2;
-      doc.text(thankYouText, thankYouX, y + 20);
-      console.log('✅ Fallback text and thank you message added');
-    }
+      doc.text(thankYouText, thankYouX, y + 20);    }
   }
 };
 
@@ -232,12 +220,8 @@ export const checkPDFSize = (doc: jsPDF, filename: string) => {
     const sizeKB = Math.round(pdfOutput.size / 1024);
     const sizeMB = Math.round(sizeKB / 1024 * 100) / 100;
     
-    console.log(`📄 PDF "${filename}" size: ${sizeKB}KB (${sizeMB}MB)`);
-    
     if (sizeKB > 1024) {
-      console.warn(`⚠️ PDF file size (${sizeKB}KB) exceeds 1MB. Consider further optimization.`);
-    } else {
-      console.log(`✅ PDF file size is within 1MB limit.`);
+      // PDF file size exceeds 1MB - consider optimization if needed
     }
     
     return { sizeKB, sizeMB };
@@ -246,3 +230,4 @@ export const checkPDFSize = (doc: jsPDF, filename: string) => {
     return { sizeKB: 0, sizeMB: 0 };
   }
 };
+

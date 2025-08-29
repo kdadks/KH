@@ -76,9 +76,6 @@ export interface SumUpTransaction {
 export const createSumUpCheckoutSession = async (
   checkoutData: SumUpCreateCheckoutRequest
 ): Promise<SumUpCreateCheckoutResponse> => {
-  
-  console.log('Creating SumUp checkout session:', checkoutData);
-
   try {
     // Get SumUp configuration from database
     const gatewayConfig = await getActiveSumUpGateway();
@@ -105,10 +102,7 @@ export const createSumUpCheckoutSession = async (
       };
 
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      console.log('🚧 Development Mode: Mock checkout session created:', mockResponse);
-      return mockResponse;
+      await new Promise(resolve => setTimeout(resolve, 500));      return mockResponse;
     }
 
     // Production mode - use real SumUp API
@@ -134,9 +128,7 @@ export const createSumUpCheckoutSession = async (
       throw new Error(`SumUp API Error: ${response.status} - ${errorData.message || 'Unknown error'}`);
     }
 
-    const result = await response.json();
-    console.log('SumUp checkout session created:', result);
-    return result;
+    const result = await response.json();    return result;
 
   } catch (error) {
     console.error('Error creating SumUp checkout session:', error);
@@ -152,9 +144,6 @@ export const processSumUpPayment = async (
   checkoutId: string,
   paymentData: SumUpProcessPaymentRequest
 ): Promise<SumUpProcessPaymentResponse> => {
-  
-  console.log('Processing SumUp payment:', { checkoutId, paymentData });
-
   try {
     // Get SumUp configuration from database
     const gatewayConfig = await getActiveSumUpGateway();
@@ -182,10 +171,7 @@ export const processSumUpPayment = async (
       };
 
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('🚧 Development Mode: Mock payment processed:', mockResponse);
-      return mockResponse;
+      await new Promise(resolve => setTimeout(resolve, 1000));      return mockResponse;
     }
 
     // Production mode - use real SumUp API
@@ -208,9 +194,7 @@ export const processSumUpPayment = async (
       throw new Error(`SumUp Payment Error: ${response.status} - ${errorData.message || 'Payment failed'}`);
     }
 
-    const result = await response.json();
-    console.log('SumUp payment processed:', result);
-    return result;
+    const result = await response.json();    return result;
 
   } catch (error) {
     console.error('Error processing SumUp payment:', error);
@@ -248,10 +232,7 @@ export const getSumUpCheckoutStatus = async (checkoutId: string): Promise<SumUpC
       };
 
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      console.log('🚧 Development Mode: Mock checkout status:', mockResponse);
-      return mockResponse;
+      await new Promise(resolve => setTimeout(resolve, 300));      return mockResponse;
     }
 
     // Production mode - use real SumUp API
@@ -289,9 +270,6 @@ export const completeSumUpPaymentFlow = async (
     cvv: string;
   }
 ): Promise<SumUpProcessPaymentResponse> => {
-  
-  console.log('Starting complete SumUp payment flow...');
-
   // Get SumUp configuration from database
   const gatewayConfig = await getActiveSumUpGateway();
   
@@ -323,3 +301,4 @@ export default {
   getSumUpCheckoutStatus,
   completeSumUpPaymentFlow
 };
+

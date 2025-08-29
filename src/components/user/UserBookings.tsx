@@ -360,8 +360,8 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming }) => {
               <div className="flex space-x-2">
                 <button
                   onClick={() => {
-                    // TODO: Implement reschedule
-                    console.log('Reschedule booking:', booking.id);
+                    // Feature coming soon
+                    alert('Reschedule feature will be available in a future update. Please contact us directly for booking changes.');
                   }}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
@@ -370,8 +370,8 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming }) => {
                 <span className="text-gray-300">|</span>
                 <button
                   onClick={() => {
-                    // TODO: Implement cancel
-                    console.log('Cancel booking:', booking.id);
+                    // Feature coming soon
+                    alert('Cancellation feature will be available in a future update. Please contact us directly to cancel your booking.');
                   }}
                   className="text-sm text-red-600 hover:text-red-800 font-medium"
                 >

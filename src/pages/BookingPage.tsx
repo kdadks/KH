@@ -343,7 +343,7 @@ const BookingPage: React.FC = () => {
     try {
       // Check for existing pending/confirmed bookings to prevent duplicates
       // Note: We'll skip this check for now since customer data is now in a separate customers table
-      // TODO: Implement proper duplicate checking using customer relationship
+      // Duplicate checking to be implemented in future version with customer relationships
       const existingBookings: any[] = [];
       const checkError = null;
 

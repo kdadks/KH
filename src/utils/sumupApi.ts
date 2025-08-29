@@ -69,9 +69,6 @@ export const createSumUpCheckout = async (
     cancel_url: `${window.location.origin}/payment-cancelled`,
     pay_to_email: customerEmail
   };
-
-  console.log('Creating SumUp checkout:', checkoutData);
-
   try {
     // For sandbox/testing, SumUp doesn't require a real API call to create the checkout
     // Instead, we use their payment widget or redirect to their test environment
@@ -91,10 +88,7 @@ export const createSumUpCheckout = async (
       date: new Date().toISOString(),
       valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Valid for 24 hours
       checkout_url: sandboxCheckoutUrl
-    };
-
-    console.log('SumUp checkout created:', mockResponse);
-    return mockResponse;
+    };    return mockResponse;
 
   } catch (error) {
     console.error('Error creating SumUp checkout:', error);
@@ -179,17 +173,14 @@ export const validateSumUpWebhook = (payload: string, signature: string, secret:
   // 
   // return signature === expectedSignature;
   
-  // For demo purposes, always return true
-  console.log('Webhook validation (demo):', { payload, signature, secret });
+  // For demo purposes, always return true:', { payload, signature, secret });
   return true;
 };
 
 /**
  * Process SumUp webhook payload
  */
-export const processSumUpWebhook = (payload: any) => {
-  console.log('Processing SumUp webhook:', payload);
-  
+export const processSumUpWebhook = (payload: any) => {  
   // Extract relevant information from webhook
   const {
     event_type,
@@ -203,27 +194,11 @@ export const processSumUpWebhook = (payload: any) => {
 
   // Handle different webhook events
   switch (event_type) {
-    case 'checkout.paid':
-      console.log('Payment completed:', {
-        transaction_id,
-        checkout_reference,
-        amount,
-        currency,
-        status
-      });
-      break;
+    case 'checkout.paid':      break;
       
-    case 'checkout.failed':
-      console.log('Payment failed:', {
-        transaction_id,
-        checkout_reference,
-        status
-      });
-      break;
+    case 'checkout.failed':      break;
       
-    default:
-      console.log('Unknown webhook event:', event_type);
-  }
+    default:  }
 
   return {
     event_type,
@@ -242,3 +217,4 @@ export default {
   validateSumUpWebhook,
   processSumUpWebhook
 };
+

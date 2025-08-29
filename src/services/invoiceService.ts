@@ -502,7 +502,7 @@ export class InvoiceService {
           
           const emailResult = await generateInvoiceForEmail(invoiceData);
           if (emailResult.success) {
-            // TODO: Send actual email here
+            // Email functionality to be implemented in future version
             return {
               success: true,
               message: `Invoice prepared for email to ${options.emailTo.join(', ')}`

@@ -26,6 +26,7 @@ import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big
 import moment from 'moment';
 import { BookingFormData } from './types';
 import { decryptCustomerDataForAdmin } from '../../utils/adminGdprUtils';
+import { treatmentPackages } from '../../data/packages';
 
 interface BookingEventResource extends BookingFormData {
   isMultiple: boolean;
@@ -79,26 +80,17 @@ export const Bookings: React.FC<BookingsProps> = ({
   const getCustomerName = (booking: BookingFormData): string => {
     const name = booking.customer_details?.first_name && booking.customer_details?.last_name 
       ? `${booking.customer_details.first_name} ${booking.customer_details.last_name}`
-      : booking.customer_name || booking.name || 'Unknown';
-    
-    console.log('getCustomerName for booking', booking.id, ':', {
-      customer_details: booking.customer_details,
-      customer_name: booking.customer_name,
-      result: name
-    });
-    
+      : booking.customer_name || booking.name || 'Unknown';    
     return name;
   };
 
   const getCustomerEmail = (booking: BookingFormData): string => {
     const email = booking.customer_details?.email || booking.customer_email || booking.email || 'No email';
-    console.log('getCustomerEmail for booking', booking.id, ':', email);
     return email;
   };
 
   const getCustomerPhone = (booking: BookingFormData): string => {
     const phone = booking.customer_details?.phone || booking.customer_phone || booking.phone || 'No phone';
-    console.log('getCustomerPhone for booking', booking.id, ':', phone);
     return phone;
   };
   
@@ -137,6 +129,8 @@ export const Bookings: React.FC<BookingsProps> = ({
     service: '',
     date: '',
     time: '',
+    customStartTime: '',
+    customEndTime: '',
     notes: '',
     status: 'pending'
   });
@@ -257,12 +251,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         bookingTime = booking.appointment_time || booking.time || '';
       }
 
-      console.log('🔍 Availability Check Debug:', {
-        booking,
-        extractedDate: bookingDate,
-        extractedTime: bookingTime,
-      });
-
       if (!bookingDate || !bookingTime) {
         return {
           hasAvailability: false,
@@ -276,12 +264,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         .select('id, date, start_time, end_time, start, is_available')
         .eq('date', bookingDate)
         .eq('is_available', true); // Only get available slots
-
-      console.log('🔍 Availability Query Result:', {
-        bookingDate,
-        availabilitySlots,
-        error
-      });
 
       if (error) {
         console.error('Error checking availability:', error);
@@ -351,7 +333,6 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Helper function to check for existing confirmed bookings in the same time slot
   const checkForConflictingBookings = async (booking: BookingFormData): Promise<{ hasConflict: boolean; conflictDetails?: any; message?: string }> => {
     try {
-      console.log('🔍 Conflict Check Started:', booking);
       
       // Extract booking date and time
       let bookingDate: string = '';
@@ -393,15 +374,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         bookingTime = booking.appointment_time || booking.time || '';
       }
 
-      console.log('🔍 Extracted Date/Time (normalized):', { 
-        bookingDate, 
-        bookingTime,
-        originalBookingDate: booking.booking_date,
-        hasTimezone: booking.booking_date ? (booking.booking_date.includes('+') || booking.booking_date.includes('Z')) : false
-      });
-
       if (!bookingDate || !bookingTime) {
-        console.log('🔍 Missing date/time, skipping conflict check');
         return {
           hasConflict: false,
           message: 'Cannot check for conflicts: Missing date or time information.'
@@ -426,14 +399,9 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // If this is an update (existing booking), exclude the current booking from the check
       if (booking.id) {
-        console.log('🔍 Excluding current booking ID:', booking.id);
         query = query.neq('id', booking.id);
       }
-
-      console.log('🔍 Executing conflict check query...');
       const { data: existingBookings, error } = await query;
-
-      console.log('🔍 Query Result:', { existingBookings, error, count: existingBookings?.length });
 
       if (error) {
         console.error('Error checking for conflicting bookings:', error);
@@ -445,36 +413,16 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // Check each existing booking to see if it conflicts with our time slot
       const conflictingBookings = existingBookings?.filter(existingBooking => {
-        console.log('🔍 Checking existing booking:', existingBooking);
 
         // Extract date and time from existing booking
         if (existingBooking.booking_date) {
           const existingDateTime = new Date(existingBooking.booking_date);
           const newDateTime = new Date(booking.booking_date || '');
           
-          console.log('🔍 DateTime comparison:', {
-            existing: {
-              original: existingBooking.booking_date,
-              parsed: existingDateTime,
-              timestamp: existingDateTime.getTime()
-            },
-            new: {
-              original: booking.booking_date,
-              parsed: newDateTime,
-              timestamp: newDateTime.getTime()
-            }
-          });
-          
           if (!isNaN(existingDateTime.getTime()) && !isNaN(newDateTime.getTime())) {
             // Compare timestamps with a small tolerance (1 minute = 60000ms)
             const timeDifference = Math.abs(existingDateTime.getTime() - newDateTime.getTime());
             const isConflict = timeDifference < 60000; // Within 1 minute
-            
-            console.log('🔍 Time comparison:', {
-              timeDifference,
-              isConflict,
-              tolerance: '60000ms (1 minute)'
-            });
             
             return isConflict;
           }
@@ -483,16 +431,8 @@ export const Bookings: React.FC<BookingsProps> = ({
         return false;
       }) || [];
 
-      console.log('🔍 Conflicting bookings found:', conflictingBookings.length);
-
       if (conflictingBookings.length > 0) {
-        console.log('🔍 CONFLICT DETECTED!', conflictingBookings[0]);
         const conflictedBooking = conflictingBookings[0];
-        console.log('🔍 Conflicted booking details:', {
-          id: conflictedBooking.id,
-          booking_reference: conflictedBooking.booking_reference,
-          hasBookingReference: !!conflictedBooking.booking_reference
-        });
         
         // Get customer details for the conflicting booking
         let customerName = 'Unknown Customer';
@@ -510,12 +450,7 @@ export const Bookings: React.FC<BookingsProps> = ({
             const decryptedCustomer = decryptCustomerDataForAdmin(customerData);
             customerName = `${decryptedCustomer.first_name} ${decryptedCustomer.last_name}`;
             customerEmail = decryptedCustomer.email || '';
-            console.log('🔍 Customer details retrieved and decrypted:', { 
-              original: customerData,
-              decrypted: { customerName, customerEmail }
-            });
           } else {
-            console.log('🔍 Failed to retrieve customer details:', customerError);
           }
         }
         
@@ -553,8 +488,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                   `Note: You can edit or cancel the existing booking using the reference ID above.`
         };
       }
-
-      console.log('🔍 No conflicts found, booking can proceed');
       return { hasConflict: false };
     } catch (error) {
       console.error('Error checking for conflicting bookings:', error);
@@ -565,36 +498,23 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
-  const handleConfirmBooking = async (booking: BookingFormData) => {
-    console.log('🚀 CONFIRM BOOKING CALLED:', booking);
-    const bookingId = booking.id?.toString() || '';
+  const handleConfirmBooking = async (booking: BookingFormData) => {    const bookingId = booking.id?.toString() || '';
     
     // Add booking to confirming set
     setConfirmingBookings(prev => new Set([...prev, bookingId]));
     
     try {
-      console.log('🔍 Starting availability check...');
       // Check availability before confirming
       const availabilityCheck = await checkBookingAvailability(booking);
       
-      if (!availabilityCheck.hasAvailability) {
-        console.log('❌ Availability check failed:', availabilityCheck.message);
-        showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
+      if (!availabilityCheck.hasAvailability) {        showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
         return;
-      }
-
-      console.log('✅ Availability check passed, starting conflict check...');
-      // Check for conflicting bookings
+      }      // Check for conflicting bookings
       const conflictCheck = await checkForConflictingBookings(booking);
       
-      if (conflictCheck.hasConflict) {
-        console.log('❌ Conflict detected:', conflictCheck.message);
-        showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
+      if (conflictCheck.hasConflict) {        showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
         return;
       }
-
-      console.log('✅ No conflicts found, proceeding with booking confirmation...');
-
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'confirmed' })
@@ -657,23 +577,16 @@ export const Bookings: React.FC<BookingsProps> = ({
           special_instructions: booking.notes || 'Please arrive 10 minutes early for your appointment.',
           total_amount: 0
         };
-
-        console.log('📧 Sending booking confirmation emails for:', bookingData);
-
         const emailResults = await sendAdminBookingConfirmation(
           customerEmail,
           bookingData
         );
 
-        if (emailResults.customerSuccess) {
-          console.log('✅ Customer booking confirmation email sent successfully');
-        } else {
+        if (emailResults.customerSuccess) {        } else {
           console.warn('⚠️ Failed to send customer booking confirmation email');
         }
 
-        if (emailResults.adminSuccess) {
-          console.log('✅ Admin booking confirmation email sent successfully');
-        } else {
+        if (emailResults.adminSuccess) {        } else {
           console.warn('⚠️ Failed to send admin booking confirmation email');
         }
 
@@ -1128,13 +1041,66 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
+  // Helper function to get full package information with pricing
+  const getFullPackageInfo = (serviceName: string): string => {
+    if (!serviceName) return 'Not specified';
+    
+    // If the service name already contains pricing information (parentheses with €), return as-is
+    if (serviceName.includes('(€') || serviceName.includes('($')) {
+      return serviceName;
+    }
+    
+    // If no pricing info, find the package in treatmentPackages and add basic info
+    const pkg = treatmentPackages.find(p => p.name === serviceName);
+    if (!pkg) return serviceName; // Return original if not found
+    
+    // For services without existing pricing, just add a simple indicator that it's a package
+    // This handles cases where the service name is stored without pricing details
+    if (pkg.price) {
+      return `${pkg.name} (${pkg.price})`;
+    } else if (pkg.inHourPrice && pkg.outOfHourPrice) {
+      // Only show "Package" indicator since we don't know which rate was booked
+      return `${pkg.name} (Package)`;
+    } else if (pkg.inHourPrice) {
+      return `${pkg.name} (${pkg.inHourPrice})`;
+    } else if (pkg.outOfHourPrice) {
+      return `${pkg.name} (${pkg.outOfHourPrice})`;
+    }
+    
+    return serviceName;
+  };
+
+  // Helper function to check if a service is "Contact for Quote"
+  const isContactForQuoteService = (serviceDisplayName: string): boolean => {
+    // First check the processed services list (this handles displayNames with pricing)
+    const selectedService = services.find(s => s.displayName === serviceDisplayName);
+    if (selectedService) {
+      return (
+        (selectedService.price && selectedService.price.toLowerCase().includes('contact for quote')) ||
+        (selectedService.in_hour_price && selectedService.in_hour_price.toLowerCase().includes('contact for quote')) ||
+        (selectedService.out_of_hour_price && selectedService.out_of_hour_price.toLowerCase().includes('contact for quote'))
+      );
+    }
+    
+    // Fallback: check against original packages data (for raw service names from database)
+    const originalPackage = treatmentPackages.find(pkg => pkg.name === serviceDisplayName);
+    if (originalPackage) {
+      return Boolean(
+        (originalPackage.price && originalPackage.price.toLowerCase().includes('contact for quote')) ||
+        (originalPackage.inHourPrice && originalPackage.inHourPrice.toLowerCase().includes('contact for quote')) ||
+        (originalPackage.outOfHourPrice && originalPackage.outOfHourPrice.toLowerCase().includes('contact for quote'))
+      );
+    }
+    
+    // Final fallback: if service name doesn't contain amount in parentheses and not found in packages
+    return !serviceDisplayName.includes('(€') && !serviceDisplayName.includes('($');
+  };
+
   const fetchTimeSlots = async (serviceId: string, selectedDate: string) => {
     if (!serviceId || !selectedDate) {
       setTimeSlots([]);
       return;
     }
-
-    console.log('Fetching time slots for:', { serviceId, selectedDate });
 
     try {
       setLoadingTimeSlots(true);
@@ -1150,12 +1116,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       } else {
         actualServiceId = parseInt(serviceId);
       }
-
-      console.log('Parsed service info:', { actualServiceId, priceType });
-
-      if (!actualServiceId || isNaN(actualServiceId)) {
-        console.log('Invalid serviceId, returning');
-        setTimeSlots([]);
+      if (!actualServiceId || isNaN(actualServiceId)) {        setTimeSlots([]);
         return;
       }
 
@@ -1167,9 +1128,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         .eq('is_available', true)
         .order('day_of_week', { ascending: true })
         .order('start_time', { ascending: true });
-
-      console.log('Time slots query result:', { data, error });
-
       if (error) {
         console.error('Error fetching time slots:', error);
         setTimeSlots([]);
@@ -1177,21 +1135,14 @@ export const Bookings: React.FC<BookingsProps> = ({
       }
 
       // Filter time slots based on service price type
-      let relevantSlots = data || [];
-      console.log('All slots before filtering:', relevantSlots);
-      
+      let relevantSlots = data || [];      
       if (priceType === 'in-hour') {
         relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
       } else if (priceType === 'out-of-hour') {
         relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
       }
-
-      console.log('Relevant slots after filtering:', relevantSlots);
-
       // If no slots found after filtering, show all slots as fallback
-      if (relevantSlots.length === 0 && (data || []).length > 0) {
-        console.log('No slots found for specific price type, showing all available slots');
-        relevantSlots = data || [];
+      if (relevantSlots.length === 0 && (data || []).length > 0) {        relevantSlots = data || [];
       }
 
       // Convert time slots to formatted time options
@@ -1214,9 +1165,6 @@ export const Bookings: React.FC<BookingsProps> = ({
           timeOptions.push(timeOption);
         }
       });
-
-      console.log('Generated time options:', timeOptions);
-
       // Remove duplicates using Set and sort by time value
       const uniqueTimeOptions = Array.from(new Set(timeOptions)).sort((a, b) => {
         const timeA = a.split('|')[0];
@@ -1256,30 +1204,25 @@ export const Bookings: React.FC<BookingsProps> = ({
       service: '',
       date: '',
       time: '',
+      customStartTime: '',
+      customEndTime: '',
       notes: '',
       status: 'pending'
     });
     setTimeSlots([]);
   };
 
-  const handleNewBookingInputChange = (field: string, value: string) => {
-    console.log('Input change:', { field, value });
-    
+  const handleNewBookingInputChange = (field: string, value: string) => {    
     setNewBookingData(prev => {
       const updated = { ...prev, [field]: value };
       
-      // Fetch time slots when service or date changes
+      // Fetch time slots when service or date changes for all services
       if (field === 'service' || field === 'date') {
         const serviceName = field === 'service' ? value : updated.service;
-        const date = field === 'date' ? value : updated.date;
-        
-        console.log('Checking for time slots:', { serviceName, date });
-        
+        const date = field === 'date' ? value : updated.date;        
         if (serviceName && date) {
           // Find the service object to get the ID
-          const selectedService = services.find(s => s.displayName === serviceName);
-          console.log('Found service:', selectedService);
-          
+          const selectedService = services.find(s => s.displayName === serviceName);          
           if (selectedService) {
             fetchTimeSlots(selectedService.id.toString(), date);
           }
@@ -1299,32 +1242,69 @@ export const Bookings: React.FC<BookingsProps> = ({
       return;
     }
 
+    // Additional validation for custom time selection
+    const isContactQuote = isContactForQuoteService(newBookingData.service);
+    if (isContactQuote && newBookingData.time === 'custom') {
+      if (!newBookingData.customStartTime || !newBookingData.customEndTime) {
+        showError('Missing Custom Time', 'Please provide both start and end times when using custom time.');
+        return;
+      }
+    }
+
     setCreatingBooking(true);
     
     try {
-      // Find the selected service to get proper service name
+      // Find the selected service to get proper service name with pricing
       const selectedService = services.find(s => s.displayName === newBookingData.service);
-      const serviceName = selectedService ? selectedService.name : newBookingData.service;
+      const serviceName = selectedService ? selectedService.displayName : newBookingData.service;
+      const isContactQuote = isContactForQuoteService(newBookingData.service);
 
       // Extract timeslot information
       let timeslotStartTime = null;
       let timeslotEndTime = null;
       let bookingDateTime = newBookingData.date;
       
-      if (newBookingData.time) {
-        if (newBookingData.time.includes('-')) {
-          const [startTime, endTime] = newBookingData.time.split('-');
-          timeslotStartTime = startTime;
-          timeslotEndTime = endTime;
-          bookingDateTime = `${newBookingData.date}T${startTime}`;
+      if (isContactQuote) {
+        // Handle contact for quote services
+        if (newBookingData.time === 'custom') {
+          // Custom time selected - use custom time inputs (validation already ensures they exist)
+          timeslotStartTime = newBookingData.customStartTime;
+          timeslotEndTime = newBookingData.customEndTime;
+          bookingDateTime = `${newBookingData.date}T${newBookingData.customStartTime}`;
+        } else if (newBookingData.time && newBookingData.time !== '') {
+          // Regular time slot selected for contact for quote services
+          if (newBookingData.time.includes('-')) {
+            const [startTime, endTime] = newBookingData.time.split('-');
+            timeslotStartTime = startTime;
+            timeslotEndTime = endTime;
+            bookingDateTime = `${newBookingData.date}T${startTime}`;
+          } else {
+            timeslotStartTime = newBookingData.time;
+            bookingDateTime = `${newBookingData.date}T${newBookingData.time}`;
+          }
         } else {
-          timeslotStartTime = newBookingData.time;
-          bookingDateTime = `${newBookingData.date}T${newBookingData.time}`;
+          // No time slot selected, use default whole day (9 AM - 5 PM)
+          timeslotStartTime = '09:00';
+          timeslotEndTime = '17:00';
+          bookingDateTime = `${newBookingData.date}T09:00`;
+        }
+      } else {
+        // Handle regular services
+        if (newBookingData.time) {
+          if (newBookingData.time.includes('-')) {
+            const [startTime, endTime] = newBookingData.time.split('-');
+            timeslotStartTime = startTime;
+            timeslotEndTime = endTime;
+            bookingDateTime = `${newBookingData.date}T${startTime}`;
+          } else {
+            timeslotStartTime = newBookingData.time;
+            bookingDateTime = `${newBookingData.date}T${newBookingData.time}`;
+          }
         }
       }
 
-      // Check availability before creating booking
-      if (newBookingData.status === 'confirmed' && bookingDateTime) {
+      // Skip availability checks for contact for quote services
+      if (!isContactQuote && newBookingData.status === 'confirmed' && bookingDateTime) {
         const availabilityCheck = await checkBookingAvailability({
           booking_date: bookingDateTime,
           appointment_date: newBookingData.date,
@@ -1385,7 +1365,14 @@ export const Bookings: React.FC<BookingsProps> = ({
         };
         
         setAllBookings([newBookingForList, ...allBookings]);
-        showSuccess('Booking Created', 'New booking has been created successfully.');
+        
+        // Show appropriate success message based on service type
+        if (isContactQuote) {
+          showSuccess('Booking Created', 'Contact for quote booking has been created successfully. No payment request will be generated.');
+        } else {
+          showSuccess('Booking Created', 'New booking has been created successfully.');
+        }
+        
         handleCloseNewBookingModal();
       }
     } catch (error) {
@@ -1402,7 +1389,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       'Customer Name': getCustomerName(booking),
       'Email': getCustomerEmail(booking),
       'Phone': getCustomerPhone(booking),
-      'Service': booking.package_name || booking.service || 'N/A',
+      'Service': getFullPackageInfo(booking.package_name || booking.service || ''),
       'Booking Date': booking.booking_date ? 
         new Date(booking.booking_date).toLocaleDateString() : 
         (booking.appointment_date || booking.date || 'N/A'),
@@ -1487,7 +1474,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         getCustomerName(booking),
         getCustomerEmail(booking),
         getCustomerPhone(booking),
-        booking.package_name || booking.service || 'N/A',
+        getFullPackageInfo(booking.package_name || booking.service || ''),
         date,
         time,
         timeslotRange,
@@ -1884,7 +1871,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                 const hasDateTime = (() => {
                   if (booking.booking_date) {
                     // booking_date holds combined date & time (e.g. 2025-08-11T10:00:00)
-                    return /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(booking.booking_date);
+                    return !!booking.booking_date && /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(booking.booking_date);
                   }
                   const dateVal = booking.appointment_date || booking.date;
                   const timeVal = booking.appointment_time || booking.time;
@@ -1959,7 +1946,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm text-gray-600 break-words">
-                                <span className="font-medium">Service:</span> {booking.package_name || booking.service || 'Not specified'}
+                                <span className="font-medium">Service:</span> {getFullPackageInfo(booking.package_name || booking.service || '')}
                               </p>
                             </div>
                           </div>
@@ -2015,8 +2002,8 @@ export const Bookings: React.FC<BookingsProps> = ({
                           </div>
                         </div>
 
-                        {/* Deposit Payment Status */}
-                        {booking.customer_id && booking.package_name && (
+                        {/* Deposit Payment Status - Hide for Contact for Quote services */}
+                        {booking.customer_id && booking.package_name && !isContactForQuoteService(booking.package_name) && (
                           <div className="flex items-start space-x-2">
                             <Euro className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                             <div className="min-w-0">
@@ -2093,6 +2080,20 @@ export const Bookings: React.FC<BookingsProps> = ({
                                   </div>
                                 );
                               })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Contact for Quote Service Indicator */}
+                        {booking.package_name && isContactForQuoteService(booking.package_name) && (
+                          <div className="flex items-start space-x-2">
+                            <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
+                              <div className="w-3 h-3 rounded-full bg-purple-500" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs text-purple-700 font-medium">
+                                📞 Contact for Quote Service
+                              </p>
                             </div>
                           </div>
                         )}
@@ -2579,7 +2580,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-gray-900">{getCustomerName(booking)}</p>
                           <p className="text-sm text-gray-500">{getCustomerEmail(booking)}</p>
-                          <p className="text-sm text-gray-600">{booking.package_name || booking.service}</p>
+                          <p className="text-sm text-gray-600">{getFullPackageInfo(booking.package_name || booking.service || '')}</p>
                           <div className="flex items-center space-x-4 mt-1">
                             <span className="text-sm text-gray-500">
                               {booking.booking_date ? 
@@ -2775,11 +2776,15 @@ export const Bookings: React.FC<BookingsProps> = ({
                         </option>
                       );
                     })}
+                    {/* Add Custom Time option for Contact for Quote services */}
+                    {isContactForQuoteService(newBookingData.service) && (
+                      <option value="custom">Custom Time</option>
+                    )}
                   </select>
                   {loadingTimeSlots && (
                     <p className="text-xs text-gray-500 mt-1">Loading available times...</p>
                   )}
-                  {!loadingTimeSlots && timeSlots.length === 0 && newBookingData.service && newBookingData.date && (
+                  {!loadingTimeSlots && timeSlots.length === 0 && newBookingData.service && newBookingData.date && !isContactForQuoteService(newBookingData.service) && (
                     <p className="text-xs text-orange-600 mt-1">No available time slots for selected service and date.</p>
                   )}
                 </div>
@@ -2795,6 +2800,47 @@ export const Bookings: React.FC<BookingsProps> = ({
                   </select>
                 </div>
               </div>
+
+              {/* Custom Time Fields - Show when "Custom Time" is selected */}
+              {isContactForQuoteService(newBookingData.service) && newBookingData.time === 'custom' && (
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Custom Time Range</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Start Time *</label>
+                      <input
+                        type="time"
+                        value={newBookingData.customStartTime}
+                        onChange={(e) => handleNewBookingInputChange('customStartTime', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">End Time *</label>
+                      <input
+                        type="time"
+                        value={newBookingData.customEndTime}
+                        onChange={(e) => handleNewBookingInputChange('customEndTime', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Both start and end times are required when using custom time.
+                  </p>
+                </div>
+              )}
+
+              {/* Info message for when no time slot is selected */}
+              {isContactForQuoteService(newBookingData.service) && !newBookingData.time && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700">
+                    If no time slot is selected, the booking will automatically be scheduled for 9:00 AM - 5:00 PM.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
@@ -2819,7 +2865,9 @@ export const Bookings: React.FC<BookingsProps> = ({
               <button
                 onClick={handleCreateNewBooking}
                 disabled={creatingBooking || !newBookingData.firstName || !newBookingData.lastName || 
-                         !newBookingData.email || !newBookingData.service || !newBookingData.date}
+                         !newBookingData.email || !newBookingData.service || !newBookingData.date ||
+                         (isContactForQuoteService(newBookingData.service) && newBookingData.time === 'custom' && 
+                          (!newBookingData.customStartTime || !newBookingData.customEndTime))}
                 className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
                 {creatingBooking ? (
@@ -2838,3 +2886,5 @@ export const Bookings: React.FC<BookingsProps> = ({
     </div>
   );
 };
+
+
