@@ -707,7 +707,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     setViewMode('preview');
     
     // Fetch comprehensive payment data (online + offline calculation)
-    const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
+    const { onlinePayments, offlinePayment } = await fetchInvoicePaymentData(invoice);
     
     // Combine online and offline payments
     const allPayments = [...onlinePayments];
@@ -1017,12 +1017,66 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         eircode: invoice.customer.eircode || ''
       };
 
-      // Send invoice using the new service
+      // For paid invoices, get enhanced payment data and actual items
+      let itemsToSend = invoice.items || [];
+      let pdfOptions = {};
+      
+      if (invoice.status === 'paid') {
+        console.log('📧 Preparing email with enhanced payment calculation for paid invoice');
+        
+        // Fetch enhanced payment data using the same logic as preview
+        const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
+        
+        // Use actual items from database
+        itemsToSend = actualItems;
+        
+        // Calculate comprehensive payment breakdown
+        const allPayments = [...onlinePayments];
+        if (offlinePayment) {
+          allPayments.push(offlinePayment);
+        }
+        
+        // Separate payments by type for email PDF display
+        const depositPayments = allPayments.filter(p => !p.invoice_id);
+        const invoiceOnlinePayments = allPayments.filter(p => p.invoice_id && p.payment_method !== 'offline');
+        const invoiceOfflinePayments = allPayments.filter(p => p.invoice_id && p.payment_method === 'offline');
+        
+        const totalPaid = allPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const depositAmount = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const onlineAmount = invoiceOnlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const offlineAmount = invoiceOfflinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+        
+        console.log('📊 Enhanced Email Payment Data:', {
+          depositAmount,
+          onlineAmount,
+          offlineAmount,
+          totalPaid,
+          allPayments
+        });
+        
+        // Create enhanced options with payment breakdown
+        pdfOptions = {
+          includePaymentDetails: true,
+          enhancedPaymentData: {
+            allPayments,
+            depositPayments,
+            invoiceOnlinePayments,
+            invoiceOfflinePayments,
+            totalPaid,
+            depositAmount,
+            onlineAmount,
+            offlineAmount
+          }
+        };
+      }
+
+      // Send invoice using the service with enhanced data for paid invoices
       const result = await sendInvoiceByEmail(
         invoiceData,
         customerData,
-        invoice.items || [],
-        emailOptions
+        itemsToSend,
+        emailOptions,
+        pdfOptions
       );
 
       if (result.success) {
@@ -1144,14 +1198,69 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         return;
       }
       
-      // Use the unified payment-aware PDF download function
-      // @ts-ignore - customerId is checked above, TypeScript type guard not working
-      const result = await downloadInvoicePDFWithPayments(invoice.id, customerId);
-
-      if (result.success) {
-        showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
+      // For paid invoices, use enhanced payment calculation to match preview exactly
+      if (invoice.status === 'paid') {
+        console.log('📄 Generating PDF with enhanced payment calculation for paid invoice');
+        
+        // Fetch enhanced payment data using the same logic as preview
+        const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
+        
+        // Calculate comprehensive payment breakdown
+        const allPayments = [...onlinePayments];
+        if (offlinePayment) {
+          allPayments.push(offlinePayment);
+        }
+        
+        // Separate payments by type for PDF display
+        const depositPayments = allPayments.filter(p => !p.invoice_id);
+        const invoiceOnlinePayments = allPayments.filter(p => p.invoice_id && p.payment_method !== 'offline');
+        const invoiceOfflinePayments = allPayments.filter(p => p.invoice_id && p.payment_method === 'offline');
+        
+        const totalPaid = allPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const depositAmount = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const onlineAmount = invoiceOnlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const offlineAmount = invoiceOfflinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+        
+        console.log('📊 Enhanced PDF Payment Data:', {
+          depositAmount,
+          onlineAmount,
+          offlineAmount,
+          totalPaid,
+          allPayments
+        });
+        
+        // Create enhanced options with payment breakdown
+        const enhancedOptions = {
+          includePaymentDetails: true,
+          enhancedPaymentData: {
+            allPayments,
+            depositPayments,
+            invoiceOnlinePayments,
+            invoiceOfflinePayments,
+            totalPaid,
+            depositAmount,
+            onlineAmount,
+            offlineAmount
+          }
+        };
+        
+        // Use standard function but with enhanced options
+        const result = await downloadInvoicePDFWithPayments(invoice.id!, customerId, enhancedOptions);
+        
+        if (result.success) {
+          showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded with enhanced payment details`);
+        } else {
+          showError('Download Error', result.error || 'Failed to download invoice');
+        }
       } else {
-        showError('Download Error', result.error || 'Failed to download invoice');
+        // For non-paid invoices, use the standard function
+        const result = await downloadInvoicePDFWithPayments(invoice.id!, customerId);
+
+        if (result.success) {
+          showSuccess('Download Complete', `Invoice ${invoice.invoice_number} downloaded successfully`);
+        } else {
+          showError('Download Error', result.error || 'Failed to download invoice');
+        }
       }
     } catch (error) {
       console.error('Error downloading invoice:', error);

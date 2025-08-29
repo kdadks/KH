@@ -91,6 +91,16 @@ export interface PDFGenerationOptions {
   includePaymentDetails?: boolean;
   includeFooter?: boolean;
   language?: 'en' | 'ie';
+  enhancedPaymentData?: {
+    allPayments: any[];
+    depositPayments: any[];
+    invoiceOnlinePayments: any[];
+    invoiceOfflinePayments: any[];
+    totalPaid: number;
+    depositAmount: number;
+    onlineAmount: number;
+    offlineAmount: number;
+  };
 }
 
 export interface PDFOutput {
@@ -110,7 +120,7 @@ export interface PDFOutput {
  */
 export class PDFInvoiceGenerator {
   private doc: jsPDF;
-  private options: Required<PDFGenerationOptions>;
+  private options: Required<Omit<PDFGenerationOptions, 'enhancedPaymentData'>> & { enhancedPaymentData?: PDFGenerationOptions['enhancedPaymentData'] };
   private startTime: number;
   
   // Design constants
@@ -149,7 +159,8 @@ export class PDFInvoiceGenerator {
       includeLogos: options.includeLogos !== false,
       includePaymentDetails: options.includePaymentDetails !== false,
       includeFooter: options.includeFooter !== false,
-      language: options.language || 'en'
+      language: options.language || 'en',
+      enhancedPaymentData: options.enhancedPaymentData
     };
     
     this.doc = new jsPDF({
@@ -185,7 +196,7 @@ export class PDFInvoiceGenerator {
       }
       
       // Generate output
-      const output = await this.generateOutput(invoiceData);
+      const output = await this.generateOutput();
       
       return {
         success: true,
@@ -453,16 +464,42 @@ export class PDFInvoiceGenerator {
       // Show balance paid (additional payments excluding deposit)
       const balancePaid = Math.max(0, totalPaidAmount - depositAmount);
       if (balancePaid > 0) {
-        this.doc.setFontSize(10);
-        this.doc.setFont('helvetica', 'normal');
-        this.doc.setTextColor(this.COLORS.success);
-        
-        // Determine payment method label
-        const paymentLabel = isOfflinePaid ? 'Offline Paid:' : 'Online Paid:';
-        
-        this.doc.text(paymentLabel, labelX, currentY);
-        this.doc.text(this.formatCurrency(balancePaid, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
-        currentY += 8;
+        // Check if we have enhanced payment data for separate online/offline display
+        if (this.options.enhancedPaymentData) {
+          const { onlineAmount, offlineAmount } = this.options.enhancedPaymentData;
+          
+          // Show online payment if any
+          if (onlineAmount > 0) {
+            this.doc.setFontSize(10);
+            this.doc.setFont('helvetica', 'normal');
+            this.doc.setTextColor(this.COLORS.success);
+            this.doc.text('Online Payment:', labelX, currentY);
+            this.doc.text(`-${this.formatCurrency(onlineAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+            currentY += 8;
+          }
+          
+          // Show offline payment if any
+          if (offlineAmount > 0) {
+            this.doc.setFontSize(10);
+            this.doc.setFont('helvetica', 'normal');
+            this.doc.setTextColor(this.COLORS.success);
+            this.doc.text('Offline Payment:', labelX, currentY);
+            this.doc.text(`-${this.formatCurrency(offlineAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+            currentY += 8;
+          }
+        } else {
+          // Fallback to original single payment line
+          this.doc.setFontSize(10);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setTextColor(this.COLORS.success);
+          
+          // Determine payment method label
+          const paymentLabel = isOfflinePaid ? 'Offline Paid:' : 'Online Paid:';
+          
+          this.doc.text(paymentLabel, labelX, currentY);
+          this.doc.text(this.formatCurrency(balancePaid, invoiceData.financial.currency), rightX, currentY, { align: 'right' });
+          currentY += 8;
+        }
       }
       
       // Add spacing before final amount
@@ -555,11 +592,9 @@ export class PDFInvoiceGenerator {
   /**
    * Generate output in various formats
    */
-  private async generateOutput(invoiceData: InvoiceData): Promise<Partial<PDFOutput>> {
-    const filename = `invoice_${invoiceData.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
-    
+  private async generateOutput(): Promise<Partial<PDFOutput>> {
     // Check file size
-    checkPDFSize(this.doc, filename);
+    checkPDFSize(this.doc);
     
     // Generate blob and base64
     const blob = this.doc.output('blob');
