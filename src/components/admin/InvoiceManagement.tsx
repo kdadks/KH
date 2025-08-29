@@ -833,6 +833,11 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         }
 
         showSuccess('Invoice Created', `Invoice created successfully${invoiceType === 'offline' ? ' - marked as paid with offline payment' : ''}`);
+        
+        // Auto-send email for offline invoices
+        if (invoiceType === 'offline' && newInvoice) {
+          await autoSendOfflineInvoiceEmail(newInvoice.id);
+        }
       }
 
       setViewMode('list');
@@ -1080,24 +1085,30 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       );
 
       if (result.success) {
-        // Update invoice status to 'sent'
-        const { error: updateError } = await supabase
-          .from('invoices')
-          .update({ 
-            status: 'sent',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', invoice.id);
+        // Update invoice status to 'sent' only for draft invoices
+        if (invoice.status === 'draft') {
+          const { error: updateError } = await supabase
+            .from('invoices')
+            .update({ 
+              status: 'sent',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', invoice.id);
 
-        if (updateError) {
-          console.error('Update error details:', updateError);
-          throw new Error(`Failed to update invoice status: ${updateError.message}`);
+          if (updateError) {
+            console.error('Update error details:', updateError);
+            throw new Error(`Failed to update invoice status: ${updateError.message}`);
+          }
+
+          // Refresh the data to show updated status
+          await fetchData();
         }
 
-        // Refresh the data to show updated status
-        await fetchData();
-
-        showSuccess('Invoice Sent', `Invoice ${invoice.invoice_number} has been sent to ${invoice.customer.email}. Customer will now see this invoice in their dashboard.`);
+        const statusMessage = invoice.status === 'paid' 
+          ? `Paid invoice ${invoice.invoice_number} has been sent to ${invoice.customer.email}.`
+          : `Invoice ${invoice.invoice_number} has been sent to ${invoice.customer.email}. Customer will now see this invoice in their dashboard.`;
+        
+        showSuccess('Invoice Sent', statusMessage);
       } else {
         showError('Email Error', result.error || 'Failed to send invoice');
       }
@@ -1107,6 +1118,121 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       showError('Send Failed', 'Failed to send invoice PDF');
     } finally {
       setSendingInvoice(prev => ({ ...prev, [invoiceId]: false }));
+    }
+  };
+
+  // Auto-send email for offline invoices
+  const autoSendOfflineInvoiceEmail = async (invoiceId: number) => {
+    try {
+      // Fetch the complete invoice data with customer and items
+      const { data: invoiceData, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          customer:customers(*),
+          items:invoice_items(*)
+        `)
+        .eq('id', invoiceId)
+        .single();
+
+      if (error || !invoiceData) {
+        console.error('Error fetching invoice for auto-email:', error);
+        return;
+      }
+
+      // Check if customer has email
+      if (!invoiceData.customer?.email) {
+        console.log('Customer has no email address, skipping auto-send');
+        return;
+      }
+
+      // Prepare email options
+      const emailOptions = {
+        to: [invoiceData.customer.email],
+        subject: `Invoice ${invoiceData.invoice_number} - Payment Confirmation - KH Therapy`,
+        includePaymentInstructions: false // No payment needed for offline invoices
+      };
+
+      // Transform Invoice to the format expected by the service
+      const invoiceServiceData = {
+        id: invoiceData.id,
+        invoice_number: invoiceData.invoice_number,
+        customer_id: invoiceData.customer_id,
+        invoice_date: invoiceData.invoice_date,
+        due_date: invoiceData.due_date,
+        status: invoiceData.status,
+        subtotal: invoiceData.subtotal,
+        vat_amount: invoiceData.vat_amount,
+        total_amount: invoiceData.total_amount,
+        total: invoiceData.total_amount,
+        notes: invoiceData.notes,
+        currency: 'EUR'
+      };
+
+      // Transform customer data
+      const customerData = {
+        id: invoiceData.customer.id,
+        name: getCustomerDisplayName(invoiceData.customer),
+        email: invoiceData.customer.email,
+        phone: invoiceData.customer.phone || '',
+        address_line_1: invoiceData.customer.address_line_1 || '',
+        address_line_2: invoiceData.customer.address_line_2 || '',
+        city: invoiceData.customer.city || '',
+        county: invoiceData.customer.county || '',
+        eircode: invoiceData.customer.eircode || ''
+      };
+
+      // Get enhanced payment data for offline invoices
+      const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoiceData);
+      
+      // Calculate comprehensive payment breakdown
+      const allPayments = [...onlinePayments];
+      if (offlinePayment) {
+        allPayments.push(offlinePayment);
+      }
+      
+      const depositPayments = allPayments.filter(p => !p.invoice_id);
+      const invoiceOnlinePayments = allPayments.filter(p => p.invoice_id && p.payment_method !== 'offline');
+      const invoiceOfflinePayments = allPayments.filter(p => p.invoice_id && p.payment_method === 'offline');
+      
+      const totalPaid = allPayments.reduce((sum, payment) => sum + payment.amount, 0);
+      const depositAmount = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
+      const onlineAmount = invoiceOnlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+      const offlineAmount = invoiceOfflinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+      
+      const pdfOptions = {
+        includePaymentDetails: true,
+        enhancedPaymentData: {
+          allPayments,
+          depositPayments,
+          invoiceOnlinePayments,
+          invoiceOfflinePayments,
+          totalPaid,
+          depositAmount,
+          onlineAmount,
+          offlineAmount
+        }
+      };
+
+      // Send invoice using the service
+      const result = await sendInvoiceByEmail(
+        invoiceServiceData,
+        customerData,
+        actualItems,
+        emailOptions,
+        pdfOptions
+      );
+
+      if (result.success) {
+        showSuccess('Invoice Emailed', `Offline invoice ${invoiceData.invoice_number} has been automatically sent to ${invoiceData.customer.email}`);
+      } else {
+        console.error('Failed to auto-send offline invoice email:', result.error);
+        showError('Email Warning', `Invoice created successfully but failed to send email automatically: ${result.error}`);
+      }
+
+    } catch (error) {
+      console.error('Error in autoSendOfflineInvoiceEmail:', error);
+      showError('Email Warning', 'Invoice created successfully but failed to send email automatically');
     }
   };
 
@@ -1203,7 +1329,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         console.log('📄 Generating PDF with enhanced payment calculation for paid invoice');
         
         // Fetch enhanced payment data using the same logic as preview
-        const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
+        const { onlinePayments, offlinePayment } = await fetchInvoicePaymentData(invoice);
         
         // Calculate comprehensive payment breakdown
         const allPayments = [...onlinePayments];
@@ -2197,6 +2323,22 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                             disabled={sendingInvoice[invoice.id!.toString()]}
                             className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Send invoice PDF to customer"
+                          >
+                            {sendingInvoice[invoice.id!.toString()] ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                            ) : (
+                              <Send size={16} />
+                            )}
+                          </button>
+                        )}
+                        
+                        {/* Send Invoice PDF for Paid Invoices - Show for paid status */}
+                        {invoice.status === 'paid' && (
+                          <button
+                            onClick={() => sendInvoicePDF(invoice)}
+                            disabled={sendingInvoice[invoice.id!.toString()]}
+                            className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Send paid invoice PDF to customer"
                           >
                             {sendingInvoice[invoice.id!.toString()] ? (
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
