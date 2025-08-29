@@ -38,3 +38,10 @@ dist-ssr
 debug-*.js
 test-*.js
 **/diagnose*.js
+
+# Backup and cleanup files
+*.backup
+**/*.backup
+clean-debug.js
+cleanup-*.js
+**/temp-*.js
