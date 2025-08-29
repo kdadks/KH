@@ -27,6 +27,7 @@ import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
 import { downloadInvoicePDFWithPayments, sendInvoiceByEmail } from '../../services/invoiceService';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
+import { extractBaseServiceName, getServicePrice, fetchServicePricing, determineTimeSlotType } from '../../services/pricingService';
 
 interface InvoiceManagementProps {
   onClose?: () => void;
@@ -51,6 +52,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   const [customers, setCustomers] = useState<Customer[]>(propCustomers || []);
   const [services, setServices] = useState<Service[]>(propServices || []);
   const [customerBookings, setCustomerBookings] = useState<BookingFormData[]>([]);
+  const [availableBookings, setAvailableBookings] = useState<BookingFormData[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(!propInvoices || !propCustomers || !propServices);
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,6 +71,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   });
   const [selectedBooking, setSelectedBooking] = useState<BookingFormData | null>(null);
   const [bookingPayments, setBookingPayments] = useState<any[]>([]);
+  const [invoicePayments, setInvoicePayments] = useState<any[]>([]);
+  const [previewInvoiceItems, setPreviewInvoiceItems] = useState<InvoiceItem[]>([]);
   
   // Invoice type selection
   const [invoiceType, setInvoiceType] = useState<'online' | 'offline'>('online');
@@ -230,10 +234,26 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         .order('booking_date', { ascending: false });
 
       if (error) throw error;
-      setCustomerBookings(data || []);
+      
+      const allBookings = data || [];
+      setCustomerBookings(allBookings);
+      
+      // Filter out fully paid bookings for invoice creation
+      const unpaidBookings: BookingFormData[] = [];
+      
+      for (const booking of allBookings) {
+        const isFullyPaid = await isBookingFullyPaid(booking);
+        if (!isFullyPaid) {
+          unpaidBookings.push(booking);
+        }
+      }
+      
+      setAvailableBookings(unpaidBookings);
+      console.log(`📋 Found ${allBookings.length} total bookings, ${unpaidBookings.length} available for invoicing`);
     } catch (err) {
       console.error('Error fetching customer bookings:', err);
       setCustomerBookings([]);
+      setAvailableBookings([]);
     }
   };
 
@@ -257,6 +277,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         console.log('✅ Customer bookings loaded, please select a specific booking/service');
       } else {
         setCustomerBookings([]);
+        setAvailableBookings([]);
       }
     } catch (error) {
       console.error('❌ Error in handleCustomerChange:', error);
@@ -293,6 +314,57 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     } catch (error) {
       console.error('Error fetching booking payments:', error);
       setBookingPayments([]);
+    }
+  };
+
+  // Function to check if a booking is fully paid (deposit + remaining balance)
+  const isBookingFullyPaid = async (booking: BookingFormData): Promise<boolean> => {
+    try {
+      // Get service name and extract base name
+      const serviceName = booking.package_name || booking.service || '';
+      const baseServiceName = extractBaseServiceName(serviceName);
+      
+      // Get the service pricing data
+      const servicePricing = await fetchServicePricing(baseServiceName);
+      if (!servicePricing) {
+        // If we can't find the service, don't exclude the booking
+        return false;
+      }
+      
+      // Determine time slot type and get price
+      const serviceNameWithDetails = booking.package_name || booking.service || '';
+      const timeSlotType = determineTimeSlotType(serviceNameWithDetails);
+      const servicePrice = getServicePrice(servicePricing, timeSlotType);
+      
+      if (!servicePrice || servicePrice === 0) {
+        // If we can't determine the price, don't exclude the booking
+        return false;
+      }
+      
+      // Fetch all payments for this booking (both 'paid' and 'completed' status)
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('amount, status')
+        .eq('booking_id', booking.id)
+        .in('status', ['paid', 'completed']);
+        
+      if (error) {
+        console.error('Error checking booking payments:', error);
+        return false;
+      }
+      
+      // Calculate total paid amount
+      const totalPaid = (payments || []).reduce((sum, payment) => sum + payment.amount, 0);
+      
+      // Check if total paid equals or exceeds service price
+      const isFullyPaid = totalPaid >= servicePrice;
+      
+      console.log(`💰 Booking ${booking.id} payment check: Service price: €${servicePrice}, Total paid: €${totalPaid}, Fully paid: ${isFullyPaid}`);
+      
+      return isFullyPaid;
+    } catch (error) {
+      console.error('Error checking if booking is fully paid:', error);
+      return false;
     }
   };
 
@@ -528,9 +600,124 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     setViewMode('form');
   };
 
-  const handlePreviewInvoice = (invoice: Invoice) => {
+  // Function to fetch all payments for a booking (both with and without invoice_id)
+  const fetchAllBookingPayments = async (bookingId: string) => {
+    try {
+      console.log(`🔍 Fetching payments for booking: ${bookingId}`);
+      
+      // First, let's fetch ALL payments for this booking regardless of status
+      const { data: allPayments, error: allError } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          amount,
+          currency,
+          status,
+          payment_method,
+          payment_date,
+          created_at,
+          booking_id,
+          invoice_id,
+          notes
+        `)
+        .eq('booking_id', bookingId)
+        .order('created_at', { ascending: true });
+
+      if (allError) {
+        console.error('Error fetching all booking payments:', allError);
+        return [];
+      }
+
+      console.log(`� Found ${allPayments?.length || 0} total payments (all statuses) for booking ${bookingId}:`, allPayments);
+
+      // Now filter for paid payments (status can be 'paid' or 'completed')
+      const paidPayments = (allPayments || []).filter(p => p.status === 'paid' || p.status === 'completed');
+      console.log(`✅ Found ${paidPayments.length} paid payments:`, paidPayments);
+
+      return paidPayments;
+    } catch (error) {
+      console.error('Error fetching all booking payments:', error);
+      return [];
+    }
+  };
+
+  // Function to fetch invoice items and calculate offline payments
+  const fetchInvoicePaymentData = async (invoice: Invoice) => {
+    try {
+      console.log(`🧾 Fetching payment data for invoice: ${invoice.id}`);
+      
+      // Fetch all online payments for this booking
+      const onlinePayments = invoice.booking_id ? await fetchAllBookingPayments(invoice.booking_id) : [];
+      
+      // Fetch invoice items to get the actual invoice total
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoice.id);
+      
+      if (itemsError) {
+        console.error('Error fetching invoice items:', itemsError);
+        return { onlinePayments, offlinePayment: null, invoiceTotal: invoice.total_amount, actualItems: invoice.items || [] };
+      }
+      
+      // Calculate actual invoice total from items
+      const invoiceTotal = invoiceItems?.reduce((sum, item) => sum + item.total_price, 0) || invoice.total_amount;
+      
+      // Update the invoice object with actual items from database
+      const actualItems = invoiceItems || invoice.items || [];
+      
+      // Calculate total online payments
+      const totalOnlinePayments = onlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
+      
+      // Calculate offline payment amount
+      const offlineAmount = invoiceTotal - totalOnlinePayments;
+      
+      console.log(`💰 Invoice Payment Breakdown:`, {
+        invoiceId: invoice.id,
+        invoiceTotal,
+        totalOnlinePayments,
+        offlineAmount,
+        onlinePayments,
+        actualItems
+      });
+      
+      // Create offline payment object if there's an offline amount
+      const offlinePayment = offlineAmount > 0 ? {
+        id: `offline-${invoice.id}`,
+        amount: offlineAmount,
+        currency: 'EUR',
+        status: 'paid',
+        payment_method: 'offline',
+        payment_date: invoice.created_at,
+        created_at: invoice.created_at,
+        booking_id: invoice.booking_id,
+        invoice_id: invoice.id,
+        notes: 'Offline payment'
+      } : null;
+      
+      return { onlinePayments, offlinePayment, invoiceTotal, actualItems };
+    } catch (error) {
+      console.error('Error fetching invoice payment data:', error);
+      return { onlinePayments: [], offlinePayment: null, invoiceTotal: invoice.total_amount, actualItems: invoice.items || [] };
+    }
+  };
+
+  const handlePreviewInvoice = async (invoice: Invoice) => {
     setPreviewingInvoice(invoice);
     setViewMode('preview');
+    
+    // Fetch comprehensive payment data (online + offline calculation)
+    const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
+    
+    // Combine online and offline payments
+    const allPayments = [...onlinePayments];
+    if (offlinePayment) {
+      allPayments.push(offlinePayment);
+    }
+    
+    // Update states
+    setInvoicePayments(allPayments);
+    setPreviewInvoiceItems(actualItems);
   };
 
   const handleSubmitForm = async () => {
@@ -1070,7 +1257,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                     disabled={!formData.customer_id || formData.customer_id === 0}
                   >
                     <option value="">Select a confirmed service/booking to auto-populate invoice</option>
-                    {customerBookings.map(booking => (
+                    {availableBookings.map(booking => (
                       <option key={booking.id} value={booking.id}>
                         {booking.package_name || booking.service} - {
                           booking.booking_date 
@@ -1085,14 +1272,24 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                       First select a customer to see their bookings
                     </p>
                   )}
-                  {formData.customer_id > 0 && customerBookings.length === 0 && (
+                  {formData.customer_id > 0 && availableBookings.length === 0 && customerBookings.length === 0 && (
                     <p className="mt-1 text-xs text-amber-600">
                       No confirmed bookings found for this customer. Only confirmed bookings can be used for invoice generation.
                     </p>
                   )}
-                  {formData.customer_id > 0 && customerBookings.length > 0 && !formData.booking_id && (
+                  {formData.customer_id > 0 && availableBookings.length === 0 && customerBookings.length > 0 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      All bookings for this customer are fully paid. No bookings available for invoicing.
+                    </p>
+                  )}
+                  {formData.customer_id > 0 && availableBookings.length > 0 && !formData.booking_id && (
                     <p className="mt-1 text-xs text-blue-600">
                       💡 Select a booking to automatically populate the invoice item with correct pricing
+                      {customerBookings.length > availableBookings.length && (
+                        <span className="block text-gray-500 mt-1">
+                          ℹ️ {customerBookings.length - availableBookings.length} fully paid booking(s) excluded from list
+                        </span>
+                      )}
                     </p>
                   )}
                   {selectedBooking && (
@@ -1525,7 +1722,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   // Invoice Preview View
   if (viewMode === 'preview' && previewingInvoice) {
     const customer = previewingInvoice.customer;
-    const items = previewingInvoice.items || [];
+    const items = previewInvoiceItems.length > 0 ? previewInvoiceItems : (previewingInvoice.items || []);
     
     return (
       <div className="space-y-6">
@@ -1645,51 +1842,40 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           </div>
 
           <div className="flex justify-end">
-            <div className="w-64 space-y-2">
+            <div className="w-80 space-y-2">
               {(() => {
                 const itemsSubtotal = items.reduce((sum, item) => sum + item.total_price, 0);
                 
-                // Enhanced deposit detection logic
-                let depositAmount = 0;
-                let hasDepositDeduction = false;
+                // Calculate total payments from all booking payments
+                const totalPaid = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
                 
-                // Check for various deposit patterns in notes
-                if (previewingInvoice.notes) {
-                  console.log('🔍 Invoice notes for deposit detection:', previewingInvoice.notes);
-                  
-                  // Pattern 1: "Deposit Deducted: €XX.XX"
-                  const depositDeductedMatch = previewingInvoice.notes.match(/Deposit Deducted: €([\d.]+)/);
-                  if (depositDeductedMatch) {
-                    depositAmount = parseFloat(depositDeductedMatch[1]);
-                    hasDepositDeduction = true;
-                    console.log('✅ Found deposit via "Deposit Deducted" pattern:', depositAmount);
-                  }
-                  
-                  // Pattern 2: "Previous deposit of €XX.XX"
-                  if (!hasDepositDeduction) {
-                    const previousDepositMatch = previewingInvoice.notes.match(/Previous deposit of €([\d.]+)/i);
-                    if (previousDepositMatch) {
-                      depositAmount = parseFloat(previousDepositMatch[1]);
-                      hasDepositDeduction = true;
-                      console.log('✅ Found deposit via "Previous deposit" pattern:', depositAmount);
-                    }
-                  }
-                  
-                  // Pattern 3: "deposit.*€XX.XX" (more general)
-                  if (!hasDepositDeduction) {
-                    const generalDepositMatch = previewingInvoice.notes.match(/deposit.*€([\d.]+)/i);
-                    if (generalDepositMatch) {
-                      depositAmount = parseFloat(generalDepositMatch[1]);
-                      hasDepositDeduction = true;
-                      console.log('✅ Found deposit via general pattern:', depositAmount);
-                    }
-                  }
-                  
-                  console.log('💰 Final deposit amount detected:', depositAmount);
-                }
+                // Separate payments by type and method
+                const depositPayments = invoicePayments.filter(p => !p.invoice_id);
+                const invoicePayments_filtered = invoicePayments.filter(p => p.invoice_id);
                 
-                const isPaid = previewingInvoice.status === 'paid';
-                const isOfflinePaid = previewingInvoice.notes?.includes('Offline Payment Received');
+                // Further separate invoice payments by method (online vs offline)
+                const onlineInvoicePayments = invoicePayments_filtered.filter(p => p.payment_method !== 'offline');
+                const offlineInvoicePayments = invoicePayments_filtered.filter(p => p.payment_method === 'offline');
+                
+                const totalDepositPaid = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
+                const totalOnlineInvoicePaid = onlineInvoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
+                const totalOfflineInvoicePaid = offlineInvoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
+                const totalInvoicePaid = totalOnlineInvoicePaid + totalOfflineInvoicePaid;
+                
+                const remainingBalance = itemsSubtotal - totalPaid;
+                const isFullyPaid = remainingBalance <= 0;
+                
+                console.log('💰 Payment Summary:', {
+                  itemsSubtotal,
+                  totalPaid,
+                  totalDepositPaid,
+                  totalOnlineInvoicePaid,
+                  totalOfflineInvoicePaid,
+                  totalInvoicePaid,
+                  remainingBalance,
+                  isFullyPaid,
+                  allPayments: invoicePayments
+                });
 
                 return (
                   <>
@@ -1698,37 +1884,59 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                       <span>{formatCurrency(itemsSubtotal)}</span>
                     </div>
                     
-                    {depositAmount > 0 && (
-                      <div className="flex justify-between text-blue-600">
-                        <span>Deposit Paid:</span>
-                        <span>-{formatCurrency(depositAmount)}</span>
+                    {/* Show all payments if any exist */}
+                    {invoicePayments.length > 0 && (
+                      <div className="border-t pt-2 mt-2 space-y-1">
+                        <div className="text-sm font-medium text-gray-700 mb-2">Payments Received:</div>
+                        
+                        {depositPayments.map((payment, index) => (
+                          <div key={`deposit-${index}`} className="flex justify-between items-center text-sm text-blue-600 min-w-0">
+                            <span className="whitespace-nowrap mr-2">
+                              Deposit Payment {payment.payment_date ? 
+                                `(${new Date(payment.payment_date).toLocaleDateString()})` :
+                                `(${new Date(payment.created_at).toLocaleDateString()})`
+                              }:
+                            </span>
+                            <span className="whitespace-nowrap">-{formatCurrency(payment.amount)}</span>
+                          </div>
+                        ))}
+                        
+                        {onlineInvoicePayments.map((payment, index) => (
+                          <div key={`online-invoice-${index}`} className="flex justify-between items-center text-sm text-green-600 min-w-0">
+                            <span className="whitespace-nowrap mr-2">
+                              Online Payment {payment.payment_date ? 
+                                `(${new Date(payment.payment_date).toLocaleDateString()})` :
+                                `(${new Date(payment.created_at).toLocaleDateString()})`
+                              }:
+                            </span>
+                            <span className="whitespace-nowrap">-{formatCurrency(payment.amount)}</span>
+                          </div>
+                        ))}
+                        
+                        {offlineInvoicePayments.map((payment, index) => (
+                          <div key={`offline-invoice-${index}`} className="flex justify-between items-center text-sm text-purple-600 min-w-0">
+                            <span className="whitespace-nowrap mr-2">
+                              Offline Payment {payment.payment_date ? 
+                                `(${new Date(payment.payment_date).toLocaleDateString()})` :
+                                `(${new Date(payment.created_at).toLocaleDateString()})`
+                              }:
+                            </span>
+                            <span className="whitespace-nowrap">-{formatCurrency(payment.amount)}</span>
+                          </div>
+                        ))}
                       </div>
                     )}
                     
-                    {isPaid && isOfflinePaid && depositAmount === 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Offline Paid:</span>
-                        <span>{formatCurrency(itemsSubtotal)}</span>
-                      </div>
-                    )}
-                    
-                    {isPaid && isOfflinePaid && depositAmount > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Offline Paid:</span>
-                        <span>{formatCurrency(itemsSubtotal - depositAmount)}</span>
-                      </div>
-                    )}
-                    
-                    <div className="flex justify-between text-lg font-bold border-t pt-2">
-                      {isPaid ? (
+                    <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
+                      {isFullyPaid ? (
                         <>
-                          <span className="text-green-600">Amount Fully Paid:</span>
+                          <span className="text-green-600">Status: Fully Paid</span>
                           <span className="text-green-600">{formatCurrency(itemsSubtotal)}</span>
                         </>
                       ) : (
                         <>
-                          <span>Amount Due:</span>
-                          <span>{formatCurrency(previewingInvoice.total_amount)}</span>
+                          <span className="text-red-600">Amount Due:</span>
+                          <span className="text-red-600">{formatCurrency(Math.max(0, remainingBalance))}</span>
                         </>
                       )}
                     </div>
