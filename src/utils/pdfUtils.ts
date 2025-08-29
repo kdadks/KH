@@ -214,7 +214,7 @@ export const calculateFooterPosition = (
 /**
  * Get PDF file size in KB and log warning if too large
  */
-export const checkPDFSize = (doc: jsPDF, filename: string) => {
+export const checkPDFSize = (doc: jsPDF) => {
   try {
     const pdfOutput = doc.output('blob');
     const sizeKB = Math.round(pdfOutput.size / 1024);
