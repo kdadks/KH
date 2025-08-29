@@ -677,28 +677,82 @@ export async function downloadInvoicePDFWithPayments(
       return false;
     }) || [];
 
-    // Calculate deposit and other payments
+    // Calculate deposit and other payments (use same logic as enhanced preview)
     let depositAmount = 0;
-    let otherPaymentsAmount = 0;
+    let onlineInvoicePayments = 0;
+    let offlineInvoicePayments = 0;
     
     invoicePayments.forEach((payment: any) => {
-      if (payment.status === 'paid') {
+      // Use same status filter as enhanced preview: both 'paid' and 'completed'
+      if (payment.status === 'paid' || payment.status === 'completed') {
         // Deposits are payments that have booking_id but no invoice_id
         const isDeposit = payment.booking_id && !payment.invoice_id;
         
         if (isDeposit) {
           depositAmount += payment.amount || 0;
         } else {
-          otherPaymentsAmount += payment.amount || 0;
+          // Separate online vs offline invoice payments
+          if (payment.payment_method === 'offline') {
+            offlineInvoicePayments += payment.amount || 0;
+          } else {
+            onlineInvoicePayments += payment.amount || 0;
+          }
         }
       }
     });
 
+    // Calculate total online payments (deposits + online invoice payments)
+    const totalOnlinePayments = depositAmount + onlineInvoicePayments;
+    
+    // For paid invoices, calculate offline payment amount from invoice items
+    let calculatedOfflineAmount = 0;
+    if (invoice.status === 'paid' && offlineInvoicePayments === 0) {
+      // Fetch actual invoice items to get true total
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('total_price')
+        .eq('invoice_id', invoice.id);
+        
+      if (!itemsError && invoiceItems) {
+        const actualInvoiceTotal = invoiceItems.reduce((sum, item) => sum + item.total_price, 0);
+        calculatedOfflineAmount = Math.max(0, actualInvoiceTotal - totalOnlinePayments);
+        console.log('📊 PDF Service - Calculated offline payment:', {
+          actualInvoiceTotal,
+          totalOnlinePayments,
+          calculatedOfflineAmount
+        });
+      }
+    }
+    
+    // Use calculated offline amount if we computed one, otherwise use recorded offline payments
+    const finalOfflineAmount = calculatedOfflineAmount > 0 ? calculatedOfflineAmount : offlineInvoicePayments;
+    const otherPaymentsAmount = onlineInvoicePayments + finalOfflineAmount;
+
     const totalPaidAmount = depositAmount + otherPaymentsAmount;
+
+    // For paid invoices, calculate the actual total from invoice items
+    let actualInvoiceTotal = invoice.total_amount;
+    if (invoice.status === 'paid') {
+      // Fetch actual invoice items to get true total for paid invoices
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('total_price')
+        .eq('invoice_id', invoice.id);
+        
+      if (!itemsError && invoiceItems && invoiceItems.length > 0) {
+        actualInvoiceTotal = invoiceItems.reduce((sum, item) => sum + item.total_price, 0);
+        console.log('📊 PDF Service - Using actual invoice total for paid invoice:', {
+          originalTotal: invoice.total_amount,
+          actualTotal: actualInvoiceTotal,
+          totalPaidAmount
+        });
+      }
+    }
 
     // Round to handle floating point precision issues
     const roundedDepositAmount = Math.round(depositAmount * 100) / 100;
     const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
+    const roundedActualTotal = Math.round(actualInvoiceTotal * 100) / 100;
 
     // Transform data for PDF service
     const invoiceData = {
@@ -710,8 +764,8 @@ export async function downloadInvoicePDFWithPayments(
       status: invoice.status,
       subtotal: invoice.subtotal,
       vat_amount: invoice.vat_amount,
-      total_amount: invoice.total_amount,
-      total: invoice.total_amount,
+      total_amount: roundedActualTotal, // Use actual total for paid invoices
+      total: roundedActualTotal, // Use actual total for paid invoices
       total_paid: roundedTotalPaid,
       deposit_paid: roundedDepositAmount,
       notes: invoice.notes,
