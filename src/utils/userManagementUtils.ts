@@ -208,10 +208,12 @@ export const changeUserPassword = async (
     // This is a placeholder implementation - in production you would:
     // 1. Hash the new password
     // 2. Update the customer table
-    // 3. Set must_change_password to false
-    
-    console.log('Password change requested for new password:', newPassword);
-    
+    // 3. Set must_change_password to false    
+    if (!newPassword) {
+      return { success: false, error: 'New password is required' };
+    }
+    // Simulate using newPassword to avoid unused variable error
+    void newPassword;
     return { success: true };
   } catch (error) {
     console.error('Exception in changeUserPassword:', error);
@@ -224,8 +226,6 @@ export const changeUserPassword = async (
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
-    console.log(`🔍 [${new Date().toLocaleTimeString()}] Starting to load invoices and payments for customer: ${customerId}`);
-    
     // First, get all invoices for this customer
     const { data: invoicesData, error: invoicesError } = await supabase
       .from('invoices')
@@ -238,15 +238,6 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
       console.error('Error fetching user invoices:', invoicesError);
       return { invoices: [], error: invoicesError.message };
     }
-
-    console.log(`📄 Raw invoices data:`, invoicesData?.map(inv => ({
-      id: inv.id,
-      invoice_number: inv.invoice_number,
-      booking_id: inv.booking_id,
-      customer_id: inv.customer_id,
-      total_amount: inv.total_amount,
-      status: inv.status
-    })));
 
     // Then, get all payments for this customer
     const { data: paymentsData, error: paymentsError } = await supabase
@@ -274,19 +265,6 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
       // Continue without payments data rather than failing completely
     }
 
-    console.log(`� Raw payments data:`, paymentsData?.map(pay => ({
-      id: pay.id,
-      invoice_id: pay.invoice_id,
-      booking_id: pay.booking_id,
-      customer_id: pay.customer_id,
-      amount: pay.amount,
-      status: pay.status,
-      payment_method: pay.payment_method,
-      notes: pay.notes?.substring(0, 50) + '...'
-    })));
-
-    console.log(`�🔍 Loaded ${invoicesData?.length || 0} invoices and ${paymentsData?.length || 0} payments for customer ${customerId}`);
-
     // Add overdue calculation and combine invoices with their payments
     const invoices = invoicesData?.map(invoice => {
       const isOverdue = invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date();
@@ -311,30 +289,23 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
         return false;
       }) || [];
       
-      console.log(`📋 Loading invoice ${invoice.invoice_number}:`, {
-        id: invoice.id,
-        booking_id: invoice.booking_id,
-        total_amount: invoice.total_amount,
-        status: invoice.status,
-        paymentsCount: invoicePayments.length,
-        payments: invoicePayments.map((p: any) => ({
-          id: p.id,
-          amount: p.amount,
-          status: p.status,
-          booking_id: p.booking_id,
-          invoice_id: p.invoice_id,
-          notes: p.notes,
-          payment_method: p.payment_method,
-          sumup_checkout_id: p.sumup_checkout_id,
-          matchedBy: (invoice.booking_id && p.booking_id === invoice.booking_id) ? 'booking_id' : 'invoice_id'
-        }))
-      });
+      const mappedPayments = invoicePayments.map((p: any) => ({
+        id: p.id,
+        amount: p.amount,
+        status: p.status,
+        booking_id: p.booking_id,
+        invoice_id: p.invoice_id,
+        notes: p.notes,
+        payment_method: p.payment_method,
+        sumup_checkout_id: p.sumup_checkout_id,
+        matchedBy: (invoice.booking_id && p.booking_id === invoice.booking_id) ? 'booking_id' : 'invoice_id'
+      }));
       
       return {
         ...invoice,
         is_overdue: isOverdue,
         days_overdue: daysOverdue,
-        payments: invoicePayments
+        payments: mappedPayments
       };
     }) || [];
 
@@ -348,12 +319,11 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
 /**
  * Get user payment history with real data
  */
-export const getUserPaymentHistory = async (customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
+export const getUserPaymentHistory = async (_customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
   try {
     // Get payment history from invoice items or a payments table if you have one
     // For now, we'll return empty array since payment tracking might be implemented later
     // You could implement this based on your payment system
-    console.log('Getting payment history for customer:', customerId);
     const payments: PaymentHistoryItem[] = [];
 
     return { payments };
@@ -534,3 +504,4 @@ export const getPaymentStatusDisplay = (status: string): { color: string; bgColo
       return { color: 'text-gray-700', bgColor: 'bg-gray-100', text: status };
   }
 };
+
