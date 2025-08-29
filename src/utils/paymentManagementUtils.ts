@@ -186,7 +186,8 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
         payment_date,
         created_at,
         customer_id,
-        invoice_id
+        invoice_id,
+        booking_id
       `)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -211,17 +212,17 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
       console.error('Error fetching customers for payments:', customersError);
     }
 
-    // Get invoice details to determine service names
-    const invoiceIds = [...new Set(paymentsData.map(p => p.invoice_id).filter(Boolean))];
-    let invoicesData: any[] = [];
-    if (invoiceIds.length > 0) {
-      const { data: invData, error: invError } = await supabase
-        .from('invoices')
-        .select('id, service_type')
-        .in('id', invoiceIds);
+    // Get booking details to determine service names
+    const bookingIds = [...new Set(paymentsData.map(p => p.booking_id).filter(Boolean))];
+    let bookingsData: any[] = [];
+    if (bookingIds.length > 0) {
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id, package_name')
+        .in('id', bookingIds);
       
-      if (!invError) {
-        invoicesData = invData || [];
+      if (!bookingError) {
+        bookingsData = bookingData || [];
       }
     }
 
@@ -242,9 +243,9 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
       });
     });
 
-    const invoiceMap = new Map();
-    invoicesData.forEach(invoice => {
-      invoiceMap.set(invoice.id, invoice.service_type || 'Payment');
+    const bookingMap = new Map();
+    bookingsData.forEach(booking => {
+      bookingMap.set(booking.id, booking.package_name || 'Payment');
     });
 
     // Combine payment data with customer and service information
@@ -259,7 +260,7 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
       created_at: payment.created_at || '',
       customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
       customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
-      service_name: invoiceMap.get(payment.invoice_id) || 'Payment',
+      service_name: bookingMap.get(payment.booking_id) || 'Payment',
       payment_date: payment.payment_date || payment.created_at
     }));
 
@@ -287,7 +288,8 @@ export const getAllPayments = async (): Promise<Payment[]> => {
         payment_date,
         created_at,
         customer_id,
-        invoice_id
+        invoice_id,
+        booking_id
       `)
       .order('created_at', { ascending: false });
 
@@ -311,17 +313,17 @@ export const getAllPayments = async (): Promise<Payment[]> => {
       console.error('Error fetching customers for payments:', customersError);
     }
 
-    // Get invoice details to determine service names
-    const invoiceIds = [...new Set(paymentsData.map(p => p.invoice_id).filter(Boolean))];
-    let invoicesData: any[] = [];
-    if (invoiceIds.length > 0) {
-      const { data: invData, error: invError } = await supabase
-        .from('invoices')
-        .select('id, service_type')
-        .in('id', invoiceIds);
+    // Get booking details to determine service names
+    const bookingIds = [...new Set(paymentsData.map(p => p.booking_id).filter(Boolean))];
+    let bookingsData: any[] = [];
+    if (bookingIds.length > 0) {
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id, package_name')
+        .in('id', bookingIds);
       
-      if (!invError) {
-        invoicesData = invData || [];
+      if (!bookingError) {
+        bookingsData = bookingData || [];
       }
     }
 
@@ -342,9 +344,9 @@ export const getAllPayments = async (): Promise<Payment[]> => {
       });
     });
 
-    const invoiceMap = new Map();
-    invoicesData.forEach(invoice => {
-      invoiceMap.set(invoice.id, invoice.service_type || 'Payment');
+    const bookingMap = new Map();
+    bookingsData.forEach(booking => {
+      bookingMap.set(booking.id, booking.package_name || 'Payment');
     });
 
     // Combine payment data with customer and service information
@@ -359,7 +361,7 @@ export const getAllPayments = async (): Promise<Payment[]> => {
       created_at: payment.created_at || '',
       customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
       customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
-      service_name: invoiceMap.get(payment.invoice_id) || 'Payment',
+      service_name: bookingMap.get(payment.booking_id) || 'Payment',
       payment_date: payment.payment_date || payment.created_at
     }));
 
