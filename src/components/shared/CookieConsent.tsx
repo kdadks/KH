@@ -35,7 +35,7 @@ const CookieConsent: React.FC = () => {
         <button onClick={handleDecline} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 rounded">
           Decline
         </button>
-        <button onClick={handleAccept} className="px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded">
+        <button onClick={handleAccept} className="px-4 py-2 bg-[#71db77] hover:bg-[#5fcf68] rounded">
           Accept
         </button>
       </div>

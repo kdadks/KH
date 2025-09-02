@@ -79,7 +79,7 @@ const Header: React.FC = () => {
               </Link>
               <Link 
                 to="/booking" 
-                className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors text-sm font-medium"
+                className="px-4 py-2 rounded-md bg-[#71db77] text-white hover:bg-[#5fcf68] transition-colors text-sm font-medium"
               >
                 Book Now
               </Link>
@@ -182,7 +182,7 @@ const Header: React.FC = () => {
               </Link>
               <Link 
                 to="/booking" 
-                className="block w-full mt-2 px-4 py-2 text-center rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors font-medium"
+                className="block w-full mt-2 px-4 py-2 text-center rounded-md bg-[#71db77] text-white hover:bg-[#5fcf68] transition-colors font-medium"
                 onClick={closeMenu}
               >
                 Book Now

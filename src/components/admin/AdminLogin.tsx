@@ -69,7 +69,7 @@ const AdminLogin: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 disabled:opacity-50"
+            className="w-full bg-[#71db77] text-white py-2 px-4 rounded-md hover:bg-[#5fcf68] disabled:opacity-50"
           >
             {loading ? 'Signing In...' : 'Sign In as Admin'}
           </button>

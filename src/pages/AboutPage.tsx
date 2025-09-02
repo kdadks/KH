@@ -109,7 +109,7 @@ const AboutPage = () => {
                   </p>
                 </div>
                 <div className="mt-6 flex flex-col sm:flex-row gap-4">
-                  <a href="/contact" className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-semibold px-6 py-3 rounded-xl shadow transition text-center">
+                  <a href="/contact" className="w-full sm:w-auto bg-[#71db77] hover:bg-[#5fcf68] text-white font-semibold px-6 py-3 rounded-xl shadow transition text-center">
                     Contact Kelly
                   </a>
                   <a href="/contact" className="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-primary-600 font-semibold px-6 py-3 rounded-xl shadow transition text-center">

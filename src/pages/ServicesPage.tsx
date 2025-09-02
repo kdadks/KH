@@ -123,7 +123,7 @@ const ServicesPage: React.FC = () => {
 										<button
 											className={`px-4 py-2 rounded-t text-sm font-medium whitespace-nowrap transition border ${
 												isActive
-													? 'bg-primary-600 text-white border-primary-600'
+													? 'bg-[#71db77] text-white border-[#71db77]'
 													: 'bg-neutral-100 hover:bg-neutral-200 border-transparent'
 											}`}
 											onClick={() => handleCategoryClick(cat)}
@@ -189,7 +189,7 @@ const ServicesPage: React.FC = () => {
 										))}
 									</ul>
 									<button
-										className="bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 transition mt-auto"
+										className="bg-[#71db77] text-white px-4 py-2 rounded hover:bg-[#5fcf68] transition mt-auto"
 										onClick={() => {
 											if (pkg.category === 'Corporate Packages') {
 												navigate('/contact');
