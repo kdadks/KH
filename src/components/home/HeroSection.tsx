@@ -412,12 +412,12 @@ const HeroSection: React.FC = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <Button to="/booking" size="lg" variant="secondary" icon={<Calendar size={20} />}>
-                  Book Appointment
+                  Book Now
                 </Button>
                 <Button to="/services" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
                   Explore Services
                 </Button>
-                <Button to="/services?category=corporate-packages" size="lg" variant="primary" className="bg-primary-600 text-white hover:bg-primary-700">
+                <Button to="/services?category=corporate-packages" size="lg" variant="primary" className="bg-[#71db77] text-white hover:bg-[#5fcf68]">
                   Corporate Packages
                 </Button>
               </div>
@@ -540,7 +540,7 @@ const HeroSection: React.FC = () => {
                </div>
               
               <Button type="submit" variant="primary" fullWidth size="lg" disabled={sendingEmail}>
-                {sendingEmail ? 'Processing...' : 'Book Appointment'} <ArrowRight size={16} className="ml-2" />
+                {sendingEmail ? 'Processing...' : 'Book Now'} <ArrowRight size={16} className="ml-2" />
               </Button>
               
               <p className="text-xs text-center text-neutral-500 mt-4">

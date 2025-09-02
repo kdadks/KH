@@ -40,13 +40,11 @@ const Button: React.FC<ButtonProps> = ({
   
   // Variant classes
   const variantClasses = {
-    primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
-    secondary: 'bg-secondary-500 text-white hover:bg-secondary-600 focus:ring-secondary-400',
+    primary: 'bg-[#71db77] text-white hover:bg-[#5fcf68] focus:ring-[#71db77]',
+    secondary: 'bg-[#71db77] text-white hover:bg-[#5fcf68] focus:ring-[#71db77]',
     outline: 'border border-primary-600 text-primary-600 hover:bg-primary-50 focus:ring-primary-500',
     ghost: 'text-primary-600 hover:bg-primary-50 focus:ring-primary-500',
-  };
-  
-  // Disabled classes
+  };  // Disabled classes
   const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
   
   // Full width class
