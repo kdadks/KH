@@ -23,7 +23,14 @@ const ServicesPage: React.FC = () => {
 		// Map common slugs back to category names
 		const slugMap: { [key: string]: string } = {
 			'corporate-packages': 'Corporate Packages',
-			'individual-therapy': 'Individual Therapy',
+			'corporate-package': 'Corporate Packages',
+			'individual-therapy': 'Individual',
+			'individual': 'Individual',
+			'rehab-fitness': 'Rehab & Fitness',
+			'rehab-&-fitness': 'Rehab & Fitness',
+			'rehab': 'Rehab & Fitness',
+			'packages': 'Packages',
+			'classes': 'Classes',
 			'sports-therapy': 'Sports Therapy',
 			'group-sessions': 'Group Sessions'
 		};
@@ -74,7 +81,41 @@ const ServicesPage: React.FC = () => {
 			// Get unique categories from the data
 			const uniqueCategories = Array.from(new Set(transformedServices.map(service => service.category)))
 				.filter(Boolean) // Remove any null/undefined categories
-				.sort(); // Sort alphabetically
+				.sort((a, b) => {
+					// Custom sort order: Packages → Individual → Rehab & Fitness → Corporate Packages → Classes
+					const order = ['Packages', 'Individual', 'Rehab & Fitness', 'Corporate Packages', 'Classes'];
+					
+					// Function to find the best match for a category
+					const findOrderIndex = (category: string): number => {
+						const cat = category.toLowerCase();
+						
+						// Exact matches first
+						const exactIndex = order.findIndex(orderCat => orderCat.toLowerCase() === cat);
+						if (exactIndex !== -1) return exactIndex;
+						
+						// Partial matches with specific logic
+						if (cat.includes('package') && !cat.includes('corporate')) return 0; // Packages
+						if (cat.includes('individual') || cat.includes('therapy')) return 1; // Individual
+						if (cat.includes('rehab') || cat.includes('fitness')) return 2; // Rehab & Fitness
+						if (cat.includes('corporate')) return 3; // Corporate Packages
+						if (cat.includes('class')) return 4; // Classes
+						
+						return -1; // Not found
+					};
+					
+					const indexA = findOrderIndex(a);
+					const indexB = findOrderIndex(b);
+					
+					// If both categories are in the predefined order, sort by their index
+					if (indexA !== -1 && indexB !== -1) {
+						return indexA - indexB;
+					}
+					// If only one is in the predefined order, prioritize it
+					if (indexA !== -1) return -1;
+					if (indexB !== -1) return 1;
+					// If neither is in the predefined order, sort alphabetically
+					return a.localeCompare(b);
+				});
 
 			setCategories(uniqueCategories);
 			
