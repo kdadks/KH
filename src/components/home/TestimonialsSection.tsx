@@ -35,7 +35,7 @@ const testimonials: TestimonialProps[] = [
     image: "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=600",
   },
   {
-    quote: "The ergonomic assessment completely transformed my workspace and eliminated my wrist pain. I can now work comfortably for hours without discomfort.",
+    quote: "The wellness assessment provided incredible insights into my overall health. The comprehensive evaluation helped me identify areas for improvement and create a personalized wellness plan that transformed my daily habits and energy levels.",
     name: "Emma Thompson",
     role: "Graphic Designer",
     rating: 4,

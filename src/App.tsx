@@ -15,7 +15,7 @@ import ManualTherapyPage from './pages/services/ManualTherapyPage';
 import ChronicPainPage from './pages/services/ChronicPainPage';
 import PostSurgeryPage from './pages/services/PostSurgeryPage';
 import NeuromuscularPage from './pages/services/NeuromuscularPage';
-import ErgonomicPage from './pages/services/ErgonomicPage';
+import WellnessAssessmentPage from './pages/services/WellnessAssessmentPage';
 import UserPortal from './components/UserPortal';
 import ResetPassword from './components/user/ResetPassword';
 import PaymentPage from './pages/PaymentPage';
@@ -39,7 +39,7 @@ function App() {
             <Route path="services/chronic-pain" element={<ChronicPainPage />} />
             <Route path="services/post-surgery" element={<PostSurgeryPage />} />
             <Route path="services/neuromuscular" element={<NeuromuscularPage />} />
-            <Route path="services/ergonomic" element={<ErgonomicPage />} />
+            <Route path="services/wellness-assessment" element={<WellnessAssessmentPage />} />
             <Route path="testimonials" element={<TestimonialsPage />} />
             <Route path="booking" element={<BookingPage />} />
             <Route path="contact" element={<ContactPage />} />

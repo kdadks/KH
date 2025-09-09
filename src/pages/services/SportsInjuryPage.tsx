@@ -34,9 +34,9 @@ const SportsInjuryPage: React.FC = () => {
         canonicalUrl="/services/sports-injury"
       />
       
-      <main className="pt-20">
+      <main>
         {/* Hero Section */}
-        <section className="relative py-16 md:py-24 bg-gradient-to-r from-primary-600 to-primary-800 text-white overflow-hidden">
+        <section className="relative py-10 md:py-10 bg-gradient-to-r from-secondary-600 to-secondary-800 text-white overflow-hidden">
           <div className="absolute inset-0 bg-black opacity-10"></div>
           <Container>
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -47,12 +47,12 @@ const SportsInjuryPage: React.FC = () => {
               >
                 <div className="flex items-center mb-4">
                   <Activity className="w-8 h-8 mr-3" />
-                  <span className="text-primary-200 font-medium">Specialized Service</span>
+                  <span className="text-secondary-200 font-medium">Specialized Service</span>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
                   Sports Injury Rehabilitation
                 </h1>
-                <p className="text-xl text-primary-100 mb-8 leading-relaxed">
+                <p className="text-xl text-secondary-100 mb-8 leading-relaxed">
                   Get back to peak performance with our comprehensive sports injury rehabilitation programs. 
                   Our expert physiotherapists use evidence-based treatments to help athletes recover safely and efficiently.
                 </p>
@@ -63,6 +63,28 @@ const SportsInjuryPage: React.FC = () => {
                   <Button to="/contact" variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
                     Ask Questions
                   </Button>
+                </div>
+                
+                {/* Service Navigation */}
+                <div className="mt-8 pt-8 border-t border-secondary-500/30">
+                  <p className="text-secondary-200 text-sm font-medium mb-4">Explore Our Services</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button to="/services/manual-therapy" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Manual Therapy
+                    </Button>
+                    <Button to="/services/chronic-pain" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Chronic Pain
+                    </Button>
+                    <Button to="/services/wellness-assessment" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Wellness Assessment
+                    </Button>
+                    <Button to="/services/neuromuscular" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Neuromuscular
+                    </Button>
+                    <Button to="/services/post-surgery" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Post-Surgery
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
               
@@ -81,7 +103,7 @@ const SportsInjuryPage: React.FC = () => {
                     target.src = "https://images.pexels.com/photos/7659652/pexels-photo-7659652.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
-                <div className="absolute -bottom-6 -left-6 bg-white text-primary-600 p-4 rounded-lg shadow-lg">
+                <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
                   <div className="flex items-center">
                     <Star className="w-5 h-5 fill-current text-yellow-400 mr-1" />
                     <span className="font-semibold">4.9/5 Rating</span>

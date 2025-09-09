@@ -42,6 +42,7 @@ export const Services: React.FC<ServicesProps> = ({
     day_of_week: 1,
     start_time: '09:00',
     end_time: '10:00',
+    slot_duration: 50,
     is_available: true
   });
 
@@ -49,6 +50,7 @@ export const Services: React.FC<ServicesProps> = ({
   const [showBulkCreate, setShowBulkCreate] = useState(false);
   const [bulkCreateData, setBulkCreateData] = useState({
     slot_type: 'in-hour' as 'in-hour' | 'out-of-hour',
+    slot_duration: 50,
     days_of_week: [] as number[],
     start_time: '09:00',
     end_time: '17:00',
@@ -126,6 +128,7 @@ export const Services: React.FC<ServicesProps> = ({
         features: service.features || [],
         description: service.description,
         isActive: service.is_active,
+        bookingType: service.booking_type || 'book_now',
         created_at: service.created_at,
         updated_at: service.updated_at
       }));
@@ -155,6 +158,7 @@ export const Services: React.FC<ServicesProps> = ({
           out_of_hour_price: newPackage.outOfHourPrice || null,
           features: newPackage.features.filter(f => f.trim()),
           description: newPackage.description || null,
+          booking_type: newPackage.bookingType || 'book_now',
           is_active: true
         }])
         .select()
@@ -173,12 +177,13 @@ export const Services: React.FC<ServicesProps> = ({
         features: data.features || [],
         description: data.description,
         isActive: data.is_active,
+        bookingType: data.booking_type || 'book_now',
         created_at: data.created_at,
         updated_at: data.updated_at
       };
 
       setPackages(prev => [transformedService, ...prev]);
-      setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], category: '', description: '' });
+      setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], category: '', description: '', bookingType: 'book_now' });
       showSuccess('Success', 'Service added successfully');
     } catch (error) {
       console.error('Error adding service:', error);
@@ -236,7 +241,8 @@ export const Services: React.FC<ServicesProps> = ({
           in_hour_price: editPackage.inHourPrice || null,
           out_of_hour_price: editPackage.outOfHourPrice || null,
           features: editPackage.features.filter(f => f.trim()),
-          description: editPackage.description || null
+          description: editPackage.description || null,
+          booking_type: editPackage.bookingType || 'book_now'
         })
         .eq('id', editPackage.id);
 
@@ -298,6 +304,7 @@ export const Services: React.FC<ServicesProps> = ({
           day_of_week: newTimeSlot.day_of_week,
           start_time: formatTime(newTimeSlot.start_time || ''),
           end_time: formatTime(newTimeSlot.end_time || ''),
+          slot_duration: newTimeSlot.slot_duration || 50,
           is_available: newTimeSlot.is_available ?? true
         }])
         .select()
@@ -314,6 +321,7 @@ export const Services: React.FC<ServicesProps> = ({
         day_of_week: 1,
         start_time: '09:00',
         end_time: '10:00',
+        slot_duration: 50,
         is_available: true
       });
       // Increment count for this service
@@ -329,8 +337,8 @@ export const Services: React.FC<ServicesProps> = ({
     }
   };
 
-  // Generate 50-minute time slots within a given time range
-  const generateTimeSlots = (startTime: string, endTime: string): { start_time: string; end_time: string; }[] => {
+  // Generate time slots within a given time range with specified duration
+  const generateTimeSlots = (startTime: string, endTime: string, slotDuration: number = 50): { start_time: string; end_time: string; }[] => {
     const slots: { start_time: string; end_time: string; }[] = [];
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
@@ -340,10 +348,10 @@ export const Services: React.FC<ServicesProps> = ({
     
     let currentMinutes = startTotalMinutes;
     
-    while (currentMinutes + 50 <= endTotalMinutes) {
+    while (currentMinutes + slotDuration <= endTotalMinutes) {
       const currentHour = Math.floor(currentMinutes / 60);
       const currentMin = currentMinutes % 60;
-      const endSlotMinutes = currentMinutes + 50;
+      const endSlotMinutes = currentMinutes + slotDuration;
       const endSlotHour = Math.floor(endSlotMinutes / 60);
       const endSlotMin = endSlotMinutes % 60;
       
@@ -355,7 +363,7 @@ export const Services: React.FC<ServicesProps> = ({
         end_time: endTimeFormatted
       });
       
-      currentMinutes += 50; // Move to next 50-minute slot
+      currentMinutes += slotDuration; // Move to next slot
     }
     
     return slots;
@@ -383,10 +391,10 @@ export const Services: React.FC<ServicesProps> = ({
     }
 
     try {
-      const timeSlots = generateTimeSlots(bulkCreateData.start_time, bulkCreateData.end_time);
+      const timeSlots = generateTimeSlots(bulkCreateData.start_time, bulkCreateData.end_time, bulkCreateData.slot_duration);
       
       if (timeSlots.length === 0) {
-        showError('Validation Error', 'No 50-minute slots can fit in the selected time range');
+        showError('Validation Error', `No ${bulkCreateData.slot_duration}-minute slots can fit in the selected time range`);
         return;
       }
 
@@ -402,6 +410,7 @@ export const Services: React.FC<ServicesProps> = ({
               day_of_week: dayOfWeek,
               start_time: slot.start_time,
               end_time: slot.end_time,
+              slot_duration: bulkCreateData.slot_duration,
               is_available: true
             });
           });
@@ -430,6 +439,7 @@ export const Services: React.FC<ServicesProps> = ({
       setShowBulkCreate(false);
       setBulkCreateData({
         slot_type: 'in-hour',
+        slot_duration: 50,
         days_of_week: [],
         start_time: '09:00',
         end_time: '17:00',
@@ -558,7 +568,7 @@ export const Services: React.FC<ServicesProps> = ({
       {/* Add New Service */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Service</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
             <div className="mb-2 h-12">
               <label className="block text-sm font-medium text-gray-700">Service Name *</label>
@@ -587,6 +597,21 @@ export const Services: React.FC<ServicesProps> = ({
               <option value="Classes">Classes</option>
               <option value="Rehab & Fitness">Rehab & Fitness</option>
               <option value="Corporate Packages">Corporate Packages</option>
+              <option value="Online Session">Online Session</option>
+            </select>
+          </div>
+          <div>
+            <div className="mb-2 h-12">
+              <label className="block text-sm font-medium text-gray-700">Booking Action *</label>
+              <span className="text-xs text-gray-500">How users interact with this service</span>
+            </div>
+            <select
+              value={newPackage.bookingType || 'book_now'}
+              onChange={(e) => setNewPackage({ ...newPackage, bookingType: e.target.value as 'book_now' | 'contact_me' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            >
+              <option value="book_now">Book Now</option>
+              <option value="contact_me">Contact Me</option>
             </select>
           </div>
           <div>
@@ -698,7 +723,7 @@ export const Services: React.FC<ServicesProps> = ({
         {showBulkCreate && (
           <div className="p-6 space-y-6">
             {/* Time Range Selection */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Slot Type</label>
                 <select
@@ -708,6 +733,17 @@ export const Services: React.FC<ServicesProps> = ({
                 >
                   <option value="in-hour">In Hours</option>
                   <option value="out-of-hour">Out of Hours</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Slot Duration</label>
+                <select
+                  value={bulkCreateData.slot_duration}
+                  onChange={(e) => setBulkCreateData(prev => ({ ...prev, slot_duration: parseInt(e.target.value) }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                >
+                  <option value={50}>50 minutes</option>
+                  <option value={30}>30 minutes</option>
                 </select>
               </div>
               <div>
@@ -802,7 +838,7 @@ export const Services: React.FC<ServicesProps> = ({
               <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
               <div className="text-sm text-gray-600">
                 {(() => {
-                  const timeSlots = generateTimeSlots(bulkCreateData.start_time, bulkCreateData.end_time);
+                  const timeSlots = generateTimeSlots(bulkCreateData.start_time, bulkCreateData.end_time, bulkCreateData.slot_duration);
                   const selectedServices = bulkCreateData.apply_to_all_services 
                     ? packages.filter(p => p.id).length
                     : bulkCreateData.selected_services.length;
@@ -810,7 +846,7 @@ export const Services: React.FC<ServicesProps> = ({
                   
                   return (
                     <div className="space-y-1">
-                      <p><strong>{timeSlots.length}</strong> × 50-minute slots per day</p>
+                      <p><strong>{timeSlots.length}</strong> × {bulkCreateData.slot_duration}-minute slots per day</p>
                       <p><strong>{bulkCreateData.days_of_week.length}</strong> days selected</p>
                       <p><strong>{selectedServices}</strong> services selected</p>
                       <p className="text-primary-600 font-medium">Total: <strong>{totalSlots}</strong> time slots will be created</p>
@@ -863,7 +899,7 @@ export const Services: React.FC<ServicesProps> = ({
                 {editIndex === idx && editPackage ? (
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Service</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                       <div>
                         <div className="mb-1 h-12">
                           <label className="block text-sm font-medium text-gray-700">
@@ -896,6 +932,23 @@ export const Services: React.FC<ServicesProps> = ({
                           <option value="Classes">Classes</option>
                           <option value="Rehab & Fitness">Rehab & Fitness</option>
                           <option value="Corporate Packages">Corporate Packages</option>
+                          <option value="Online Session">Online Session</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="mb-1 h-12">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Booking Action *
+                          </label>
+                          <span className="text-xs text-gray-500">How users interact with service</span>
+                        </div>
+                        <select
+                          value={editPackage.bookingType || 'book_now'}
+                          onChange={(e) => handleEditChange('bookingType', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                        >
+                          <option value="book_now">Book Now</option>
+                          <option value="contact_me">Contact Me</option>
                         </select>
                       </div>
                       <div>
@@ -1106,7 +1159,7 @@ export const Services: React.FC<ServicesProps> = ({
                         {/* Add Time Slot Form */}
                         <div className="bg-white p-4 rounded-lg border mb-4">
                           <h6 className="text-md font-medium text-gray-700 mb-3">Add New Time Slot</h6>
-                          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                             <div>
                               <label className="block text-sm font-medium text-gray-600 mb-1">Type</label>
                               <select
@@ -1116,6 +1169,17 @@ export const Services: React.FC<ServicesProps> = ({
                               >
                                 <option value="in-hour">In Hour</option>
                                 <option value="out-of-hour">Out of Hour</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Duration</label>
+                              <select
+                                value={newTimeSlot.slot_duration}
+                                onChange={(e) => setNewTimeSlot({ ...newTimeSlot, slot_duration: parseInt(e.target.value) })}
+                                className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                              >
+                                <option value={50}>50 min</option>
+                                <option value={30}>30 min</option>
                               </select>
                             </div>
                             <div>
@@ -1192,6 +1256,9 @@ export const Services: React.FC<ServicesProps> = ({
                                           : 'bg-orange-100 text-orange-700'
                                       }`}>
                                         {slot.slot_type}
+                                      </span>
+                                      <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                                        {slot.slot_duration || 50}min
                                       </span>
                                     </div>
                                     <div className="text-sm text-gray-600 mt-1">

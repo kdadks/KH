@@ -55,9 +55,9 @@ const PostSurgeryPage: React.FC = () => {
         canonicalUrl="/services/post-surgery"
       />
       
-      <main className="pt-20">
+      <main>
         {/* Hero Section */}
-        <section className="relative py-16 md:py-24 bg-gradient-to-r from-green-600 to-teal-700 text-white overflow-hidden">
+        <section className="relative py-10 md:py-10 bg-gradient-to-r from-secondary-600 to-secondary-800 text-white overflow-hidden">
           <div className="absolute inset-0 bg-black opacity-10"></div>
           <Container>
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -68,12 +68,12 @@ const PostSurgeryPage: React.FC = () => {
               >
                 <div className="flex items-center mb-4">
                   <Activity className="w-8 h-8 mr-3" />
-                  <span className="text-green-200 font-medium">Recovery Excellence</span>
+                  <span className="text-secondary-200 font-medium">Recovery Excellence</span>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
                   Post-Surgery Rehabilitation
                 </h1>
-                <p className="text-xl text-green-100 mb-8 leading-relaxed">
+                <p className="text-xl text-secondary-100 mb-8 leading-relaxed">
                   Accelerate your recovery with our specialized post-surgical rehabilitation programs. 
                   Our expert team guides you through every phase of healing to restore optimal function.
                 </p>
@@ -84,6 +84,28 @@ const PostSurgeryPage: React.FC = () => {
                   <Button to="/contact" variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
                     Consultation
                   </Button>
+                </div>
+                
+                {/* Service Navigation */}
+                <div className="mt-8 pt-8 border-t border-secondary-500/30">
+                  <p className="text-secondary-200 text-sm font-medium mb-4">Explore Our Services</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button to="/services/manual-therapy" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Manual Therapy
+                    </Button>
+                    <Button to="/services/chronic-pain" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Chronic Pain
+                    </Button>
+                    <Button to="/services/wellness-assessment" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Wellness Assessment
+                    </Button>
+                    <Button to="/services/neuromuscular" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Neuromuscular
+                    </Button>
+                    <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Sports Injury
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
               
@@ -102,7 +124,7 @@ const PostSurgeryPage: React.FC = () => {
                     target.src = "https://images.pexels.com/photos/8376155/pexels-photo-8376155.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
-                <div className="absolute -bottom-6 -left-6 bg-white text-green-600 p-4 rounded-lg shadow-lg">
+                <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
                   <div className="flex items-center">
                     <Shield className="w-5 h-5 fill-current text-green-400 mr-1" />
                     <span className="font-semibold">Safe Recovery</span>

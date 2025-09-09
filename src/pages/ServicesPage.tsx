@@ -32,7 +32,10 @@ const ServicesPage: React.FC = () => {
 			'packages': 'Packages',
 			'classes': 'Classes',
 			'sports-therapy': 'Sports Therapy',
-			'group-sessions': 'Group Sessions'
+			'group-sessions': 'Group Sessions',
+			'online-session': 'Online Session',
+			'online-sessions': 'Online Session',
+			'online': 'Online Session'
 		};
 		return slugMap[slug] || slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 	};
@@ -74,6 +77,7 @@ const ServicesPage: React.FC = () => {
 				inHourPrice: service.in_hour_price || undefined,
 				outOfHourPrice: service.out_of_hour_price || undefined,
 				features: service.features || [],
+				bookingType: service.booking_type || 'book_now',
 			})) || [];
 
 			setServices(transformedServices);
@@ -82,8 +86,8 @@ const ServicesPage: React.FC = () => {
 			const uniqueCategories = Array.from(new Set(transformedServices.map(service => service.category)))
 				.filter(Boolean) // Remove any null/undefined categories
 				.sort((a, b) => {
-					// Custom sort order: Packages → Individual → Rehab & Fitness → Corporate Packages → Classes
-					const order = ['Packages', 'Individual', 'Rehab & Fitness', 'Corporate Packages', 'Classes'];
+					// Custom sort order: Packages → Individual → Rehab & Fitness → Corporate Packages → Classes → Online Session
+					const order = ['Packages', 'Individual', 'Rehab & Fitness', 'Corporate Packages', 'Classes', 'Online Session'];
 					
 					// Function to find the best match for a category
 					const findOrderIndex = (category: string): number => {
@@ -99,6 +103,7 @@ const ServicesPage: React.FC = () => {
 						if (cat.includes('rehab') || cat.includes('fitness')) return 2; // Rehab & Fitness
 						if (cat.includes('corporate')) return 3; // Corporate Packages
 						if (cat.includes('class')) return 4; // Classes
+						if (cat.includes('online') || cat.includes('session')) return 5; // Online Session
 						
 						return -1; // Not found
 					};
@@ -145,7 +150,7 @@ const ServicesPage: React.FC = () => {
 		<>
 			<SEOHead
 				title="Our Services - KH Therapy"
-				description="Discover KH Therapy's range of physiotherapy services, from sports injury rehabilitation to ergonomic assessments. Personalized care for your wellness journey."
+				description="Discover KH Therapy's range of physiotherapy services, from sports injury rehabilitation to wellness assessments. Personalized care for your wellness journey."
 				canonicalUrl="/services"
 			/>
 			<main className="py-16">
@@ -232,14 +237,14 @@ const ServicesPage: React.FC = () => {
 									<button
 										className="bg-[#71db77] text-white px-4 py-2 rounded hover:bg-[#5fcf68] transition mt-auto"
 										onClick={() => {
-											if (pkg.category === 'Corporate Packages') {
+											if (pkg.bookingType === 'contact_me') {
 												navigate('/contact');
 											} else {
 												navigate('/booking');
 											}
 										}}
 									>
-										{pkg.category === 'Corporate Packages' ? 'Enquire Now' : 'Book Now'}
+										{pkg.bookingType === 'contact_me' ? 'Contact Me' : 'Book Now'}
 									</button>
 								</div>
 							))}

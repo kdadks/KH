@@ -194,6 +194,22 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
   // Helpers
   const getSlotStart = (slot: AvailabilitySlot) => slot.start ?? slot.start_time ?? '';
+  
+  // Check if a slot is in the past (including today for safety)
+  const isSlotInPast = (slot: AvailabilitySlot) => {
+    const today = new Date();
+    const slotDate = new Date(slot.date + 'T' + getSlotStart(slot));
+    return slotDate <= today;
+  };
+  
+  // Check if a date is in the past (including today)
+  const isDateInPast = (dateStr: string) => {
+    const today = new Date();
+    const checkDate = new Date(dateStr + 'T00:00:00');
+    today.setHours(0, 0, 0, 0); // Set to start of day for comparison
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate <= today;
+  };
 
   // Convert slots to calendar events  
   const formatTime = (t: string) => {
@@ -380,6 +396,12 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const handleDeleteSlot = async (slot: AvailabilitySlot) => {
     if (!slot?.id) return;
 
+    // Check if slot is in the past
+    if (isSlotInPast(slot)) {
+      showError('Cannot Delete', 'Cannot delete past or current availability slots. Only future slots can be deleted.');
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('availability')
@@ -391,8 +413,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       showSuccess('Success', 'Availability slot deleted successfully');
       
       // Refresh the data
-      await fetchAvailabilitySlots();
-      await fetchBookedSlots();
+      await Promise.all([fetchAvailabilitySlots(), fetchBookedSlots()]);
     } catch (error) {
       console.error('Error deleting availability slot:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -414,6 +435,12 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     
     if (slotsForDate.length === 0) {
       showError('No Slots', 'No availability slots found for this date.');
+      return;
+    }
+
+    // Check if date is in the past
+    if (isDateInPast(dateStr)) {
+      showError('Cannot Delete', 'Cannot delete past or current availability slots. Only future slots can be deleted.');
       return;
     }
 
@@ -471,7 +498,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       setEditError('End time must be after start time');
       return;
     }
+    
     try {
+      // First, update the database
       let { error }: any = await supabase
         .from('availability')
         .update({ start_time: editStartTime, end_time: editEndTime })
@@ -486,11 +515,16 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       }
 
       if (error) throw error;
-      showSuccess('Updated', 'Availability slot updated');
+      
+      // Close the modal first
       setShowEditModal(false);
       setSlotToEdit(null);
-      await fetchAvailabilitySlots();
-      await fetchBookedSlots();
+      setEditError('');
+      
+      // Then refresh the data and show success message
+      await Promise.all([fetchAvailabilitySlots(), fetchBookedSlots()]);
+      showSuccess('Updated', 'Availability slot updated successfully');
+      
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       showError('Error', `Failed to update slot: ${msg}`);
@@ -793,6 +827,13 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
                     if (event.resource?.id && event.type === 'available-slot') {
                       const slot = event.resource as AvailabilitySlot;
+                      
+                      // Check if slot is in the past
+                      if (isSlotInPast(slot)) {
+                        showError('Cannot Edit', 'Cannot edit past or current availability slots. Only future slots can be edited.');
+                        return;
+                      }
+                      
                       // If multiple for date, open list modal; else open edit modal
                       if (!openSlotsModalIfMultiple(slot.date)) {
                         setSlotToEdit(slot);
@@ -882,15 +923,18 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                             {slotsForDate.length > 1 && (
                               <button
                                 onClick={() => handleDeleteAllDaySlots(date)}
-                                disabled={hasConfirmedBookingsOnDate(date)}
+                                disabled={hasConfirmedBookingsOnDate(date) || isDateInPast(date)}
                                 className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                                  hasConfirmedBookingsOnDate(date)
+                                  hasConfirmedBookingsOnDate(date) || isDateInPast(date)
                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                     : 'bg-red-600 text-white hover:bg-red-700'
                                 }`}
-                                title={hasConfirmedBookingsOnDate(date) 
-                                  ? 'Cannot delete - confirmed bookings exist'
-                                  : 'Delete all slots for this day'
+                                title={
+                                  hasConfirmedBookingsOnDate(date) 
+                                    ? 'Cannot delete - confirmed bookings exist'
+                                    : isDateInPast(date)
+                                      ? 'Cannot delete - past date'
+                                      : 'Delete all slots for this day'
                                 }
                               >
                                 Delete All Day
@@ -928,7 +972,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                       <Clock className={`w-4 h-4 ${isBooked ? 'text-gray-400' : 'text-emerald-500'}`} />
-                                      {!isBooked && (
+                                      {!isBooked && !isSlotInPast(slot) && (
                                         <button
                                           onClick={() => handleDeleteSlot(slot)}
                                           className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -936,6 +980,11 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                         >
                                           <Trash2 className="w-3 h-3" />
                                         </button>
+                                      )}
+                                      {!isBooked && isSlotInPast(slot) && (
+                                        <div className="text-xs text-gray-400 px-2 py-1 bg-gray-100 rounded">
+                                          Past
+                                        </div>
                                       )}
                                     </div>
                                   </div>
@@ -1055,9 +1104,23 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                 </div>
               )}
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
-              <button onClick={() => { setShowEditModal(false); setSlotToEdit(null); }} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200">Cancel</button>
-              <button onClick={handleSaveEdit} className="px-4 py-2 text-sm font-medium text-white bg-[#71db77] border border-transparent rounded-md hover:bg-[#5fcf68]">Save</button>
+            <div className="flex justify-between items-center mt-6">
+              <button 
+                onClick={() => {
+                  if (slotToEdit) {
+                    setShowEditModal(false);
+                    handleDeleteSlot(slotToEdit);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 flex items-center"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </button>
+              <div className="flex space-x-3">
+                <button onClick={() => { setShowEditModal(false); setSlotToEdit(null); }} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200">Cancel</button>
+                <button onClick={handleSaveEdit} className="px-4 py-2 text-sm font-medium text-white bg-[#71db77] border border-transparent rounded-md hover:bg-[#5fcf68]">Save</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1073,15 +1136,18 @@ export const Availability: React.FC<AvailabilityProps> = () => {
               </div>
               <button
                 onClick={() => handleDeleteAllDaySlots(selectedDateLabel)}
-                disabled={hasConfirmedBookingsOnDate(selectedDateLabel)}
+                disabled={hasConfirmedBookingsOnDate(selectedDateLabel) || isDateInPast(selectedDateLabel)}
                 className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                  hasConfirmedBookingsOnDate(selectedDateLabel)
+                  hasConfirmedBookingsOnDate(selectedDateLabel) || isDateInPast(selectedDateLabel)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-red-600 text-white hover:bg-red-700'
                 }`}
-                title={hasConfirmedBookingsOnDate(selectedDateLabel) 
-                  ? 'Cannot delete - confirmed bookings exist'
-                  : 'Delete all slots for this day'
+                title={
+                  hasConfirmedBookingsOnDate(selectedDateLabel) 
+                    ? 'Cannot delete - confirmed bookings exist'
+                    : isDateInPast(selectedDateLabel)
+                      ? 'Cannot delete - past date'
+                      : 'Delete all slots for this day'
                 }
               >
                 Delete All Day
@@ -1091,13 +1157,22 @@ export const Availability: React.FC<AvailabilityProps> = () => {
               {selectedDateSlots.map(slot => (
                 <div key={slot.id || `${slot.date}-${getSlotStart(slot)}-${slot.end_time}`}
                   className="flex items-center justify-between border border-gray-200 rounded-md px-4 py-2">
-                  <span className="text-sm font-medium text-gray-800">{formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}</span>
-                  <button
-                    onClick={() => handleDeleteSlot(slot)}
-                    className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
-                  >
-                    Delete
-                  </button>
+                  <span className="text-sm font-medium text-gray-800">
+                    {formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}
+                    {isSlotInPast(slot) && ' (Past)'}
+                  </span>
+                  {!isSlotInPast(slot) ? (
+                    <button
+                      onClick={() => handleDeleteSlot(slot)}
+                      className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  ) : (
+                    <div className="text-xs text-gray-400 px-3 py-1 bg-gray-100 rounded">
+                      Past
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -12,7 +12,7 @@ const ChronicPainPage: React.FC = () => {
     'Manual therapy techniques',
     'Stress management strategies',
     'Lifestyle modification guidance',
-    'Ergonomic assessments',
+    'Wellness assessments',
     'Gradual activity progression',
     'Mind-body connection techniques'
   ];
@@ -45,9 +45,9 @@ const ChronicPainPage: React.FC = () => {
         canonicalUrl="/services/chronic-pain"
       />
       
-      <main className="pt-20">
+      <main>
         {/* Hero Section */}
-        <section className="relative py-16 md:py-24 bg-gradient-to-r from-purple-600 to-purple-800 text-white overflow-hidden">
+        <section className="relative py-10 md:py-10 bg-gradient-to-r from-secondary-600 to-secondary-800 text-white overflow-hidden">
           <div className="absolute inset-0 bg-black opacity-10"></div>
           <Container>
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -58,12 +58,12 @@ const ChronicPainPage: React.FC = () => {
               >
                 <div className="flex items-center mb-4">
                   <Brain className="w-8 h-8 mr-3" />
-                  <span className="text-purple-200 font-medium">Comprehensive Care</span>
+                  <span className="text-secondary-200 font-medium">Comprehensive Care</span>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
                   Chronic Pain Management
                 </h1>
-                <p className="text-xl text-purple-100 mb-8 leading-relaxed">
+                <p className="text-xl text-secondary-100 mb-8 leading-relaxed">
                   Take control of your chronic pain with our comprehensive, evidence-based approach. 
                   We help you develop effective strategies to manage pain and reclaim your quality of life.
                 </p>
@@ -74,6 +74,28 @@ const ChronicPainPage: React.FC = () => {
                   <Button to="/contact" variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
                     Get Support
                   </Button>
+                </div>
+                
+                {/* Service Navigation */}
+                <div className="mt-8 pt-8 border-t border-secondary-500/30">
+                  <p className="text-secondary-200 text-sm font-medium mb-4">Explore Our Services</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button to="/services/manual-therapy" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Manual Therapy
+                    </Button>
+                    <Button to="/services/wellness-assessment" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Wellness Assessment
+                    </Button>
+                    <Button to="/services/neuromuscular" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Neuromuscular
+                    </Button>
+                    <Button to="/services/post-surgery" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Post-Surgery
+                    </Button>
+                    <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Sports Injury
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
               
@@ -92,7 +114,7 @@ const ChronicPainPage: React.FC = () => {
                     target.src = "https://images.pexels.com/photos/6111370/pexels-photo-6111370.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
-                <div className="absolute -bottom-6 -left-6 bg-white text-purple-600 p-4 rounded-lg shadow-lg">
+                <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
                   <div className="flex items-center">
                     <Shield className="w-5 h-5 fill-current text-green-400 mr-1" />
                     <span className="font-semibold">Holistic Approach</span>

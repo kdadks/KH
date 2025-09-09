@@ -10,6 +10,7 @@ export type Package = {
   category?: string;
   description?: string;
   isActive?: boolean;
+  bookingType?: 'book_now' | 'contact_me';
   created_at?: string;
   updated_at?: string;
 };
@@ -37,6 +38,7 @@ export type ServiceTimeSlot = {
   start_time: string;
   end_time: string;
   is_available: boolean;
+  slot_duration?: number; // Duration in minutes (30 or 50)
   created_at?: string;
 };
 
