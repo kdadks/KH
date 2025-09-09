@@ -74,9 +74,9 @@ const ServicesSection: React.FC = () => {
     },
     {
       icon: <Shield size={24} />,
-      title: "Ergonomic Assessments",
-      description: "Professional evaluations of workspaces to prevent injuries and improve comfort in daily activities.",
-      href: "/services/ergonomic",
+      title: "Wellness Assessment",
+      description: "Comprehensive evaluation of physical, mental, emotional, and spiritual well-being using evidence-based tools.",
+      href: "/services/wellness-assessment",
     },
   ];
 

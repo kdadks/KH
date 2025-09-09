@@ -84,7 +84,7 @@ const Footer: React.FC = () => {
                 <Link to="/services/neuromuscular" className="text-neutral-300 hover:text-white transition-colors">Neuromuscular Therapy</Link>
               </li>
               <li>
-                <Link to="/services/ergonomic" className="text-neutral-300 hover:text-white transition-colors">Ergonomic Assessments</Link>
+                <Link to="/services/wellness-assessment" className="text-neutral-300 hover:text-white transition-colors">Wellness Assessment</Link>
               </li>
             </ul>
           </div>

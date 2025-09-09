@@ -3,7 +3,8 @@ export type PackageCategory =
   | 'Individual'
   | 'Classes'
   | 'Rehab & Fitness'
-  | 'Corporate Packages';
+  | 'Corporate Packages'
+  | 'Online Session';
 
 export type Package = {
   name: string;
@@ -15,6 +16,8 @@ export type Package = {
   outOfHourPrice?: string;
   features: string[];
   category: PackageCategory;
+  /** Booking action type for user interaction */
+  bookingType?: 'book_now' | 'contact_me';
 };
 
 // Ordered list of categories for UI tabs
@@ -24,6 +27,7 @@ export const packageCategories: PackageCategory[] = [
   'Classes',
   'Rehab & Fitness',
   'Corporate Packages',
+  'Online Session',
 ];
 
 export const treatmentPackages: Package[] = [
@@ -123,7 +127,7 @@ export const treatmentPackages: Package[] = [
     features: [
       'Workplace health workshops',
       'Group exercise sessions',
-      'Ergonomic assessments',
+      'Wellness assessments',
     ],
     category: 'Corporate Packages',
   },
