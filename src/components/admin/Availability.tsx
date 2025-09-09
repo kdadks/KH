@@ -81,22 +81,11 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const fetchAvailabilitySlots = useCallback(async () => {
     try {
       console.log('🔍 Fetching availability slots...');
-      let { data, error }: any = await supabase
+      const { data, error } = await supabase
         .from('availability')
         .select('*')
         .order('date', { ascending: true })
-        .order('start_time', { ascending: true });
-
-      if (error && error.code === '42703') {
-        // Fallback for legacy schema using 'start'
-        const fallback = await supabase
-          .from('availability')
-          .select('*')
-          .order('date', { ascending: true })
-          .order('start', { ascending: true });
-        data = fallback.data;
-        error = fallback.error;
-      }
+        .order('start', { ascending: true });
 
       if (error) {
         console.error('❌ Error fetching availability slots:', error);
@@ -337,27 +326,14 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     }
 
     try {
-      let { error }: any = await supabase
+      const { error } = await supabase
         .from('availability')
         .insert([{
           date: newSlotDate,
-          start_time: newSlotStartTime,
+          start: newSlotStartTime,
           end_time: newSlotEndTime
         }])
         .select();
-
-      if (error && error.code === '42703') {
-        // Fallback for legacy schema using 'start'
-        const retry = await supabase
-          .from('availability')
-          .insert([{
-            date: newSlotDate,
-            start: newSlotStartTime,
-            end_time: newSlotEndTime
-          }])
-          .select();
-        error = retry.error;
-      }
 
       if (error) throw error;
 
@@ -472,18 +448,10 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       return;
     }
     try {
-      let { error }: any = await supabase
+      const { error } = await supabase
         .from('availability')
-        .update({ start_time: editStartTime, end_time: editEndTime })
+        .update({ start: editStartTime, end_time: editEndTime })
         .eq('id', slotToEdit.id);
-
-      if (error && error.code === '42703') {
-        const retry = await supabase
-          .from('availability')
-          .update({ start: editStartTime, end_time: editEndTime })
-          .eq('id', slotToEdit.id);
-        error = retry.error;
-      }
 
       if (error) throw error;
       showSuccess('Updated', 'Availability slot updated');
