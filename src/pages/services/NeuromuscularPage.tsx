@@ -124,7 +124,7 @@ const NeuromuscularPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/7659530/pexels-photo-7659530.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Neuromusucolar.jpeg"
                   alt="Neuromuscular therapy treatment"
                   className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
                   onError={(e) => {
@@ -194,7 +194,7 @@ const NeuromuscularPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/7659645/pexels-photo-7659645.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/Neuromusucolar.jpeg"
                   alt="Neuromuscular assessment and treatment" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
@@ -298,7 +298,7 @@ const NeuromuscularPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/7659576/pexels-photo-7659576.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/Neuromusucolar.jpeg"
                   alt="Neuromuscular therapy techniques" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
@@ -492,7 +492,7 @@ const NeuromuscularPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/7659633/pexels-photo-7659633.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/Neuromuscular.jpeg" 
                   alt="Neuromuscular therapy expectations" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {

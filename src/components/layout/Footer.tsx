@@ -24,7 +24,7 @@ const Footer: React.FC = () => {
               KH Therapy provides excellent high standard physiotherapy care through personalized physical therapy sessions. We help you become pain free through education, knowledge, and strengthening the body through rehabilitation and movement.
             </p>
             <div className="flex space-x-4">
-              <a href="https://www.facebook.com/PhysiotherapyAndPerformance" className="text-white hover:text-primary-400 transition-colors" aria-label="Facebook" target="_blank" rel="noopener noreferrer">
+              <a href="https://www.facebook.com/share/19bD1ZcoJd/" className="text-white hover:text-primary-400 transition-colors" aria-label="Facebook" target="_blank" rel="noopener noreferrer">
                 <Facebook size={20} />
               </a>
               <a href="https://www.instagram.com/kh.therapy/" className="text-white hover:text-primary-400 transition-colors" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
@@ -120,9 +120,12 @@ const Footer: React.FC = () => {
         <hr className="border-neutral-700 my-8" />
         
         {/* Bottom Footer */}
-        <div className="flex flex-col md:flex-row justify-between items-center text-sm text-neutral-400">
+        <div className="flex justify-between items-center text-sm text-neutral-400">
           <p>&copy; {new Date().getFullYear()} KH Therapy. All rights reserved.</p>
-          <div className="flex space-x-4 mt-4 md:mt-0">
+          <div className="text-center">
+            Made by <a href="https://it-wala.com/consulting" className="hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">ITWala (Kdadks Service Pvt. Ltd.)</a>
+          </div>
+          <div className="flex space-x-4">
             <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link to="/terms-of-service" className="hover:text-white transition-colors">Terms of Service</Link>
             <Link to="/cookie-policy" className="hover:text-white transition-colors">Cookie Policy</Link>

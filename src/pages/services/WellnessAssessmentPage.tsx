@@ -121,12 +121,12 @@ const WellnessAssessmentPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Wellness.jpeg"
                   alt="Wellness assessment consultation"
                   className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/Wellness.jpeg";
                   }}
                 />
                 <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
@@ -192,12 +192,12 @@ const WellnessAssessmentPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Wellness.jpeg"
                   alt="Wellness assessment process"
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/Wellness.jpeg";
                   }}
                 />
               </motion.div>
@@ -259,12 +259,12 @@ const WellnessAssessmentPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Wellness.jpeg"
                   alt="Wellness assessment areas"
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/Wellness.jpeg";
                   }}
                 />
                 <div className="absolute -top-6 -right-6 bg-secondary-600 text-white p-4 rounded-lg shadow-lg">
@@ -447,12 +447,12 @@ const WellnessAssessmentPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Wellness.jpeg"
                   alt="Wheel of Wellness model illustration"
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/Wellness.jpeg";
                   }}
                 />
               </motion.div>

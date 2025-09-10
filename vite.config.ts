@@ -13,5 +13,22 @@ export default defineConfig({
         secure: false
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['framer-motion', 'lucide-react', 'react-icons', 'react-big-calendar'],
+          'utils-vendor': ['date-fns', 'moment', 'crypto-js', 'bcryptjs'],
+          'pdf-vendor': ['jspdf', 'jspdf-autotable', 'xlsx'],
+          'supabase-vendor': ['@supabase/supabase-js'],
+          'form-vendor': ['react-hook-form'],
+          'helmet-vendor': ['react-helmet-async']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000 // Increase warning limit to 1MB
   }
 });
