@@ -95,13 +95,9 @@ const SportsInjuryPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/7659564/pexels-photo-7659564.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Sport Injury.jpeg"
                   alt="Sports injury rehabilitation session"
-                  className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/7659652/pexels-photo-7659652.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
-                  }}
+                  className="rounded-lg shadow-2xl w-full h-[400px] object-contain"
                 />
                 <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
                   <div className="flex items-center">
@@ -157,13 +153,9 @@ const SportsInjuryPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/7659624/pexels-photo-7659624.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Sport Injury.jpeg"
                   alt="Athletic training and rehabilitation"
-                  className="rounded-lg shadow-lg w-full h-[400px] object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/7659683/pexels-photo-7659683.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
-                  }}
+                  className="rounded-lg shadow-lg w-full h-[400px] object-contain"
                 />
               </motion.div>
             </div>

@@ -106,12 +106,12 @@ const ManualTherapyPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/5473307/pexels-photo-5473307.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
                   alt="Manual therapy treatment session"
                   className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/5473310/pexels-photo-5473310.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
                 <div className="absolute -bottom-6 -right-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
@@ -138,12 +138,12 @@ const ManualTherapyPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/7659689/pexels-photo-7659689.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
                   alt="Manual therapy techniques" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/5473951/pexels-photo-5473951.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
                 <div className="absolute -top-6 -left-6 bg-secondary-600 text-white p-4 rounded-lg shadow-lg">
@@ -266,12 +266,12 @@ const ManualTherapyPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/7659693/pexels-photo-7659693.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
                   alt="Patient receiving manual therapy treatment" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/5473946/pexels-photo-5473946.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=200";
                   }}
                 />
               </motion.div>

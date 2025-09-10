@@ -58,7 +58,7 @@ const WhyChooseUsSection: React.FC = () => {
             <div className="absolute -top-4 -left-4 w-24 h-24 bg-primary-100 rounded-tl-lg z-0"></div>
             <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-secondary-100 rounded-br-lg z-0"></div>
             <img 
-              src="https://images.pexels.com/photos/7579829/pexels-photo-7579829.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" 
+              src="/whyus.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" 
               alt="Physiotherapist with patient" 
               className="rounded-lg shadow-lg relative z-10 w-full h-full object-cover"
             />

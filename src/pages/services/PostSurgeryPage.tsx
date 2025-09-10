@@ -116,13 +116,9 @@ const PostSurgeryPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/7659695/pexels-photo-7659695.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Post Ops.jpeg"
                   alt="Post-surgery rehabilitation therapy"
                   className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/8376155/pexels-photo-8376155.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
-                  }}
                 />
                 <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
                   <div className="flex items-center">
@@ -186,13 +182,9 @@ const PostSurgeryPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/6111597/pexels-photo-6111597.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/Post Ops.jpeg" 
                   alt="Post-surgery recovery process" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/8376264/pexels-photo-8376264.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
-                  }}
                 />
               </motion.div>
             </div>
@@ -296,13 +288,9 @@ const PostSurgeryPage: React.FC = () => {
                 className="relative"
               >
                 <img 
-                  src="https://images.pexels.com/photos/5473305/pexels-photo-5473305.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
+                  src="/Post Ops.jpeg" 
                   alt="Post-surgery rehabilitation techniques" 
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/8376268/pexels-photo-8376268.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
-                  }}
                 />
                 <div className="absolute -top-6 -right-6 bg-secondary-600 text-white p-4 rounded-lg shadow-lg">
                   <Shield className="w-6 h-6 mb-2" />
