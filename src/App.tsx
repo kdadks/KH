@@ -4,6 +4,13 @@ import Layout from './components/layout/Layout';
 import { ToastProvider } from './components/shared/toastContext';
 import { UserAuthProvider } from './contexts/UserAuthContext';
 
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+  </div>
+);
+
 // Lazy load pages
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
@@ -32,7 +39,7 @@ function App() {
   return (
     <ToastProvider>
       <UserAuthProvider>
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />

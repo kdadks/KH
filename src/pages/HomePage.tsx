@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import SEOHead from '../components/utils/SEOHead';
 import HeroSection from '../components/home/HeroSection';
 import ServicesSection from '../components/home/ServicesSection';
@@ -8,6 +8,7 @@ import StatisticsSection from '../components/home/StatisticsSection';
 // import TestimonialsSection from '../components/home/TestimonialsSection';
 import FaqSection from '../components/home/FaqSection';
 import CtaSection from '../components/home/CtaSection';
+import { preloadCriticalRoutes } from '../utils/preloader';
 
 const HomePage: React.FC = () => {
   const kellyImages = [
@@ -21,6 +22,11 @@ const HomePage: React.FC = () => {
     '/Kelly Pic8.jpeg',
     '/Kelly Pic9.jpeg'
   ];
+
+  // Preload critical routes after component mounts
+  useEffect(() => {
+    preloadCriticalRoutes();
+  }, []);
 
   return (
     <>
