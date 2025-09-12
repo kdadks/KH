@@ -15,7 +15,8 @@
     "test:gdpr": "jest src/tests/gdpr-compliance.test.js",
     "analyze-db": "node scripts/analyze-database-schema.js",
     "implement-rls": "node scripts/implement-rls-safely.js",
-    "rls-manual": "node scripts/implement-rls-manual.js"
+    "rls-manual": "node scripts/implement-rls-manual.js",
+    "setup-google-reviews": "node scripts/setup-google-reviews.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.52.0",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@netlify/functions": "^4.2.5",
     "@testing-library/jest-dom": "^6.7.0",
     "@testing-library/react": "^16.3.0",
     "@types/bcryptjs": "^2.4.6",

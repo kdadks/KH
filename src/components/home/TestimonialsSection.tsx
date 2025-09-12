@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Star, ChevronLeft, ChevronRight } from 'lucide-react';
-import SectionHeading from '../shared/SectionHeading';
-import Container from '../shared/Container';
 
 interface TestimonialProps {
   quote: string;
@@ -59,57 +57,58 @@ const TestimonialsSection: React.FC = () => {
   };
 
   return (
-    <section className="py-16 md:py-24 bg-white">
-      <Container>
-        <SectionHeading
-          title="Patient Success Stories"
-          subtitle="Hear from our patients about their experiences and recovery journeys with PhysioLife."
-          centered={true}
-        />
-        
-        {/* Desktop Testimonials */}
-        <div className="hidden md:block">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="bg-neutral-50 p-6 rounded-lg shadow-md"
-              >
-                <div className="flex items-center mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      size={20}
-                      fill={i < testimonial.rating ? "#F59E0B" : "none"}
-                      color={i < testimonial.rating ? "#F59E0B" : "#D1D5DB"}
-                    />
-                  ))}
-                </div>
-                
-                <blockquote className="text-neutral-700 mb-6 italic">
-                  "{testimonial.quote}"
-                </blockquote>
-                
-                <div className="flex items-center">
-                  <img 
-                    src={testimonial.image} 
-                    alt={testimonial.name}
-                    className="w-12 h-12 rounded-full object-cover mr-4"
+    <section className="py-8">
+      <div className="mb-8">
+        <h3 className="text-2xl font-bold text-neutral-800 mb-2 text-center">
+          Client Success Stories
+        </h3>
+        <p className="text-neutral-600 text-center">
+          Hear from our patients about their experiences and recovery journeys
+        </p>
+      </div>
+      
+      {/* Desktop Testimonials */}
+      <div className="hidden md:block">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {testimonials.map((testimonial, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              viewport={{ once: true }}
+              className="bg-white border border-neutral-200 rounded-xl p-6 shadow-sm"
+            >
+              <div className="flex items-center mb-4">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    size={16}
+                    fill={i < testimonial.rating ? "#FCD34D" : "none"}
+                    color={i < testimonial.rating ? "#FCD34D" : "#D1D5DB"}
                   />
-                  <div>
-                    <p className="font-semibold text-neutral-800">{testimonial.name}</p>
-                    <p className="text-neutral-500 text-sm">{testimonial.role}</p>
-                  </div>
+                ))}
+              </div>
+              
+              <blockquote className="text-neutral-700 mb-6 italic leading-relaxed">
+                "{testimonial.quote}"
+              </blockquote>
+              
+              <div className="flex items-center">
+                <img 
+                  src={testimonial.image} 
+                  alt={testimonial.name}
+                  className="w-12 h-12 rounded-full object-cover mr-4"
+                />
+                <div>
+                  <p className="font-semibold text-neutral-800">{testimonial.name}</p>
+                  <p className="text-neutral-500 text-sm">{testimonial.role}</p>
                 </div>
-              </motion.div>
-            ))}
-          </div>
+              </div>
+            </motion.div>
+          ))}
         </div>
-        
+      </div>
         {/* Mobile Testimonial Carousel */}
         <div className="md:hidden relative">
           <div className="overflow-hidden">
@@ -122,19 +121,19 @@ const TestimonialsSection: React.FC = () => {
                   key={index}
                   className="w-full flex-shrink-0 px-4 py-8"
                 >
-                  <div className="bg-neutral-50 p-6 rounded-lg shadow-md">
+                  <div className="bg-white border border-neutral-200 rounded-xl p-6 shadow-sm">
                     <div className="flex items-center mb-4">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
                           size={16}
-                          fill={i < testimonial.rating ? "#F59E0B" : "none"}
-                          color={i < testimonial.rating ? "#F59E0B" : "#D1D5DB"}
+                          fill={i < testimonial.rating ? "#FCD34D" : "none"}
+                          color={i < testimonial.rating ? "#FCD34D" : "#D1D5DB"}
                         />
                       ))}
                     </div>
                     
-                    <blockquote className="text-neutral-700 mb-6 italic text-sm">
+                    <blockquote className="text-neutral-700 mb-6 italic text-sm leading-relaxed">
                       "{testimonial.quote}"
                     </blockquote>
                     
@@ -183,21 +182,8 @@ const TestimonialsSection: React.FC = () => {
             </button>
           </div>
         </div>
-        
-        <div className="text-center mt-10">
-          <a 
-            href="/testimonials" 
-            className="text-primary-600 font-medium hover:text-primary-700 inline-flex items-center"
-          >
-            Read more patient stories
-            <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </a>
-        </div>
-      </Container>
-    </section>
-  );
-};
+      </section>
+    );
+  };
 
 export default TestimonialsSection;
