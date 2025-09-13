@@ -20,6 +20,7 @@ const BookingPage = lazy(() => import('./pages/BookingPage'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage'));
+const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const AdminConsole = lazy(() => import('./pages/AdminConsole'));
 const SportsInjuryPage = lazy(() => import('./pages/services/SportsInjuryPage'));
@@ -57,6 +58,7 @@ function App() {
               <Route path="my-account" element={<UserPortal />} />
               <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
               <Route path="terms-of-service" element={<TermsOfServicePage />} />
+              <Route path="cookie-policy" element={<CookiePolicyPage />} />
               <Route path="admin/*" element={<AdminConsole />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
