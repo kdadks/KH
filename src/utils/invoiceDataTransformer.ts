@@ -53,7 +53,7 @@ const COMPANY_INFO = {
   ],
   contact: {
     phone: '(083) 8009404',
-    email: 'khtherapy@hotmail.com',
+    email: 'info@khtherapy.ie',
     website: 'www.khtherapy.ie'
   }
 };

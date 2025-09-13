@@ -29,7 +29,7 @@ const TermsOfServicePage: React.FC = () => {
             <h3 className="text-lg font-semibold">6. Changes to Terms</h3>
             <p>We may modify these Terms of Service at any time. Continued use of the site after changes constitutes acceptance of the updated terms.</p>
             <h3 className="text-lg font-semibold">7. Contact Us</h3>
-            <p>If you have any questions about these terms, please email us at <a href="mailto:khtherapy@hotmail.com" className="text-primary-600 hover:underline">khtherapy@hotmail.com</a>.</p>
+            <p>If you have any questions about these terms, please email us at <a href="mailto:info@khtherapy.ie" className="text-primary-600 hover:underline">info@khtherapy.ie</a>.</p>
           </div>
         </Container>
       </main>

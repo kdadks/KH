@@ -166,7 +166,7 @@ const PrivacyPolicyPage: React.FC = () => {
                 <p>For any privacy-related questions or to exercise your rights, please contact us:</p>
                 <div className="bg-gray-50 border rounded-lg p-4">
                   <p><strong>Email:</strong> <a href="mailto:privacy@khtherapy.ie" className="text-primary-600 hover:underline">privacy@khtherapy.ie</a></p>
-                  <p><strong>General Contact:</strong> <a href="mailto:khtherapy@hotmail.com" className="text-primary-600 hover:underline">khtherapy@hotmail.com</a></p>
+                  <p><strong>General Contact:</strong> <a href="mailto:info@khtherapy.ie" className="text-primary-600 hover:underline">info@khtherapy.ie</a></p>
                   <p><strong>Address:</strong> Dublin, Ireland</p>
                 </div>
                 <p>
