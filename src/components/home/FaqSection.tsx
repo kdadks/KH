@@ -105,8 +105,8 @@ const FaqSection: React.FC = () => {
               (083) 8009404
             </a>{' '}
             or{' '}
-            <a href="mailto:khtherapy@hotmail.com" className="text-primary-600 font-medium hover:underline">
-              khtherapy@hotmail.com
+            <a href="mailto:info@khtherapy.ie" className="text-primary-600 font-medium hover:underline">
+              info@khtherapy.ie
             </a>
           </p>
         </div>
