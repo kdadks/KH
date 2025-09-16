@@ -108,7 +108,7 @@ const ManualTherapyPage: React.FC = () => {
                 <img
                   src="/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
                   alt="Manual therapy treatment session"
-                  className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
+                  className="rounded-lg shadow-2xl w-full h-[500px] object-contain bg-secondary-700"
                   onError={(e) => {
                     const target = e.currentTarget;
                     target.src = "/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
@@ -140,7 +140,7 @@ const ManualTherapyPage: React.FC = () => {
                 <img 
                   src="/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
                   alt="Manual therapy techniques" 
-                  className="rounded-lg shadow-lg w-full h-[400px] object-cover"
+                  className="rounded-lg shadow-lg w-full h-[500px] object-contain bg-neutral-100"
                   onError={(e) => {
                     const target = e.currentTarget;
                     target.src = "/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
@@ -268,7 +268,7 @@ const ManualTherapyPage: React.FC = () => {
                 <img 
                   src="/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=600" 
                   alt="Patient receiving manual therapy treatment" 
-                  className="rounded-lg shadow-lg w-full h-[400px] object-cover"
+                  className="rounded-lg shadow-lg w-full h-[500px] object-contain bg-neutral-100"
                   onError={(e) => {
                     const target = e.currentTarget;
                     target.src = "/ManualTH.jpeg?auto=compress&cs=tinysrgb&w=800&h=200";

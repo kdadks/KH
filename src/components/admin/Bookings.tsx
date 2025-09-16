@@ -45,7 +45,7 @@ interface BookingCalendarEvent {
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
-import { createPaymentRequest } from '../../utils/paymentRequestUtils';
+import { createPaymentRequest, fixBookingStatusBasedOnPayments } from '../../utils/paymentRequestUtils';
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
 import { sendAdminBookingConfirmation } from '../../utils/emailUtils';
@@ -96,7 +96,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   
   // State management
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'deposit_paid' | 'confirmed' | 'cancelled'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showEditBookingModal, setShowEditBookingModal] = useState(false);
   const [editingBooking, setEditingBooking] = useState<BookingFormData | null>(null);
@@ -165,6 +165,59 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   }, [filterDate, filterRange]);
 
+  // Auto-refresh bookings data every 30 seconds for real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Trigger refresh of bookings from parent component
+      window.dispatchEvent(new CustomEvent('refreshBookings'));
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Listen for booking updates from other parts of the app
+  useEffect(() => {
+    const handleBookingUpdate = () => {
+      window.dispatchEvent(new CustomEvent('refreshBookings'));
+    };
+
+    const handleBookingStatusUpdate = (event: any) => {
+      console.log('🔄 Admin received booking status update event:', event.detail);
+      // Force refresh of bookings to reflect the status change
+      window.dispatchEvent(new CustomEvent('refreshBookings'));
+
+      // Also refresh payment status for the affected booking
+      if (event.detail?.bookingId) {
+        console.log('🔄 Refreshing payment status for booking:', event.detail.bookingId);
+        setTimeout(() => {
+          // Use a small delay to ensure the booking refresh happens first
+          const refreshPaymentStatus = async () => {
+            try {
+              const affectedBooking = allBookings.find(b => b.id === event.detail.bookingId);
+              if (affectedBooking) {
+                const updatedStatus = await checkBookingPaymentStatus(affectedBooking);
+                setBookingPaymentStatus(prev => new Map(prev.set(event.detail.bookingId, updatedStatus)));
+              }
+            } catch (error) {
+              console.error('Error refreshing payment status:', error);
+            }
+          };
+          refreshPaymentStatus();
+        }, 500);
+      }
+    };
+
+    window.addEventListener('bookingUpdated', handleBookingUpdate);
+    window.addEventListener('availabilityUpdated', handleBookingUpdate);
+    window.addEventListener('bookingStatusUpdated', handleBookingStatusUpdate);
+
+    return () => {
+      window.removeEventListener('bookingUpdated', handleBookingUpdate);
+      window.removeEventListener('availabilityUpdated', handleBookingUpdate);
+      window.removeEventListener('bookingStatusUpdated', handleBookingStatusUpdate);
+    };
+  }, []);
+
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -224,7 +277,443 @@ export const Bookings: React.FC<BookingsProps> = ({
   const currentPageBookings = filteredBookings.slice(startIndex, endIndex);
 
   // Booking operations
-  // Helper function to check if booking has availability
+  // Enhanced availability check that auto-matches to available slots
+  const checkBookingAvailabilityWithAutoMatch = async (booking: BookingFormData): Promise<{
+    hasAvailability: boolean;
+    message?: string;
+    matchedSlot?: any;
+    bookingDate?: string
+  }> => {
+    try {
+      // Extract booking date and time
+      let bookingDate: string = '';
+
+      console.log('🔍 Auto-match availability check for booking:', {
+        booking_date: booking.booking_date,
+        appointment_date: booking.appointment_date,
+        appointment_time: booking.appointment_time,
+        time: booking.time,
+        date: booking.date,
+        timeslot_start_time: booking.timeslot_start_time,
+        timeslot_end_time: booking.timeslot_end_time
+      });
+
+
+      // First try to get the requested date
+      if (booking.appointment_date) {
+        bookingDate = booking.appointment_date;
+      } else if (booking.date) {
+        bookingDate = booking.date;
+      } else if (booking.booking_date && booking.booking_date.includes('T')) {
+        const [dateStr] = booking.booking_date.split('T');
+        if (dateStr) {
+          bookingDate = dateStr;
+        }
+      }
+
+      if (!bookingDate) {
+        return {
+          hasAvailability: false,
+          message: 'Cannot auto-match: Missing booking date.'
+        };
+      }
+
+      // Fetch availability slots for the requested date
+      const { data: availabilitySlots, error } = await supabase
+        .from('availability')
+        .select('*')
+        .eq('date', bookingDate)
+        .order('start', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching availability slots:', error);
+        return {
+          hasAvailability: false,
+          message: 'Error checking availability. Please try again.'
+        };
+      }
+
+      if (!availabilitySlots || availabilitySlots.length === 0) {
+        return {
+          hasAvailability: false,
+          message: `No availability slots found for ${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })}. Please create availability slots for this date before confirming the booking.`
+        };
+      }
+
+      // Extract the requested booking start and end times
+      let requestedStartTime = '';
+      let requestedEndTime = '';
+
+      if (booking.booking_date && booking.booking_date.includes('T')) {
+        const timeStr = booking.booking_date.split('T')[1];
+        if (timeStr) {
+          requestedStartTime = timeStr.substring(0, 5); // Get HH:MM format
+        }
+      } else if (booking.timeslot_start_time) {
+        requestedStartTime = booking.timeslot_start_time;
+      } else if (booking.appointment_time) {
+        requestedStartTime = booking.appointment_time;
+      } else if (booking.time) {
+        requestedStartTime = booking.time;
+      }
+
+      // Get the end time if available
+      if (booking.timeslot_end_time) {
+        requestedEndTime = booking.timeslot_end_time;
+      } else if (requestedStartTime) {
+        // If no end time, assume 50-minute session (default therapy session)
+        const [hours, minutes] = requestedStartTime.split(':').map(Number);
+        const endMinutes = minutes + 50;
+        const endHours = hours + Math.floor(endMinutes / 60);
+        const finalMinutes = endMinutes % 60;
+        requestedEndTime = `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+      }
+
+      // Helper function to normalize time format (remove seconds if present)
+      const normalizeTime = (timeStr: string): string => {
+        if (!timeStr) return '';
+        return timeStr.substring(0, 5); // Get HH:MM format, removing seconds
+      };
+
+      // Check if this is an all-day booking - look for multiple indicators
+      const isAllDayBooking = (requestedStartTime === '09:00' && normalizeTime(requestedEndTime) === '17:00') ||
+                             (normalizeTime(booking.timeslot_start_time || '') === '09:00' && normalizeTime(booking.timeslot_end_time || '') === '17:00') ||
+                             // Check if booking_date indicates 09:00 start time with explicit timeslot_end_time of 17:00
+                             (requestedStartTime === '09:00' && normalizeTime(booking.timeslot_end_time || '') === '17:00');
+
+      console.log('🔍 Extracted times after processing:', {
+        requestedStartTime,
+        requestedEndTime,
+        'booking.timeslot_start_time': booking.timeslot_start_time,
+        'booking.timeslot_end_time': booking.timeslot_end_time,
+        'normalized_start': normalizeTime(booking.timeslot_start_time || ''),
+        'normalized_end': normalizeTime(booking.timeslot_end_time || ''),
+        isAllDayBooking
+      });
+
+      console.log(`🔍 Looking for slot that contains: ${requestedStartTime} - ${requestedEndTime} on ${bookingDate}${isAllDayBooking ? ' (ALL-DAY BOOKING)' : ''}`);
+
+      if (!requestedStartTime) {
+        return {
+          hasAvailability: false,
+          message: 'Cannot check availability: Missing requested time information.'
+        };
+      }
+
+      // Helper function to convert time string to minutes
+      const timeToMinutes = (timeStr: string): number => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const requestedStartMinutes = timeToMinutes(requestedStartTime);
+      const requestedEndMinutes = timeToMinutes(requestedEndTime);
+
+      // Check for already booked slots to avoid conflicts
+      // Use date range filtering instead of 'like' on timestamp column
+      const startOfDay = `${bookingDate}T00:00:00`;
+      const endOfDay = `${bookingDate}T23:59:59`;
+
+      const { data: existingBookings, error: bookingError } = await supabase
+        .from('bookings')
+        .select('booking_date, timeslot_start_time, timeslot_end_time')
+        .eq('status', 'confirmed')
+        .gte('booking_date', startOfDay)
+        .lte('booking_date', endOfDay);
+
+      if (bookingError) {
+        console.error('Error checking existing bookings:', bookingError);
+      }
+
+      // Handle all-day bookings differently
+      if (isAllDayBooking) {
+        // For all-day bookings, check if there are ANY available slots between 9am-5pm
+        const allDayStartMinutes = timeToMinutes('09:00');
+        const allDayEndMinutes = timeToMinutes('17:00');
+
+        // Find slots that overlap with the 9am-5pm range
+        const overlappingSlots = availabilitySlots.filter(slot => {
+          const slotStartTime = slot.start_time || slot.start || '';
+          const slotEndTime = slot.end_time || '';
+
+          if (!slotStartTime || !slotEndTime) return false;
+
+          const slotStartMinutes = timeToMinutes(slotStartTime);
+          const slotEndMinutes = timeToMinutes(slotEndTime);
+
+          // Check if slot overlaps with 9am-5pm range
+          return !(slotEndMinutes <= allDayStartMinutes || slotStartMinutes >= allDayEndMinutes);
+        });
+
+        if (overlappingSlots.length === 0) {
+          return {
+            hasAvailability: false,
+            message: `No availability slots found between 9:00 AM - 5:00 PM for ${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}. Please create availability slots for this time range before confirming the all-day booking.`
+          };
+        }
+
+        // Check if any existing bookings conflict with the entire 9am-5pm range
+        const hasConflictingBookings = existingBookings?.some(existingBooking => {
+          const existingDateTime = existingBooking.booking_date;
+          if (!existingDateTime || !existingDateTime.includes('T')) return false;
+
+          const existingStartTime = existingDateTime.split('T')[1]?.substring(0, 5);
+          const existingEndTime = existingBooking.timeslot_end_time;
+
+          if (!existingStartTime) return false;
+
+          const existingStartMinutes = timeToMinutes(existingStartTime);
+          const existingEndMinutes = existingEndTime ? timeToMinutes(existingEndTime) : existingStartMinutes + 50;
+
+          // Check for any overlap with the 9am-5pm range
+          return !(existingEndMinutes <= allDayStartMinutes || existingStartMinutes >= allDayEndMinutes);
+        });
+
+        if (hasConflictingBookings) {
+          return {
+            hasAvailability: false,
+            message: `There are existing bookings that conflict with the all-day booking (9:00 AM - 5:00 PM) on ${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}. Please check existing bookings first.`
+          };
+        }
+
+        const matchingSlot = overlappingSlots[0]; // Use first available slot as reference
+        console.log('✅ Found availability for all-day booking:', {
+          overlappingSlots: overlappingSlots.length,
+          date: bookingDate,
+          timeRange: '09:00 - 17:00'
+        });
+
+        return {
+          hasAvailability: true,
+          matchedSlot: matchingSlot,
+          bookingDate,
+          message: `All-day booking availability confirmed for ${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })}.`
+        };
+      }
+
+      // Original logic for specific time bookings
+      const matchingSlot = availabilitySlots.find(slot => {
+        const slotStartTime = slot.start_time || slot.start || '';
+        const slotEndTime = slot.end_time || '';
+
+        if (!slotStartTime || !slotEndTime) return false;
+
+        const slotStartMinutes = timeToMinutes(slotStartTime);
+        const slotEndMinutes = timeToMinutes(slotEndTime);
+
+        // Check if the requested booking falls within this availability slot
+        const bookingFitsInSlot = requestedStartMinutes >= slotStartMinutes &&
+                                 requestedEndMinutes <= slotEndMinutes;
+
+        if (bookingFitsInSlot) {
+          // Check if this slot time is already taken by another confirmed booking
+          const isSlotConflicted = existingBookings?.some(existingBooking => {
+            const existingDateTime = existingBooking.booking_date;
+            if (!existingDateTime || !existingDateTime.includes('T')) return false;
+
+            const existingStartTime = existingDateTime.split('T')[1]?.substring(0, 5);
+            const existingEndTime = existingBooking.timeslot_end_time;
+
+            if (!existingStartTime) return false;
+
+            const existingStartMinutes = timeToMinutes(existingStartTime);
+            const existingEndMinutes = existingEndTime ? timeToMinutes(existingEndTime) : existingStartMinutes + 50;
+
+            // Check for time overlap between existing booking and requested booking
+            const hasOverlap = !(requestedEndMinutes <= existingStartMinutes || requestedStartMinutes >= existingEndMinutes);
+
+            return hasOverlap;
+          });
+
+          return !isSlotConflicted; // Return true only if no conflicts
+        }
+
+        return false;
+      });
+
+      if (matchingSlot) {
+        console.log('✅ Found containing slot:', {
+          slotId: matchingSlot.id,
+          requestedTime: `${requestedStartTime} - ${requestedEndTime}`,
+          availableSlot: `${matchingSlot.start_time || matchingSlot.start} - ${matchingSlot.end_time}`,
+          date: bookingDate
+        });
+
+        return {
+          hasAvailability: true,
+          matchedSlot: matchingSlot,
+          bookingDate: bookingDate
+        };
+      }
+
+      // No containing slot found for the requested time
+      const formattedDate = new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const formatTime = (timeStr: string) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+      };
+
+      return {
+        hasAvailability: false,
+        message: `No availability slot found that can contain the booking from ${formatTime(requestedStartTime)} to ${formatTime(requestedEndTime)} on ${formattedDate}. Please create an availability slot that covers this time period.`
+      };
+
+    } catch (error) {
+      console.error('Error in auto-match availability check:', error);
+      return {
+        hasAvailability: false,
+        message: 'Error checking availability. Please try again.'
+      };
+    }
+  };
+
+  // Helper function to find the availability slot that matches a booking
+  const findMatchingAvailabilitySlot = async (booking: any): Promise<any | null> => {
+    try {
+      console.log('🔍 DEBUGGING: Full booking object for slot matching:', booking);
+
+      // Extract booking date and time from the booking
+      let bookingDate: string;
+      let bookingTime: string;
+
+      if (booking.booking_date) {
+        // Parse booking_date field
+        console.log('🔍 Parsing booking_date for slot matching:', booking.booking_date);
+
+        if (booking.booking_date.includes('T')) {
+          // ISO format: "2024-09-16T14:50:00"
+          const [dateStr, timeWithZone] = booking.booking_date.split('T');
+          const timeStr = timeWithZone.split(':').slice(0, 2).join(':');
+          bookingDate = dateStr;
+          bookingTime = timeStr;
+        } else {
+          // Date only: "2024-09-16" - use appointment_time
+          bookingDate = booking.booking_date;
+          bookingTime = booking.appointment_time || booking.timeslot_start_time || '';
+        }
+      } else if (booking.appointment_date && booking.appointment_time) {
+        // Use appointment_date and appointment_time
+        bookingDate = booking.appointment_date;
+        bookingTime = booking.appointment_time;
+      } else {
+        console.warn('❌ Cannot extract booking date/time for slot matching - available fields:', {
+          booking_date: booking.booking_date,
+          appointment_date: booking.appointment_date,
+          appointment_time: booking.appointment_time,
+          timeslot_start_time: booking.timeslot_start_time,
+          timeslot_end_time: booking.timeslot_end_time
+        });
+        return null;
+      }
+
+      console.log('🔍 Looking for availability slot for:', { bookingDate, bookingTime, bookingStatus: booking.status });
+
+      // Fetch availability slots for the booking date
+      const { data: availabilitySlots, error } = await supabase
+        .from('availability')
+        .select('id, date, start_time, end_time, start, is_available')
+        .eq('date', bookingDate);
+
+      if (error) {
+        console.error('❌ Error fetching availability slots:', error);
+        return null;
+      }
+
+      console.log('🔍 Found availability slots for date:', availabilitySlots?.length || 0, availabilitySlots);
+
+      if (!availabilitySlots || availabilitySlots.length === 0) {
+        console.log('❌ No availability slots found for date:', bookingDate);
+        return null;
+      }
+
+      // Helper function to convert time string to minutes
+      const timeToMinutes = (timeStr: string): number => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      // Find slot that contains this booking time
+      const matchingSlot = availabilitySlots.find(slot => {
+        const slotStartTime = slot.start_time || slot.start || '';
+        const slotEndTime = slot.end_time || '';
+
+        console.log('🔍 Checking slot:', {
+          slotId: slot.id,
+          slotStartTime,
+          slotEndTime,
+          slotIsAvailable: slot.is_available
+        });
+
+        if (!slotStartTime || !slotEndTime || !bookingTime) {
+          console.log('❌ Missing time data for slot check');
+          return false;
+        }
+
+        // Convert times to minutes for comparison
+        const bookingMinutes = timeToMinutes(bookingTime);
+        const slotStartMinutes = timeToMinutes(slotStartTime);
+        const slotEndMinutes = timeToMinutes(slotEndTime);
+
+        // Check if booking falls within the slot
+        const isWithinSlot = bookingMinutes >= slotStartMinutes && bookingMinutes < slotEndMinutes;
+
+        console.log('🔍 Checking slot match:', {
+          slotId: slot.id,
+          slotStart: slotStartTime,
+          slotEnd: slotEndTime,
+          bookingTime,
+          bookingMinutes,
+          slotStartMinutes,
+          slotEndMinutes,
+          isWithinSlot
+        });
+
+        return isWithinSlot;
+      });
+
+      if (matchingSlot) {
+        console.log('✅ Found matching availability slot:', matchingSlot.id);
+        return matchingSlot;
+      } else {
+        console.log('❌ No matching availability slot found');
+        return null;
+      }
+
+    } catch (error) {
+      console.error('❌ Error finding matching availability slot:', error);
+      return null;
+    }
+  };
+
+  // Helper function to check if booking has availability (original logic)
   const checkBookingAvailability = async (booking: BookingFormData): Promise<{ hasAvailability: boolean; message?: string }> => {
     try {
       // Extract booking date and time
@@ -232,16 +721,72 @@ export const Bookings: React.FC<BookingsProps> = ({
       let bookingTime: string = '';
 
       if (booking.booking_date) {
-        const bookingDateTime = new Date(booking.booking_date);
-        if (!isNaN(bookingDateTime.getTime())) {
-          const year = bookingDateTime.getFullYear();
-          const month = String(bookingDateTime.getMonth() + 1).padStart(2, '0');
-          const day = String(bookingDateTime.getDate()).padStart(2, '0');
-          const hours = String(bookingDateTime.getHours()).padStart(2, '0');
-          const minutes = String(bookingDateTime.getMinutes()).padStart(2, '0');
-          
-          bookingDate = `${year}-${month}-${day}`;
-          bookingTime = `${hours}:${minutes}`;
+        console.log('🔍 Parsing booking_date for availability check:', booking.booking_date);
+      console.log('🔍 All booking time fields:', {
+        booking_date: booking.booking_date,
+        appointment_date: booking.appointment_date,
+        appointment_time: booking.appointment_time,
+        time: booking.time,
+        date: booking.date,
+        timeslot_start_time: booking.timeslot_start_time,
+        timeslot_end_time: booking.timeslot_end_time
+      });
+
+        // Handle range format like "2025-09-16T14:50-15:40"
+        if (booking.booking_date.includes('T') && booking.booking_date.includes('-')) {
+          const lastDashIndex = booking.booking_date.lastIndexOf('-');
+          console.log('🔍 Last dash index:', lastDashIndex, 'in string:', booking.booking_date);
+
+          if (lastDashIndex > 10) { // Ensure it's not the date separator
+            // Extract the datetime part before the end time
+            const dateTimeStr = booking.booking_date.substring(0, lastDashIndex);
+            console.log('🔍 Extracted datetime string:', dateTimeStr);
+
+            const [dateStr, timeStr] = dateTimeStr.split('T');
+            console.log('🔍 Split result - dateStr:', dateStr, 'timeStr:', timeStr);
+
+            if (dateStr && timeStr) {
+              bookingDate = dateStr;
+              bookingTime = timeStr;
+              console.log('🔍 Parsed from range format - Date:', bookingDate, 'Time:', bookingTime);
+            }
+          } else {
+            console.log('🔍 Last dash index too early, might be date separator');
+          }
+        }
+
+        // Fallback: Direct ISO string parsing to avoid timezone issues
+        if (!bookingDate || !bookingTime) {
+          console.log('🔍 Attempting direct ISO string parsing to avoid timezone conversion');
+
+          // For ISO strings like "2025-09-16T14:50:00+00:00", extract components directly
+          if (booking.booking_date.includes('T')) {
+            const [dateStr, timeWithZone] = booking.booking_date.split('T');
+            const timeStr = timeWithZone.split(':').slice(0, 2).join(':'); // Get HH:MM, ignore seconds and timezone
+
+            if (dateStr && timeStr) {
+              bookingDate = dateStr;
+              bookingTime = timeStr;
+              console.log('🔍 Parsed from ISO string directly - Date:', bookingDate, 'Time:', bookingTime);
+            }
+          }
+
+          // Final fallback to JavaScript Date if direct parsing failed
+          if (!bookingDate || !bookingTime) {
+            console.log('🔍 Falling back to JavaScript Date parsing (with timezone conversion)');
+            const bookingDateTime = new Date(booking.booking_date);
+            if (!isNaN(bookingDateTime.getTime())) {
+              const year = bookingDateTime.getFullYear();
+              const month = String(bookingDateTime.getMonth() + 1).padStart(2, '0');
+              const day = String(bookingDateTime.getDate()).padStart(2, '0');
+              const hours = String(bookingDateTime.getHours()).padStart(2, '0');
+              const minutes = String(bookingDateTime.getMinutes()).padStart(2, '0');
+
+              bookingDate = `${year}-${month}-${day}`;
+              bookingTime = `${hours}:${minutes}`;
+              console.log('🔍 Parsed from JavaScript Date - Date:', bookingDate, 'Time:', bookingTime);
+            }
+          }
         }
       } else if (booking.appointment_date && (booking.appointment_time || booking.time)) {
         bookingDate = booking.appointment_date;
@@ -273,10 +818,23 @@ export const Bookings: React.FC<BookingsProps> = ({
         };
       }
 
+      console.log('🔍 Availability check results:', {
+        bookingDate,
+        bookingTime,
+        availabilitySlots: availabilitySlots?.map(slot => ({
+          id: slot.id,
+          date: slot.date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          start: slot.start,
+          is_available: slot.is_available
+        }))
+      });
+
       if (!availabilitySlots || availabilitySlots.length === 0) {
         return {
           hasAvailability: false,
-          message: `No availability slots found for ${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', { 
+          message: `No availability slots found for ${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
@@ -289,15 +847,35 @@ export const Bookings: React.FC<BookingsProps> = ({
       const hasMatchingSlot = availabilitySlots.some(slot => {
         const slotStartTime = slot.start_time || slot.start || '';
         const slotEndTime = slot.end_time || '';
-        
-        if (!slotStartTime || !slotEndTime) return false;
-        
+
+        console.log('🔍 Checking slot:', {
+          slotId: slot.id,
+          slotStartTime,
+          slotEndTime,
+          bookingTime
+        });
+
+        if (!slotStartTime || !slotEndTime) {
+          console.log('❌ Slot missing start or end time');
+          return false;
+        }
+
         // Convert times to comparable format (remove seconds if present)
         const bookingTimeFormatted = bookingTime.length === 5 ? bookingTime : bookingTime.substring(0, 5);
         const slotStartFormatted = slotStartTime.length === 5 ? slotStartTime : slotStartTime.substring(0, 5);
         const slotEndFormatted = slotEndTime.length === 5 ? slotEndTime : slotEndTime.substring(0, 5);
-        
-        return bookingTimeFormatted >= slotStartFormatted && bookingTimeFormatted < slotEndFormatted;
+
+        const isWithinSlot = bookingTimeFormatted >= slotStartFormatted && bookingTimeFormatted < slotEndFormatted;
+
+        console.log('🔍 Time comparison:', {
+          bookingTimeFormatted,
+          slotStartFormatted,
+          slotEndFormatted,
+          isWithinSlot,
+          condition: `${bookingTimeFormatted} >= ${slotStartFormatted} && ${bookingTimeFormatted} < ${slotEndFormatted}`
+        });
+
+        return isWithinSlot;
       });
 
       if (!hasMatchingSlot) {
@@ -383,31 +961,18 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // Check for other confirmed bookings at the same date and time
       // We need to exclude the current booking if we're updating an existing one
-      let query = supabase
+      const { data: existingBookings, error } = await supabase
         .from('bookings')
-        .select(`
-          id,
-          booking_reference,
-          booking_date,
-          timeslot_start_time,
-          timeslot_end_time,
-          status,
-          customer_id,
-          package_name
-        `)
-        .eq('status', 'confirmed');
-
-      // If this is an update (existing booking), exclude the current booking from the check
-      if (booking.id) {
-        query = query.neq('id', booking.id);
-      }
-      const { data: existingBookings, error } = await query;
+        .select('id, booking_reference, booking_date, timeslot_start_time, timeslot_end_time, status, customer_id, package_name')
+        .eq('status', 'confirmed')
+        .neq('id', booking.id || '00000000-0000-0000-0000-000000000000'); // Exclude current booking if exists
 
       if (error) {
         console.error('Error checking for conflicting bookings:', error);
+        // Return false conflict to allow booking to proceed if check fails
         return {
           hasConflict: false,
-          message: 'Error checking for existing bookings. Please try again.'
+          message: 'Could not verify conflicts, proceeding with confirmation.'
         };
       }
 
@@ -499,28 +1064,174 @@ export const Bookings: React.FC<BookingsProps> = ({
   };
 
   const handleConfirmBooking = async (booking: BookingFormData) => {    const bookingId = booking.id?.toString() || '';
-    
+
     // Add booking to confirming set
     setConfirmingBookings(prev => new Set([...prev, bookingId]));
-    
-    try {
-      // Check availability before confirming
-      const availabilityCheck = await checkBookingAvailability(booking);
-      
-      if (!availabilityCheck.hasAvailability) {        showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
-        return;
-      }      // Check for conflicting bookings
-      const conflictCheck = await checkForConflictingBookings(booking);
-      
-      if (conflictCheck.hasConflict) {        showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
-        return;
-      }
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'confirmed' })
-        .eq('id', booking.id);
 
-      if (error) throw error;
+    try {
+      // Check if this is a full-day booking
+      const isFullDayBooking = booking.timeslot_start_time === 'full-day' ||
+                              booking.timeslot_end_time === 'full-day' ||
+                              (booking.timeslot_start_time === '09:00' && booking.timeslot_end_time === '17:00');
+
+      if (isFullDayBooking) {
+        console.log('📅 Processing full-day booking confirmation');
+
+        // For full-day bookings, check if there are ANY available slots during business hours
+        const bookingDate = booking.booking_date?.split('T')[0] || booking.appointment_date;
+
+        if (!bookingDate) {
+          showError('Cannot Confirm Booking', 'Booking date is required for full-day booking.');
+          return;
+        }
+
+        // Check if there are any available slots for this date
+        console.log('🔍 Checking for any available slots on date:', bookingDate);
+        const { data: availableSlots, error: slotsError } = await supabase
+          .from('availability')
+          .select('id, start_time, end_time, is_available')
+          .eq('date', bookingDate)
+          .eq('is_available', true);
+
+        if (slotsError) {
+          console.error('❌ Error checking availability for full-day booking:', slotsError);
+          showError('Cannot Confirm Booking', 'Error checking availability. Please try again.');
+          return;
+        }
+
+        if (!availableSlots || availableSlots.length === 0) {
+          showError('Cannot Confirm Booking', 'No available time slots found for this date. Please check the availability calendar.');
+          return;
+        }
+
+        console.log(`✅ Found ${availableSlots.length} available slots for full-day booking`);
+
+        // Update booking status
+        const updateData: any = {
+          status: 'confirmed'
+        };
+
+        console.log('📍 Updating full-day booking with data:', updateData);
+
+        const { error } = await supabase
+          .from('bookings')
+          .update(updateData)
+          .eq('id', booking.id);
+
+        if (error) {
+          console.error('❌ Database update error:', error);
+          throw new Error(`Failed to update booking: ${error.message}`);
+        }
+
+        // Mark availability slots between 9am-5pm as unavailable
+        const timeToMinutes = (timeStr: string): number => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return hours * 60 + minutes;
+        };
+
+        const allDayStartMinutes = timeToMinutes('09:00');
+        const allDayEndMinutes = timeToMinutes('17:00');
+
+        // Filter slots that overlap with 9am-5pm range
+        const slotsToUpdate = availableSlots.filter(slot => {
+          const slotStartMinutes = timeToMinutes(slot.start_time);
+          const slotEndMinutes = timeToMinutes(slot.end_time);
+          // Check if slot overlaps with 9am-5pm range
+          return !(slotEndMinutes <= allDayStartMinutes || slotStartMinutes >= allDayEndMinutes);
+        });
+
+        console.log(`🔄 Marking ${slotsToUpdate.length} slots (9:00 AM - 5:00 PM) as unavailable for date:`, bookingDate);
+
+        if (slotsToUpdate.length > 0) {
+          const slotIds = slotsToUpdate.map(slot => slot.id);
+
+          const { error: availabilityError } = await supabase
+            .from('availability')
+            .update({ is_available: false })
+            .in('id', slotIds);
+
+          if (availabilityError) {
+            console.error('❌ Failed to update availability slots for all-day booking:', availabilityError);
+            // Don't throw error - booking is already confirmed, just log the issue
+          } else {
+            console.log(`✅ ${slotsToUpdate.length} availability slots between 9:00 AM - 5:00 PM marked as unavailable`);
+          }
+        } else {
+          console.log('ℹ️ No slots found in 9:00 AM - 5:00 PM range to mark as unavailable');
+        }
+      } else {
+        // Regular time-specific booking logic
+        // Check availability before confirming and try to find matching slot
+        const availabilityCheck = await checkBookingAvailabilityWithAutoMatch(booking);
+
+        if (!availabilityCheck.hasAvailability) {          showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
+          return;
+        }        // Check for conflicting bookings
+        const conflictCheck = await checkForConflictingBookings(booking);
+
+        if (conflictCheck.hasConflict) {          showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
+          return;
+        }
+
+        // Update booking with confirmed status and matched slot time if available
+        const updateData: any = {
+          status: 'confirmed'
+        };
+
+        if (availabilityCheck.matchedSlot) {
+          // Update the timeslot fields to ensure consistency
+          const slotStartTime = availabilityCheck.matchedSlot.start_time || availabilityCheck.matchedSlot.start;
+          const slotEndTime = availabilityCheck.matchedSlot.end_time;
+
+          if (slotStartTime) {
+            updateData.timeslot_start_time = slotStartTime;
+            if (slotEndTime) {
+              updateData.timeslot_end_time = slotEndTime;
+            }
+
+            // Don't update booking_date during confirmation to avoid timezone issues
+            // The booking should keep its original booking_date and we only update the status and slot fields
+
+            console.log('✅ Confirming booking with corrected time:', {
+              originalTime: booking.booking_date,
+              confirmedSlot: {
+                start: slotStartTime,
+                end: slotEndTime
+              },
+              correctedBookingDate: updateData.booking_date
+            });
+          }
+        }
+
+        console.log('📍 Updating booking with data:', updateData);
+
+        const { error } = await supabase
+          .from('bookings')
+          .update(updateData)
+          .eq('id', booking.id);
+
+        if (error) {
+          console.error('❌ Database update error:', error);
+          throw new Error(`Failed to update booking: ${error.message}`);
+        }
+
+        // CRITICAL: Update the availability table to mark the slot as unavailable
+        if (availabilityCheck.matchedSlot && availabilityCheck.matchedSlot.id) {
+          console.log('🔄 Updating availability slot to mark as unavailable:', availabilityCheck.matchedSlot.id);
+
+          const { error: availabilityError } = await supabase
+            .from('availability')
+            .update({ is_available: false })
+            .eq('id', availabilityCheck.matchedSlot.id);
+
+          if (availabilityError) {
+            console.error('❌ Failed to update availability slot:', availabilityError);
+            // Don't throw error - booking is already confirmed, just log the issue
+          } else {
+            console.log('✅ Availability slot marked as unavailable');
+          }
+        }
+      }
 
       const updatedBookings = [...allBookings];
       const actualIndex = allBookings.findIndex(b => b.id === booking.id);
@@ -597,9 +1308,23 @@ export const Bookings: React.FC<BookingsProps> = ({
             : 'Booking confirmed! (Email sending failed - please check manually)';
 
         showSuccess('Booking Confirmed', successMessage);
+
+        // Trigger availability view refresh to show the booking as confirmed
+        // Add a small delay to ensure database transaction is committed
+        setTimeout(() => {
+          console.log('📡 Dispatching bookingUpdated event from booking confirmation...');
+          window.dispatchEvent(new CustomEvent('bookingUpdated'));
+        }, 500);
       } catch (emailError) {
         console.error('❌ Error sending booking confirmation emails:', emailError);
         showSuccess('Booking Confirmed', 'The booking has been confirmed successfully. (Email sending failed - please contact customer manually)');
+
+        // Trigger availability view refresh even if email failed
+        // Add a small delay to ensure database transaction is committed
+        setTimeout(() => {
+          console.log('📡 Dispatching bookingUpdated event from booking confirmation (email failed)...');
+          window.dispatchEvent(new CustomEvent('bookingUpdated'));
+        }, 500);
       }
     } catch (error) {
       console.error('Error confirming booking:', error);
@@ -718,6 +1443,41 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
+  // Manual booking status fix function
+  const handleFixBookingStatus = async (booking: BookingFormData) => {
+    if (!booking.id) {
+      showError('Error', 'Booking ID is missing');
+      return;
+    }
+
+    try {
+      setLoadingPaymentStatus(true);
+      console.log('🔧 Manually fixing booking status for:', booking.id);
+
+      const result = await fixBookingStatusBasedOnPayments(booking.id);
+
+      if (result.success) {
+        showSuccess('Booking Status Fixed', result.message);
+
+        // Refresh the booking data
+        window.dispatchEvent(new CustomEvent('refreshBookings'));
+
+        // Refresh payment status for this booking
+        const updatedStatus = await checkBookingPaymentStatus(booking);
+        if (booking.id) {
+          setBookingPaymentStatus(prev => new Map(prev.set(booking.id!, updatedStatus)));
+        }
+      } else {
+        showError('Fix Failed', result.message);
+      }
+    } catch (error) {
+      console.error('Error fixing booking status:', error);
+      showError('Error', 'Failed to fix booking status');
+    } finally {
+      setLoadingPaymentStatus(false);
+    }
+  };
+
   const handleCreatePaymentRequest = async (booking: BookingFormData) => {
     if (!booking.customer_id || !booking.package_name) {
       showError('Error', 'Missing customer or service information');
@@ -789,11 +1549,27 @@ export const Bookings: React.FC<BookingsProps> = ({
           if (booking.customer_id) {
             const status = await checkBookingPaymentStatus(booking);
             statusMap.set(booking.id, status);
-            
+
             // Calculate deposit amount for this booking
             if (booking.package_name) {
               const depositAmount = await calculateDepositAmount(booking.package_name);
               depositMap.set(booking.id, depositAmount);
+            }
+
+            // Auto-fix status inconsistencies - if payment is completed but booking status is still pending
+            if (status.payment && booking.status === 'pending' && booking.id) {
+              console.log(`🔄 Auto-fixing status for booking ${booking.id} - payment completed but status is pending`);
+              try {
+                await fixBookingStatusBasedOnPayments(booking.id);
+                // Update the booking in allBookings state to reflect the status change
+                setAllBookings(prev => prev.map(b =>
+                  b.id === booking.id
+                    ? { ...b, status: 'deposit_paid' }
+                    : b
+                ));
+              } catch (error) {
+                console.error('Failed to auto-fix booking status:', error);
+              }
             }
           }
         }
@@ -930,8 +1706,15 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Delete booking
   const handleDeleteBooking = async () => {
     if (!bookingToDelete) return;
-    
+
     try {
+      // First, find the matching availability slot if the booking was confirmed
+      let matchingSlot = null;
+      if (bookingToDelete.status === 'confirmed') {
+        console.log('🔍 Finding availability slot to restore for deleted booking:', bookingToDelete.id);
+        matchingSlot = await findMatchingAvailabilitySlot(bookingToDelete);
+      }
+
       const { error } = await supabase
         .from('bookings')
         .delete()
@@ -939,11 +1722,48 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       if (error) throw error;
 
+      // Restore availability slot if one was found
+      if (matchingSlot) {
+        console.log('🔄 Restoring availability slot after booking deletion:', {
+          slotId: matchingSlot.id,
+          currentIsAvailable: matchingSlot.is_available,
+          updatingTo: true
+        });
+
+        const { data: updateData, error: availabilityError } = await supabase
+          .from('availability')
+          .update({ is_available: true })
+          .eq('id', matchingSlot.id)
+          .select();
+
+        if (availabilityError) {
+          console.error('❌ Failed to restore availability slot:', {
+            error: availabilityError,
+            slotId: matchingSlot.id
+          });
+          // Don't throw error - booking is already deleted
+        } else {
+          console.log('✅ Availability slot restored to available:', {
+            updatedData: updateData,
+            slotId: matchingSlot.id
+          });
+        }
+      } else {
+        console.log('❌ No matching slot found to restore - this may be expected if booking was not confirmed or slot was manually created');
+      }
+
       setAllBookings(allBookings.filter(booking => booking.id !== bookingToDelete.id));
-      
+
       setShowDeleteConfirmModal(false);
       setBookingToDelete(null);
       showSuccess('Booking Deleted', 'The booking has been deleted successfully.');
+
+      // Trigger availability view refresh
+      setTimeout(() => {
+        console.log('📡 Dispatching bookingUpdated event from booking deletion...');
+        window.dispatchEvent(new CustomEvent('bookingUpdated'));
+      }, 500);
+
     } catch (error) {
       console.error('Error deleting booking:', error);
       showError('Error', 'Failed to delete booking. Please try again.');
@@ -953,8 +1773,15 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Cancel booking
   const handleCancelBooking = async () => {
     if (!bookingToCancel) return;
-    
+
     try {
+      // First, find the matching availability slot if the booking was confirmed
+      let matchingSlot = null;
+      if (bookingToCancel.status === 'confirmed') {
+        console.log('🔍 Finding availability slot to restore for cancelled booking:', bookingToCancel.id);
+        matchingSlot = await findMatchingAvailabilitySlot(bookingToCancel);
+      }
+
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
@@ -962,16 +1789,40 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       if (error) throw error;
 
-      const updatedBookings = allBookings.map(booking => 
+      // Restore availability slot if one was found
+      if (matchingSlot) {
+        console.log('🔄 Restoring availability slot after booking cancellation:', matchingSlot.id);
+
+        const { error: availabilityError } = await supabase
+          .from('availability')
+          .update({ is_available: true })
+          .eq('id', matchingSlot.id);
+
+        if (availabilityError) {
+          console.error('❌ Failed to restore availability slot:', availabilityError);
+          // Don't throw error - booking is already cancelled
+        } else {
+          console.log('✅ Availability slot restored to available');
+        }
+      }
+
+      const updatedBookings = allBookings.map(booking =>
         booking.id === bookingToCancel.id
           ? { ...booking, status: 'cancelled' }
           : booking
       );
       setAllBookings(updatedBookings);
-      
+
       setShowCancelConfirmModal(false);
       setBookingToCancel(null);
       showSuccess('Booking Cancelled', 'The booking has been cancelled successfully.');
+
+      // Trigger availability view refresh
+      setTimeout(() => {
+        console.log('📡 Dispatching bookingUpdated event from booking cancellation...');
+        window.dispatchEvent(new CustomEvent('bookingUpdated'));
+      }, 500);
+
     } catch (error) {
       console.error('Error cancelling booking:', error);
       showError('Error', 'Failed to cancel booking. Please try again.');
@@ -1120,13 +1971,22 @@ export const Bookings: React.FC<BookingsProps> = ({
         return;
       }
 
-      // Fetch time slots for the selected service (don't filter by day initially)
-      const { data, error } = await supabase
-        .from('services_time_slots')
+      // Fetch actual available slots from availability table for the selected date
+      let availabilityQuery = supabase
+        .from('availability')
         .select('*')
-        .eq('service_id', actualServiceId)
-        .eq('is_available', true)
-        .order('day_of_week', { ascending: true })
+        .eq('date', selectedDate)
+        .eq('is_available', true);
+
+      // Filter by slot_type based on service pricing type
+      if (priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+      // If priceType is 'standard' or undefined, show all slots
+
+      const { data, error } = await availabilityQuery
         .order('start_time', { ascending: true });
       if (error) {
         console.error('Error fetching time slots:', error);
@@ -1134,32 +1994,26 @@ export const Bookings: React.FC<BookingsProps> = ({
         return;
       }
 
-      // Filter time slots based on service price type
-      let relevantSlots = data || [];      
-      if (priceType === 'in-hour') {
-        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
-      } else if (priceType === 'out-of-hour') {
-        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
-      }
-      // If no slots found after filtering, show all slots as fallback
-      if (relevantSlots.length === 0 && (data || []).length > 0) {        relevantSlots = data || [];
-      }
+      // Use available slots directly (filtering already done at database level)
+      const availableSlots = data || [];
 
-      // Convert time slots to formatted time options
+      console.log(`📅 Admin booking modal - fetched ${availableSlots.length} available slots for service type "${priceType}" on ${selectedDate}`);
+
+      // Convert availability slots to formatted time options
       const timeOptions: string[] = [];
-      
-      relevantSlots.forEach(slot => {
-        // Show the actual time range from database
-        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
-        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
-        
+
+      availableSlots.forEach(slot => {
+        // Handle both legacy 'start' field and new 'start_time' field
+        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
+        const endTime = slot.end_time.substring(0, 5);
+
         const startDisplay = formatTimeForDisplay(startTime);
         const endDisplay = formatTimeForDisplay(endTime);
-        
+
         const timeRange = `${startTime}-${endTime}`;
         const displayRange = `${startDisplay} - ${endDisplay}`;
         const timeOption = `${timeRange}|${displayRange}`;
-        
+
         // Only add if not already in array
         if (!timeOptions.includes(timeOption)) {
           timeOptions.push(timeOption);
@@ -1283,14 +2137,15 @@ export const Bookings: React.FC<BookingsProps> = ({
             bookingDateTime = `${newBookingData.date}T${newBookingData.time}`;
           }
         } else {
-          // No time slot selected, use default whole day (9 AM - 5 PM)
+          // No time slot selected - this is a full-day booking for contact quote services too (9 AM - 5 PM)
+          console.log('📅 Creating full-day contact quote booking (no specific time selected)');
           timeslotStartTime = '09:00';
           timeslotEndTime = '17:00';
-          bookingDateTime = `${newBookingData.date}T09:00`;
+          bookingDateTime = `${newBookingData.date}T09:00:00`;
         }
       } else {
         // Handle regular services
-        if (newBookingData.time) {
+        if (newBookingData.time && newBookingData.time !== '') {
           if (newBookingData.time.includes('-')) {
             const [startTime, endTime] = newBookingData.time.split('-');
             timeslotStartTime = startTime;
@@ -1300,18 +2155,27 @@ export const Bookings: React.FC<BookingsProps> = ({
             timeslotStartTime = newBookingData.time;
             bookingDateTime = `${newBookingData.date}T${newBookingData.time}`;
           }
+        } else {
+          // No time selected - this is a full-day booking (9 AM - 5 PM)
+          console.log('📅 Creating full-day booking (no specific time selected)');
+          timeslotStartTime = '09:00';
+          timeslotEndTime = '17:00';
+          bookingDateTime = `${newBookingData.date}T09:00:00`;
         }
       }
 
-      // Skip availability checks for contact for quote services
-      if (!isContactQuote && newBookingData.status === 'confirmed' && bookingDateTime) {
+      // Skip availability checks for contact for quote services and full-day bookings
+      const isFullDayBooking = timeslotStartTime === 'full-day' || timeslotEndTime === 'full-day' ||
+                              (timeslotStartTime === '09:00' && timeslotEndTime === '17:00');
+
+      if (!isContactQuote && !isFullDayBooking && newBookingData.status === 'confirmed' && bookingDateTime) {
         const availabilityCheck = await checkBookingAvailability({
           booking_date: bookingDateTime,
           appointment_date: newBookingData.date,
           appointment_time: timeslotStartTime,
           status: newBookingData.status
         } as BookingFormData);
-        
+
         if (!availabilityCheck.hasAvailability) {
           showError('Cannot Create Confirmed Booking', availabilityCheck.message || 'No availability found for this booking time.');
           return;
@@ -1324,11 +2188,13 @@ export const Bookings: React.FC<BookingsProps> = ({
           appointment_time: timeslotStartTime,
           status: newBookingData.status
         } as BookingFormData);
-        
+
         if (conflictCheck.hasConflict) {
           showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
           return;
         }
+      } else if (isFullDayBooking) {
+        console.log('📅 Skipping availability checks for full-day booking during creation');
       }
 
       const customerData = {
@@ -1347,7 +2213,49 @@ export const Bookings: React.FC<BookingsProps> = ({
         status: newBookingData.status
       };
 
-      const { booking, customer, error } = await createBookingWithCustomer(customerData, bookingData);
+      // Check if we can automatically confirm this booking based on availability
+      let shouldAutoConfirm = false;
+      let finalBookingData = { ...bookingData };
+
+      if (!isContactQuote && !isFullDayBooking && timeslotStartTime && timeslotEndTime) {
+        // Try to auto-match with available slots for non-contact-quote services (excluding full-day bookings)
+        const tempBooking = {
+          id: '0',
+          booking_date: bookingDateTime,
+          appointment_date: newBookingData.date,
+          timeslot_start_time: timeslotStartTime,
+          timeslot_end_time: timeslotEndTime,
+          package_name: serviceName,
+          status: 'pending',
+          customer_name: '',
+          customer_email: '',
+          customer_phone: ''
+        } as BookingFormData;
+
+        const availabilityCheck = await checkBookingAvailabilityWithAutoMatch(tempBooking);
+
+        if (availabilityCheck.hasAvailability && availabilityCheck.matchedSlot) {
+          console.log('✅ Auto-confirming booking - matching slot found:', availabilityCheck.matchedSlot);
+          shouldAutoConfirm = true;
+          finalBookingData.status = 'confirmed';
+
+          // Update booking time to match the available slot
+          const slotStartTime = availabilityCheck.matchedSlot.start_time || availabilityCheck.matchedSlot.start;
+          const slotEndTime = availabilityCheck.matchedSlot.end_time;
+          if (slotStartTime && slotEndTime) {
+            // Keep in local time without timezone conversion to avoid timezone shifts
+            finalBookingData.booking_date = `${newBookingData.date}T${slotStartTime}:00`;
+            finalBookingData.timeslot_start_time = slotStartTime;
+            finalBookingData.timeslot_end_time = slotEndTime;
+          }
+        } else {
+          console.log('⚠️ Creating as pending - no matching availability slot found');
+        }
+      } else if (isFullDayBooking) {
+        console.log('📅 Skipping auto-confirmation logic for full-day booking - will be handled during manual confirmation');
+      }
+
+      const { booking, customer, error } = await createBookingWithCustomer(customerData, finalBookingData, true);
 
       if (error) {
         showError('Booking Failed', error);
@@ -1366,11 +2274,13 @@ export const Bookings: React.FC<BookingsProps> = ({
         
         setAllBookings([newBookingForList, ...allBookings]);
         
-        // Show appropriate success message based on service type
+        // Show appropriate success message based on service type and auto-confirmation
         if (isContactQuote) {
           showSuccess('Booking Created', 'Contact for quote booking has been created successfully. No payment request will be generated.');
+        } else if (shouldAutoConfirm) {
+          showSuccess('Booking Created & Auto-Confirmed', 'New booking has been created and automatically confirmed based on available time slot!');
         } else {
-          showSuccess('Booking Created', 'New booking has been created successfully.');
+          showSuccess('Booking Created', 'New booking has been created successfully as pending. Admin can manually confirm once availability is checked.');
         }
         
         handleCloseNewBookingModal();
@@ -1597,6 +2507,7 @@ export const Bookings: React.FC<BookingsProps> = ({
     let backgroundColor = '#6b7280'; // gray for pending
     
     if (booking.status === 'confirmed') backgroundColor = '#10b981'; // green
+    else if (booking.status === 'deposit_paid') backgroundColor = '#3b82f6'; // blue
     else if (booking.status === 'cancelled') backgroundColor = '#ef4444'; // red
     else if (!(booking.appointment_date || booking.date) || !(booking.appointment_time || booking.time)) backgroundColor = '#f59e0b'; // orange
     
@@ -1717,11 +2628,12 @@ export const Bookings: React.FC<BookingsProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'confirmed' | 'cancelled')}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'deposit_paid' | 'confirmed' | 'cancelled')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
+                <option value="deposit_paid">Deposit Paid</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -2011,7 +2923,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                                 const status = bookingPaymentStatus.get(booking.id || '');
                                 const depositAmount = bookingDepositAmounts.get(booking.id || '') || 75; // Default fallback
                                 
-                                // If payment is completed
+                                // If payment is completed - don't show any action buttons
                                 if (status?.payment) {
                                   return (
                                     <div className="space-y-1">
@@ -2022,24 +2934,39 @@ export const Bookings: React.FC<BookingsProps> = ({
                                         Service: {booking.package_name}
                                       </p>
                                       <p className="text-xs text-gray-500">
-                                        Paid: {status.payment.payment_date ? 
-                                          new Date(status.payment.payment_date).toLocaleDateString() : 
+                                        Paid: {status.payment.payment_date ?
+                                          new Date(status.payment.payment_date).toLocaleDateString() :
                                           new Date(status.payment.created_at).toLocaleDateString()}
                                       </p>
+                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && (
+                                        <div className="mt-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleFixBookingStatus(booking);
+                                            }}
+                                            disabled={loadingPaymentStatus}
+                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
+                                            title="Update booking status to reflect payment"
+                                          >
+                                            {loadingPaymentStatus ? '...' : 'Sync Status'}
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 }
                                 
-                                // If payment request exists but not paid
-                                if (status?.paymentRequest) {
-                                  const isExpired = status.paymentRequest.payment_due_date && 
+                                // If payment request exists but not paid yet
+                                if (status?.paymentRequest && status.paymentRequest.status !== 'paid') {
+                                  const isExpired = status.paymentRequest.payment_due_date &&
                                     new Date(status.paymentRequest.payment_due_date) < new Date();
-                                  
+
                                   return (
                                     <div className="space-y-1">
                                       <p className={`text-xs font-medium ${
-                                        isExpired ? 'text-red-600' : 
-                                        status.paymentRequest.status === 'paid' ? 'text-green-600' : 'text-blue-600'
+                                        isExpired ? 'text-red-600' : 'text-blue-600'
                                       }`}>
                                         {isExpired ? '⚠ Overdue' : '📧 Request sent'} - €{status.paymentRequest.amount.toFixed(2)} deposit
                                       </p>
@@ -2047,14 +2974,75 @@ export const Bookings: React.FC<BookingsProps> = ({
                                         Service: {booking.package_name}
                                       </p>
                                       <p className="text-xs text-gray-500">
-                                        Status: {status.paymentRequest.status} • Due: {status.paymentRequest.payment_due_date ? 
+                                        Status: {status.paymentRequest.status} • Due: {status.paymentRequest.payment_due_date ?
                                           new Date(status.paymentRequest.payment_due_date).toLocaleDateString() : 'N/A'}
                                       </p>
+                                      <div className="mt-2">
+                                        <button
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleFixBookingStatus(booking);
+                                          }}
+                                          disabled={loadingPaymentStatus}
+                                          className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
+                                          title="Check if payment was completed and update status"
+                                        >
+                                          {loadingPaymentStatus ? '...' : 'Check Payment'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                // If payment request is marked as 'paid' but we didn't find payment record
+                                if (status?.paymentRequest && status.paymentRequest.status === 'paid') {
+                                  return (
+                                    <div className="space-y-1">
+                                      <p className="text-xs text-green-700 font-medium">
+                                        ✓ Payment Confirmed - €{status.paymentRequest.amount.toFixed(2)}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
+                                        Service: {booking.package_name}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Payment Request: {status.paymentRequest.status}
+                                      </p>
+                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && (
+                                        <div className="mt-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleFixBookingStatus(booking);
+                                            }}
+                                            disabled={loadingPaymentStatus}
+                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
+                                            title="Update booking status to reflect payment"
+                                          >
+                                            {loadingPaymentStatus ? '...' : 'Sync Status'}
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 }
                                 
                                 // No payment request exists
+                                // Don't show payment request options for confirmed or deposit_paid bookings
+                                if (booking.status === 'confirmed' || booking.status === 'deposit_paid') {
+                                  return (
+                                    <div className="space-y-1">
+                                      <p className="text-xs text-green-600">
+                                        ✅ Booking {booking.status === 'confirmed' ? 'confirmed' : 'deposit paid'} - No action needed
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
+                                        Service: {booking.package_name}
+                                      </p>
+                                    </div>
+                                  );
+                                }
+
                                 return (
                                   <div className="space-y-1">
                                     <div className="flex items-center space-x-2">
@@ -2072,6 +3060,18 @@ export const Bookings: React.FC<BookingsProps> = ({
                                         title="Create Payment Request"
                                       >
                                         {loadingPaymentStatus ? '...' : 'Create Request'}
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          handleFixBookingStatus(booking);
+                                        }}
+                                        disabled={loadingPaymentStatus}
+                                        className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
+                                        title="Fix Booking Status Based on Payments"
+                                      >
+                                        {loadingPaymentStatus ? '...' : 'Fix Status'}
                                       </button>
                                     </div>
                                     <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
@@ -2589,10 +3589,12 @@ export const Bookings: React.FC<BookingsProps> = ({
                               }
                             </span>
                             <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              booking.status === 'confirmed' 
+                              booking.status === 'confirmed'
                                 ? 'bg-green-100 text-green-800'
+                                : booking.status === 'deposit_paid'
+                                ? 'bg-blue-100 text-blue-800'
                                 : booking.status === 'cancelled'
-                                ? 'bg-red-100 text-red-800' 
+                                ? 'bg-red-100 text-red-800'
                                 : 'bg-yellow-100 text-yellow-800'
                             }`}>
                               {booking.status || 'pending'}
@@ -2837,7 +3839,16 @@ export const Bookings: React.FC<BookingsProps> = ({
               {isContactForQuoteService(newBookingData.service) && !newBookingData.time && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-xs text-blue-700">
-                    If no time slot is selected, the booking will automatically be scheduled for 9:00 AM - 5:00 PM.
+                    If no time slot is selected, this will be treated as a full-day booking and mark the entire day unavailable when confirmed.
+                  </p>
+                </div>
+              )}
+
+              {/* Info message for regular services when no time slot is selected */}
+              {!isContactForQuoteService(newBookingData.service) && newBookingData.service && newBookingData.date && !newBookingData.time && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700">
+                    If no time slot is selected, this will be treated as a full-day booking and mark the entire day unavailable when confirmed.
                   </p>
                 </div>
               )}

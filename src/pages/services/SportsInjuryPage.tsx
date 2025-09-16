@@ -104,7 +104,7 @@ const SportsInjuryPage: React.FC = () => {
                     <Star className="w-5 h-5 fill-current text-yellow-400 mr-1" />
                     <span className="font-semibold">4.9/5 Rating</span>
                   </div>
-                  <p className="text-sm text-gray-600">From 200+ athletes</p>
+                  <p className="text-sm text-gray-600">From 200+ clients</p>
                 </div>
               </motion.div>
             </div>
