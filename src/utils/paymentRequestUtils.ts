@@ -414,7 +414,7 @@ export async function processPaymentRequest(
     // Update payment request status to 'paid'
     const { error: updateError } = await supabase
       .from('payment_requests')
-      .update({ 
+      .update({
         status: 'paid',
         updated_at: new Date().toISOString()
       })
@@ -422,6 +422,202 @@ export async function processPaymentRequest(
 
     if (updateError) {
       console.error('Failed to update payment request status:', updateError);
+    }
+
+    // Update associated booking status based on payment type (deposit vs full payment)
+    if (paymentRequest.customer_id) {
+      console.log('🔄 Determining booking status update for payment request:', {
+        paymentRequestId: paymentRequestId,
+        customerId: paymentRequest.customer_id,
+        bookingId: paymentRequest.booking_id,
+        paidAmount: paymentRequest.amount
+      });
+
+      // Determine if this was a full payment or deposit by comparing against service cost
+      let serviceCost = 0;
+      let isFullPayment = false;
+
+      try {
+        console.log('🔍 Debugging service cost detection:', {
+          paymentRequestId: paymentRequestId,
+          paymentRequestServiceName: paymentRequest.service_name,
+          paymentRequestAmount: paymentRequest.amount,
+          bookingId: paymentRequest.booking_id
+        });
+
+        // Try to get service cost from the payment request's service_name or booking
+        if (paymentRequest.service_name) {
+          console.log('📊 Attempting to get service cost from payment request service_name:', paymentRequest.service_name);
+          const dbPrice = await getServicePriceFromDatabase(paymentRequest.service_name);
+          console.log('📊 Service cost from payment request service_name:', dbPrice);
+          if (dbPrice) {
+            serviceCost = dbPrice;
+          }
+        }
+
+        // If we couldn't get service cost from service_name, try to get it from booking
+        if (serviceCost === 0 && paymentRequest.booking_id) {
+          console.log('📊 Service cost not found via service_name, trying booking package_name...');
+          const { data: booking } = await supabase
+            .from('bookings')
+            .select('package_name')
+            .eq('id', paymentRequest.booking_id)
+            .single();
+
+          console.log('📊 Booking package_name:', booking?.package_name);
+
+          if (booking?.package_name) {
+            const dbPrice = await getServicePriceFromDatabase(booking.package_name);
+            console.log('📊 Service cost from booking package_name:', dbPrice);
+            if (dbPrice) {
+              serviceCost = dbPrice;
+            }
+          }
+        }
+
+        // Determine if this is a full payment (within €2 tolerance for rounding)
+        if (serviceCost > 0) {
+          const depositAmount = Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+          isFullPayment = paymentRequest.amount >= (serviceCost - 2); // Allow €2 tolerance
+
+          console.log('💰 Payment analysis:', {
+            serviceCost,
+            depositAmount,
+            paidAmount: paymentRequest.amount,
+            isFullPayment,
+            paymentType: isFullPayment ? 'full' : 'deposit'
+          });
+        } else {
+          // Fallback: assume it's full payment if we can't determine service cost
+          console.log('⚠️ Could not determine service cost, assuming full payment');
+          isFullPayment = true;
+        }
+      } catch (error) {
+        console.error('❌ Error determining payment type:', error);
+        // Fallback: assume full payment on error
+        isFullPayment = true;
+      }
+
+      // First check the current booking status before attempting update
+      if (paymentRequest.booking_id) {
+        const { data: currentBooking, error: checkError } = await supabase
+          .from('bookings')
+          .select('id, status')
+          .eq('id', paymentRequest.booking_id)
+          .single();
+
+        if (checkError) {
+          console.error('❌ Failed to check current booking status:', checkError);
+        } else {
+          console.log('🔍 Current booking status for', paymentRequest.booking_id, ':', currentBooking?.status);
+
+          // Update booking status based on payment type
+          const targetStatus = isFullPayment ? 'confirmed' : 'deposit_paid';
+
+          console.log('🎯 Booking status update decision:', {
+            currentBookingStatus: currentBooking?.status,
+            targetStatus,
+            shouldUpdate: currentBooking && currentBooking.status !== targetStatus,
+            bookingId: paymentRequest.booking_id
+          });
+
+          if (currentBooking && currentBooking.status !== targetStatus) {
+            console.log(`📍 Attempting to update booking status from '${currentBooking.status}' to '${targetStatus}'...`);
+
+            const bookingUpdateResult = await supabase
+              .from('bookings')
+              .update({
+                status: targetStatus,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', paymentRequest.booking_id);
+
+            console.log('📍 Database update result:', {
+              error: bookingUpdateResult.error,
+              data: bookingUpdateResult.data,
+              statusCode: bookingUpdateResult.status
+            });
+
+            if (bookingUpdateResult.error) {
+              console.error('❌ Failed to update booking status:', bookingUpdateResult.error);
+            } else {
+              console.log(`✅ Booking status updated to ${targetStatus} via booking_id`);
+            }
+          } else {
+            console.log(`ℹ️ Booking update skipped - Current status: ${currentBooking?.status}, Target status: ${targetStatus}`);
+          }
+        }
+      } else {
+        // Fallback: try to find booking by customer_id if no booking_id in payment request
+        console.log('📍 No booking_id in payment request, trying customer_id:', paymentRequest.customer_id);
+
+        // First find the most recent booking for this customer
+        const { data: customerBookings, error: findError } = await supabase
+          .from('bookings')
+          .select('id, status, created_at')
+          .eq('customer_id', paymentRequest.customer_id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (findError) {
+          console.error('❌ Failed to find customer bookings:', findError);
+        } else if (customerBookings && customerBookings.length > 0) {
+          const mostRecentBooking = customerBookings[0];
+          console.log('🔍 Found most recent booking:', mostRecentBooking.id, 'with status:', mostRecentBooking.status);
+
+          const targetStatus = isFullPayment ? 'confirmed' : 'deposit_paid';
+
+          if (mostRecentBooking.status !== targetStatus) {
+            const fallbackResult = await supabase
+              .from('bookings')
+              .update({
+                status: targetStatus,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', mostRecentBooking.id);
+
+            if (fallbackResult.error) {
+              console.error('❌ Failed to update booking by customer_id:', fallbackResult.error);
+            } else {
+              console.log(`✅ Booking status updated to ${targetStatus} via customer_id`);
+            }
+          } else {
+            console.log(`ℹ️ Most recent booking already has status ${mostRecentBooking.status}`);
+          }
+        } else {
+          console.log('⚠️ No bookings found for customer_id:', paymentRequest.customer_id);
+        }
+      }
+
+      // Verify the update worked by checking the booking status
+      const verificationQuery = paymentRequest.booking_id
+        ? supabase.from('bookings').select('id, status').eq('id', paymentRequest.booking_id)
+        : supabase.from('bookings').select('id, status').eq('customer_id', paymentRequest.customer_id).order('created_at', { ascending: false }).limit(1);
+
+      const { data: verificationData, error: verificationError } = await verificationQuery;
+
+      if (verificationError) {
+        console.error('❌ Failed to verify booking update:', verificationError);
+      } else if (verificationData && verificationData.length > 0) {
+        console.log('🔍 Booking status verification:', {
+          bookingId: verificationData[0].id,
+          currentStatus: verificationData[0].status,
+          expectedStatus: 'confirmed'
+        });
+
+        // Dispatch event to notify admin views of booking status change
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('bookingStatusUpdated', {
+            detail: {
+              bookingId: verificationData[0].id,
+              newStatus: verificationData[0].status,
+              paymentRequestId: paymentRequestId,
+              customerId: paymentRequest.customer_id
+            }
+          }));
+          console.log('📡 Dispatched booking status update event');
+        }
+      }
     }
 
     // Update payment status to 'paid' and set payment date
@@ -970,6 +1166,122 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
   } catch (error) {
     console.error('❌ Error getting customer deposit payments:', error);
     return { amount: 0, payments: [] };
+  }
+}
+
+/**
+ * Manual function to fix booking status based on actual payment data
+ * Useful for retroactively fixing bookings that should be confirmed
+ */
+export async function fixBookingStatusBasedOnPayments(bookingId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log('🔧 Manual booking status fix for booking:', bookingId);
+
+    // Get the booking
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('id, customer_id, package_name, status')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { success: false, message: 'Booking not found' };
+    }
+
+    console.log('📋 Current booking info:', booking);
+
+    // Get all payments for this customer
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('customer_id', booking.customer_id)
+      .eq('status', 'paid')
+      .order('created_at', { ascending: false });
+
+    if (paymentsError) {
+      return { success: false, message: 'Failed to fetch payments' };
+    }
+
+    // Find payment that matches this booking
+    const matchingPayment = payments?.find(p => p.booking_id === bookingId) ||
+                           payments?.find(p => p.notes?.includes(booking.package_name)) ||
+                           payments?.[0]; // Last resort: most recent payment
+
+    if (!matchingPayment) {
+      return { success: false, message: 'No payments found for this booking' };
+    }
+
+    console.log('💳 Found matching payment:', {
+      id: matchingPayment.id,
+      amount: matchingPayment.amount,
+      booking_id: matchingPayment.booking_id,
+      notes: matchingPayment.notes
+    });
+
+    // Get service cost
+    let serviceCost = 0;
+    const dbPrice = await getServicePriceFromDatabase(booking.package_name);
+    if (dbPrice) {
+      serviceCost = dbPrice;
+    }
+
+    if (serviceCost === 0) {
+      return { success: false, message: 'Could not determine service cost' };
+    }
+
+    const depositAmount = Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+    const isFullPayment = matchingPayment.amount >= (serviceCost - 2);
+    const targetStatus = isFullPayment ? 'confirmed' : 'deposit_paid';
+
+    console.log('🎯 Payment analysis for manual fix:', {
+      serviceCost,
+      depositAmount,
+      paidAmount: matchingPayment.amount,
+      isFullPayment,
+      currentStatus: booking.status,
+      targetStatus
+    });
+
+    if (booking.status === targetStatus) {
+      return { success: true, message: `Booking already has correct status: ${targetStatus}` };
+    }
+
+    // Update booking status
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({
+        status: targetStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', bookingId);
+
+    if (updateError) {
+      console.error('❌ Failed to update booking status:', updateError);
+      return { success: false, message: 'Failed to update booking status' };
+    }
+
+    console.log(`✅ Booking status manually updated from '${booking.status}' to '${targetStatus}'`);
+
+    // Dispatch event to refresh admin views
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bookingStatusUpdated', {
+        detail: {
+          bookingId: bookingId,
+          newStatus: targetStatus,
+          customerId: booking.customer_id,
+          manualFix: true
+        }
+      }));
+    }
+
+    return {
+      success: true,
+      message: `Booking status updated from '${booking.status}' to '${targetStatus}' based on payment of €${matchingPayment.amount}`
+    };
+
+  } catch (error) {
+    console.error('❌ Error in manual booking status fix:', error);
+    return { success: false, message: 'Unexpected error occurred' };
   }
 }
 

@@ -191,7 +191,8 @@ export const createBookingWithCustomer = async (
     email: string;
     phone?: string;
   },
-  bookingData: Omit<BookingData, 'customer_id'>
+  bookingData: Omit<BookingData, 'customer_id'>,
+  isAdminBooking: boolean = false
 ): Promise<{ booking: any | null; customer: Customer | null; paymentRequest?: any; error: string | null }> => {
   try {
     // Step 1: Find or create customer
@@ -225,8 +226,9 @@ export const createBookingWithCustomer = async (
     }
 
     // Step 4: Try to create payment request for 20% deposit (don't let this block email sending)
+    // Skip payment request generation for admin bookings
     let paymentRequest = null;
-    if (customer.id) {
+    if (customer.id && !isAdminBooking) {
       try {
         console.log('💳 Attempting to create payment request...');
         paymentRequest = await createPaymentRequest(
@@ -236,7 +238,7 @@ export const createBookingWithCustomer = async (
           null, // invoiceId
           booking.id // bookingId
         );
-        
+
         if (paymentRequest) {
           console.log('✅ Payment request created successfully');
         } else {
@@ -247,8 +249,12 @@ export const createBookingWithCustomer = async (
         // Don't return here - continue with email sending even if payment request fails
         paymentRequest = null;
       }
+    } else if (isAdminBooking) {
+      console.log('ℹ️ Skipping payment request generation for admin booking');
+    }
 
-      // Step 5: Send emails regardless of payment request success/failure
+    // Step 5: Send emails regardless of payment request success/failure
+    if (customer.id) {
       try {
         // Only send welcome email for new customers who haven't received it yet
         if (isNewCustomer && !customer.welcome_email_sent) {
@@ -297,7 +303,7 @@ export const createBookingWithCustomer = async (
             clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
             special_instructions: bookingData.notes || undefined
           });
-          
+
           if (capturedResult.success) {
             console.log('✅ Booking captured notification sent successfully');
           } else {
@@ -305,6 +311,33 @@ export const createBookingWithCustomer = async (
           }
         } catch (capturedEmailError) {
           console.error('❌ Booking captured notification failed:', capturedEmailError);
+        }
+
+        // Send admin notification for new booking
+        console.log('📧 Sending admin notification for new booking...');
+        try {
+          const { sendAdminBookingConfirmationEmail } = await import('./emailUtils');
+          const adminResult = await sendAdminBookingConfirmationEmail({
+            customer_name: `${customerData.firstName} ${customerData.lastName}`,
+            customer_email: customerData.email,
+            service_name: bookingData.package_name,
+            appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
+            appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
+            booking_reference: booking.booking_reference || booking.id.toString(),
+            therapist_name: 'KH Therapy Team',
+            clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+            special_instructions: bookingData.notes || undefined,
+            booking_status: paymentRequest ? 'Payment Required' : 'Confirmed',
+            payment_amount: paymentRequest?.amount || 0
+          });
+
+          if (adminResult.success) {
+            console.log('✅ Admin booking notification sent successfully');
+          } else {
+            console.error('❌ Failed to send admin booking notification:', adminResult.error);
+          }
+        } catch (adminEmailError) {
+          console.error('❌ Admin booking notification failed:', adminEmailError);
         }
 
         // Then send payment request email if payment is required

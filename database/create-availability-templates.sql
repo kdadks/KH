@@ -216,10 +216,14 @@ DECLARE
     template_slot RECORD;
     v_current_date DATE;
     slots_created INTEGER := 0;
-    v_current_time TIME;
     slot_start TIME;
     slot_end TIME;
     slot_duration_minutes INTEGER;
+    break_duration_minutes INTEGER;
+    total_available_minutes INTEGER;
+    slot_with_break INTEGER;
+    total_slots INTEGER;
+    i INTEGER;
 BEGIN
     -- Loop through each day in the date range
     v_current_date := p_start_date;
@@ -231,13 +235,31 @@ BEGIN
             AND day_of_week = (EXTRACT(DOW FROM v_current_date))::int
             AND is_active = true
         LOOP
-            -- Generate time slots based on slot duration
+            -- Get slot and break duration values
             slot_duration_minutes := COALESCE(template_slot.slot_duration, 60);
-            v_current_time := template_slot.start_time;
+            break_duration_minutes := COALESCE(template_slot.break_duration, 0);
             
-            WHILE v_current_time + (slot_duration_minutes || ' minutes')::INTERVAL <= template_slot.end_time LOOP
-                slot_start := v_current_time;
-                slot_end := v_current_time + (slot_duration_minutes || ' minutes')::INTERVAL;
+            -- Calculate total time available
+            total_available_minutes := EXTRACT(EPOCH FROM (template_slot.end_time - template_slot.start_time))/60;
+            
+            -- Calculate slot + break duration (for determining how many slots fit)
+            slot_with_break := slot_duration_minutes + break_duration_minutes;
+            
+            -- Calculate how many complete slots will fit
+            total_slots := FLOOR(total_available_minutes / slot_with_break);
+            
+            -- Create each slot with proper breaks
+            FOR i IN 0..(total_slots-1) LOOP
+                -- Start time is calculated by adding (slot + break) for each previous slot
+                slot_start := template_slot.start_time + ((i * slot_with_break) || ' minutes')::INTERVAL;
+                
+                -- End time is start time + slot duration (no break included in the end time)
+                slot_end := slot_start + (slot_duration_minutes || ' minutes')::INTERVAL;
+                
+                -- Debug output to verify calculations
+                RAISE NOTICE 'Creating slot: Day %, Start %, End %, Slot+Break: % (% + %)',
+                    v_current_date, slot_start, slot_end, slot_with_break, 
+                    slot_duration_minutes, break_duration_minutes;
                 
                 -- Insert availability slot
                 INSERT INTO public.availability (
@@ -261,9 +283,6 @@ BEGIN
                 ) ON CONFLICT DO NOTHING;
                 
                 slots_created := slots_created + 1;
-                
-                -- Move to next slot (including break duration)
-                v_current_time := slot_end + (COALESCE(template_slot.break_duration, 0) || ' minutes')::INTERVAL;
             END LOOP;
         END LOOP;
         
@@ -299,10 +318,14 @@ DECLARE
     schedule_day RECORD;
     v_current_date DATE;
     slots_created INTEGER := 0;
-    v_current_time TIME;
     slot_start TIME;
     slot_end TIME;
     slot_duration_minutes INTEGER;
+    break_duration_minutes INTEGER;
+    total_available_minutes INTEGER;
+    slot_with_break INTEGER;
+    total_slots INTEGER;
+    i INTEGER;
 BEGIN
     v_current_date := p_start_date;
     WHILE v_current_date <= p_end_date LOOP
@@ -312,12 +335,34 @@ BEGIN
             WHERE day_of_week = (EXTRACT(DOW FROM v_current_date))::int
             AND is_active = true
         LOOP
+            -- Get slot and break duration values
             slot_duration_minutes := COALESCE(schedule_day.slot_duration, 60);
-            v_current_time := schedule_day.start_time;
+            break_duration_minutes := COALESCE(schedule_day.break_duration, 0);
             
-            WHILE v_current_time + (slot_duration_minutes || ' minutes')::INTERVAL <= schedule_day.end_time LOOP
-                slot_start := v_current_time;
-                slot_end := v_current_time + (slot_duration_minutes || ' minutes')::INTERVAL;
+            -- Calculate total time available
+            total_available_minutes := EXTRACT(EPOCH FROM (schedule_day.end_time - schedule_day.start_time))/60;
+            
+            -- Calculate slot + break duration (for determining how many slots fit)
+            slot_with_break := slot_duration_minutes + break_duration_minutes;
+            
+            -- Calculate how many complete slots will fit
+            total_slots := FLOOR(total_available_minutes / slot_with_break);
+            
+            -- Debug output before creating slots
+            RAISE NOTICE 'Creating slots for day %, with % min slots and % min breaks', 
+                v_current_date, slot_duration_minutes, break_duration_minutes;
+            
+            -- Create each slot with proper breaks
+            FOR i IN 0..(total_slots-1) LOOP
+                -- Start time is calculated by adding (slot + break) for each previous slot
+                slot_start := schedule_day.start_time + ((i * slot_with_break) || ' minutes')::INTERVAL;
+                
+                -- End time is start time + slot duration (no break included in the end time)
+                slot_end := slot_start + (slot_duration_minutes || ' minutes')::INTERVAL;
+                
+                -- Debug output to verify individual slot calculations
+                RAISE NOTICE 'Slot %: Start %, End %, Duration % mins, Next slot starts after % min break',
+                    i+1, slot_start, slot_end, slot_duration_minutes, break_duration_minutes;
                 
                 -- Insert availability slot
                 INSERT INTO public.availability (
@@ -341,9 +386,6 @@ BEGIN
                 ) ON CONFLICT DO NOTHING;
                 
                 slots_created := slots_created + 1;
-                
-                -- Move to next slot (including break duration)
-                v_current_time := slot_end + (COALESCE(schedule_day.break_duration, 0) || ' minutes')::INTERVAL;
             END LOOP;
         END LOOP;
         

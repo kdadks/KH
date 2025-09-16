@@ -173,6 +173,30 @@ const AdminConsole = () => {
     }
   }, [isLoggedIn]);
 
+  // Listen for refresh events from child components
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const handleRefreshBookings = () => {
+      console.log('🔄 AdminConsole received refreshBookings event, refreshing booking and payment data...');
+      fetchAllBookings();
+      fetchAllPaymentData(); // Also refresh payment data since booking payments are linked
+    };
+
+    const handleRefreshDashboard = () => {
+      console.log('🔄 AdminConsole received refreshDashboard event, refreshing all data...');
+      handleManualRefresh();
+    };
+
+    window.addEventListener('refreshBookings', handleRefreshBookings);
+    window.addEventListener('refreshDashboard', handleRefreshDashboard);
+
+    return () => {
+      window.removeEventListener('refreshBookings', handleRefreshBookings);
+      window.removeEventListener('refreshDashboard', handleRefreshDashboard);
+    };
+  }, [isLoggedIn]);
+
   // Only fetch data when first logging in, not on tab changes
   // This prevents losing payment status and reduces unnecessary API calls
   useEffect(() => {

@@ -39,6 +39,11 @@ interface PaymentState {
   customer: any;
   checkoutUrl?: string;
   paymentCompleted: boolean;
+  paymentOptions?: {
+    deposit: { amount: number; percentage: number };
+    full: { amount: number };
+  };
+  selectedPaymentType?: 'deposit' | 'full';
 }
 
 const BookingPage: React.FC = () => {
@@ -62,8 +67,9 @@ const BookingPage: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
 
-  // Watch the service field to trigger time slot updates
+  // Watch the service and date fields to trigger time slot updates
   const watchedService = watch('service');
+  const watchedDate = watch('date');
 
   // Handle countdown reaching zero
   useEffect(() => {
@@ -93,10 +99,26 @@ const BookingPage: React.FC = () => {
     if (!selectedService) {
       return <option disabled>Please select a service first</option>;
     }
+    if (!watchedDate) {
+      return <option disabled>Please select a date first</option>;
+    }
     if (loadingTimeSlots) {
       return <option disabled>Loading available times...</option>;
     }
     if (timeSlots.length === 0) {
+      const dateSelected = watchedDate;
+      if (dateSelected) {
+        const selectedDateObj = new Date(dateSelected);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        selectedDateObj.setHours(0, 0, 0, 0);
+
+        if (selectedDateObj.getTime() === today.getTime()) {
+          return <option disabled>No available time slots for today (all slots may be in the past)</option>;
+        } else {
+          return <option disabled>No available time slots for {new Date(dateSelected).toLocaleDateString('en-IE')}</option>;
+        }
+      }
       return <option disabled>No time slots available for selected service</option>;
     }
     return timeSlots.map((slot, index) => {
@@ -107,13 +129,13 @@ const BookingPage: React.FC = () => {
         </option>
       );
     });
-  }, [selectedService, loadingTimeSlots, timeSlots]);
+  }, [selectedService, loadingTimeSlots, timeSlots, watchedDate]);
 
   useEffect(() => {
     fetchServices();
   }, []);
 
-  // Fetch time slots when service changes
+  // Fetch time slots when service or date changes
   useEffect(() => {
     if (watchedService) {
       // Find by displayName first (since that's what shows in the dropdown)
@@ -122,10 +144,10 @@ const BookingPage: React.FC = () => {
         // Fallback to name matching
         service = services.find(s => s.name === watchedService);
       }
-      
+
       if (service) {
         setSelectedService(service);
-        fetchTimeSlots(service);
+        fetchTimeSlots(service, watchedDate);
       } else {
         setSelectedService(null);
         setTimeSlots([]);
@@ -134,12 +156,12 @@ const BookingPage: React.FC = () => {
       setSelectedService(null);
       setTimeSlots([]);
     }
-  }, [watchedService, services]);
+  }, [watchedService, watchedDate, services]);
 
-  const fetchTimeSlots = async (service: Service) => {
+  const fetchTimeSlots = async (service: Service, selectedDate?: string) => {
     try {
       setLoadingTimeSlots(true);
-      
+
       // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
       let serviceId: number;
       if (typeof service.id === 'string') {
@@ -157,60 +179,119 @@ const BookingPage: React.FC = () => {
         return;
       }
 
-      // Fetch time slots for the selected service
-      const { data, error } = await supabase
-        .from('services_time_slots')
-        .select('*')
-        .eq('service_id', serviceId)
-        .eq('is_available', true)
-        .order('day_of_week', { ascending: true })
-        .order('start_time', { ascending: true });
+      // Get current date and time for filtering
+      const now = new Date();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
 
-      if (error) {
-        console.error('Error fetching time slots:', error);
+      // Determine the minimum date to fetch slots from
+      let minimumDate = currentDate;
+      if (selectedDate && selectedDate >= currentDate) {
+        minimumDate = selectedDate;
+      }
+
+      // Fetch available time slots from availability table, filtering by service type if applicable
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .gte('date', minimumDate) // Only from selected date or current date onwards
+        .eq('is_available', true); // Only available slots
+
+      // Filter by slot_type based on service pricing type
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+      // If priceType is 'standard' or undefined, show all slots
+
+      const { data: availabilityData, error: availError } = await availabilityQuery
+        .order('date', { ascending: true })
+        .order('start', { ascending: true });
+
+      if (availError) {
+        console.error('Error fetching availability:', availError);
         setTimeSlots([]);
         return;
       }
 
-      // Filter time slots based on service price type
-      let relevantSlots = data || [];
-      if (service.priceType === 'in-hour') {
-        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
-      } else if (service.priceType === 'out-of-hour') {
-        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
-      }
+      // Filter availability slots based on date selection and time validation
+      // Note: slot_type filtering is now done at database level above
+      let relevantSlots = (availabilityData || []).filter(slot => {
+        const slotDate = slot.date;
+        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
 
-      // Convert time slots to formatted time options
-      const timeOptions: string[] = [];
-      
+        // If user has selected a specific date, only show slots for that exact date
+        if (selectedDate) {
+          // Only include slots on the exact selected date
+          if (slotDate !== selectedDate) {
+            return false; // Skip slots not on the selected date
+          }
+
+          // If slot is today, check if time is in the future
+          if (slotDate === currentDate) {
+            return startTime > currentTime;
+          }
+
+          // It's the selected date and not today, show all times
+          return true;
+        }
+
+        // If no date selected, use default filtering (current behavior)
+        if (slotDate === currentDate) {
+          return startTime > currentTime; // Only show future times for today
+        }
+
+        return slotDate > currentDate; // Show all slots for future dates
+      });
+
+      console.log(`📅 Booking slots for service "${service.displayName}":`, {
+        serviceType: service.priceType,
+        totalFromDB: availabilityData?.length || 0,
+        afterTimeFiltering: relevantSlots.length,
+        selectedDate,
+        sampleSlots: relevantSlots.slice(0, 3).map(s => ({
+          date: s.date,
+          time: s.start || s.start_time,
+          slotType: s.slot_type
+        }))
+      });
+
+      // Convert availability slots to formatted time options grouped by date
+      const timeOptionsByDate: Record<string, string[]> = {};
+
       relevantSlots.forEach(slot => {
-        // Show the actual time range from database instead of generating hourly slots
-        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
-        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
-        
+        const slotDate = slot.date;
+        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
+        const endTime = slot.end_time.substring(0, 5);
+
+        if (!timeOptionsByDate[slotDate]) {
+          timeOptionsByDate[slotDate] = [];
+        }
+
         const startDisplay = formatTimeForDisplay(startTime);
         const endDisplay = formatTimeForDisplay(endTime);
-        
-        const timeRange = `${startTime}-${endTime}`;
-        const displayRange = `${startDisplay} - ${endDisplay}`;
+
+        // Create time range value and display format
+        // Still keep date in the value for processing, but only show time in display
+        const timeRange = `${slotDate}T${startTime}-${endTime}`;
+        const displayRange = `${startDisplay} - ${endDisplay}`; // Only display time range, not date
         const timeOption = `${timeRange}|${displayRange}`;
-        
-        // Only add if not already in array
-        if (!timeOptions.includes(timeOption)) {
-          timeOptions.push(timeOption);
+
+        if (!timeOptionsByDate[slotDate].includes(timeOption)) {
+          timeOptionsByDate[slotDate].push(timeOption);
         }
       });
 
-      // Remove duplicates using Set and sort by time value
-      const uniqueTimeOptions = Array.from(new Set(timeOptions)).sort((a, b) => {
+      // Flatten and sort all time options
+      const allTimeOptions = Object.values(timeOptionsByDate).flat().sort((a, b) => {
         const timeA = a.split('|')[0];
         const timeB = b.split('|')[0];
         return timeA.localeCompare(timeB);
       });
-      
-      // ONLY use database time slots - no fallbacks
-      setTimeSlots(uniqueTimeOptions);
-      
+
+      setTimeSlots(allTimeOptions);
+
     } catch (error) {
       console.error('Error fetching time slots:', error);
       setTimeSlots([]);
@@ -357,23 +438,98 @@ const BookingPage: React.FC = () => {
       }
 
       // Map form data to booking data
-      // Combine date and time into ISO string for booking_date
+      // Extract date and time from the combined value (e.g., "2024-01-15T09:00-17:00")
       let bookingDateTime = data.date;
       let timeslotStartTime = null;
       let timeslotEndTime = null;
-      
-      if (data.time) {
-        // Extract start and end times from range (e.g., "17:00-20:00" -> start: "17:00", end: "20:00")
-        if (data.time.includes('-')) {
-          const [startTime, endTime] = data.time.split('-');
-          timeslotStartTime = startTime;
-          timeslotEndTime = endTime;
-          bookingDateTime = `${data.date}T${startTime}`;
-        } else {
-          // Fallback for single time value
-          timeslotStartTime = data.time;
-          bookingDateTime = `${data.date}T${data.time}`;
+
+      console.log('🔍 BookingPage - Form data received:', { date: data.date, time: data.time });
+
+      if (data.time && data.time.includes('T')) {
+        // Parse the combined datetime-range format (e.g., "2024-09-18T09:00-17:00")
+        const lastDashIndex = data.time.lastIndexOf('-');
+        if (lastDashIndex === -1) {
+          console.error('❌ No dash separator found in time:', data.time);
+          setSuccessMsg('Error: Invalid time format. Please try again.');
+          setSendingEmail(false);
+          return;
         }
+        const dateTimeStr = data.time.substring(0, lastDashIndex);
+        const endTime = data.time.substring(lastDashIndex + 1);
+        const [dateStr, startTime] = dateTimeStr.split('T');
+
+        if (!dateStr || !startTime || !endTime) {
+          console.error('❌ Missing components after parsing:', { dateStr, startTime, endTime, originalTime: data.time });
+          setSuccessMsg('Error: Invalid time format. Please try again.');
+          setSendingEmail(false);
+          return;
+        }
+
+        // Update booking date from time slot
+        timeslotStartTime = startTime;
+        timeslotEndTime = endTime;
+        // Ensure proper timestamp format with seconds
+        if (!startTime) {
+          console.error('❌ StartTime is undefined:', { dateStr, startTime, endTime });
+          setSuccessMsg('Error: Invalid time selection. Please try again.');
+          setSendingEmail(false);
+          return;
+        }
+        const formattedStartTime = startTime.includes(':') ?
+          (startTime.split(':').length === 2 ? `${startTime}:00` : startTime) :
+          `${startTime}:00:00`;
+        bookingDateTime = `${dateStr}T${formattedStartTime}`;
+
+        console.log('✅ Parsed datetime-range format:', { dateStr, startTime, endTime, bookingDateTime });
+      } else if (data.time && data.time.includes('-')) {
+        // Legacy format: just time range (e.g., "09:00-17:00")
+        const [startTime, endTime] = data.time.split('-');
+
+        if (!startTime || !endTime) {
+          console.error('❌ Missing time components in legacy format:', { startTime, endTime, originalTime: data.time });
+          setSuccessMsg('Error: Invalid time format. Please try again.');
+          setSendingEmail(false);
+          return;
+        }
+
+        timeslotStartTime = startTime;
+        timeslotEndTime = endTime;
+        // Ensure proper timestamp format with seconds
+        const formattedStartTime = startTime.includes(':') ?
+          (startTime.split(':').length === 2 ? `${startTime}:00` : startTime) :
+          `${startTime}:00:00`;
+        bookingDateTime = `${data.date}T${formattedStartTime}`;
+
+        console.log('✅ Parsed time-range format:', { startTime, endTime, bookingDateTime });
+      } else if (data.time) {
+        // Fallback for single time value
+        if (!data.time) {
+          console.error('❌ Empty time value');
+          setSuccessMsg('Error: Please select a time.');
+          setSendingEmail(false);
+          return;
+        }
+
+        timeslotStartTime = data.time;
+        // Ensure proper timestamp format with seconds
+        const formattedTime = data.time.includes(':') ?
+          (data.time.split(':').length === 2 ? `${data.time}:00` : data.time) :
+          `${data.time}:00:00`;
+        bookingDateTime = `${data.date}T${formattedTime}`;
+
+        console.log('✅ Parsed single time format:', { time: data.time, bookingDateTime });
+      } else {
+        // No time selected - use date only with default time
+        bookingDateTime = `${data.date}T09:00:00`; // Default to 9 AM if no time selected
+        console.log('⚠️ No time selected, using default:', { bookingDateTime });
+      }
+
+      // Validate that we have a proper booking date time
+      if (!bookingDateTime || bookingDateTime.includes('undefined')) {
+        console.error('❌ Invalid booking datetime generated:', bookingDateTime);
+        setSuccessMsg('Error: Invalid date/time selection. Please try again.');
+        setSendingEmail(false);
+        return;
       }
 
       // Prepare customer data
@@ -391,9 +547,11 @@ const BookingPage: React.FC = () => {
         // Only include timeslot fields if they have values
         ...(timeslotStartTime && { timeslot_start_time: timeslotStartTime }),
         ...(timeslotEndTime && { timeslot_end_time: timeslotEndTime }),
-        notes: data.notes,
+        notes: data.notes || '',
         status: 'pending'
       };
+
+      console.log('📋 BookingPage - Final booking data:', bookingData);
 
       console.log('📝 BookingPage - About to create booking with:', {
         customerData,
@@ -412,24 +570,126 @@ const BookingPage: React.FC = () => {
       }
 
       if (booking && customer) {
-        console.log('✅ BookingPage - Booking created successfully:', { 
-          booking, 
-          customer, 
+        console.log('✅ BookingPage - Booking created successfully:', {
+          booking,
+          customer,
           paymentRequest: paymentRequest ? 'Created' : 'Not created',
-          paymentRequestDetails: paymentRequest 
+          paymentRequestDetails: paymentRequest
         });
+
+        // Dispatch event to notify admin views of booking update
+        window.dispatchEvent(new CustomEvent('bookingUpdated', {
+          detail: { booking, customer, paymentRequest }
+        }));
         
         if (paymentRequest && paymentRequest.amount > 0) {
           console.log('💳 Payment request created with amount > 0, showing payment interface');
+
+          // Calculate actual service cost based on selected service and time slot
+          let actualServiceCost = paymentRequest.amount; // Fallback to payment request amount
+
+          try {
+            console.log('🔍 Calculating actual service cost for:', data.service);
+
+            // Import pricing functions
+            const { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } = await import('../services/pricingService');
+
+            // Extract base service name and determine time slot type
+            const baseServiceName = extractBaseServiceName(data.service);
+            const timeSlotType = determineTimeSlotType(data.service);
+
+            console.log('📊 Service pricing calculation:', {
+              originalService: data.service,
+              baseServiceName,
+              timeSlotType,
+              serviceLength: data.service.length,
+              baseServiceLength: baseServiceName.length
+            });
+
+            // Fetch service pricing from database
+            const servicePricing = await fetchServicePricing(baseServiceName);
+
+            if (servicePricing) {
+              actualServiceCost = getServicePrice(servicePricing, timeSlotType);
+              console.log('✅ Service cost calculated from database:', {
+                servicePricing,
+                actualServiceCost,
+                originalPaymentAmount: paymentRequest.amount
+              });
+            } else {
+              console.log('⚠️ Service pricing not found in database, trying packages data...');
+
+              // Fallback to packages data
+              try {
+                const { treatmentPackages } = await import('../data/packages');
+                const packageData = treatmentPackages.find(pkg =>
+                  pkg.name.toLowerCase() === baseServiceName.toLowerCase()
+                );
+
+                if (packageData) {
+                  console.log('✅ Found package data:', packageData);
+
+                  if (packageData.price) {
+                    // Flat price service
+                    const { extractNumericPrice } = await import('../services/pricingService');
+                    actualServiceCost = extractNumericPrice(packageData.price);
+                  } else if (timeSlotType === 'in_hour' && packageData.inHourPrice) {
+                    const { extractNumericPrice } = await import('../services/pricingService');
+                    actualServiceCost = extractNumericPrice(packageData.inHourPrice);
+                  } else if (timeSlotType === 'out_of_hour' && packageData.outOfHourPrice) {
+                    const { extractNumericPrice } = await import('../services/pricingService');
+                    actualServiceCost = extractNumericPrice(packageData.outOfHourPrice);
+                  }
+
+                  console.log('✅ Service cost calculated from packages:', {
+                    packageData,
+                    timeSlotType,
+                    actualServiceCost,
+                    originalPaymentAmount: paymentRequest.amount
+                  });
+                } else {
+                  console.log('⚠️ Service not found in packages data either, using payment request amount:', paymentRequest.amount);
+                }
+              } catch (packageError) {
+                console.error('❌ Error accessing packages data:', packageError);
+                console.log('⚠️ Using payment request amount as final fallback:', paymentRequest.amount);
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error calculating service cost:', error);
+            console.log('⚠️ Falling back to payment request amount:', paymentRequest.amount);
+          }
+
+          // Calculate payment options (20% deposit vs full amount) based on actual service cost
+          const fullAmount = actualServiceCost;
+          const depositAmount = Math.round(fullAmount * 0.2 * 100) / 100; // 20% deposit rounded to 2 decimals
+
+          const paymentOptions = {
+            deposit: { amount: depositAmount, percentage: 20 },
+            full: { amount: fullAmount }
+          };
+
+          console.log('💰 Final payment options calculated:', {
+            selectedService: data.service,
+            actualServiceCost,
+            paymentOptions: {
+              deposit: `€${paymentOptions.deposit.amount} (${paymentOptions.deposit.percentage}%)`,
+              full: `€${paymentOptions.full.amount}`
+            },
+            originalPaymentRequestAmount: paymentRequest.amount,
+            calculationSource: actualServiceCost !== paymentRequest.amount ? 'Pricing Service' : 'Payment Request'
+          });
+
           // Show payment interface for immediate payment only if amount > 0
           setPaymentState({
             showPayment: true,
             paymentRequest,
             booking,
             customer,
-            paymentCompleted: false
+            paymentCompleted: false,
+            paymentOptions,
+            selectedPaymentType: 'deposit' // Default to deposit
           });
-          // Removed duplicate success message - booking creation is already shown in the UI
         } else {
           // No payment request created OR payment request with 0 amount
           if (paymentRequest && paymentRequest.amount === 0) {
@@ -452,16 +712,23 @@ const BookingPage: React.FC = () => {
     }
   };
 
-  const handlePayNow = async () => {
+  const handlePayNow = async (paymentType: 'deposit' | 'full') => {
     try {
       // Open the PaymentModal with the payment request
-      if (paymentState.paymentRequest && paymentState.customer) {
+      if (paymentState.paymentRequest && paymentState.customer && paymentState.paymentOptions) {
         // Ensure customer data is properly structured
         const customerData = paymentState.customer;
-        
+
+        // Get the amount based on payment type
+        const selectedAmount = paymentType === 'deposit'
+          ? paymentState.paymentOptions.deposit.amount
+          : paymentState.paymentOptions.full.amount;
+
         // Transform the payment request to match PaymentRequestWithCustomer structure
         const paymentRequestWithCustomer = {
           ...paymentState.paymentRequest,
+          amount: selectedAmount, // Use selected payment amount
+          payment_type: paymentType, // Add payment type for tracking
           customer: {
             first_name: customerData.first_name || customerData.firstName || '',
             last_name: customerData.last_name || customerData.lastName || '',
@@ -470,16 +737,17 @@ const BookingPage: React.FC = () => {
           service_name: paymentState.booking?.package_name,
           booking_date: paymentState.booking?.booking_date
         };
-        
-        console.log('Opening PaymentModal with:', paymentRequestWithCustomer);
-        
+
+        console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
+
         setSelectedPaymentRequest(paymentRequestWithCustomer);
         setShowPaymentModal(true);
-        setSuccessMsg('Opening secure payment modal...');
+        setSuccessMsg(`Opening secure payment modal for ${paymentType === 'deposit' ? '20% deposit' : 'full payment'}...`);
       } else {
-        console.error('Missing payment request or customer data:', { 
-          paymentRequest: paymentState.paymentRequest, 
-          customer: paymentState.customer 
+        console.error('Missing payment request or customer data:', {
+          paymentRequest: paymentState.paymentRequest,
+          customer: paymentState.customer,
+          paymentOptions: paymentState.paymentOptions
         });
         setSuccessMsg('Payment Error: Missing payment information. Please try again.');
       }
@@ -502,7 +770,16 @@ const BookingPage: React.FC = () => {
     setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
     setSuccessMsg('Payment completed successfully! Your booking is confirmed.');
     setCountdown(20);
-    
+
+    // Dispatch event to notify admin views of payment completion
+    window.dispatchEvent(new CustomEvent('bookingUpdated', {
+      detail: {
+        booking: paymentState.booking,
+        customer: paymentState.customer,
+        paymentCompleted: true
+      }
+    }));
+
     // Start countdown timer
     const countdownInterval = setInterval(() => {
       setCountdown(prev => {
@@ -619,9 +896,9 @@ const BookingPage: React.FC = () => {
           )}
 
           {/* Payment Modal */}
-          {paymentState.showPayment && !paymentState.paymentCompleted && (
+          {paymentState.showPayment && !paymentState.paymentCompleted && paymentState.paymentOptions && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-              <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto transform animate-slideUp">
+              <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto transform animate-slideUp">
                 <div className="p-6 md:p-8">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-gray-800">Complete Your Payment</h2>
@@ -632,27 +909,78 @@ const BookingPage: React.FC = () => {
                       <X className="h-6 w-6" />
                     </button>
                   </div>
-                  
-                  <div className="text-center">
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+
+                  <div className="space-y-6">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <p className="text-green-800 font-medium">✅ Booking Created Successfully!</p>
                       <p className="text-green-600 text-sm mt-1">
                         Service: {paymentState.booking?.package_name}
                       </p>
+                      {paymentState.booking?.booking_date && (
+                        <p className="text-green-600 text-sm">
+                          Date & Time: {new Date(paymentState.booking.booking_date).toLocaleString('en-IE')}
+                        </p>
+                      )}
                     </div>
-                    
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                      <h3 className="font-semibold text-blue-900 mb-2">Payment Required</h3>
-                      <p className="text-blue-800 text-sm mb-3">
-                        A deposit payment of <strong>€{paymentState.paymentRequest?.amount}</strong> is required to confirm your booking.
-                      </p>
-                      <Button
-                        onClick={handlePayNow}
-                        variant="primary"
-                        className="w-full"
-                      >
-                        Pay Now - €{paymentState.paymentRequest?.amount}
-                      </Button>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-blue-900 mb-4 text-center">Choose Your Payment Option</h3>
+
+                      <div className="space-y-4">
+                        {/* 20% Deposit Option */}
+                        <div className="border-2 border-primary-300 rounded-lg p-4 bg-primary-25">
+                          <div className="flex justify-between items-center mb-3">
+                            <div>
+                              <h4 className="font-semibold text-primary-800">20% Deposit</h4>
+                              <p className="text-sm text-primary-600">Secure your booking now, pay the rest later</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-primary-700">
+                                €{paymentState.paymentOptions.deposit.amount}
+                              </div>
+                              <div className="text-xs text-primary-600">
+                                of €{paymentState.paymentOptions.full.amount} total
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => handlePayNow('deposit')}
+                            variant="primary"
+                            className="w-full"
+                          >
+                            Pay 20% Deposit - €{paymentState.paymentOptions.deposit.amount}
+                          </Button>
+                        </div>
+
+                        {/* Full Payment Option */}
+                        <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-25">
+                          <div className="flex justify-between items-center mb-3">
+                            <div>
+                              <h4 className="font-semibold text-gray-800">Full Payment</h4>
+                              <p className="text-sm text-gray-600">Pay the complete amount upfront</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-gray-700">
+                                €{paymentState.paymentOptions.full.amount}
+                              </div>
+                              <div className="text-xs text-green-600">
+                                ✓ No remaining balance
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => handlePayNow('full')}
+                            variant="secondary"
+                            className="w-full"
+                          >
+                            Pay Full Amount - €{paymentState.paymentOptions.full.amount}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 text-center text-sm text-blue-700 bg-blue-100 rounded p-2">
+                        💡 Both options will immediately confirm your booking
+                      </div>
                     </div>
 
                     <div className="text-center">
@@ -781,7 +1109,28 @@ const BookingPage: React.FC = () => {
                   <input
                     type="date"
                     id="date"
-                    {...register('date', { required: 'Please select a date' })}
+                    min={new Date().toISOString().split('T')[0]} // Prevent past dates
+                    {...register('date', {
+                      required: 'Please select a date',
+                      validate: (value) => {
+                        if (!value) return 'Please select a date';
+
+                        const selectedDate = new Date(value + 'T00:00:00');
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (selectedDate < today) {
+                          return 'Cannot book appointments in the past';
+                        }
+
+                        // If selected date is today, validation will be done when time slots are loaded
+                        if (selectedDate.getTime() === today.getTime()) {
+                          return true;
+                        }
+
+                        return true;
+                      }
+                    })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   />
                   {errors.date && (
@@ -791,11 +1140,103 @@ const BookingPage: React.FC = () => {
                 
                 <div>
                   <label htmlFor="time" className="block text-sm font-medium text-neutral-700 mb-1">
-                    Preferred Time *
+                    Available Times for Selected Date *
                   </label>
                   <select
                     id="time"
-                    {...register('time', { required: 'Please select a time' })}
+                    {...register('time', {
+                      required: 'Please select a time',
+                      validate: (value) => {
+                        if (!value) return 'Please select a time';
+
+                        try {
+                          console.log('🔍 Time validation - Input value:', value);
+
+                          // Parse the datetime-range format (e.g., "2024-01-15T09:00-17:00")
+                          if (value.includes('T') && value.includes('-')) {
+                            // Find the last occurrence of '-' to properly split datetime and end time
+                            const lastDashIndex = value.lastIndexOf('-');
+                            if (lastDashIndex === -1) {
+                              console.log('❌ Time validation - No dash separator found');
+                              return 'Invalid time slot format';
+                            }
+
+                            const dateTimeStr = value.substring(0, lastDashIndex);
+                            const endTimeStr = value.substring(lastDashIndex + 1);
+
+                            console.log('🔍 Time validation - Split result:', { dateTimeStr, endTimeStr });
+
+                            if (!dateTimeStr.includes('T')) {
+                              console.log('❌ Time validation - No T separator in datetime string');
+                              return 'Invalid time slot format';
+                            }
+
+                            // Basic validation of end time format
+                            if (!endTimeStr || endTimeStr.length < 4) {
+                              console.log('❌ Time validation - Invalid end time format:', endTimeStr);
+                              return 'Invalid time slot format';
+                            }
+
+                            const [dateStr, timeStr] = dateTimeStr.split('T');
+
+                            if (!dateStr || !timeStr) {
+                              console.log('❌ Time validation - Missing date or time component:', { dateStr, timeStr });
+                              return 'Invalid time slot format';
+                            }
+
+                            // Additional validation for date format (YYYY-MM-DD)
+                            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                              console.log('❌ Time validation - Invalid date format:', dateStr);
+                              return 'Invalid date format';
+                            }
+
+                            // Additional validation for time format (HH:MM)
+                            if (!/^\d{2}:\d{2}$/.test(timeStr)) {
+                              console.log('❌ Time validation - Invalid time format:', timeStr);
+                              return 'Invalid time format';
+                            }
+
+                            // Add seconds (we know timeStr is HH:MM format from regex validation)
+                            const formattedTimeStr = `${timeStr}:00`;
+
+                            const selectedDateTime = new Date(`${dateStr}T${formattedTimeStr}`);
+                            const now = new Date();
+
+                            console.log('✅ Time validation - Parsed datetime:', {
+                              dateStr,
+                              timeStr,
+                              formattedTimeStr,
+                              selectedDateTime: selectedDateTime.toISOString(),
+                              now: now.toISOString()
+                            });
+
+                            if (isNaN(selectedDateTime.getTime())) {
+                              console.log('❌ Time validation - Invalid date object created');
+                              return 'Invalid date/time selected';
+                            }
+
+                            if (selectedDateTime <= now) {
+                              console.log('❌ Time validation - Selected time is in the past');
+                              return 'Selected time slot is in the past or too close to current time';
+                            }
+
+                            console.log('✅ Time validation - Success');
+                            return true;
+                          }
+
+                          // For other formats (legacy or simple time), allow through
+                          // This handles cases like "09:00-17:00" or single time values
+                          console.log('✅ Time validation - Non-datetime format, allowing through:', value);
+                          return true;
+                        } catch (error) {
+                          console.error('❌ Time validation error:', error);
+                          // In case of any validation errors, allow through to prevent form blocking
+                          // This ensures the booking flow continues even if validation fails
+                          console.log('⚠️ Time validation - Error occurred, allowing through to prevent blocking');
+                          return true;
+                        }
+                      }
+                    })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   >
                     <option value="">Select a time</option>

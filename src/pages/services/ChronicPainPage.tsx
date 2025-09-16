@@ -106,12 +106,12 @@ const ChronicPainPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/5473307/pexels-photo-5473307.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Chronic.png?auto=compress&cs=tinysrgb&w=800&h=600"
                   alt="Chronic pain management therapy"
-                  className="rounded-lg shadow-2xl w-full h-[400px] object-cover"
+                  className="rounded-lg shadow-2xl w-full h-[500px] object-contain bg-secondary-700"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/6111370/pexels-photo-6111370.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/Chronic.png?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
                 <div className="absolute -bottom-6 -left-6 bg-white text-secondary-600 p-4 rounded-lg shadow-lg">
@@ -176,12 +176,12 @@ const ChronicPainPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="https://images.pexels.com/photos/5473310/pexels-photo-5473310.jpeg?auto=compress&cs=tinysrgb&w=800&h=600"
+                  src="/Chronic.png?auto=compress&cs=tinysrgb&w=800&h=600"
                   alt="Patient consultation for chronic pain"
-                  className="rounded-lg shadow-lg w-full h-[400px] object-cover"
+                  className="rounded-lg shadow-lg w-full h-[500px] object-contain bg-neutral-100"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = "https://images.pexels.com/photos/6749773/pexels-photo-6749773.jpeg?auto=compress&cs=tinysrgb&w=800&h=600";
+                    target.src = "/Chronic.png?auto=compress&cs=tinysrgb&w=800&h=600";
                   }}
                 />
               </motion.div>

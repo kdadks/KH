@@ -14,9 +14,7 @@ import {
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
 import { decryptCustomerDataForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
-import { DefaultScheduleManager } from './availability/DefaultScheduleManager';
-import { generateSchedulePreview, applyDefaultScheduleToRange } from './availability/utils';
-import type { SchedulePreview } from './availability/types';
+import { QuickScheduleGenerator } from './availability/QuickScheduleGenerator';
 
 const localizer = momentLocalizer(moment);
 
@@ -26,6 +24,7 @@ interface AvailabilitySlot {
   start?: string; // legacy
   start_time?: string; // new schema
   end_time: string;
+  is_available?: boolean; // flag to mark slot as unavailable when booked
 }
 
 interface BookedSlot {
@@ -34,6 +33,8 @@ interface BookedSlot {
   package_name: string;
   booking_date: string;
   status: string;
+  timeslot_start_time?: string;
+  timeslot_end_time?: string;
   appointment_date?: string; // Optional fallback fields
   appointment_time?: string; // Optional fallback fields
 }
@@ -71,12 +72,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const [newSlotEndTime, setNewSlotEndTime] = useState('');
   const [newSlotError, setNewSlotError] = useState('');
 
-  // Default schedule apply state
-  const [applyStartDate, setApplyStartDate] = useState('');
-  const [applyEndDate, setApplyEndDate] = useState('');
-  const [preview, setPreview] = useState<SchedulePreview | null>(null);
-  const [isPreviewing, setIsPreviewing] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
+  // State management cleaned up - old schedule generation removed
 
   const fetchAvailabilitySlots = useCallback(async () => {
     try {
@@ -108,7 +104,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       // Use the simple approach that works reliably - fetch bookings and customers separately
       const { data: simpleData, error: simpleError } = await supabase
         .from('bookings')
-        .select('id, package_name, booking_date, status, customer_id')
+        .select('id, package_name, booking_date, status, customer_id, timeslot_start_time, timeslot_end_time')
         .in('status', ['confirmed', 'completed'])
         .order('booking_date', { ascending: true })
         .limit(500); // Add limit for performance
@@ -149,6 +145,8 @@ export const Availability: React.FC<AvailabilityProps> = () => {
           package_name: booking.package_name,
           booking_date: booking.booking_date,
           status: booking.status,
+          timeslot_start_time: booking.timeslot_start_time,
+          timeslot_end_time: booking.timeslot_end_time,
           appointment_date: undefined,
           appointment_time: undefined
         };
@@ -156,6 +154,15 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
       setBookedSlots(transformedSimpleData);
       console.log('✅ Booked slots set:', transformedSimpleData.length, 'processed bookings');
+      console.log('📋 Booked slots details:', transformedSimpleData.map(slot => ({
+        id: slot.id,
+        customer: slot.customer_name,
+        service: slot.package_name,
+        booking_date: slot.booking_date,
+        status: slot.status,
+        timeslot_start: slot.timeslot_start_time,
+        timeslot_end: slot.timeslot_end_time
+      })));
       
       // Log admin access for GDPR audit trail
       const customerIds = transformedSimpleData
@@ -179,6 +186,41 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   useEffect(() => {
     fetchAvailabilitySlots();
     fetchBookedSlots();
+  }, [fetchAvailabilitySlots, fetchBookedSlots]);
+
+  // Auto-refresh data every 30 seconds for real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAvailabilitySlots();
+      fetchBookedSlots();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchAvailabilitySlots, fetchBookedSlots]);
+
+  // Listen for booking updates from other parts of the app
+  useEffect(() => {
+    const handleBookingUpdate = () => {
+      console.log('🔄 Availability view received bookingUpdated event - refreshing data...');
+      fetchAvailabilitySlots();
+      fetchBookedSlots();
+    };
+
+    const handleAvailabilityUpdate = () => {
+      console.log('🔄 Availability view received availabilityUpdated event - refreshing data...');
+      fetchAvailabilitySlots();
+      fetchBookedSlots();
+    };
+
+    console.log('🎧 Availability view setting up event listeners...');
+    window.addEventListener('bookingUpdated', handleBookingUpdate);
+    window.addEventListener('availabilityUpdated', handleAvailabilityUpdate);
+
+    return () => {
+      console.log('🎧 Availability view removing event listeners...');
+      window.removeEventListener('bookingUpdated', handleBookingUpdate);
+      window.removeEventListener('availabilityUpdated', handleAvailabilityUpdate);
+    };
   }, [fetchAvailabilitySlots, fetchBookedSlots]);
 
   // Helpers
@@ -207,9 +249,27 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : t;
   };
 
-  // Helper function to extract date and time from booking_date
+  // Helper function to extract date and time from booking_date without timezone conversion
   const getBookingDateTime = (booking: BookedSlot) => {
     if (booking.booking_date) {
+      console.log('🔍 Processing booking_date for availability display:', booking.booking_date);
+
+      // Try to parse without timezone conversion first
+      if (booking.booking_date.includes('T')) {
+        const [dateStr, timeWithZone] = booking.booking_date.split('T');
+        const timeStr = timeWithZone.split(':').slice(0, 2).join(':'); // Get HH:MM, ignore seconds and timezone
+
+        if (dateStr && timeStr) {
+          console.log('✅ Direct parsing without timezone conversion:', { dateStr, timeStr });
+          return {
+            date: dateStr,
+            time: timeStr
+          };
+        }
+      }
+
+      // Fallback to Date object parsing (may cause timezone shift)
+      console.log('⚠️ Falling back to Date object parsing (may cause timezone shift)');
       const bookingDateTime = new Date(booking.booking_date);
       if (!isNaN(bookingDateTime.getTime())) {
         const year = bookingDateTime.getFullYear();
@@ -217,7 +277,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         const day = String(bookingDateTime.getDate()).padStart(2, '0');
         const hours = String(bookingDateTime.getHours()).padStart(2, '0');
         const minutes = String(bookingDateTime.getMinutes()).padStart(2, '0');
-        
+
         return {
           date: `${year}-${month}-${day}`,
           time: `${hours}:${minutes}`
@@ -240,27 +300,138 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const availableSlotEvents = availabilitySlots.map(slot => {
     const startFmt = formatTime(getSlotStart(slot));
     const endFmt = formatTime(slot.end_time);
-    
-    // Check if this slot conflicts with any booked slot
-    const isBooked = bookedSlots.some(booking => {
+
+    // Find specific booking that matches this slot
+    const matchingBooking = bookedSlots.find(booking => {
       const bookingDateTime = getBookingDateTime(booking);
       if (!bookingDateTime) return false;
-      
-      return bookingDateTime.date === slot.date && 
-        bookingDateTime.time >= getSlotStart(slot) && 
-             bookingDateTime.time < slot.end_time;
+
+      const isDateMatch = bookingDateTime.date === slot.date;
+      const isTimeInRange = bookingDateTime.time >= getSlotStart(slot) && bookingDateTime.time < slot.end_time;
+
+      console.log('🔍 Checking slot match:', {
+        slotDate: slot.date,
+        slotStart: getSlotStart(slot),
+        slotEnd: slot.end_time,
+        bookingDate: bookingDateTime.date,
+        bookingTime: bookingDateTime.time,
+        bookingId: booking.id,
+        customerName: booking.customer_name,
+        isDateMatch,
+        isTimeInRange,
+        finalMatch: isDateMatch && isTimeInRange
+      });
+
+      // Check if booking falls within this availability slot
+      return bookingDateTime.date === slot.date &&
+        bookingDateTime.time >= getSlotStart(slot) &&
+        bookingDateTime.time < slot.end_time;
     });
+
+    // A slot is considered booked if:
+    // 1. There's a matching booking, OR
+    // 2. The availability slot is marked as unavailable in the database
+    const isBooked = !!matchingBooking || slot.is_available === false;
+
+    console.log('🎯 Slot booking status:', {
+      slotId: slot.id,
+      hasMatchingBooking: !!matchingBooking,
+      isAvailableFlag: slot.is_available,
+      finalIsBooked: isBooked
+    });
+
+    // Create title with booking details if booked
+    let title = `${startFmt} - ${endFmt}`;
+    if (isBooked) {
+      if (matchingBooking) {
+        // Has booking details - show customer info
+        const bookingDateTime = getBookingDateTime(matchingBooking);
+        const bookingEndTime = matchingBooking.timeslot_end_time ||
+          (bookingDateTime ? (() => {
+            const [hours, minutes] = bookingDateTime.time.split(':').map(Number);
+            const endMinutes = minutes + 50; // Default 50 minutes
+            const endHours = hours + Math.floor(endMinutes / 60);
+            const finalMinutes = endMinutes % 60;
+            return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+          })() : '');
+
+        title = `${bookingDateTime?.time || ''} - ${bookingEndTime} | ${matchingBooking.customer_name} | ${matchingBooking.package_name}`;
+
+        console.log('✅ Slot is booked with details:', {
+          slotId: slot.id,
+          customer: matchingBooking.customer_name,
+          service: matchingBooking.package_name,
+          time: `${bookingDateTime?.time} - ${bookingEndTime}`
+        });
+      } else if (slot.is_available === false) {
+        // Slot marked unavailable - try to find ANY booking for this date/time range
+        console.log('🔍 Slot marked unavailable but no exact match found, searching all bookings...');
+
+        const anyBookingForSlot = bookedSlots.find(booking => {
+          const bookingDateTime = getBookingDateTime(booking);
+          if (!bookingDateTime) return false;
+
+          // Check if booking is on the same date and overlaps with slot time range
+          if (bookingDateTime.date !== slot.date) return false;
+
+          const bookingStart = bookingDateTime.time;
+          const slotStart = getSlotStart(slot);
+          const slotEnd = slot.end_time;
+
+          // Check if booking time overlaps with slot (more flexible matching)
+          const isOverlapping = bookingStart >= slotStart && bookingStart < slotEnd;
+
+          console.log('🔍 Checking any booking overlap:', {
+            bookingId: booking.id,
+            bookingDate: bookingDateTime.date,
+            bookingStart,
+            slotStart,
+            slotEnd,
+            isOverlapping
+          });
+
+          return isOverlapping;
+        });
+
+        if (anyBookingForSlot) {
+          const bookingDateTime = getBookingDateTime(anyBookingForSlot);
+          const bookingEndTime = anyBookingForSlot.timeslot_end_time ||
+            (bookingDateTime ? (() => {
+              const [hours, minutes] = bookingDateTime.time.split(':').map(Number);
+              const endMinutes = minutes + 50;
+              const endHours = hours + Math.floor(endMinutes / 60);
+              const finalMinutes = endMinutes % 60;
+              return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+            })() : '');
+
+          title = `${bookingDateTime?.time || ''} - ${bookingEndTime} | ${anyBookingForSlot.customer_name} | ${anyBookingForSlot.package_name}`;
+
+          console.log('✅ Found booking for unavailable slot:', {
+            slotId: slot.id,
+            customer: anyBookingForSlot.customer_name,
+            service: anyBookingForSlot.package_name
+          });
+        } else {
+          // Marked as unavailable but no booking details found
+          title = `${startFmt} - ${endFmt} (Unavailable)`;
+          console.log('⚠️ Slot marked unavailable but no booking found:', {
+            slotId: slot.id,
+            reason: 'is_available = false, no matching booking'
+          });
+        }
+      }
+    }
 
     return {
       id: `available-${slot.id}`,
-      title: isBooked ? `${startFmt} - ${endFmt} (Booked)` : `${startFmt} - ${endFmt}`,
+      title: title,
       start: new Date(`${slot.date}T${getSlotStart(slot)}`),
       end: new Date(`${slot.date}T${slot.end_time}`),
-      resource: slot,
+      resource: { ...slot, booking: matchingBooking },
       type: isBooked ? 'booked-slot' : 'available-slot',
       style: {
-        backgroundColor: isBooked ? '#9CA3AF' : '#10B981',
-        borderColor: isBooked ? '#6B7280' : '#059669',
+        backgroundColor: isBooked ? '#EF4444' : '#10B981', // Red for booked, green for available
+        borderColor: isBooked ? '#DC2626' : '#059669',
         color: 'white',
         fontSize: '0.7rem',
         lineHeight: '0.9rem',
@@ -289,9 +460,19 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       const bookingDateTime = getBookingDateTime(booking);
       if (!bookingDateTime) return null;
 
-      // Assume 1-hour duration if we don't have end time
+      // Use actual booking end time if available, otherwise calculate from timeslot fields
       const startTime = new Date(`${bookingDateTime.date}T${bookingDateTime.time}:00`);
-      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+      let endTime: Date;
+
+      if (booking.timeslot_end_time) {
+        // Use the actual booking end time
+        endTime = new Date(`${bookingDateTime.date}T${booking.timeslot_end_time}:00`);
+        console.log('✅ Using actual booking end time:', booking.timeslot_end_time);
+      } else {
+        // Fallback: assume 50-minute session (therapy standard)
+        endTime = new Date(startTime.getTime() + 50 * 60 * 1000);
+        console.log('⚠️ No end time found, assuming 50 minutes');
+      }
 
       return {
         id: `booking-${booking.id}`,
@@ -448,9 +629,21 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
       if (error) throw error;
 
-      showSuccess('Success', `${slotIds.length} availability slots deleted successfully`);
+      // Close all modals
       setShowDeleteDayModal(false);
+      setShowMultiSlotsModal(false);
+      setShowEditModal(false);
+      
+      // Clear all modal-related state
       setDateToDeleteSlots('');
+      setSelectedDateSlots([]);
+      setSlotToEdit(null);
+      
+      // Navigate to overview tab
+      setMainTab('overview');
+      
+      // Show success message after modal closing
+      showSuccess('Success', `${slotIds.length} availability slots deleted successfully`);
       
       // Refresh the data
       await fetchAvailabilitySlots();
@@ -603,86 +796,13 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       ) : (
         <>
           {/* Default Schedule Manager */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Default Schedule</h3>
-            <DefaultScheduleManager />
-          </div>
-          {/* Apply Default Schedule to Date Range */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Apply Default Schedule</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  value={applyStartDate}
-                  onChange={(e) => setApplyStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                <input
-                  type="date"
-                  value={applyEndDate}
-                  onChange={(e) => setApplyEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={async () => {
-                    if (!applyStartDate || !applyEndDate) return;
-                    setIsPreviewing(true);
-                    try {
-                      const p = await generateSchedulePreview(null, applyStartDate, applyEndDate, true);
-                      setPreview(p);
-                    } catch (err) {
-                      showError('Error', 'Failed to generate preview');
-                    } finally {
-                      setIsPreviewing(false);
-                    }
-                  }}
-                  className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200"
-                  disabled={!applyStartDate || !applyEndDate || isPreviewing}
-                >
-                  {isPreviewing ? 'Previewing…' : 'Preview'}
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!applyStartDate || !applyEndDate) return;
-                    setIsApplying(true);
-                    try {
-                      const count = await applyDefaultScheduleToRange(applyStartDate, applyEndDate);
-                      showSuccess('Schedule Applied', `${count} slots created/updated`);
-                      setPreview(null);
-                      await fetchAvailabilitySlots();
-                    } catch (err) {
-                      showError('Error', 'Failed to apply default schedule');
-                    } finally {
-                      setIsApplying(false);
-                    }
-                  }}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-                  disabled={!applyStartDate || !applyEndDate || isApplying}
-                >
-                  {isApplying ? 'Applying…' : 'Apply'}
-                </button>
-              </div>
-            </div>
-            {preview && (
-              <div className="mt-4 p-4 border rounded-lg bg-gray-50 text-sm text-gray-700">
-                <div>
-                  Preview: {preview.totalSlots} slots across {preview.daysAffected} days
-                </div>
-                {preview.conflicts && preview.conflicts.length > 0 && (
-                  <div className="mt-2 text-red-700">
-                    {preview.conflicts.length} day(s) have existing slots that may be affected
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Quick Schedule Generator - Redesigned Schedule Creation */}
+          <QuickScheduleGenerator
+            onScheduleGenerated={async () => {
+              // Refresh availability slots after generation
+              await fetchAvailabilitySlots();
+            }}
+          />
         </>
       )}
 
@@ -911,31 +1031,96 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {slotsForDate.map((slot) => {
-                              // Check if this slot is booked
-                              const isBooked = bookedSlots.some(booking => {
+                              // Find specific booking that matches this slot (same logic as calendar view)
+                              const matchingBooking = bookedSlots.find(booking => {
                                 const bookingDateTime = getBookingDateTime(booking);
                                 if (!bookingDateTime) return false;
-                                
-                                return bookingDateTime.date === slot.date && 
-                                  bookingDateTime.time >= getSlotStart(slot) && 
+
+                                return bookingDateTime.date === slot.date &&
+                                  bookingDateTime.time >= getSlotStart(slot) &&
                                   bookingDateTime.time < slot.end_time;
                               });
+
+                              // A slot is considered booked if there's a matching booking OR it's marked unavailable
+                              const isBooked = !!matchingBooking || slot.is_available === false;
                               
                               return (
                                 <div
                                   key={slot.id || `${slot.date}-${getSlotStart(slot)}-${slot.end_time}`}
                                   className={`p-3 border rounded-lg relative transition-colors ${
-                                    isBooked 
-                                      ? 'border-gray-300 bg-gray-50' 
+                                    isBooked
+                                      ? 'border-red-300 bg-red-50'
                                       : 'border-emerald-200 bg-emerald-50 hover:border-emerald-300'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className={`text-sm font-medium ${isBooked ? 'text-gray-500' : 'text-emerald-600'}`}>
-                                        {formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}
-                                        {isBooked && ' (Booked)'}
-                                      </p>
+                                    <div className="flex-1">
+                                      {isBooked ? (
+                                        (() => {
+                                          // Try to find booking details - either exact match or any overlapping booking
+                                          let displayBooking = matchingBooking;
+
+                                          if (!displayBooking && slot.is_available === false) {
+                                            // Look for any booking that overlaps with this slot
+                                            displayBooking = bookedSlots.find(booking => {
+                                              const bookingDateTime = getBookingDateTime(booking);
+                                              if (!bookingDateTime || bookingDateTime.date !== slot.date) return false;
+
+                                              const bookingStart = bookingDateTime.time;
+                                              const slotStart = getSlotStart(slot);
+                                              const slotEnd = slot.end_time;
+
+                                              return bookingStart >= slotStart && bookingStart < slotEnd;
+                                            });
+                                          }
+
+                                          if (displayBooking) {
+                                            return (
+                                              <div>
+                                                <p className="text-sm font-medium text-red-700 mb-1">
+                                                  📅 BOOKED
+                                                </p>
+                                                <p className="text-xs text-gray-700">
+                                                  <strong>Customer:</strong> {displayBooking.customer_name}
+                                                </p>
+                                                <p className="text-xs text-gray-700">
+                                                  <strong>Service:</strong> {displayBooking.package_name}
+                                                </p>
+                                                <p className="text-xs text-gray-600">
+                                                  <strong>Time:</strong> {(() => {
+                                                    const bookingDateTime = getBookingDateTime(displayBooking);
+                                                    const bookingEndTime = displayBooking.timeslot_end_time ||
+                                                      (bookingDateTime ? (() => {
+                                                        const [hours, minutes] = bookingDateTime.time.split(':').map(Number);
+                                                        const endMinutes = minutes + 50;
+                                                        const endHours = hours + Math.floor(endMinutes / 60);
+                                                        const finalMinutes = endMinutes % 60;
+                                                        return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+                                                      })() : '');
+                                                    return `${bookingDateTime?.time || ''} - ${bookingEndTime}`;
+                                                  })()}
+                                                </p>
+                                              </div>
+                                            );
+                                          } else {
+                                            return (
+                                              <div>
+                                                <p className="text-sm font-medium text-red-700 mb-1">
+                                                  📅 UNAVAILABLE
+                                                </p>
+                                                <p className="text-xs text-gray-600">
+                                                  This slot is not available for booking
+                                                </p>
+                                              </div>
+                                            );
+                                          }
+                                        })()
+                                      ) : (
+                                        <p className={`text-sm font-medium ${isBooked ? 'text-gray-500' : 'text-emerald-600'}`}>
+                                          {formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}
+                                          {!isBooked && ' (Available)'}
+                                        </p>
+                                      )}
                                     </div>
                                     <div className="flex items-center space-x-2">
                                       <Clock className={`w-4 h-4 ${isBooked ? 'text-gray-400' : 'text-emerald-500'}`} />

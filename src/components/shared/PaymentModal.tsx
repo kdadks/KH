@@ -5,6 +5,7 @@ import { createSumUpCheckoutSession } from '../../utils/sumupRealApiImplementati
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
 import { getActiveSumUpGateway } from '../../utils/paymentManagementUtils';
 import { useToast } from './toastContext';
+import { supabase } from '../../supabaseClient';
 
 interface SumUpPaymentFormProps {
   amount: number;
@@ -289,28 +290,75 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       console.log('Processing payment request:', paymentData);
 
+      // Update payment request amount in database if it differs (for full payments)
+      const { data: currentPaymentRequest } = await supabase
+        .from('payment_requests')
+        .select('amount')
+        .eq('id', paymentRequest.id)
+        .single();
+
+      if (currentPaymentRequest && currentPaymentRequest.amount !== paymentRequest.amount) {
+        console.log(`🔄 Updating payment request amount from €${currentPaymentRequest.amount} to €${paymentRequest.amount}`);
+
+        const { error: updateError } = await supabase
+          .from('payment_requests')
+          .update({
+            amount: paymentRequest.amount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', paymentRequest.id);
+
+        if (updateError) {
+          console.error('❌ Failed to update payment request amount:', updateError);
+          throw new Error('Failed to update payment amount');
+        } else {
+          console.log('✅ Payment request amount updated successfully');
+        }
+      }
+
       // Process the payment request (updates status to 'paid' and creates payment record)
       const result = await processPaymentRequest(paymentRequest.id, paymentData);
 
       if (result.success) {
         setCurrentStep('success');
         showSuccess('Payment Successful!', 'Your payment has been processed and moved to payment history.');
-        
+
+        // Dispatch events to notify admin views of payment completion
+        window.dispatchEvent(new CustomEvent('bookingUpdated', {
+          detail: {
+            paymentRequest: paymentRequest,
+            paymentCompleted: true,
+            paymentStatus: 'paid'
+          }
+        }));
+
+        // Also dispatch specific booking status update event
+        if (paymentRequest.booking_id) {
+          window.dispatchEvent(new CustomEvent('bookingStatusUpdated', {
+            detail: {
+              bookingId: paymentRequest.booking_id,
+              newStatus: 'confirmed',
+              paymentRequestId: paymentRequest.id,
+              customerId: paymentRequest.customer_id
+            }
+          }));
+        }
+
         // Close modal and handle redirect after a short delay
         setTimeout(() => {
           onPaymentComplete?.();
           onClose();
-          
+
           // For dashboard context, trigger a data refresh event instead of redirect
           if (context === 'dashboard') {
             // Dispatch custom event to refresh dashboard data
             window.dispatchEvent(new CustomEvent('refreshDashboard'));
             return;
           }
-          
+
           // Get redirect URL for successful payment (non-dashboard contexts)
           const redirectUrl = getRedirectUrl(true);
-          
+
           // Perform redirect if needed
           if (redirectUrl) {
             // Use window.location.href for email and booking contexts
