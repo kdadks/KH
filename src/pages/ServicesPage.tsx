@@ -72,7 +72,9 @@ const ServicesPage: React.FC = () => {
 			// Transform database services to Package format
 			const transformedServices: Package[] = data?.map(service => ({
 				name: service.name,
-				category: service.category,
+				categories: Array.isArray(service.category) ? service.category : 
+				           (service.category ? [service.category] : []),
+				category: service.category, // Keep for backward compatibility
 				price: service.price || undefined,
 				inHourPrice: service.in_hour_price || undefined,
 				outOfHourPrice: service.out_of_hour_price || undefined,
@@ -82,8 +84,13 @@ const ServicesPage: React.FC = () => {
 
 			setServices(transformedServices);
 
-			// Get unique categories from the data
-			const uniqueCategories = Array.from(new Set(transformedServices.map(service => service.category)))
+			// Get unique categories from the data (flatten all categories from arrays)
+			const allCategories = transformedServices.flatMap(service => 
+				Array.isArray(service.categories) ? service.categories : 
+				(service.category ? [service.category] : [])
+			);
+			
+			const uniqueCategories = Array.from(new Set(allCategories))
 				.filter(Boolean) // Remove any null/undefined categories
 				.sort((a, b) => {
 					// Custom sort order: Packages → Individual → Rehab & Fitness → Corporate Packages → Classes → Online Session
@@ -143,7 +150,12 @@ const ServicesPage: React.FC = () => {
 	};
 
 	const filtered: Package[] = services.filter(
-		(p) => p.category === activeCategory
+		(p) => {
+			// Check if service has the active category in its categories array
+			const serviceCategories = Array.isArray(p.categories) ? p.categories : 
+			                        (p.category ? [p.category] : []);
+			return serviceCategories.includes(activeCategory as any);
+		}
 	);
 
 	return (

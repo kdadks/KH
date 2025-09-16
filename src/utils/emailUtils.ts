@@ -281,19 +281,25 @@ export const sendInvoiceNotificationEmail = async (
     amount: number;
     due_date: string;
     payment_url?: string;
+    service_name?: string;
   }
-): Promise<boolean> => {
+): Promise<{ success: boolean; error?: string }> => {
   try {
-    return await smtpSendInvoiceNotification(customerEmail, {
+    const result = await smtpSendInvoiceNotification(customerEmail, {
       customer_name: data.customer_name,
       invoice_number: data.invoice_number,
       amount: data.amount,
       due_date: data.due_date,
-      payment_url: data.payment_url
+      service_name: data.service_name
     });
+
+    return result;
   } catch (error) {
     console.error('Error sending invoice notification email:', error);
-    return false;
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 };
 
@@ -509,3 +515,6 @@ export const sendBookingCapturedNotification = async (
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 };
+
+// Export the admin booking confirmation email function directly
+export { sendAdminBookingConfirmationEmail };

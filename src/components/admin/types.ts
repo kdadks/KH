@@ -7,7 +7,8 @@ export type Package = {
   inHourPrice?: string;
   outOfHourPrice?: string;
   features: string[];
-  category?: string;
+  categories?: string[]; // Changed from category?: string to support multiple categories
+  category?: string; // Keep for backward compatibility during migration
   description?: string;
   isActive?: boolean;
   bookingType?: 'book_now' | 'contact_me';
@@ -19,7 +20,8 @@ export type Package = {
 export type Service = {
   id: number;
   name: string;
-  category?: string;
+  categories?: string[]; // Changed from category?: string to support multiple categories
+  category?: string; // Keep for backward compatibility during migration
   price?: string;
   in_hour_price?: string;
   out_of_hour_price?: string;

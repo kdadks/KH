@@ -25,6 +25,8 @@ import {
  */
 async function getServicePriceFromDatabase(serviceName: string): Promise<number | null> {
   try {
+    console.log('🔍 getServicePriceFromDatabase called with:', serviceName);
+
     // First check if this service should skip payment request creation
     const skipPatterns = [
       /contact\s+for\s+quote/i,
@@ -44,12 +46,15 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
     
     // Extract base service name (e.g., "Ultimate Health")
     const baseServiceName = extractBaseServiceName(serviceName);
+    console.log('📝 Base service name:', baseServiceName);
     
     // Determine if it's in-hour or out-of-hour
     const timeSlotType = determineTimeSlotType(serviceName);
+    console.log('⏰ Time slot type:', timeSlotType);
     
     // Fetch pricing from database
     const servicePricing = await fetchServicePricing(baseServiceName);
+    console.log('💾 Service pricing from database:', servicePricing);
     
     if (!servicePricing) {
       console.warn(`Service pricing not found for: ${baseServiceName}`);
@@ -78,6 +83,8 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
  * @returns The extracted price or null if not found or not a fixed booking amount
  */
 function extractPriceFromServiceName(serviceName: string): number | null {
+  console.log('🔍 extractPriceFromServiceName called with:', serviceName);
+
   // Skip payment request creation for services with these patterns:
   // - "Contact for Quote" - indicates pricing needs to be discussed
   // - "/class" or "per class" - indicates per-session pricing, not a booking package
@@ -94,6 +101,7 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   // Check if service matches any skip pattern
   for (const pattern of skipPatterns) {
     if (pattern.test(serviceName)) {
+      console.log('⏭️ Skipping payment request creation for pattern match:', pattern);
       return null;
     }
   }
@@ -102,11 +110,15 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   // This pattern indicates a fixed booking package that requires payment
   const priceMatch = serviceName.match(/€(\d+)(?!\s*\/|\s*per)/);
   
+  console.log('💰 Price match result:', priceMatch);
+  
   if (priceMatch) {
     const price = parseInt(priceMatch[1]);
+    console.log('✅ Extracted price:', price);
     return price;
   }
   
+  console.log('❌ No price found in service name');
   return null;
 }
 
@@ -123,6 +135,16 @@ export async function createPaymentRequest(
   customAmount?: number // New parameter for custom amounts (used for invoice payments)
 ): Promise<PaymentRequest | null> {
   try {
+    console.log('🔄 createPaymentRequest called with:', {
+      customerId,
+      serviceName,
+      bookingDate,
+      invoiceId,
+      bookingId,
+      isInvoicePaymentRequest,
+      customAmount
+    });
+
     let finalAmount: number;
 
     if (isInvoicePaymentRequest && customAmount !== undefined) {
@@ -205,6 +227,7 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
       `)
       .eq('customer_id', customerId)
       .in('status', ['pending', 'sent']) // Only show unpaid payment requests
+      .not('booking_id', 'is', null) // Exclude orphaned payment requests (where booking was deleted)
       .order('created_at', { ascending: false });
 
     if (error) {

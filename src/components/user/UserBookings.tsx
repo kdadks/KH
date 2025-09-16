@@ -16,6 +16,7 @@ import {
   Plus
 } from 'lucide-react';
 import BookingModal from './BookingModal';
+import RescheduleModal from './RescheduleModal';
 
 const UserBookings: React.FC = () => {
   const { user } = useUserAuth();
@@ -26,6 +27,8 @@ const UserBookings: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [bookingToReschedule, setBookingToReschedule] = useState<UserBooking | null>(null);
 
   useEffect(() => {
     if (user?.id) {
@@ -51,6 +54,17 @@ const UserBookings: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReschedule = (booking: UserBooking) => {
+    setBookingToReschedule(booking);
+    setShowRescheduleModal(true);
+  };
+
+  const handleRescheduleComplete = () => {
+    setShowRescheduleModal(false);
+    setBookingToReschedule(null);
+    loadBookings(); // Refresh the bookings list
   };
 
   // Filter bookings based on search and status
@@ -197,7 +211,7 @@ const UserBookings: React.FC = () => {
               </h2>
               <div className="grid gap-4">
                 {upcomingBookings.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} isUpcoming={true} />
+                  <BookingCard key={booking.id} booking={booking} isUpcoming={true} onReschedule={handleReschedule} />
                 ))}
               </div>
             </div>
@@ -211,7 +225,7 @@ const UserBookings: React.FC = () => {
               </h2>
               <div className="grid gap-4">
                 {pastBookings.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} isUpcoming={false} />
+                  <BookingCard key={booking.id} booking={booking} isUpcoming={false} onReschedule={handleReschedule} />
                 ))}
               </div>
             </div>
@@ -237,6 +251,22 @@ const UserBookings: React.FC = () => {
           }}
         />
       )}
+
+      {showRescheduleModal && bookingToReschedule && user && (
+        <RescheduleModal
+          isOpen={showRescheduleModal}
+          onClose={() => setShowRescheduleModal(false)}
+          booking={bookingToReschedule}
+          customer={{
+            id: user.id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email: user.email,
+            phone: user.phone
+          }}
+          onRescheduleComplete={handleRescheduleComplete}
+        />
+      )}
     </div>
   );
 };
@@ -245,9 +275,10 @@ const UserBookings: React.FC = () => {
 interface BookingCardProps {
   booking: UserBooking;
   isUpcoming: boolean;
+  onReschedule: (booking: UserBooking) => void;
 }
 
-const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming }) => {
+const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming, onReschedule }) => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -359,15 +390,12 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming }) => {
             {isUpcoming && booking.status === 'confirmed' && (
               <div className="flex space-x-2">
                 <button
-                  onClick={() => {
-                    // Feature coming soon
-                    alert('Reschedule feature will be available in a future update. Please contact us directly for booking changes.');
-                  }}
+                  onClick={() => onReschedule(booking)}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Reschedule
                 </button>
-                <span className="text-gray-300">|</span>
+                {/* <span className="text-gray-300">|</span>
                 <button
                   onClick={() => {
                     // Feature coming soon
@@ -376,7 +404,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming }) => {
                   className="text-sm text-red-600 hover:text-red-800 font-medium"
                 >
                   Cancel
-                </button>
+                </button> */}
               </div>
             )}
           </div>

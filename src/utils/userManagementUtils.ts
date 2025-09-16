@@ -338,12 +338,12 @@ export const getUserPaymentHistory = async (_customerId: string): Promise<{ paym
  */
 export const getUserBookings = async (customerId: string): Promise<{ bookings: UserBooking[]; error?: string }> => {
   try {
-    // Get real bookings for this customer - only show confirmed bookings
+    // Get real bookings for this customer - show pending and confirmed bookings
     const { data: bookings, error } = await supabase
       .from('bookings')
       .select('*')
       .eq('customer_id', parseInt(customerId))
-      .eq('status', 'confirmed')
+      .in('status', ['pending', 'confirmed'])
       .order('booking_date', { ascending: false });
 
     if (error) {
@@ -384,12 +384,12 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
       is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date()
     }));
 
-    // Get real bookings for this customer - only show confirmed bookings
+    // Get real bookings for this customer - show pending and confirmed bookings
     const { data: bookings } = await supabase
       .from('bookings')
       .select('*')
       .eq('customer_id', parseInt(customerId))
-      .eq('status', 'confirmed')
+      .in('status', ['pending', 'confirmed'])
       .order('booking_date', { ascending: false })
       .limit(5);
 
@@ -432,8 +432,8 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
         inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
       ) || [],
       totalOutstanding: totalOutstanding,
-      upcomingBookings: bookings?.filter(booking => 
-        booking.status === 'confirmed' && new Date(booking.booking_date) > new Date()
+      upcomingBookings: bookings?.filter(booking =>
+        (booking.status === 'confirmed' || booking.status === 'pending') && new Date(booking.booking_date) > new Date()
       ) || [],
       stats: {
         totalInvoices: invoices?.length || 0,

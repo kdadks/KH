@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar, Clock, User, FileText, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, User, FileText, AlertCircle, CreditCard } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../shared/toastContext';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
+import PaymentModal from '../shared/PaymentModal';
+import { fetchServicePricing, extractNumericPrice } from '../../services/pricingService';
 
 interface Service {
   id: number | string;
@@ -21,6 +23,19 @@ interface Customer {
   last_name: string;
   email: string;
   phone?: string;
+}
+
+interface PaymentState {
+  showPayment: boolean;
+  paymentRequest: any;
+  booking: any;
+  customer: any;
+  paymentCompleted: boolean;
+  paymentOptions?: {
+    deposit: { amount: number; percentage: number };
+    full: { amount: number };
+  };
+  selectedPaymentType?: 'deposit' | 'full';
 }
 
 interface BookingModalProps {
@@ -43,6 +58,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentState, setPaymentState] = useState<PaymentState>({
+    showPayment: false,
+    paymentRequest: null,
+    booking: null,
+    customer: null,
+    paymentCompleted: false
+  });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     service: '',
@@ -62,6 +86,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
       });
       setSelectedService(null);
       setTimeSlots([]);
+      setPaymentState({
+        showPayment: false,
+        paymentRequest: null,
+        booking: null,
+        customer: null,
+        paymentCompleted: false
+      });
       fetchServices();
     }
   }, [isOpen]);
@@ -88,6 +119,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
       setTimeSlots([]);
     }
   }, [formData.service, services]);
+
+  // Fetch time slots when date changes
+  useEffect(() => {
+    if (selectedService && formData.date) {
+      fetchTimeSlotsForDate(formData.date, selectedService);
+    } else {
+      setTimeSlots([]);
+    }
+  }, [selectedService, formData.date]);
 
   const fetchServices = async () => {
     try {
@@ -186,58 +226,9 @@ const BookingModal: React.FC<BookingModalProps> = ({
         return;
       }
 
-      // Fetch time slots for the selected service
-      const { data, error } = await supabase
-        .from('services_time_slots')
-        .select('*')
-        .eq('service_id', serviceId)
-        .eq('is_available', true)
-        .order('day_of_week', { ascending: true })
-        .order('start_time', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching time slots:', error);
-        setTimeSlots([]);
-        return;
-      }
-
-      // Filter time slots based on service price type
-      let relevantSlots = data || [];
-      if (service.priceType === 'in-hour') {
-        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'in-hour');
-      } else if (service.priceType === 'out-of-hour') {
-        relevantSlots = relevantSlots.filter(slot => slot.slot_type === 'out-of-hour');
-      }
-
-      // Convert time slots to formatted time options
-      const timeOptions: string[] = [];
-      
-      relevantSlots.forEach(slot => {
-        // Show the actual time range from database instead of generating hourly slots
-        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
-        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
-        
-        const startDisplay = formatTimeForDisplay(startTime);
-        const endDisplay = formatTimeForDisplay(endTime);
-        
-        const timeRange = `${startTime}-${endTime}`;
-        const displayRange = `${startDisplay} - ${endDisplay}`;
-        const timeOption = `${timeRange}|${displayRange}`;
-        
-        // Only add if not already in array
-        if (!timeOptions.includes(timeOption)) {
-          timeOptions.push(timeOption);
-        }
-      });
-
-      // Remove duplicates using Set and sort by time value
-      const uniqueTimeOptions = Array.from(new Set(timeOptions)).sort((a, b) => {
-        const timeA = a.split('|')[0];
-        const timeB = b.split('|')[0];
-        return timeA.localeCompare(timeB);
-      });
-      
-      setTimeSlots(uniqueTimeOptions);
+      // This will be called when user selects a date, for now just set empty
+      // The actual time fetching will happen when user selects a date
+      setTimeSlots([]);
       
     } catch (error) {
       console.error('Error fetching time slots:', error);
@@ -245,6 +236,183 @@ const BookingModal: React.FC<BookingModalProps> = ({
     } finally {
       setLoadingTimeSlots(false);
     }
+  };
+
+  const fetchTimeSlotsForDate = async (selectedDate: string, service: Service) => {
+    try {
+      setLoadingTimeSlots(true);
+
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0]);
+        } else {
+          serviceId = parseInt(service.id);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId, returning');
+        return;
+      }
+
+      // Fetch available slots for the selected date
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .eq('date', selectedDate)
+        .eq('is_available', true)
+        .order('start_time', { ascending: true });
+
+      // Filter by slot_type based on service pricing type
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+      // If service.priceType is 'standard' or undefined, show all slots
+
+      const { data, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching availability for date:', error);
+        setTimeSlots([]);
+        return;
+      }
+
+      // Convert availability slots to time options
+      const timeOptions: string[] = [];
+
+      data?.forEach(slot => {
+        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
+        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
+
+        const startDisplay = formatTimeForDisplay(startTime);
+        const endDisplay = formatTimeForDisplay(endTime);
+
+        // Format: "HH:MM-HH:MM|Display String"
+        const timeRange = `${startTime}-${endTime}`;
+        const displayRange = `${startDisplay} - ${endDisplay}`;
+        const timeOption = `${timeRange}|${displayRange}`;
+
+        // Only add if not already in array
+        if (!timeOptions.includes(timeOption)) {
+          timeOptions.push(timeOption);
+        }
+      });
+
+      // Remove duplicates and sort by start time
+      const uniqueTimeOptions = Array.from(new Set(timeOptions)).sort((a, b) => {
+        const timeA = a.split('|')[0].split('-')[0];
+        const timeB = b.split('|')[0].split('-')[0];
+        return timeA.localeCompare(timeB);
+      });
+
+      setTimeSlots(uniqueTimeOptions);
+
+    } catch (error) {
+      console.error('Error fetching time slots for date:', error);
+      setTimeSlots([]);
+    } finally {
+      setLoadingTimeSlots(false);
+    }
+  };
+
+  const handlePayNow = async (paymentType: 'deposit' | 'full') => {
+    try {
+      // Open the PaymentModal with the payment request
+      if (paymentState.paymentRequest && paymentState.customer && paymentState.paymentOptions) {
+        const customerData = paymentState.customer;
+
+        // Get the amount based on payment type
+        const selectedAmount = paymentType === 'deposit'
+          ? paymentState.paymentOptions.deposit.amount
+          : paymentState.paymentOptions.full.amount;
+
+        // Transform the payment request to match PaymentRequestWithCustomer structure
+        const paymentRequestWithCustomer = {
+          ...paymentState.paymentRequest,
+          amount: selectedAmount, // Use selected payment amount
+          payment_type: paymentType, // Add payment type for tracking
+          customer: {
+            first_name: customerData.first_name,
+            last_name: customerData.last_name,
+            email: customerData.email
+          },
+          service_name: paymentState.booking?.package_name,
+          booking_date: paymentState.booking?.booking_date
+        };
+
+        console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
+
+        setSelectedPaymentRequest(paymentRequestWithCustomer);
+        setShowPaymentModal(true);
+        showSuccess(`Opening secure payment modal for ${paymentType === 'deposit' ? '20% deposit' : 'full payment'}...`, '');
+      } else {
+        console.error('Missing payment request or customer data');
+        showError('Payment Error', 'Missing payment information. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error opening payment modal:', error);
+      showError('Payment Error', 'Failed to open payment interface. Please try again.');
+    }
+  };
+
+  const handlePaymentModalComplete = async () => {
+    // Close the payment modal
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+
+    // Get payment type from the selected payment request
+    const paymentType = selectedPaymentRequest?.payment_type || 'deposit';
+
+    // Send email confirmation for payment completion
+    try {
+      const { sendBookingNotificationWithPaymentStatus } = await import('../../utils/emailUtils');
+
+      await sendBookingNotificationWithPaymentStatus(
+        selectedPaymentRequest.customer.email,
+        {
+          customer_name: `${selectedPaymentRequest.customer.first_name} ${selectedPaymentRequest.customer.last_name}`,
+          customer_email: selectedPaymentRequest.customer.email,
+          service_name: selectedPaymentRequest.service_name,
+          appointment_date: new Date(selectedPaymentRequest.booking_date).toLocaleDateString('en-IE'),
+          appointment_time: new Date(selectedPaymentRequest.booking_date).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' }),
+          booking_reference: selectedPaymentRequest.booking_reference || selectedPaymentRequest.id.toString(),
+          payment_status: 'completed',
+          payment_amount: selectedPaymentRequest.amount,
+          next_steps: paymentType === 'deposit'
+            ? 'Your deposit has been received. You will need to pay the remaining balance before your appointment.'
+            : 'Your payment is complete. Your booking is confirmed!',
+          therapist_name: 'KH Therapy Team',
+          clinic_address: 'KH Therapy Clinic, Dublin, Ireland'
+        }
+      );
+    } catch (emailError) {
+      console.error('Error sending payment confirmation email:', emailError);
+    }
+
+    showSuccess(
+      'Payment Completed!',
+      paymentType === 'deposit'
+        ? 'Your deposit has been processed successfully. Your booking is now confirmed!'
+        : 'Your payment has been processed successfully. Your booking is confirmed!'
+    );
+
+    // Reset form and close modal
+    setFormData({
+      service: '',
+      date: '',
+      time: '',
+      notes: ''
+    });
+
+    // Close modal and refresh bookings
+    onClose();
+    onBookingCreated();
   };
 
   const formatTimeForDisplay = (time: string) => {
@@ -265,15 +433,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
     try {
       setIsSubmitting(true);
 
-      // Parse the time range to get start and end times
+      // Parse the time slot format: "HH:MM-HH:MM|Display String"
       const [timeRange] = formData.time.split('|');
       const [startTime, endTime] = timeRange.split('-');
 
-      // Create booking data
+      // Create booking data without timezone conversion to avoid offset issues
       const bookingData = {
         customer_id: customer.id,
         package_name: formData.service, // Use the selected service with full display name including pricing
-        booking_date: new Date(`${formData.date}T${startTime}:00`).toISOString(),
+        booking_date: `${formData.date}T${startTime}:00`, // Store as local time string, not converted to UTC
         timeslot_start_time: startTime + ':00', // Add seconds
         timeslot_end_time: endTime + ':00',
         notes: formData.notes.trim() || null,
@@ -301,11 +469,17 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
       // Check if this is a service that doesn't need payment (Contact for Quote, per-session pricing, etc.)
       const needsQuoteOrPerSession = /contact\s+for\s+quote|€\d+\s*\/\s*(class|session)|€\d+\s*per\s*(class|session)/i.test(formData.service);
-      let paymentRequestCreated = false;
-      
-      // Only create payment request for services that have fixed pricing
+
+      // Only show payment options for services that have fixed pricing
       if (!needsQuoteOrPerSession) {
         try {
+          console.log('🔄 Calling createPaymentRequest with:', {
+            customerId: customer.id,
+            serviceName: formData.service,
+            bookingDate: bookingData.booking_date,
+            bookingId: data.id
+          });
+
           const paymentRequest = await createPaymentRequest(
             customer.id,
             formData.service, // This contains the full service name with pricing
@@ -313,23 +487,89 @@ const BookingModal: React.FC<BookingModalProps> = ({
             null, // invoiceId
             data.id // bookingId - add the booking ID to link payment request to booking
           );
-          
+
+          console.log('📋 Payment request result:', paymentRequest);
+
           if (paymentRequest && paymentRequest.amount > 0) {
-            paymentRequestCreated = true;
-            
-            // Send payment request email notification
+            // Calculate actual service cost for payment options
+            let actualServiceCost = paymentRequest.amount;
+
             try {
-              const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
-              const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-              
-              if (!emailSuccess) {
-                console.error('❌ Failed to send payment request email:', emailError);
+              // Extract base service name from display name (remove pricing info)
+              // e.g., "Massage - In Hour (€90)" -> "Massage"
+              const baseServiceName = formData.service.split(' - ')[0].trim();
+              console.log('🔍 Extracted base service name:', baseServiceName, 'from:', formData.service);
+
+              const servicePricing = await fetchServicePricing(baseServiceName);
+              console.log('📋 Service pricing result:', servicePricing);
+
+              if (servicePricing) {
+                let priceToUse = '';
+
+                // Determine which price field to use based on service type
+                if (formData.service.includes('In Hour') && servicePricing.in_hour_price) {
+                  priceToUse = servicePricing.in_hour_price;
+                  console.log('💰 Using in_hour_price:', priceToUse);
+                } else if (formData.service.includes('Out of Hour') && servicePricing.out_of_hour_price) {
+                  priceToUse = servicePricing.out_of_hour_price;
+                  console.log('💰 Using out_of_hour_price:', priceToUse);
+                } else if (servicePricing.price) {
+                  priceToUse = servicePricing.price;
+                  console.log('💰 Using standard price:', priceToUse);
+                }
+
+                if (priceToUse) {
+                  const extractedPrice = extractNumericPrice(priceToUse);
+                  console.log('🔢 Extracted numeric price:', extractedPrice, 'from:', priceToUse);
+
+                  if (extractedPrice > 0) {
+                    actualServiceCost = extractedPrice;
+                    console.log('✅ Using pricing service cost:', actualServiceCost);
+                  } else {
+                    console.log('⚠️ No valid price extracted, using payment request amount:', paymentRequest.amount);
+                  }
+                } else {
+                  console.log('⚠️ No suitable price field found, using payment request amount:', paymentRequest.amount);
+                }
+              } else {
+                console.log('⚠️ Service pricing not found, using payment request amount:', paymentRequest.amount);
               }
-            } catch (emailError) {
-              console.error('❌ Payment request email failed:', emailError);
+            } catch (error) {
+              console.error('❌ Error calculating service cost:', error);
+              console.log('⚠️ Falling back to payment request amount:', paymentRequest.amount);
             }
-          } else if (paymentRequest && paymentRequest.amount === 0) {
-            paymentRequestCreated = false; // Treat 0-amount as no payment needed
+
+            // Calculate payment options (20% deposit vs full amount)
+            const fullAmount = actualServiceCost;
+            const depositAmount = Math.round(fullAmount * 0.2 * 100) / 100; // 20% deposit rounded to 2 decimals
+
+            const paymentOptions = {
+              deposit: { amount: depositAmount, percentage: 20 },
+              full: { amount: fullAmount }
+            };
+
+            console.log('💰 Payment options calculated:', {
+              selectedService: formData.service,
+              actualServiceCost,
+              paymentOptions: {
+                deposit: `€${paymentOptions.deposit.amount} (${paymentOptions.deposit.percentage}%)`,
+                full: `€${paymentOptions.full.amount}`
+              }
+            });
+
+            // Show payment interface for immediate payment
+            setPaymentState({
+              showPayment: true,
+              paymentRequest,
+              booking: data,
+              customer,
+              paymentCompleted: false,
+              paymentOptions,
+              selectedPaymentType: 'deposit' // Default to deposit
+            });
+
+            // Don't close the modal yet, show payment options first
+            return;
           }
         } catch (paymentError) {
           console.error('Error creating payment request:', paymentError);
@@ -338,74 +578,10 @@ const BookingModal: React.FC<BookingModalProps> = ({
         }
       }
       
-      // Send appropriate confirmation email based on payment requirement
-      try {
-        if (paymentRequestCreated) {
-          // Send booking confirmation with payment status for services requiring payment
-          const { sendBookingNotificationWithPaymentStatus } = await import('../../utils/emailUtils');
-          
-          const emailResult = await sendBookingNotificationWithPaymentStatus(
-            customer.email,
-            {
-              customer_name: `${customer.first_name} ${customer.last_name}`,
-              customer_email: customer.email,
-              service_name: formData.service,
-              appointment_date: new Date(bookingData.booking_date).toLocaleDateString('en-IE'),
-              appointment_time: formData.time.split('|')[0], // Get just the time range part
-              booking_reference: data.booking_reference || data.id.toString(),
-              payment_status: 'pending',
-              payment_amount: undefined, // Will be set by the email template based on service
-              next_steps: 'Please complete the 20% deposit payment to confirm your booking. You can pay through your dashboard or click the payment link in your payment request email.',
-              therapist_name: 'KH Therapy Team',
-              clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
-              special_instructions: formData.notes || undefined
-            }
-          );
-          
-          if (!emailResult) {
-            console.error('Failed to send booking confirmation email with payment status');
-          }
-        } else {
-          // Send simple booking confirmation for services without payment requirements
-          const { sendSimpleBookingConfirmation } = await import('../../utils/emailUtils');
-          
-          const emailResult = await sendSimpleBookingConfirmation(
-            customer.email,
-            {
-              customer_name: `${customer.first_name} ${customer.last_name}`,
-              customer_email: customer.email,
-              service_name: formData.service,
-              appointment_date: new Date(bookingData.booking_date).toLocaleDateString('en-IE'),
-              appointment_time: formData.time.split('|')[0], // Get just the time range part
-              total_amount: 0, // No amount for contact for quote
-              booking_reference: data.booking_reference || data.id.toString(),
-              therapist_name: 'KH Therapy Team',
-              clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
-              special_instructions: formData.notes || undefined
-            }
-          );
-          
-          if (!emailResult) {
-            console.error('Failed to send simple booking confirmation email');
-          }
-        }
-      } catch (emailError) {
-        console.error('Error sending booking confirmation email:', emailError);
-        // Don't fail the booking, just log the error
-      }
+      // Email will be sent when payment is completed or from payment flow
       
-      // Show appropriate success message based on service type
-      if (needsQuoteOrPerSession) {
-        showSuccess('Booking Request Submitted!', 'Your booking request has been submitted successfully. We will contact you shortly to discuss pricing and confirm your appointment.');
-      } else {
-        if (paymentRequestCreated) {
-          showSuccess('Booking Created!', 'Your booking has been created successfully. Please complete the 20% deposit payment to confirm your appointment.');
-          // Dispatch event to navigate to dashboard for payment
-          window.dispatchEvent(new CustomEvent('navigateToDashboardForPayment'));
-        } else {
-          showSuccess('Booking Created!', 'Your booking request has been submitted successfully. You will receive a confirmation email once it\'s reviewed.');
-        }
-      }
+      // Show success message for services without payment requirements (Contact for Quote)
+      showSuccess('Booking Request Submitted!', 'Your booking request has been submitted successfully. We will contact you shortly to discuss pricing and confirm your appointment.');
       
       // Reset form
       setFormData({
@@ -439,19 +615,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
       return <option disabled>No time slots available for selected service</option>;
     }
     return timeSlots.map((slot, index) => {
-      const [, displayTime] = slot.split('|');
+      const [, displayText] = slot.split('|');
       return (
         <option key={index} value={slot}>
-          {displayTime}
+          {displayText}
         </option>
       );
     });
   }, [selectedService, loadingTimeSlots, timeSlots]);
 
-  // Get minimum date (tomorrow)
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDate = tomorrow.toISOString().split('T')[0];
 
   if (!isOpen) return null;
 
@@ -472,8 +644,9 @@ const BookingModal: React.FC<BookingModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6">
+          {/* Content - Only show if not in payment flow */}
+        {!paymentState.showPayment && (
+          <form onSubmit={handleSubmit} className="p-6">
           {/* Customer Info Display */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div className="flex items-center mb-2">
@@ -530,14 +703,17 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   <input
                     type="date"
                     value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    min={minDate}
+                    onChange={(e) => {
+                      setFormData({ ...formData, date: e.target.value, time: '' });
+                      setTimeSlots([]); // Clear time slots when date changes
+                    }}
+                    min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Earliest available date: {new Date(minDate).toLocaleDateString()}
+                  Earliest available date: {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString()}
                 </p>
               </div>
             </div>
@@ -649,7 +825,104 @@ const BookingModal: React.FC<BookingModalProps> = ({
             </button>
           </div>
         </form>
+        )}
+
+        {/* Payment Options Section */}
+        {paymentState.showPayment && !paymentState.paymentCompleted && paymentState.paymentOptions && (
+          <div className="border-t border-gray-200 p-6 bg-gray-50">
+            <div className="mb-6">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <p className="text-green-800 font-medium">✅ Booking Created Successfully!</p>
+                <p className="text-green-600 text-sm mt-1">
+                  Service: {paymentState.booking?.package_name}
+                </p>
+                {paymentState.booking?.booking_date && (
+                  <p className="text-green-600 text-sm">
+                    Date & Time: {new Date(paymentState.booking.booking_date).toLocaleString('en-IE')}
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 mb-4 text-center">Choose Your Payment Option</h3>
+
+                <div className="space-y-4">
+                  {/* 20% Deposit Option */}
+                  <div className="border-2 border-blue-300 rounded-lg p-4 bg-blue-25">
+                    <div className="flex justify-between items-center mb-3">
+                      <div>
+                        <h4 className="font-semibold text-blue-800">20% Deposit</h4>
+                        <p className="text-sm text-blue-600">Secure your booking now, pay the rest later</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-blue-700">
+                          €{paymentState.paymentOptions.deposit.amount}
+                        </div>
+                        <div className="text-xs text-blue-600">
+                          of €{paymentState.paymentOptions.full.amount} total
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handlePayNow('deposit')}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      Pay 20% Deposit - €{paymentState.paymentOptions.deposit.amount}
+                    </button>
+                  </div>
+
+                  {/* Full Payment Option */}
+                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-25">
+                    <div className="flex justify-between items-center mb-3">
+                      <div>
+                        <h4 className="font-semibold text-gray-800">Full Payment</h4>
+                        <p className="text-sm text-gray-600">Pay the complete amount upfront</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-gray-700">
+                          €{paymentState.paymentOptions.full.amount}
+                        </div>
+                        <div className="text-xs text-green-600">
+                          ✓ No remaining balance
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handlePayNow('full')}
+                      className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                    >
+                      Pay Full Amount - €{paymentState.paymentOptions.full.amount}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-center text-sm text-blue-700 bg-blue-100 rounded p-2">
+                  💡 Both options will immediately confirm your booking
+                </div>
+              </div>
+
+              <div className="text-center mt-4">
+                <p className="text-sm text-gray-600">
+                  Payment is required to complete your booking
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Payment Modal */}
+      {(() => {
+        console.log('🔍 PaymentModal render condition:', { showPaymentModal, selectedPaymentRequest: !!selectedPaymentRequest });
+        return showPaymentModal && selectedPaymentRequest && (
+          <PaymentModal
+            isOpen={showPaymentModal}
+            paymentRequest={selectedPaymentRequest}
+            onClose={() => setShowPaymentModal(false)}
+            onPaymentComplete={handlePaymentModalComplete}
+          />
+        );
+      })()}
     </div>
   );
 };
