@@ -27,6 +27,42 @@ export const Services: React.FC<ServicesProps> = ({
 }) => {
   const { showSuccess, showError, showConfirm } = useToast();
   
+  // Available categories for services
+  const availableCategories = [
+    'Packages',
+    'Individual',
+    'Classes',
+    'Rehab & Fitness',
+    'Corporate Packages',
+    'Online Session'
+  ];
+
+  // Helper functions for category management
+  const handleCategoryToggle = (category: string, isForNew: boolean = true) => {
+    if (isForNew) {
+      const currentCategories = newPackage.categories || [];
+      const newCategories = currentCategories.includes(category)
+        ? currentCategories.filter(c => c !== category)
+        : [...currentCategories, category];
+      setNewPackage({ ...newPackage, categories: newCategories });
+    } else if (editPackage) {
+      const currentCategories = editPackage.categories || [];
+      const newCategories = currentCategories.includes(category)
+        ? currentCategories.filter(c => c !== category)
+        : [...currentCategories, category];
+      setEditPackage({ ...editPackage, categories: newCategories });
+    }
+  };
+
+  const isCategorySelected = (category: string, isForNew: boolean = true) => {
+    if (isForNew) {
+      return (newPackage.categories || []).includes(category);
+    } else if (editPackage) {
+      return (editPackage.categories || []).includes(category);
+    }
+    return false;
+  };
+  
   // Helper function to format time without seconds
   const formatTime = (time: string) => {
     if (!time) return '';
@@ -121,7 +157,9 @@ export const Services: React.FC<ServicesProps> = ({
       const transformedServices: Package[] = (data || []).map(service => ({
         id: service.id,
         name: service.name,
-        category: service.category,
+        categories: Array.isArray(service.category) ? service.category : 
+                   (service.category ? [service.category] : []), // Handle both array and string formats
+        category: service.category, // Keep for backward compatibility
         price: service.price,
         inHourPrice: service.in_hour_price,
         outOfHourPrice: service.out_of_hour_price,
@@ -152,7 +190,7 @@ export const Services: React.FC<ServicesProps> = ({
         .from('services')
         .insert([{
           name: newPackage.name.trim(),
-          category: newPackage.category || null,
+          category: (newPackage.categories && newPackage.categories.length > 0) ? newPackage.categories : null,
           price: newPackage.price || null,
           in_hour_price: newPackage.inHourPrice || null,
           out_of_hour_price: newPackage.outOfHourPrice || null,
@@ -170,7 +208,9 @@ export const Services: React.FC<ServicesProps> = ({
       const transformedService: Package = {
         id: data.id,
         name: data.name,
-        category: data.category,
+        categories: Array.isArray(data.category) ? data.category : 
+                   (data.category ? [data.category] : []),
+        category: data.category, // Keep for backward compatibility
         price: data.price,
         inHourPrice: data.in_hour_price,
         outOfHourPrice: data.out_of_hour_price,
@@ -183,7 +223,7 @@ export const Services: React.FC<ServicesProps> = ({
       };
 
       setPackages(prev => [transformedService, ...prev]);
-      setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], category: '', description: '', bookingType: 'book_now' });
+      setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], categories: [], category: '', description: '', bookingType: 'book_now' });
       showSuccess('Success', 'Service added successfully');
     } catch (error) {
       console.error('Error adding service:', error);
@@ -236,7 +276,7 @@ export const Services: React.FC<ServicesProps> = ({
         .from('services')
         .update({
           name: editPackage.name.trim(),
-          category: editPackage.category || null,
+          category: (editPackage.categories && editPackage.categories.length > 0) ? editPackage.categories : null,
           price: editPackage.price || null,
           in_hour_price: editPackage.inHourPrice || null,
           out_of_hour_price: editPackage.outOfHourPrice || null,
@@ -530,8 +570,12 @@ export const Services: React.FC<ServicesProps> = ({
 
   // Edit handlers
   const handleEdit = (index: number) => {
+    const pkg = packages[index];
     setEditIndex(index);
-    setEditPackage({ ...packages[index] });
+    setEditPackage({
+      ...pkg,
+      categories: pkg.categories || (pkg.category ? [pkg.category] : [])
+    });
   };
 
   const handleEditChange = (field: keyof Package, value: string) => {
@@ -584,21 +628,30 @@ export const Services: React.FC<ServicesProps> = ({
           </div>
           <div>
             <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">Category</label>
+              <label className="block text-sm font-medium text-gray-700">Categories</label>
+              <span className="text-xs text-gray-500">Select one or more categories</span>
             </div>
-            <select
-              value={newPackage.category || ''}
-              onChange={(e) => setNewPackage({ ...newPackage, category: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-            >
-              <option value="">Select category</option>
-              <option value="Packages">Packages</option>
-              <option value="Individual">Individual</option>
-              <option value="Classes">Classes</option>
-              <option value="Rehab & Fitness">Rehab & Fitness</option>
-              <option value="Corporate Packages">Corporate Packages</option>
-              <option value="Online Session">Online Session</option>
-            </select>
+            <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-32 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2">
+                {availableCategories.map(category => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => handleCategoryToggle(category, true)}
+                    className={`px-3 py-2 text-sm rounded border transition-colors ${
+                      isCategorySelected(category, true)
+                        ? 'bg-primary-100 text-primary-700 border-primary-300'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Check className={`w-4 h-4 inline mr-2 ${
+                      isCategorySelected(category, true) ? 'text-primary-600' : 'text-transparent'
+                    }`} />
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div>
             <div className="mb-2 h-12">
@@ -918,22 +971,31 @@ export const Services: React.FC<ServicesProps> = ({
                       <div>
                         <div className="mb-1 h-12">
                           <label className="block text-sm font-medium text-gray-700">
-                            Category
+                            Categories
                           </label>
+                          <span className="text-xs text-gray-500">Select one or more categories</span>
                         </div>
-                        <select
-                          value={editPackage.category || ''}
-                          onChange={(e) => handleEditChange('category', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                        >
-                          <option value="">Select Category</option>
-                          <option value="Packages">Packages</option>
-                          <option value="Individual">Individual</option>
-                          <option value="Classes">Classes</option>
-                          <option value="Rehab & Fitness">Rehab & Fitness</option>
-                          <option value="Corporate Packages">Corporate Packages</option>
-                          <option value="Online Session">Online Session</option>
-                        </select>
+                        <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-32 overflow-y-auto">
+                          <div className="grid grid-cols-2 gap-2">
+                            {availableCategories.map(category => (
+                              <button
+                                key={category}
+                                type="button"
+                                onClick={() => handleCategoryToggle(category, false)}
+                                className={`px-3 py-2 text-sm rounded border transition-colors ${
+                                  isCategorySelected(category, false)
+                                    ? 'bg-primary-100 text-primary-700 border-primary-300'
+                                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                }`}
+                              >
+                                <Check className={`w-4 h-4 inline mr-2 ${
+                                  isCategorySelected(category, false) ? 'text-primary-600' : 'text-transparent'
+                                }`} />
+                                {category}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                       <div>
                         <div className="mb-1 h-12">
@@ -1059,16 +1121,20 @@ export const Services: React.FC<ServicesProps> = ({
                         {pkg.price && (
                           <p className="text-2xl font-bold text-primary-600 mt-1">{pkg.price}</p>
                         )}
-                        {pkg.category && (
-                          <span className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full mt-2">
-                            {pkg.category}
+                        {(pkg.categories && pkg.categories.length > 0) && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {pkg.categories.map((category, catIdx) => (
+                              <span key={catIdx} className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full">
+                                {category}
+                              </span>
+                            ))}
                             {typeof pkg.id === 'number' && (
-                              <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5">
+                              <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-1">
                                 <Clock className="w-3 h-3 mr-1" />
                                 {timeSlotCounts[pkg.id] ?? 0}
                               </span>
                             )}
-                          </span>
+                          </div>
                         )}
                         {pkg.description && (
                           <p className="text-gray-600 mt-2 text-sm">{pkg.description}</p>

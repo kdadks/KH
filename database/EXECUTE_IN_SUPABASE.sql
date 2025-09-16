@@ -4,17 +4,25 @@
 -- 3. Clear all data and start fresh
 
 -- STEP 1: Add booking_id to payments table
-ALTER TABLE public.payments 
+ALTER TABLE public.payments
 ADD COLUMN IF NOT EXISTS booking_id uuid;
 
-ALTER TABLE public.payments 
-ADD CONSTRAINT IF NOT EXISTS payments_booking_id_fkey 
-FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE SET NULL;
+-- Add foreign key constraint (check if it doesn't exist first)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'payments_booking_id_fkey'
+        AND table_name = 'payments'
+    ) THEN
+        ALTER TABLE public.payments
+        ADD CONSTRAINT payments_booking_id_fkey
+        FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_payments_booking_id 
-ON public.payments USING btree (booking_id);
-
--- STEP 2: Clear all data from tables (CAREFUL - THIS DELETES ALL DATA!)
+CREATE INDEX IF NOT EXISTS idx_payments_booking_id
+ON public.payments USING btree (booking_id);-- STEP 2: Clear all data from tables (CAREFUL - THIS DELETES ALL DATA!)
 -- Uncomment these lines if you want to clear all data:
 
 -- TRUNCATE TABLE payment_requests RESTART IDENTITY CASCADE;
@@ -61,3 +69,30 @@ FROM pg_sequences
 WHERE schemaname = 'public' 
   AND sequencename LIKE '%_id_seq'
 ORDER BY sequencename;
+
+-- MIGRATION: Update services table to support multiple categories
+-- Change category column from VARCHAR to TEXT[] array
+
+-- First, create a backup of existing data
+CREATE TEMP TABLE IF NOT EXISTS services_category_backup AS
+SELECT id, category FROM services WHERE category IS NOT NULL AND category != '';
+
+-- Update the category column to TEXT[] array
+ALTER TABLE services ALTER COLUMN category TYPE TEXT[] USING
+  CASE
+    WHEN category IS NULL OR category = '' THEN ARRAY[]::TEXT[]
+    ELSE ARRAY[category]
+  END;
+
+-- Add a comment to document the change
+COMMENT ON COLUMN services.category IS 'Array of categories this service belongs to. Supports multiple categories per service.';
+
+-- Create an index for better performance with array operations
+CREATE INDEX IF NOT EXISTS idx_services_categories ON services USING GIN (category);
+
+-- VERIFICATION: Check that category column is now an array
+SELECT column_name, data_type, is_nullable, udt_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'services'
+  AND column_name = 'category';

@@ -8,7 +8,7 @@ import {
   User, 
   Check, 
   X, 
-  Edit, 
+  RefreshCw,
   Trash2,
   Eye,
   FileSpreadsheet,
@@ -48,6 +48,7 @@ import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { createPaymentRequest, fixBookingStatusBasedOnPayments } from '../../utils/paymentRequestUtils';
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
+import RescheduleModal from '../user/RescheduleModal';
 import { sendAdminBookingConfirmation } from '../../utils/emailUtils';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -98,15 +99,14 @@ export const Bookings: React.FC<BookingsProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'deposit_paid' | 'confirmed' | 'cancelled'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [showEditBookingModal, setShowEditBookingModal] = useState(false);
-  const [editingBooking, setEditingBooking] = useState<BookingFormData | null>(null);
-  const [editBookingDate, setEditBookingDate] = useState('');
-  const [editBookingTime, setEditBookingTime] = useState('');
-  const [editBookingError, setEditBookingError] = useState('');
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<BookingFormData | null>(null);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<BookingFormData | null>(null);
+  
+  // Reschedule state management
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [bookingToReschedule, setBookingToReschedule] = useState<BookingFormData | null>(null);
   
   // Calendar view state
   const [calendarView, setCalendarView] = useState<'list' | 'calendar'>('list');
@@ -346,25 +346,26 @@ export const Bookings: React.FC<BookingsProps> = ({
       }
 
       // Extract the requested booking start and end times
+      // Prefer explicit timeslot fields over booking_date to avoid timezone issues
       let requestedStartTime = '';
       let requestedEndTime = '';
 
-      if (booking.booking_date && booking.booking_date.includes('T')) {
+      if (booking.timeslot_start_time) {
+        requestedStartTime = booking.timeslot_start_time.substring(0, 5); // Remove seconds: 08:00:00 -> 08:00
+      } else if (booking.appointment_time) {
+        requestedStartTime = booking.appointment_time.substring(0, 5);
+      } else if (booking.time) {
+        requestedStartTime = booking.time.substring(0, 5);
+      } else if (booking.booking_date && booking.booking_date.includes('T')) {
         const timeStr = booking.booking_date.split('T')[1];
         if (timeStr) {
           requestedStartTime = timeStr.substring(0, 5); // Get HH:MM format
         }
-      } else if (booking.timeslot_start_time) {
-        requestedStartTime = booking.timeslot_start_time;
-      } else if (booking.appointment_time) {
-        requestedStartTime = booking.appointment_time;
-      } else if (booking.time) {
-        requestedStartTime = booking.time;
       }
 
       // Get the end time if available
       if (booking.timeslot_end_time) {
-        requestedEndTime = booking.timeslot_end_time;
+        requestedEndTime = booking.timeslot_end_time.substring(0, 5); // Remove seconds: 08:50:00 -> 08:50
       } else if (requestedStartTime) {
         // If no end time, assume 50-minute session (default therapy session)
         const [hours, minutes] = requestedStartTime.split(':').map(Number);
@@ -1069,10 +1070,16 @@ export const Bookings: React.FC<BookingsProps> = ({
     setConfirmingBookings(prev => new Set([...prev, bookingId]));
 
     try {
+      // Helper function to normalize time format (remove seconds if present)
+      const normalizeTime = (timeStr: string): string => {
+        if (!timeStr) return '';
+        return timeStr.substring(0, 5); // Get HH:MM format, removing seconds
+      };
+
       // Check if this is a full-day booking
       const isFullDayBooking = booking.timeslot_start_time === 'full-day' ||
                               booking.timeslot_end_time === 'full-day' ||
-                              (booking.timeslot_start_time === '09:00' && booking.timeslot_end_time === '17:00');
+                              (normalizeTime(booking.timeslot_start_time || '') === '09:00' && normalizeTime(booking.timeslot_end_time || '') === '17:00');
 
       if (isFullDayBooking) {
         console.log('📅 Processing full-day booking confirmation');
@@ -1085,13 +1092,33 @@ export const Bookings: React.FC<BookingsProps> = ({
           return;
         }
 
-        // Check if there are any available slots for this date
+        // First check if there are any available slots for this date for validation
         console.log('🔍 Checking for any available slots on date:', bookingDate);
         const { data: availableSlots, error: slotsError } = await supabase
           .from('availability')
           .select('id, start_time, end_time, is_available')
           .eq('date', bookingDate)
           .eq('is_available', true);
+
+        if (slotsError) {
+          console.error('❌ Error checking availability for full-day booking:', slotsError);
+          showError('Cannot Confirm Booking', 'Error checking availability. Please try again.');
+          return;
+        }
+
+        if (!availableSlots || availableSlots.length === 0) {
+          showError('Cannot Confirm Booking', 'No available time slots found for this date. Please check the availability calendar.');
+          return;
+        }
+
+        console.log(`✅ Found ${availableSlots.length} available slots for full-day booking`);
+
+        // Now get ALL slots for the date (both available and unavailable) to mark them as unavailable
+        console.log('🔍 Fetching ALL slots for the date to mark as unavailable:', bookingDate);
+        const { data: allSlots, error: allSlotsError } = await supabase
+          .from('availability')
+          .select('id, start_time, end_time, is_available')
+          .eq('date', bookingDate);
 
         if (slotsError) {
           console.error('❌ Error checking availability for full-day booking:', slotsError);
@@ -1132,13 +1159,13 @@ export const Bookings: React.FC<BookingsProps> = ({
         const allDayStartMinutes = timeToMinutes('09:00');
         const allDayEndMinutes = timeToMinutes('17:00');
 
-        // Filter slots that overlap with 9am-5pm range
-        const slotsToUpdate = availableSlots.filter(slot => {
+        // Filter ALL slots that overlap with 9am-5pm range (not just available ones)
+        const slotsToUpdate = allSlots?.filter(slot => {
           const slotStartMinutes = timeToMinutes(slot.start_time);
           const slotEndMinutes = timeToMinutes(slot.end_time);
           // Check if slot overlaps with 9am-5pm range
           return !(slotEndMinutes <= allDayStartMinutes || slotStartMinutes >= allDayEndMinutes);
-        });
+        }) || [];
 
         console.log(`🔄 Marking ${slotsToUpdate.length} slots (9:00 AM - 5:00 PM) as unavailable for date:`, bookingDate);
 
@@ -1595,120 +1622,53 @@ export const Bookings: React.FC<BookingsProps> = ({
   ]);
 
   // Helper function to process booking data for editing
-  const processBookingForEdit = (bookingToEdit: BookingFormData) => {
-    // Handle booking_date field (contains both date and time)
-    if (bookingToEdit.booking_date) {
-      const bookingDateTime = new Date(bookingToEdit.booking_date);
-      if (!isNaN(bookingDateTime.getTime())) {
-        // Extract date and time from booking_date
-        const dateStr = bookingDateTime.toISOString().split('T')[0]; // YYYY-MM-DD
-        const timeStr = bookingDateTime.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
-        setEditBookingDate(dateStr);
-        setEditBookingTime(timeStr);
-      } else {
-        // Fallback to legacy fields or empty
-        setEditBookingDate(bookingToEdit.appointment_date || bookingToEdit.date || '');
-        setEditBookingTime(bookingToEdit.appointment_time || bookingToEdit.time || '');
-      }
-    } else {
-      // Fallback to legacy fields
-      setEditBookingDate(bookingToEdit.appointment_date || bookingToEdit.date || '');
-      setEditBookingTime(bookingToEdit.appointment_time || bookingToEdit.time || '');
-    }
-  };
-
-  // Edit booking
-  const handleEditBooking = (booking: BookingFormData) => {
-    setEditingBooking(booking);
-    processBookingForEdit(booking);
-    setShowEditBookingModal(true);
-  };
-
-  const handleUpdateBooking = async () => {
-    if (!editingBooking || !editBookingDate || !editBookingTime) {
-      setEditBookingError('Please fill in all fields');
-      return;
-    }
-
-    try {
-      // Combine date and time into a single datetime string for booking_date column
-      const bookingDateTime = `${editBookingDate}T${editBookingTime}:00`;
-
-      // Check availability if the booking is being confirmed or already confirmed
-      if (editingBooking.status === 'confirmed') {
-        const availabilityCheck = await checkBookingAvailability({
-          booking_date: bookingDateTime,
-          appointment_date: editBookingDate,
-          appointment_time: editBookingTime,
-          status: editingBooking.status
-        } as BookingFormData);
-        
-        if (!availabilityCheck.hasAvailability) {
-          setEditBookingError(availabilityCheck.message || 'No availability found for this booking time.');
-          return;
-        }
-
-        // Check for conflicting bookings
-        const conflictCheck = await checkForConflictingBookings({
-          id: editingBooking.id, // Include the ID so we exclude this booking from the conflict check
-          booking_date: bookingDateTime,
-          appointment_date: editBookingDate,
-          appointment_time: editBookingTime,
-          status: editingBooking.status
-        } as BookingFormData);
-        
-        if (conflictCheck.hasConflict) {
-          setEditBookingError(conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
-          return;
-        }
-      }
-
-      const { error } = await supabase
-        .from('bookings')
-        .update({ 
-          booking_date: bookingDateTime
-        })
-        .eq('id', editingBooking.id);
-
-      if (error) {
-        console.error('Supabase error details:', error);
-        throw error;
-      }
-
-      // Update local state with the new booking_date and also set legacy fields for compatibility
-      const updatedBookings = allBookings.map(booking => 
-        booking.id === editingBooking.id
-          ? { 
-              ...booking, 
-              booking_date: bookingDateTime,
-              // Also set legacy fields for compatibility with calendar logic
-              appointment_date: editBookingDate, 
-              appointment_time: editBookingTime,
-              date: editBookingDate, 
-              time: editBookingTime 
-            }
-          : booking
-      );
-      setAllBookings(updatedBookings);
-      
-      setShowEditBookingModal(false);
-      setEditingBooking(null);
-      setEditBookingError('');
-      showSuccess('Booking Updated', 'The booking has been updated successfully.');
-    } catch (error) {
-      console.error('Error updating booking:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      setEditBookingError(`Update failed: ${errorMessage}`);
-      showError('Error', 'Failed to update booking. Please try again.');
-    }
-  };
-
   // Delete booking
   const handleDeleteBooking = async () => {
     if (!bookingToDelete) return;
 
     try {
-      // First, find the matching availability slot if the booking was confirmed
+      // First, delete associated payment requests to prevent orphaned records
+      console.log('🗑️ Deleting associated payment requests for booking:', bookingToDelete.id);
+      const { data: deletedPaymentRequests, error: paymentRequestError } = await supabase
+        .from('payment_requests')
+        .delete()
+        .eq('booking_id', bookingToDelete.id)
+        .select('id, service_name, amount');
+
+      if (paymentRequestError) {
+        console.error('❌ Failed to delete associated payment requests:', {
+          error: paymentRequestError,
+          bookingId: bookingToDelete.id
+        });
+        // Don't throw error - continue with booking deletion
+      } else {
+        console.log('✅ Deleted associated payment requests:', {
+          count: deletedPaymentRequests?.length || 0,
+          requests: deletedPaymentRequests
+        });
+      }
+
+      // Also delete associated payments
+      const { data: deletedPayments, error: paymentError } = await supabase
+        .from('payments')
+        .delete()
+        .eq('booking_id', bookingToDelete.id)
+        .select('id, amount');
+
+      if (paymentError) {
+        console.error('❌ Failed to delete associated payments:', {
+          error: paymentError,
+          bookingId: bookingToDelete.id
+        });
+        // Don't throw error - continue with booking deletion
+      } else {
+        console.log('✅ Deleted associated payments:', {
+          count: deletedPayments?.length || 0,
+          payments: deletedPayments
+        });
+      }
+
+      // Second, find the matching availability slot if the booking was confirmed
       let matchingSlot = null;
       if (bookingToDelete.status === 'confirmed') {
         console.log('🔍 Finding availability slot to restore for deleted booking:', bookingToDelete.id);
@@ -1827,6 +1787,19 @@ export const Bookings: React.FC<BookingsProps> = ({
       console.error('Error cancelling booking:', error);
       showError('Error', 'Failed to cancel booking. Please try again.');
     }
+  };
+
+  // Reschedule booking
+  const handleReschedule = (booking: BookingFormData) => {
+    setBookingToReschedule(booking);
+    setShowRescheduleModal(true);
+  };
+
+  const handleRescheduleComplete = () => {
+    setShowRescheduleModal(false);
+    setBookingToReschedule(null);
+    // Refresh bookings data
+    window.dispatchEvent(new CustomEvent('refreshBookings'));
   };
 
   // New booking functions
@@ -3139,13 +3112,13 @@ export const Bookings: React.FC<BookingsProps> = ({
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleEditBooking(booking);
+                                handleReschedule(booking);
                               }}
                               className="flex items-center justify-center w-10 h-10 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors cursor-pointer"
-                              title="Edit Booking"
+                              title="Reschedule Booking"
                               type="button"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Calendar className="w-4 h-4" />
                             </button>
                             <button
                               onClick={(e) => {
@@ -3265,73 +3238,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         )}
       </div>
 
-      {/* Edit Booking Modal */}
-      {showEditBookingModal && editingBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Booking</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
-                <p className="text-sm text-gray-600">{getCustomerName(editingBooking)}</p>
-              </div>
-              {editingBooking.timeslot_start_time && editingBooking.timeslot_end_time && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Current Timeslot</label>
-                  <p className="text-sm text-gray-600 p-2 bg-blue-50 rounded-lg">
-                    {editingBooking.timeslot_start_time.substring(0, 5)} - {editingBooking.timeslot_end_time.substring(0, 5)}
-                    <span className="text-xs text-blue-600 ml-2">(Full timeslot)</span>
-                  </p>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                <input
-                  type="date"
-                  value={editBookingDate}
-                  onChange={(e) => setEditBookingDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                <input
-                  type="time"
-                  value={editBookingTime}
-                  onChange={(e) => setEditBookingTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-                {editingBooking.timeslot_start_time && editingBooking.timeslot_end_time && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Note: Editing time will override the original timeslot information
-                  </p>
-                )}
-              </div>
-              {editBookingError && (
-                <div className="text-red-600 text-sm">{editBookingError}</div>
-              )}
-            </div>
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowEditBookingModal(false);
-                  setEditingBooking(null);
-                  setEditBookingError('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateBooking}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700"
-              >
-                Update Booking
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirmModal && bookingToDelete && (
@@ -3396,6 +3303,36 @@ export const Bookings: React.FC<BookingsProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && bookingToReschedule && (
+        <RescheduleModal
+          isOpen={showRescheduleModal}
+          onClose={() => {
+            setShowRescheduleModal(false);
+            setBookingToReschedule(null);
+          }}
+          booking={{
+            id: bookingToReschedule.id || '',
+            booking_reference: bookingToReschedule.booking_reference,
+            customer_id: bookingToReschedule.customer_id || 0,
+            package_name: bookingToReschedule.package_name,
+            booking_date: bookingToReschedule.booking_date,
+            timeslot_start_time: bookingToReschedule.timeslot_start_time,
+            timeslot_end_time: bookingToReschedule.timeslot_end_time,
+            notes: bookingToReschedule.notes,
+            status: bookingToReschedule.status
+          }}
+          customer={{
+            id: bookingToReschedule.customer_details?.id || bookingToReschedule.customer_id || 0,
+            first_name: bookingToReschedule.customer_details?.first_name || bookingToReschedule.customer_name.split(' ')[0] || '',
+            last_name: bookingToReschedule.customer_details?.last_name || bookingToReschedule.customer_name.split(' ').slice(1).join(' ') || '',
+            email: bookingToReschedule.customer_details?.email || bookingToReschedule.customer_email,
+            phone: bookingToReschedule.customer_details?.phone || bookingToReschedule.customer_phone
+          }}
+          onRescheduleComplete={handleRescheduleComplete}
+        />
       )}
 
       {/* Booking Details Modal */}
@@ -3506,12 +3443,12 @@ export const Bookings: React.FC<BookingsProps> = ({
                     <button
                       onClick={() => {
                         setShowBookingModal(false);
-                        handleEditBooking(selectedBooking);
+                        handleReschedule(selectedBooking);
                       }}
                       className="min-w-[120px] flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center"
                     >
-                      <Edit className="w-4 h-4 mr-1" />
-                      Edit
+                      <Calendar className="w-4 h-4 mr-1" />
+                      Reschedule
                     </button>
                     <button
                       onClick={() => {
@@ -3635,12 +3572,12 @@ export const Bookings: React.FC<BookingsProps> = ({
                             <button
                               onClick={() => {
                                 setShowMultiBookingsModal(false);
-                                handleEditBooking(booking);
+                                handleReschedule(booking);
                               }}
                               className="px-3 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 transition-colors flex items-center"
                             >
-                              <Edit className="w-3 h-3 mr-1" />
-                              Edit
+                              <Calendar className="w-3 h-3 mr-1" />
+                              Reschedule
                             </button>
                             <button
                               onClick={() => {

@@ -317,24 +317,25 @@ export const createBookingWithCustomer = async (
         console.log('📧 Sending admin notification for new booking...');
         try {
           const { sendAdminBookingConfirmationEmail } = await import('./emailUtils');
-          const adminResult = await sendAdminBookingConfirmationEmail({
-            customer_name: `${customerData.firstName} ${customerData.lastName}`,
-            customer_email: customerData.email,
-            service_name: bookingData.package_name,
-            appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
-            appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
-            booking_reference: booking.booking_reference || booking.id.toString(),
-            therapist_name: 'KH Therapy Team',
-            clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
-            special_instructions: bookingData.notes || undefined,
-            booking_status: paymentRequest ? 'Payment Required' : 'Confirmed',
-            payment_amount: paymentRequest?.amount || 0
-          });
+          const adminResult = await sendAdminBookingConfirmationEmail(
+            customerData.email,
+            {
+              customer_name: `${customerData.firstName} ${customerData.lastName}`,
+              service_name: bookingData.package_name,
+              appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
+              appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
+              total_amount: paymentRequest?.amount || 0,
+              booking_reference: booking.booking_reference || booking.id.toString(),
+              therapist_name: 'KH Therapy Team',
+              clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+              special_instructions: bookingData.notes || undefined
+            }
+          );
 
-          if (adminResult.success) {
+          if (adminResult.customerSuccess) {
             console.log('✅ Admin booking notification sent successfully');
           } else {
-            console.error('❌ Failed to send admin booking notification:', adminResult.error);
+            console.error('❌ Failed to send admin booking notification');
           }
         } catch (adminEmailError) {
           console.error('❌ Admin booking notification failed:', adminEmailError);

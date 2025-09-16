@@ -15,7 +15,10 @@ export type Package = {
   /** Outside business hours rate (optional) */
   outOfHourPrice?: string;
   features: string[];
-  category: PackageCategory;
+  /** Single category for backward compatibility */
+  category?: PackageCategory;
+  /** Multiple categories support */
+  categories?: PackageCategory[];
   /** Booking action type for user interaction */
   bookingType?: 'book_now' | 'contact_me';
 };
