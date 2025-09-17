@@ -5,6 +5,7 @@ import { useToast } from '../shared/toastContext';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import PaymentModal from '../shared/PaymentModal';
 import { fetchServicePricing, extractNumericPrice } from '../../services/pricingService';
+import { validateNotesRealTime } from '../../utils/formValidation';
 
 interface Service {
   id: number | string;
@@ -74,6 +75,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
     time: '',
     notes: ''
   });
+
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -774,11 +777,24 @@ const BookingModal: React.FC<BookingModalProps> = ({
               <FileText className="absolute left-3 top-3 text-gray-400" size={20} />
               <textarea
                 value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const error = validateNotesRealTime(value);
+                  setFormErrors(prev => ({ ...prev, notes: error }));
+                  setFormData({ ...formData, notes: value });
+                }}
                 rows={4}
                 placeholder="Any special requests, medical conditions, or additional information..."
-                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                className={`w-full pl-10 pr-3 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
+                  formErrors.notes ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                }`}
               />
+            </div>
+            {formErrors.notes && (
+              <p className="mt-1 text-sm text-red-600">{formErrors.notes}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              {formData.notes.length}/1000 characters
             </div>
           </div>
 
