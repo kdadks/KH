@@ -6,6 +6,11 @@ import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
 import { supabase } from '../supabaseClient';
 import { useToast } from '../components/shared/toastContext';
+import {
+  validateEmailRealTime,
+  validateNameRealTime,
+  validateNotesRealTime
+} from '../utils/formValidation';
 
 interface Service {
   id: number | string;
@@ -28,6 +33,7 @@ const ContactPage: React.FC = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [realTimeErrors, setRealTimeErrors] = useState<{[key: string]: string}>({});
   const { showSuccess } = useToast();
 
   // Fetch services from database
@@ -122,6 +128,30 @@ const ContactPage: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
+
+    // Real-time validation
+    let error = '';
+    switch (id) {
+      case 'name':
+        error = validateNameRealTime(value, 'Full name');
+        break;
+      case 'email':
+        error = validateEmailRealTime(value);
+        break;
+      case 'message':
+        error = validateNotesRealTime(value);
+        break;
+      case 'service':
+        if (!value) {
+          error = 'Please select a service';
+        }
+        break;
+    }
+
+    // Update errors state
+    setRealTimeErrors(prev => ({ ...prev, [id]: error }));
+
+    // Update form data
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
@@ -175,15 +205,22 @@ const ContactPage: React.FC = () => {
                       <User className="inline w-4 h-4 mr-2" />
                       Full Name
                     </label>
-                    <input 
-                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all duration-200" 
-                      id="name" 
-                      type="text" 
+                    <input
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 transition-all duration-200 ${
+                        realTimeErrors.name
+                          ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                          : 'border-gray-200 focus:border-primary-500 focus:ring-primary-200'
+                      }`}
+                      id="name"
+                      type="text"
                       placeholder="Enter your full name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      required 
+                      required
                     />
+                    {realTimeErrors.name && (
+                      <p className="mt-2 text-sm text-red-600">{realTimeErrors.name}</p>
+                    )}
                   </div>
 
                   {/* Email Field */}
@@ -192,15 +229,22 @@ const ContactPage: React.FC = () => {
                       <Mail className="inline w-4 h-4 mr-2" />
                       Email Address
                     </label>
-                    <input 
-                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all duration-200" 
-                      id="email" 
-                      type="email" 
+                    <input
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 transition-all duration-200 ${
+                        realTimeErrors.email
+                          ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                          : 'border-gray-200 focus:border-primary-500 focus:ring-primary-200'
+                      }`}
+                      id="email"
+                      type="email"
                       placeholder="Enter your email address"
                       value={formData.email}
                       onChange={handleInputChange}
-                      required 
+                      required
                     />
+                    {realTimeErrors.email && (
+                      <p className="mt-2 text-sm text-red-600">{realTimeErrors.email}</p>
+                    )}
                   </div>
 
                   {/* Service Type Field */}
@@ -208,8 +252,12 @@ const ContactPage: React.FC = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2" htmlFor="service">
                       Service Type
                     </label>
-                    <select 
-                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all duration-200 bg-white" 
+                    <select
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 transition-all duration-200 bg-white ${
+                        realTimeErrors.service
+                          ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                          : 'border-gray-200 focus:border-primary-500 focus:ring-primary-200'
+                      }`}
                       id="service"
                       value={formData.service}
                       onChange={handleInputChange}
@@ -230,6 +278,9 @@ const ContactPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    {realTimeErrors.service && (
+                      <p className="mt-2 text-sm text-red-600">{realTimeErrors.service}</p>
+                    )}
                   </div>
 
                   {/* Message Field */}
@@ -238,15 +289,25 @@ const ContactPage: React.FC = () => {
                       <MessageSquare className="inline w-4 h-4 mr-2" />
                       Message
                     </label>
-                    <textarea 
-                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all duration-200 resize-none" 
-                      id="message" 
-                      rows={6} 
+                    <textarea
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 transition-all duration-200 resize-none ${
+                        realTimeErrors.message
+                          ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                          : 'border-gray-200 focus:border-primary-500 focus:ring-primary-200'
+                      }`}
+                      id="message"
+                      rows={6}
                       placeholder="Tell us about your condition, symptoms, or any questions you have..."
                       value={formData.message}
                       onChange={handleInputChange}
-                      required 
+                      required
                     />
+                    {realTimeErrors.message && (
+                      <p className="mt-2 text-sm text-red-600">{realTimeErrors.message}</p>
+                    )}
+                    <p className="mt-2 text-xs text-gray-500">
+                      {formData.message.length}/1000 characters
+                    </p>
                   </div>
 
                   {/* Submit Button */}

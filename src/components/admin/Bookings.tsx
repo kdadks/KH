@@ -50,6 +50,7 @@ import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
 import RescheduleModal from '../user/RescheduleModal';
 import { sendAdminBookingConfirmation } from '../../utils/emailUtils';
+import { validateEmail, validateName, validatePhoneNumber, validateNotes } from '../../utils/formValidation';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -134,6 +135,8 @@ export const Bookings: React.FC<BookingsProps> = ({
     notes: '',
     status: 'pending'
   });
+
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
   const [services, setServices] = useState<any[]>([]);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
@@ -323,7 +326,8 @@ export const Bookings: React.FC<BookingsProps> = ({
         .from('availability')
         .select('*')
         .eq('date', bookingDate)
-        .order('start', { ascending: true });
+        .eq('is_available', true) // Only fetch available slots
+        .order('start_time', { ascending: true });
 
       if (error) {
         console.error('Error fetching availability slots:', error);
@@ -332,6 +336,16 @@ export const Bookings: React.FC<BookingsProps> = ({
           message: 'Error checking availability. Please try again.'
         };
       }
+
+      console.log('🔍 Raw availability slots from database:', availabilitySlots?.map(slot => ({
+        id: slot.id,
+        date: slot.date,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        start: slot.start,
+        is_available: slot.is_available,
+        slot_type: slot.slot_type
+      })));
 
       if (!availabilitySlots || availabilitySlots.length === 0) {
         return {
@@ -513,21 +527,72 @@ export const Bookings: React.FC<BookingsProps> = ({
       }
 
       // Original logic for specific time bookings
+      console.log('🔍 Availability slots found for matching:', availabilitySlots.map(slot => ({
+        id: slot.id,
+        start: slot.start_time || slot.start,
+        end: slot.end_time,
+        is_available: slot.is_available,
+        slot_type: slot.slot_type
+      })));
+
       const matchingSlot = availabilitySlots.find(slot => {
         const slotStartTime = slot.start_time || slot.start || '';
         const slotEndTime = slot.end_time || '';
 
-        if (!slotStartTime || !slotEndTime) return false;
+        console.log('🔍 Checking slot for match:', {
+          slotId: slot.id,
+          slotStartTime,
+          slotEndTime,
+          slotIsAvailable: slot.is_available,
+          requestedRange: `${requestedStartTime} - ${requestedEndTime}`
+        });
+
+        if (!slotStartTime || !slotEndTime) {
+          console.log('❌ Slot missing start/end time');
+          return false;
+        }
 
         const slotStartMinutes = timeToMinutes(slotStartTime);
         const slotEndMinutes = timeToMinutes(slotEndTime);
 
+        console.log('🔍 Time comparison:', {
+          requested: `${requestedStartMinutes} - ${requestedEndMinutes} minutes`,
+          slot: `${slotStartMinutes} - ${slotEndMinutes} minutes`,
+          fitsStart: requestedStartMinutes >= slotStartMinutes,
+          fitsEnd: requestedEndMinutes <= slotEndMinutes
+        });
+
         // Check if the requested booking falls within this availability slot
+        // Use exact match first (for slots that exactly match the booking time)
+        const isExactMatch = requestedStartMinutes === slotStartMinutes &&
+                            requestedEndMinutes === slotEndMinutes;
+
+        // Then check if booking fits within slot (for larger slots)
         const bookingFitsInSlot = requestedStartMinutes >= slotStartMinutes &&
                                  requestedEndMinutes <= slotEndMinutes;
 
-        if (bookingFitsInSlot) {
+        console.log(`🔍 Slot ${slot.id} matching results:`, {
+          isExactMatch,
+          bookingFitsInSlot,
+          slotRange: `${slotStartMinutes}-${slotEndMinutes}`,
+          requestedRange: `${requestedStartMinutes}-${requestedEndMinutes}`
+        });
+
+        // Accept either exact match or fitting within slot
+        const slotCanAccommodate = isExactMatch || bookingFitsInSlot;
+
+        // If exact fit doesn't work, also check for overlapping slots that could potentially work
+        const hasOverlap = !(requestedEndMinutes <= slotStartMinutes || requestedStartMinutes >= slotEndMinutes);
+        if (!slotCanAccommodate && hasOverlap) {
+          console.log(`⚠️ Slot ${slot.id} overlaps but doesn't fully contain the booking time`);
+        }
+
+        if (slotCanAccommodate) {
+          console.log(`✅ Slot ${slot.id} can accommodate booking - checking for conflicts...`);
+
           // Check if this slot time is already taken by another confirmed booking
+          console.log(`🔍 Checking ${existingBookings?.length || 0} existing bookings for conflicts...`);
+
           const isSlotConflicted = existingBookings?.some(existingBooking => {
             const existingDateTime = existingBooking.booking_date;
             if (!existingDateTime || !existingDateTime.includes('T')) return false;
@@ -543,8 +608,16 @@ export const Bookings: React.FC<BookingsProps> = ({
             // Check for time overlap between existing booking and requested booking
             const hasOverlap = !(requestedEndMinutes <= existingStartMinutes || requestedStartMinutes >= existingEndMinutes);
 
+            console.log(`🔍 Checking conflict with existing booking:`, {
+              existing: `${existingStartTime}-${existingEndTime}`,
+              existingMinutes: `${existingStartMinutes}-${existingEndMinutes}`,
+              hasOverlap
+            });
+
             return hasOverlap;
           });
+
+          console.log(`🔍 Slot ${slot.id} conflict check result: ${isSlotConflicted ? 'CONFLICTED' : 'CLEAR'}`);
 
           return !isSlotConflicted; // Return true only if no conflicts
         }
@@ -567,7 +640,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         };
       }
 
-      // No containing slot found for the requested time
+      // No available slot found for the requested time (either no slot exists or all matching slots are conflicted)
       const formattedDate = new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -582,9 +655,42 @@ export const Bookings: React.FC<BookingsProps> = ({
         return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
       };
 
+      // Check if we found slots that matched but were conflicted
+      const hadMatchingSlots = availabilitySlots.some(slot => {
+        const slotStartTime = slot.start_time || slot.start || '';
+        const slotEndTime = slot.end_time || '';
+        if (!slotStartTime || !slotEndTime) return false;
+
+        const slotStartMinutes = timeToMinutes(slotStartTime);
+        const slotEndMinutes = timeToMinutes(slotEndTime);
+
+        // Check if slot could contain the booking
+        return requestedStartMinutes >= slotStartMinutes && requestedEndMinutes <= slotEndMinutes;
+      });
+
+      // Show available slots to help with debugging
+      const availableSlotsList = availabilitySlots
+        .filter(slot => slot.is_available)
+        .map(slot => {
+          const start = slot.start_time || slot.start;
+          const end = slot.end_time;
+          return `${formatTime(start)} - ${formatTime(end)}`;
+        })
+        .join(', ');
+
+      let message;
+      if (hadMatchingSlots) {
+        message = `The time slot ${formatTime(requestedStartTime)} - ${formatTime(requestedEndTime)} on ${formattedDate} is already booked by another confirmed appointment. Please choose a different time or check existing bookings.`;
+      } else {
+        const debugMessage = availableSlotsList
+          ? `Available slots on this date: ${availableSlotsList}`
+          : 'No available slots found on this date';
+        message = `No availability slot found that can contain the booking from ${formatTime(requestedStartTime)} to ${formatTime(requestedEndTime)} on ${formattedDate}. ${debugMessage}. Please create or adjust availability slots to accommodate this booking time.`;
+      }
+
       return {
         hasAvailability: false,
-        message: `No availability slot found that can contain the booking from ${formatTime(requestedStartTime)} to ${formatTime(requestedEndTime)} on ${formattedDate}. Please create an availability slot that covers this time period.`
+        message
       };
 
     } catch (error) {
@@ -1972,10 +2078,34 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       console.log(`📅 Admin booking modal - fetched ${availableSlots.length} available slots for service type "${priceType}" on ${selectedDate}`);
 
+      // Filter out past time slots if the selected date is today
+      const today = new Date().toISOString().split('T')[0];
+      const currentTime = new Date();
+      const currentHours = currentTime.getHours();
+      const currentMinutes = currentTime.getMinutes();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+      const filteredSlots = availableSlots.filter(slot => {
+        // If the selected date is not today, include all slots
+        if (selectedDate !== today) {
+          return true;
+        }
+
+        // For today's date, only include slots that haven't started yet
+        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
+        const [slotHours, slotMinutes] = startTime.split(':').map(Number);
+        const slotTimeInMinutes = slotHours * 60 + slotMinutes;
+
+        // Only include slots that start in the future (with a small buffer)
+        return slotTimeInMinutes > currentTimeInMinutes;
+      });
+
+      console.log(`📅 Admin booking modal - after filtering past slots: ${filteredSlots.length} slots remaining for ${selectedDate}`);
+
       // Convert availability slots to formatted time options
       const timeOptions: string[] = [];
 
-      availableSlots.forEach(slot => {
+      filteredSlots.forEach(slot => {
         // Handle both legacy 'start' field and new 'start_time' field
         const startTime = (slot.start || slot.start_time || '').substring(0, 5);
         const endTime = slot.end_time.substring(0, 5);
@@ -2039,17 +2169,54 @@ export const Bookings: React.FC<BookingsProps> = ({
     setTimeSlots([]);
   };
 
-  const handleNewBookingInputChange = (field: string, value: string) => {    
+  const handleNewBookingInputChange = (field: string, value: string) => {
+    // Validate input in real-time
+    let error = '';
+
+    switch (field) {
+      case 'firstName':
+      case 'lastName':
+        if (!validateName(value)) {
+          error = 'Name can only contain letters, spaces, and apostrophes';
+        } else if (value.length > 50) {
+          error = 'Name cannot exceed 50 characters';
+        }
+        break;
+      case 'email':
+        if (value && !validateEmail(value)) {
+          error = 'Please enter a valid email address';
+        }
+        break;
+      case 'phone':
+        if (value && !validatePhoneNumber(value)) {
+          error = 'Phone number can only contain numbers, spaces, hyphens, parentheses, and + sign';
+        }
+        break;
+      case 'notes':
+        if (value && !validateNotes(value)) {
+          error = 'Notes can only contain letters, numbers, spaces, and basic punctuation';
+        } else if (value.length > 1000) {
+          error = 'Notes cannot exceed 1000 characters';
+        }
+        break;
+    }
+
+    // Update form errors
+    setFormErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+
     setNewBookingData(prev => {
       const updated = { ...prev, [field]: value };
-      
+
       // Fetch time slots when service or date changes for all services
       if (field === 'service' || field === 'date') {
         const serviceName = field === 'service' ? value : updated.service;
-        const date = field === 'date' ? value : updated.date;        
+        const date = field === 'date' ? value : updated.date;
         if (serviceName && date) {
           // Find the service object to get the ID
-          const selectedService = services.find(s => s.displayName === serviceName);          
+          const selectedService = services.find(s => s.displayName === serviceName);
           if (selectedService) {
             fetchTimeSlots(selectedService.id.toString(), date);
           }
@@ -2057,7 +2224,7 @@ export const Bookings: React.FC<BookingsProps> = ({
           setTimeSlots([]);
         }
       }
-      
+
       return updated;
     });
   };
@@ -2186,12 +2353,17 @@ export const Bookings: React.FC<BookingsProps> = ({
         status: newBookingData.status
       };
 
-      // Check if we can automatically confirm this booking based on availability
-      let shouldAutoConfirm = false;
+      // Respect the user's selected status - NO auto-confirmation from admin booking modal
+      // Admin bookings should follow the normal booking creation and confirmation process
       let finalBookingData = { ...bookingData };
 
-      if (!isContactQuote && !isFullDayBooking && timeslotStartTime && timeslotEndTime) {
-        // Try to auto-match with available slots for non-contact-quote services (excluding full-day bookings)
+      console.log('📝 Admin booking modal - respecting user-selected status:', newBookingData.status);
+      console.log('📝 Admin booking modal - skipping auto-confirmation to maintain manual control');
+
+      // Only perform availability checks if user explicitly selected 'confirmed' status
+      // This allows admin to manually confirm later through the normal process
+      if (newBookingData.status === 'confirmed' && !isContactQuote && !isFullDayBooking && timeslotStartTime && timeslotEndTime) {
+        // User explicitly wants to create a confirmed booking - check availability
         const tempBooking = {
           id: '0',
           booking_date: bookingDateTime,
@@ -2208,24 +2380,25 @@ export const Bookings: React.FC<BookingsProps> = ({
         const availabilityCheck = await checkBookingAvailabilityWithAutoMatch(tempBooking);
 
         if (availabilityCheck.hasAvailability && availabilityCheck.matchedSlot) {
-          console.log('✅ Auto-confirming booking - matching slot found:', availabilityCheck.matchedSlot);
-          shouldAutoConfirm = true;
-          finalBookingData.status = 'confirmed';
+          console.log('✅ Admin requested confirmed status - matching slot found:', availabilityCheck.matchedSlot);
 
           // Update booking time to match the available slot
           const slotStartTime = availabilityCheck.matchedSlot.start_time || availabilityCheck.matchedSlot.start;
           const slotEndTime = availabilityCheck.matchedSlot.end_time;
           if (slotStartTime && slotEndTime) {
             // Keep in local time without timezone conversion to avoid timezone shifts
-            finalBookingData.booking_date = `${newBookingData.date}T${slotStartTime}:00`;
+            // Ensure slotStartTime has proper HH:MM:SS format (add :00 if only HH:MM)
+            const formattedSlotStartTime = slotStartTime.includes(':00') ? slotStartTime : `${slotStartTime}:00`;
+            finalBookingData.booking_date = `${newBookingData.date}T${formattedSlotStartTime}`;
             finalBookingData.timeslot_start_time = slotStartTime;
             finalBookingData.timeslot_end_time = slotEndTime;
           }
         } else {
-          console.log('⚠️ Creating as pending - no matching availability slot found');
+          console.log('⚠️ Admin requested confirmed status but no matching slot found - creating as pending');
+          finalBookingData.status = 'pending'; // Override to pending if no slot available
         }
       } else if (isFullDayBooking) {
-        console.log('📅 Skipping auto-confirmation logic for full-day booking - will be handled during manual confirmation');
+        console.log('📅 Full-day booking - will be handled during manual confirmation process');
       }
 
       const { booking, customer, error } = await createBookingWithCustomer(customerData, finalBookingData, true);
@@ -2247,13 +2420,13 @@ export const Bookings: React.FC<BookingsProps> = ({
         
         setAllBookings([newBookingForList, ...allBookings]);
         
-        // Show appropriate success message based on service type and auto-confirmation
+        // Show appropriate success message based on service type and final status
         if (isContactQuote) {
           showSuccess('Booking Created', 'Contact for quote booking has been created successfully. No payment request will be generated.');
-        } else if (shouldAutoConfirm) {
-          showSuccess('Booking Created & Auto-Confirmed', 'New booking has been created and automatically confirmed based on available time slot!');
+        } else if (finalBookingData.status === 'confirmed') {
+          showSuccess('Booking Created & Confirmed', 'New booking has been created with confirmed status and matching availability slot found.');
         } else {
-          showSuccess('Booking Created', 'New booking has been created successfully as pending. Admin can manually confirm once availability is checked.');
+          showSuccess('Booking Created', `New booking has been created successfully with "${finalBookingData.status}" status. Use the confirmation process to manage availability and payments.`);
         }
         
         handleCloseNewBookingModal();
@@ -3625,9 +3798,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                     type="text"
                     value={newBookingData.firstName}
                     onChange={(e) => handleNewBookingInputChange('firstName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      formErrors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="John"
                   />
+                  {formErrors.firstName && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.firstName}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
@@ -3635,9 +3813,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                     type="text"
                     value={newBookingData.lastName}
                     onChange={(e) => handleNewBookingInputChange('lastName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      formErrors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="Doe"
                   />
+                  {formErrors.lastName && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.lastName}</p>
+                  )}
                 </div>
               </div>
 
@@ -3648,9 +3831,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                     type="email"
                     value={newBookingData.email}
                     onChange={(e) => handleNewBookingInputChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      formErrors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="john@example.com"
                   />
+                  {formErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
@@ -3658,9 +3846,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                     type="tel"
                     value={newBookingData.phone}
                     onChange={(e) => handleNewBookingInputChange('phone', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      formErrors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="+353 123 456 789"
                   />
+                  {formErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+                  )}
                 </div>
               </div>
 
@@ -3796,9 +3989,17 @@ export const Bookings: React.FC<BookingsProps> = ({
                   value={newBookingData.notes}
                   onChange={(e) => handleNewBookingInputChange('notes', e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                    formErrors.notes ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
                   placeholder="Additional notes or special requirements..."
                 />
+                {formErrors.notes && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.notes}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  {newBookingData.notes.length}/1000 characters
+                </p>
               </div>
             </div>
 

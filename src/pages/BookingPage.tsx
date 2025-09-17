@@ -9,6 +9,20 @@ import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
 import PaymentModal from '../components/shared/PaymentModal';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
+import {
+  emailValidation,
+  phoneValidation,
+  firstNameValidation,
+  lastNameValidation,
+  serviceValidation,
+  dateValidation,
+  timeValidation,
+  optionalNotesValidation,
+  validateEmailRealTime,
+  validatePhoneRealTime,
+  validateNameRealTime,
+  validateNotesRealTime
+} from '../utils/formValidation';
 
 interface BookingFormData {
   firstName: string;
@@ -53,6 +67,7 @@ const BookingPage: React.FC = () => {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const [realTimeErrors, setRealTimeErrors] = useState<{[key: string]: string}>({});
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -1010,12 +1025,21 @@ const BookingPage: React.FC = () => {
                   <input
                     type="text"
                     id="firstName"
-                    {...register('firstName', { required: 'First name is required' })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    {...register('firstName', firstNameValidation)}
+                    onChange={(e) => {
+                      const error = validateNameRealTime(e.target.value, 'First name');
+                      setRealTimeErrors(prev => ({ ...prev, firstName: error }));
+                      register('firstName', firstNameValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.firstName || errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="John"
                   />
-                  {errors.firstName && (
-                    <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+                  {(realTimeErrors.firstName || errors.firstName) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.firstName || errors.firstName?.message}
+                    </p>
                   )}
                 </div>
                 
@@ -1026,12 +1050,21 @@ const BookingPage: React.FC = () => {
                   <input
                     type="text"
                     id="lastName"
-                    {...register('lastName', { required: 'Last name is required' })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    {...register('lastName', lastNameValidation)}
+                    onChange={(e) => {
+                      const error = validateNameRealTime(e.target.value, 'Last name');
+                      setRealTimeErrors(prev => ({ ...prev, lastName: error }));
+                      register('lastName', lastNameValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.lastName || errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="Doe"
                   />
-                  {errors.lastName && (
-                    <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
+                  {(realTimeErrors.lastName || errors.lastName) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.lastName || errors.lastName?.message}
+                    </p>
                   )}
                 </div>
                 
@@ -1042,18 +1075,21 @@ const BookingPage: React.FC = () => {
                   <input
                     type="email"
                     id="email"
-                    {...register('email', { 
-                      required: 'Email is required',
-                      pattern: {
-                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                        message: 'Invalid email address'
-                      }
-                    })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    {...register('email', emailValidation)}
+                    onChange={(e) => {
+                      const error = validateEmailRealTime(e.target.value);
+                      setRealTimeErrors(prev => ({ ...prev, email: error }));
+                      register('email', emailValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.email || errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     placeholder="john@example.com"
                   />
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                  {(realTimeErrors.email || errors.email) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.email || errors.email?.message}
+                    </p>
                   )}
                 </div>
                 
@@ -1064,12 +1100,21 @@ const BookingPage: React.FC = () => {
                   <input
                     type="tel"
                     id="phone"
-                    {...register('phone', { required: 'Phone number is required' })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="(01) 234-5678"
+                    {...register('phone', phoneValidation)}
+                    onChange={(e) => {
+                      const error = validatePhoneRealTime(e.target.value);
+                      setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                      register('phone', phoneValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.phone || errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                    placeholder="+353 1 234 5678"
                   />
-                  {errors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
+                  {(realTimeErrors.phone || errors.phone) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.phone || errors.phone?.message}
+                    </p>
                   )}
                 </div>
                 
@@ -1079,7 +1124,7 @@ const BookingPage: React.FC = () => {
                   </label>
                   <select
                     id="service"
-                    {...register('service', { required: 'Please select a service' })}
+                    {...register('service', serviceValidation)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   >
                     <option value="">Select a service</option>
@@ -1254,11 +1299,24 @@ const BookingPage: React.FC = () => {
                 </label>
                 <textarea
                   id="notes"
-                  {...register('notes')}
+                  {...register('notes', optionalNotesValidation)}
+                  onChange={(e) => {
+                    const error = validateNotesRealTime(e.target.value);
+                    setRealTimeErrors(prev => ({ ...prev, notes: error }));
+                    register('notes', optionalNotesValidation).onChange(e);
+                  }}
                   rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                    realTimeErrors.notes ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
                   placeholder="Please provide any additional information about your condition or specific requirements"
                 ></textarea>
+                {realTimeErrors.notes && (
+                  <p className="mt-1 text-sm text-red-600">{realTimeErrors.notes}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  {(watch('notes') || '').length}/1000 characters
+                </p>
               </div>
               
               <div className="flex flex-col items-center">

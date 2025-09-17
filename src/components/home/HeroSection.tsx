@@ -6,6 +6,17 @@ import Button from '../shared/Button';
 import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
+import {
+  emailValidation,
+  phoneValidation,
+  firstNameValidation,
+  lastNameValidation,
+  serviceValidation,
+  validateEmailRealTime,
+  validatePhoneRealTime,
+  validateNameRealTime,
+  validateNotesRealTime
+} from '../../utils/formValidation';
 
 interface Service {
   id: number | string;
@@ -16,6 +27,7 @@ interface Service {
   out_of_hour_price?: string;
   displayName?: string;
   priceType?: string;
+  booking_type?: 'book_now' | 'contact_me';
 }
 
 interface PaymentState {
@@ -42,6 +54,7 @@ const HeroSection: React.FC = () => {
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [realTimeErrors, setRealTimeErrors] = useState<{[key: string]: string}>({});
 
   // Watch form fields for time slot fetching
   const watchedService = watch('service');
@@ -186,7 +199,7 @@ const HeroSection: React.FC = () => {
       setLoadingServices(true);
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, category, price, in_hour_price, out_of_hour_price')
+        .select('id, name, category, price, in_hour_price, out_of_hour_price, booking_type')
         .eq('is_active', true)
         .order('name', { ascending: true });
 
@@ -207,14 +220,16 @@ const HeroSection: React.FC = () => {
               id: `${service.id}-in`,
               displayName: `${service.name} - In Hour (${service.in_hour_price})`,
               name: service.name,
-              priceType: 'in-hour'
+              priceType: 'in-hour',
+              booking_type: service.booking_type || 'book_now'
             });
             transformedServices.push({
               ...service,
               id: `${service.id}-out`,
               displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
               name: service.name,
-              priceType: 'out-of-hour'
+              priceType: 'out-of-hour',
+              booking_type: service.booking_type || 'book_now'
             });
           } else if (hasInHour || hasOutOfHour || hasMainPrice) {
             // Only one pricing option or main price
@@ -235,14 +250,16 @@ const HeroSection: React.FC = () => {
             transformedServices.push({
               ...service,
               displayName,
-              priceType
+              priceType,
+              booking_type: service.booking_type || 'book_now'
             });
           } else {
             // No pricing info, just show service name
             transformedServices.push({
               ...service,
               displayName: service.name,
-              priceType: 'standard'
+              priceType: 'standard',
+              booking_type: service.booking_type || 'book_now'
             });
           }
         });
@@ -368,6 +385,43 @@ const HeroSection: React.FC = () => {
     setSuccessMsg('');
 
     try {
+      // Check if selected service is "Contact Me" type
+      const selectedServiceObj = services.find(s =>
+        s.displayName === data.service || s.name === data.service
+      );
+
+      if (selectedServiceObj?.booking_type === 'contact_me') {
+        // Handle "Contact Me" services by sending consultation message directly
+        try {
+          const consultationMessage = {
+            name: `${data.firstName} ${data.lastName}`,
+            email: data.email,
+            service: selectedServiceObj.displayName || selectedServiceObj.name,
+            message: `Hi, I'm interested in ${selectedServiceObj.displayName || selectedServiceObj.name} and would like to schedule a consultation. Please contact me to discuss my needs and availability.`
+          };
+
+          // Send consultation email using contact form functionality
+          const { data: emailData, error: emailError } = await supabase.functions.invoke('send-email', {
+            body: {
+              type: 'contact',
+              data: consultationMessage
+            }
+          });
+
+          if (emailError) {
+            console.error('Error sending consultation message:', emailError);
+            setSuccessMsg('Failed to send consultation request. Please try again or contact us directly.');
+          } else {
+            setSuccessMsg('Consultation request sent successfully! We will contact you within 24 hours to discuss your needs and schedule an appointment.');
+            reset(); // Clear the form after successful submission
+          }
+        } catch (error) {
+          console.error('Error sending consultation request:', error);
+          setSuccessMsg('Failed to send consultation request. Please try again or contact us directly.');
+        }
+        setSendingEmail(false);
+        return;
+      }
       // Check for existing pending/confirmed bookings to prevent duplicates
       const { data: existingBookings, error: checkError } = await supabase
         .from('bookings')
@@ -700,70 +754,137 @@ const HeroSection: React.FC = () => {
                   <label htmlFor="firstName" className="block text-sm font-medium text-neutral-700 mb-1">
                     First Name *
                   </label>
-                  <input type="text" id="firstName" {...register('firstName',{required:'First name is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="John" />
-                  {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>}
+                  <input
+                    type="text"
+                    id="firstName"
+                    {...register('firstName', firstNameValidation)}
+                    onChange={(e) => {
+                      const error = validateNameRealTime(e.target.value, 'First name');
+                      setRealTimeErrors(prev => ({ ...prev, firstName: error }));
+                      register('firstName', firstNameValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.firstName || errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                    placeholder="John"
+                  />
+                  {(realTimeErrors.firstName || errors.firstName) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.firstName || errors.firstName?.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="lastName" className="block text-sm font-medium text-neutral-700 mb-1">
                     Last Name *
                   </label>
-                  <input type="text" id="lastName" {...register('lastName',{required:'Last name is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="Doe" />
-                  {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>}
+                  <input
+                    type="text"
+                    id="lastName"
+                    {...register('lastName', lastNameValidation)}
+                    onChange={(e) => {
+                      const error = validateNameRealTime(e.target.value, 'Last name');
+                      setRealTimeErrors(prev => ({ ...prev, lastName: error }));
+                      register('lastName', lastNameValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.lastName || errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                    placeholder="Doe"
+                  />
+                  {(realTimeErrors.lastName || errors.lastName) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.lastName || errors.lastName?.message}
+                    </p>
+                  )}
                 </div>
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-1">
                   Email Address *
                 </label>
-                <input type="email" id="email" {...register('email',{required:'Email is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="john@example.com" />
-                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                <input
+                  type="email"
+                  id="email"
+                  {...register('email', emailValidation)}
+                  onChange={(e) => {
+                    const error = validateEmailRealTime(e.target.value);
+                    setRealTimeErrors(prev => ({ ...prev, email: error }));
+                    register('email', emailValidation).onChange(e);
+                  }}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                    realTimeErrors.email || errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
+                  placeholder="john@example.com"
+                />
+                {(realTimeErrors.email || errors.email) && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {realTimeErrors.email || errors.email?.message}
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
                   Phone Number *
                 </label>
-                <input type="tel" id="phone" {...register('phone',{required:'Phone number is required'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500" placeholder="(01) 234-5678" />
-                {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
+                <input
+                  type="tel"
+                  id="phone"
+                  {...register('phone', phoneValidation)}
+                  onChange={(e) => {
+                    const error = validatePhoneRealTime(e.target.value);
+                    setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                    register('phone', phoneValidation).onChange(e);
+                  }}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                    realTimeErrors.phone || errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
+                  placeholder="+353 1 234 5678"
+                />
+                {(realTimeErrors.phone || errors.phone) && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {realTimeErrors.phone || errors.phone?.message}
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="service" className="block text-sm font-medium text-neutral-700 mb-1">
                   Service Type *
                 </label>
-                <select id="service" {...register('service',{required:'Please select a service'})} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500">
+                <select id="service" {...register('service', serviceValidation)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500">
                    <option value="">
                      {loadingServices ? 'Loading services...' : 'Select a service'}
                    </option>
-                   {!loadingServices && services.filter(service => {
-                     // Filter out "Contact for Quote" entries for booking forms
-                     const serviceText = service.displayName || service.name || '';
-                     return !/contact\s+for\s+quote/i.test(serviceText);
-                   }).map((service) => (
+                   {!loadingServices && services.map((service) => (
                      <option key={service.id} value={service.displayName || service.name}>
-                       {service.displayName || service.name}
+                       {service.displayName || service.name} {service.booking_type === 'contact_me' ? ' (Consultation Required)' : ''}
                      </option>
                    ))}
                  </select>
                 {errors.service && <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>}
                </div>
 
-              <div>
-                <label htmlFor="preferredDate" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Preferred Date 
-                </label>
-                <input
-                  type="date"
-                  id="preferredDate"
-                  {...register('preferredDate')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  min={new Date().toISOString().split('T')[0]}
-                />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Leave blank and we'll schedule your appointment for the next available slot
-                </p>
-              </div>
+              {/* Date Selection - Only show for Book Now services */}
+              {(!watchedService || services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me') && (
+                <div>
+                  <label htmlFor="preferredDate" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Preferred Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    id="preferredDate"
+                    {...register('preferredDate')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Leave blank and we'll schedule your appointment for the next available slot
+                  </p>
+                </div>
+              )}
 
-              {/* Time Selection - Only show if date is selected */}
-              {watchedDate && (
+              {/* Time Selection - Only show if date is selected AND service is book_now type */}
+              {watchedDate && watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' && (
                 <div>
                   <label htmlFor="time" className="block text-sm font-medium text-neutral-700 mb-1">
                     Preferred Time {watchedService ? '' : ''}
@@ -795,11 +916,27 @@ const HeroSection: React.FC = () => {
               )}
 
               <Button type="submit" variant="primary" fullWidth size="lg" disabled={sendingEmail}>
-                {sendingEmail ? 'Processing...' : 'Book Now'} <ArrowRight size={16} className="ml-2" />
+                {sendingEmail ? 'Processing...' :
+                 watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type === 'contact_me'
+                   ? 'Contact for Consultation'
+                   : 'Book Now'
+                } <ArrowRight size={16} className="ml-2" />
               </Button>
-              
+
+              {/* Service Type Guidance */}
+              {watchedService && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-xs text-blue-800">
+                    {services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type === 'contact_me'
+                      ? '📞 This service requires a consultation. We\'ll redirect you to our contact page to discuss your specific needs.'
+                      : '📅 You can book this service directly! Complete the form and choose your preferred time.'
+                    }
+                  </p>
+                </div>
+              )}
+
               <p className="text-xs text-center text-neutral-500 mt-4">
-                  By booking, you agree to our <a href="/terms-of-service" className="text-primary-600 hover:underline">Terms of Service</a> and <a href="/privacy-policy" className="text-primary-600 hover:underline">Privacy Policy</a>.
+                  By submitting, you agree to our <a href="/terms-of-service" className="text-primary-600 hover:underline">Terms of Service</a> and <a href="/privacy-policy" className="text-primary-600 hover:underline">Privacy Policy</a>.
                 </p>
             </form>
             )}
