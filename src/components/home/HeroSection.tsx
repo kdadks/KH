@@ -24,16 +24,36 @@ interface PaymentState {
   booking: any;
   customer: any;
   paymentCompleted: boolean;
+  paymentOptions?: {
+    deposit: { amount: number; percentage: number };
+    full: { amount: number };
+  };
+  selectedPaymentType?: 'deposit' | 'full';
 }
 
 const HeroSection: React.FC = () => {
   // Form and UI states
-  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; }
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<BookingFormData>();
+  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; preferredDate?: string; time?: string; }
+  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<BookingFormData>();
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+
+  // Watch form fields for time slot fetching
+  const watchedService = watch('service');
+  const watchedDate = watch('preferredDate');
+
+  // Helper function to format time for display
+  const formatTimeForDisplay = (time24: string): string => {
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
   
   // Payment states
   const [paymentState, setPaymentState] = useState<PaymentState>({
@@ -56,12 +76,16 @@ const HeroSection: React.FC = () => {
     setShowPaymentModal(false);
     setSelectedPaymentRequest(null);
     setPaymentProcessing(false);
+    setTimeSlots([]);
+    setSelectedService(null);
     setPaymentState({
       showPayment: false,
       paymentRequest: null,
       booking: null,
       customer: null,
-      paymentCompleted: false
+      paymentCompleted: false,
+      paymentOptions: undefined,
+      selectedPaymentType: undefined
     });
   };
 
@@ -72,12 +96,16 @@ const HeroSection: React.FC = () => {
     setShowPaymentModal(false);
     setSelectedPaymentRequest(null);
     setPaymentProcessing(false);
+    setTimeSlots([]);
+    setSelectedService(null);
     setPaymentState({
       showPayment: false,
       paymentRequest: null,
       booking: null,
       customer: null,
-      paymentCompleted: false
+      paymentCompleted: false,
+      paymentOptions: undefined,
+      selectedPaymentType: undefined
     });
   };
 
@@ -130,6 +158,28 @@ const HeroSection: React.FC = () => {
   useEffect(() => {
     fetchServices();
   }, []);
+
+  // Watch for service and date changes to fetch time slots
+  useEffect(() => {
+    if (watchedService && watchedDate) {
+      // Find selected service
+      let service = services.find(s => s.displayName === watchedService);
+      if (!service) {
+        service = services.find(s => s.name === watchedService);
+      }
+
+      if (service) {
+        setSelectedService(service);
+        fetchTimeSlots(service, watchedDate);
+      } else {
+        setSelectedService(null);
+        setTimeSlots([]);
+      }
+    } else {
+      setSelectedService(null);
+      setTimeSlots([]);
+    }
+  }, [watchedService, watchedDate, services]);
 
   const fetchServices = async () => {
     try {
@@ -205,6 +255,79 @@ const HeroSection: React.FC = () => {
     }
   };
 
+  const fetchTimeSlots = async (service: Service, selectedDate: string) => {
+    try {
+      setLoadingTimeSlots(true);
+
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0]);
+        } else {
+          serviceId = parseInt(service.id);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId, returning');
+        setTimeSlots([]);
+        return;
+      }
+
+      // Fetch available slots for the selected date
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .eq('date', selectedDate)
+        .eq('is_available', true)
+        .order('start_time', { ascending: true });
+
+      // Filter by slot_type based on service pricing type
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+      // If service.priceType is 'standard' or undefined, show all slots
+
+      const { data, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching availability for date:', error);
+        setTimeSlots([]);
+        return;
+      }
+
+      // Convert availability slots to time options
+      const timeOptions: string[] = [];
+
+      data?.forEach(slot => {
+        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
+        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
+
+        const startDisplay = formatTimeForDisplay(startTime);
+        const endDisplay = formatTimeForDisplay(endTime);
+
+        // Format: "HH:MM-HH:MM|Display String"
+        const timeRange = `${startTime}-${endTime}`;
+        const displayRange = `${startDisplay} - ${endDisplay}`;
+        const timeOption = `${timeRange}|${displayRange}`;
+
+        timeOptions.push(timeOption);
+      });
+
+      setTimeSlots(timeOptions);
+    } catch (error) {
+      console.error('Error fetching time slots:', error);
+      setTimeSlots([]);
+    } finally {
+      setLoadingTimeSlots(false);
+    }
+  };
+
   // Service mapping is no longer needed as we use service names directly
 
   const sendBookingEmail = async (booking: BookingFormData, bookingRecord: any) => {
@@ -272,10 +395,43 @@ const HeroSection: React.FC = () => {
       };
 
       // Prepare booking data for hero section (quick appointment)
+      let bookingDate: string;
+
+      if (data.preferredDate) {
+        // Use the customer's preferred date
+        bookingDate = data.preferredDate;
+      } else {
+        // Set to next business day at 9 AM for scheduling
+        const nextBusinessDay = new Date();
+        nextBusinessDay.setDate(nextBusinessDay.getDate() + 1);
+        // If tomorrow is weekend, move to Monday
+        if (nextBusinessDay.getDay() === 0) nextBusinessDay.setDate(nextBusinessDay.getDate() + 1); // Sunday -> Monday
+        if (nextBusinessDay.getDay() === 6) nextBusinessDay.setDate(nextBusinessDay.getDate() + 2); // Saturday -> Monday
+
+        bookingDate = nextBusinessDay.toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
+
+      // Handle time slot selection
+      let startTime = '09:00:00'; // Default 9 AM start time
+      let endTime = '10:00:00';   // Default 1 hour session
+
+      if (data.time) {
+        // Parse selected time slot (format: "09:00-10:00")
+        const [start, end] = data.time.split('-');
+        if (start && end) {
+          startTime = `${start}:00`;
+          endTime = `${end}:00`;
+        }
+      }
+
       const bookingData = {
         package_name: data.service,
-        booking_date: new Date().toISOString(), // Set current date and time
-        notes: 'Quick Appointment from Hero Section',
+        booking_date: bookingDate,
+        timeslot_start_time: startTime,
+        timeslot_end_time: endTime,
+        notes: data.preferredDate || data.time
+          ? `Quick Appointment from Hero Section${data.preferredDate ? ` - Customer preferred date: ${data.preferredDate}` : ''}${data.time ? ` - Requested time: ${data.time}` : ''}. Please contact to confirm.`
+          : 'Quick Appointment from Hero Section - Please contact customer to confirm exact time',
         status: 'pending'
       };
 
@@ -296,24 +452,69 @@ const HeroSection: React.FC = () => {
       }
 
       if (booking && customer) {
-        console.log('✅ HeroSection - Booking created successfully:', { 
-          booking, 
-          customer, 
+        console.log('✅ HeroSection - Booking created successfully:', {
+          booking,
+          customer,
           paymentRequest: paymentRequest ? 'Created' : 'Not created',
-          paymentRequestDetails: paymentRequest 
+          paymentRequestDetails: paymentRequest
         });
-        
+
         if (paymentRequest && paymentRequest.amount > 0) {
           console.log('💳 Payment request created with amount > 0, showing payment interface');
-          // Show payment interface with Pay Now button only if amount > 0
+
+          // Calculate actual service cost and payment options similar to main booking system
+          let actualServiceCost = paymentRequest.amount; // Fallback to payment request amount
+
+          try {
+            console.log('🔍 Calculating actual service cost for:', data.service);
+
+            // Import pricing functions
+            const { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } = await import('../../services/pricingService');
+
+            // Extract base service name and determine time slot type
+            const baseServiceName = extractBaseServiceName(data.service);
+            const timeSlotType = determineTimeSlotType(data.service);
+
+            // Fetch service pricing from database
+            const servicePricing = await fetchServicePricing(baseServiceName);
+
+            if (servicePricing) {
+              actualServiceCost = getServicePrice(servicePricing, timeSlotType);
+              console.log('✅ Service cost calculated from database:', actualServiceCost);
+            } else {
+              console.log('⚠️ Service pricing not found in database, using payment request amount');
+            }
+          } catch (pricingError) {
+            console.error('Error calculating service cost:', pricingError);
+          }
+
+          // Calculate payment options (20% deposit, full payment)
+          const depositPercentage = 20;
+          const depositAmount = Math.round(actualServiceCost * (depositPercentage / 100));
+          const paymentOptions = {
+            deposit: { amount: depositAmount, percentage: depositPercentage },
+            full: { amount: actualServiceCost }
+          };
+
+          console.log('💰 Payment options calculated:', {
+            selectedService: data.service,
+            actualServiceCost,
+            paymentOptions: {
+              deposit: `€${paymentOptions.deposit.amount} (${paymentOptions.deposit.percentage}%)`,
+              full: `€${paymentOptions.full.amount}`
+            }
+          });
+
+          // Show payment interface with deposit/full payment options
           setPaymentState({
             showPayment: true,
             paymentRequest,
             booking,
             customer,
-            paymentCompleted: false
+            paymentCompleted: false,
+            paymentOptions,
+            selectedPaymentType: 'deposit' // Default to deposit
           });
-          // Removed duplicate success message - booking creation is already shown in the UI
         } else {
           // No payment request created OR payment request with 0 amount
           if (paymentRequest && paymentRequest.amount === 0) {
@@ -336,16 +537,22 @@ const HeroSection: React.FC = () => {
     }
   };
 
-  const handlePayNow = async () => {
+  const handlePayNow = async (paymentType: 'deposit' | 'full' = 'deposit') => {
     try {
-      // Open the PaymentModal with the payment request
-      if (paymentState.paymentRequest && paymentState.customer) {
+      if (paymentState.paymentRequest && paymentState.customer && paymentState.paymentOptions) {
         // Ensure customer data is properly structured
         const customerData = paymentState.customer;
-        
+
+        // Get the amount based on payment type
+        const selectedAmount = paymentType === 'deposit'
+          ? paymentState.paymentOptions.deposit.amount
+          : paymentState.paymentOptions.full.amount;
+
         // Transform the payment request to match PaymentRequestWithCustomer structure
         const paymentRequestWithCustomer = {
           ...paymentState.paymentRequest,
+          amount: selectedAmount, // Use selected payment amount
+          payment_type: paymentType, // Add payment type for tracking
           customer: {
             first_name: customerData.first_name || '',
             last_name: customerData.last_name || '',
@@ -354,17 +561,17 @@ const HeroSection: React.FC = () => {
           service_name: paymentState.booking?.package_name,
           booking_date: paymentState.booking?.booking_date
         };
-        
-        console.log('Opening PaymentModal with:', paymentRequestWithCustomer);
-        
+
+        console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
+
         setSelectedPaymentRequest(paymentRequestWithCustomer);
         setShowPaymentModal(true);
-        // Clear any previous messages when opening modal
-        setSuccessMsg('');
+        setSuccessMsg(`Opening secure payment modal for ${paymentType === 'deposit' ? '20% deposit' : 'full payment'}...`);
       } else {
-        console.error('Missing payment request or customer data:', { 
-          paymentRequest: paymentState.paymentRequest, 
-          customer: paymentState.customer 
+        console.error('Missing payment request, customer data, or payment options:', {
+          paymentRequest: paymentState.paymentRequest,
+          customer: paymentState.customer,
+          paymentOptions: paymentState.paymentOptions
         });
         setSuccessMsg('Payment Error: Missing payment information. Please try again.');
       }
@@ -538,7 +745,55 @@ const HeroSection: React.FC = () => {
                  </select>
                 {errors.service && <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>}
                </div>
-              
+
+              <div>
+                <label htmlFor="preferredDate" className="block text-sm font-medium text-neutral-700 mb-1">
+                  Preferred Date 
+                </label>
+                <input
+                  type="date"
+                  id="preferredDate"
+                  {...register('preferredDate')}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Leave blank and we'll schedule your appointment for the next available slot
+                </p>
+              </div>
+
+              {/* Time Selection - Only show if date is selected */}
+              {watchedDate && (
+                <div>
+                  <label htmlFor="time" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Preferred Time {watchedService ? '' : ''}
+                  </label>
+                  <select
+                    id="time"
+                    {...register('time')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">
+                      {!watchedService ? 'Please select a service first' :
+                       loadingTimeSlots ? 'Loading available times...' :
+                       timeSlots.length === 0 ? `No available slots for ${new Date(watchedDate).toLocaleDateString('en-IE')}` :
+                       'Select a time slot'}
+                    </option>
+                    {timeSlots.map((slot, index) => {
+                      const [timeValue, displayTime] = slot.split('|');
+                      return (
+                        <option key={index} value={timeValue}>
+                          {displayTime}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Available time slots based on our availability. Leave blank for default scheduling.
+                  </p>
+                </div>
+              )}
+
               <Button type="submit" variant="primary" fullWidth size="lg" disabled={sendingEmail}>
                 {sendingEmail ? 'Processing...' : 'Book Now'} <ArrowRight size={16} className="ml-2" />
               </Button>
@@ -559,7 +814,7 @@ const HeroSection: React.FC = () => {
 
 
             {/* Payment Interface - Only show when payment is required but not yet completed */}
-            {paymentState.showPayment && !paymentState.paymentCompleted && (
+            {paymentState.showPayment && !paymentState.paymentCompleted && paymentState.paymentOptions && (
               <div className="mt-6 p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div className="text-center">
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
@@ -568,19 +823,61 @@ const HeroSection: React.FC = () => {
                       Service: {paymentState.booking?.package_name}
                     </p>
                   </div>
-                  
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <h3 className="font-semibold text-blue-900 mb-2">Payment Required</h3>
-                    <p className="text-blue-800 text-sm mb-3">
-                      A deposit payment of <strong>€{paymentState.paymentRequest?.amount}</strong> is required to confirm your booking.
-                    </p>
-                    <Button
-                      onClick={handlePayNow}
-                      variant="primary"
-                      className="w-full"
-                    >
-                      Pay Now - €{paymentState.paymentRequest?.amount}
-                    </Button>
+
+                  <div className="mb-6">
+                    <h3 className="font-semibold text-gray-900 mb-4 text-lg">Choose Your Payment Option</h3>
+
+                    <div className="space-y-4">
+                      {/* Deposit Payment Option */}
+                      <div className="border-2 border-primary-300 rounded-lg p-4 bg-primary-25">
+                        <div className="flex justify-between items-center mb-3">
+                          <div>
+                            <h4 className="font-semibold text-primary-800">20% Deposit</h4>
+                            <p className="text-sm text-primary-600">Secure your booking now, pay the rest later</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-primary-700">
+                              €{paymentState.paymentOptions.deposit.amount}
+                            </div>
+                            <div className="text-xs text-primary-600">
+                              of €{paymentState.paymentOptions.full.amount} total
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handlePayNow('deposit')}
+                          variant="primary"
+                          className="w-full"
+                        >
+                          Pay 20% Deposit - €{paymentState.paymentOptions.deposit.amount}
+                        </Button>
+                      </div>
+
+                      {/* Full Payment Option */}
+                      <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-25">
+                        <div className="flex justify-between items-center mb-3">
+                          <div>
+                            <h4 className="font-semibold text-gray-800">Full Payment</h4>
+                            <p className="text-sm text-gray-600">Pay the complete amount upfront</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-gray-700">
+                              €{paymentState.paymentOptions.full.amount}
+                            </div>
+                            <div className="text-xs text-green-600">
+                              No further payments needed
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handlePayNow('full')}
+                          variant="outline"
+                          className="w-full border-gray-400 text-gray-700 hover:bg-gray-200"
+                        >
+                          Pay Full Amount - €{paymentState.paymentOptions.full.amount}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="text-center">
