@@ -163,7 +163,93 @@ export const findOrCreateCustomer = async (customerData: {
       .single();
 
     if (createError) {
-      console.error('Error creating customer:', createError);
+      console.error('Error creating customer:', {
+        code: createError.code,
+        message: createError.message,
+        details: createError.details,
+        hint: createError.hint,
+        customerEmail: customerData.email
+      });
+
+      // Handle duplicate key constraint violation
+      if (createError.code === '23505' || createError.message.includes('duplicate key value violates unique constraint')) {
+        const constraintName = createError.message.match(/unique constraint "([^"]+)"/)?.[1];
+        console.log(`🔄 Constraint violation detected: ${constraintName}. Attempting to resolve...`);
+
+        if (constraintName === 'customers_pkey') {
+          console.error('❌ Primary key constraint violation detected - this suggests an ID sequence issue');
+          // For primary key violations, we need to retry the entire operation
+          // This is likely an ID sequence problem that needs database attention
+          return { customer: null, error: 'Database ID sequence error. Please try again or contact support.', isNewCustomer: false };
+        }
+
+        if (constraintName === 'customers_email_key' || constraintName?.includes('email')) {
+          console.log('🔄 Email constraint violation - customer with this email already exists, fetching...');
+
+          // Try to fetch the existing customer again with a small delay to ensure the other transaction has completed
+          await new Promise(resolve => setTimeout(resolve, 200));
+
+          const { data: existingAfterConflict, error: refetchError } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('email', customerData.email.toLowerCase().trim())
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (refetchError) {
+            console.error('Error refetching customer after conflict:', refetchError);
+            return { customer: null, error: 'Failed to resolve customer creation conflict', isNewCustomer: false };
+          }
+
+          if (existingAfterConflict) {
+            // Return decrypted version of the existing customer found after conflict
+            const decryptedExistingCustomer = { ...existingAfterConflict };
+            decryptedExistingCustomer.first_name = isDataEncrypted(existingAfterConflict.first_name)
+              ? decryptSensitiveData(existingAfterConflict.first_name)
+              : existingAfterConflict.first_name;
+            decryptedExistingCustomer.last_name = isDataEncrypted(existingAfterConflict.last_name)
+              ? decryptSensitiveData(existingAfterConflict.last_name)
+              : existingAfterConflict.last_name;
+            decryptedExistingCustomer.phone = existingAfterConflict.phone && isDataEncrypted(existingAfterConflict.phone)
+              ? decryptSensitiveData(existingAfterConflict.phone)
+              : existingAfterConflict.phone;
+
+            console.log('✅ Successfully resolved race condition - found existing customer');
+            return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
+          } else {
+            console.error('❌ Customer should exist but was not found after email constraint violation');
+            return { customer: null, error: 'Customer creation conflict could not be resolved', isNewCustomer: false };
+          }
+        }
+
+        // Generic constraint violation
+        console.log('🔄 Generic constraint violation, attempting to fetch existing customer...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const { data: existingAfterConflict, error: refetchError } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('email', customerData.email.toLowerCase().trim())
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!refetchError && existingAfterConflict) {
+          const decryptedExistingCustomer = { ...existingAfterConflict };
+          decryptedExistingCustomer.first_name = isDataEncrypted(existingAfterConflict.first_name)
+            ? decryptSensitiveData(existingAfterConflict.first_name)
+            : existingAfterConflict.first_name;
+          decryptedExistingCustomer.last_name = isDataEncrypted(existingAfterConflict.last_name)
+            ? decryptSensitiveData(existingAfterConflict.last_name)
+            : existingAfterConflict.last_name;
+          decryptedExistingCustomer.phone = existingAfterConflict.phone && isDataEncrypted(existingAfterConflict.phone)
+            ? decryptSensitiveData(existingAfterConflict.phone)
+            : existingAfterConflict.phone;
+
+          console.log('✅ Successfully resolved constraint violation - found existing customer');
+          return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
+        }
+      }
+
       return { customer: null, error: createError.message, isNewCustomer: false };
     }
 
