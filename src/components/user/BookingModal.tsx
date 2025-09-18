@@ -795,7 +795,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
             )}
             <p className="mt-1 text-xs text-gray-500">
               {formData.notes.length}/1000 characters
-            </div>
+            </p>
           </div>
 
           {/* Important Notice */}
