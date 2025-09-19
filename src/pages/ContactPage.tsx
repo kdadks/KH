@@ -43,7 +43,8 @@ const ContactPage: React.FC = () => {
         setServicesLoading(true);
         const { data, error } = await supabase
           .from('services')
-          .select('id, name, price, in_hour_price, out_of_hour_price')
+          .select('id, name, price, in_hour_price, out_of_hour_price, is_active')
+          .eq('is_active', true)
           .order('name', { ascending: true });
 
         if (error) {
@@ -85,7 +86,7 @@ const ContactPage: React.FC = () => {
               // Only one pricing option or main price
               let displayName = service.name;
               let priceType = 'standard';
-              
+
               if (hasInHour) {
                 displayName = `${service.name} - In Hour (${service.in_hour_price})`;
                 priceType = 'in-hour';
@@ -96,7 +97,7 @@ const ContactPage: React.FC = () => {
                 displayName = `${service.name} (${service.price})`;
                 priceType = 'standard';
               }
-              
+
               transformedServices.push({
                 ...service,
                 displayName,
@@ -158,21 +159,51 @@ const ContactPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Reset form after submission
-    setFormData({
-      name: '',
-      email: '',
-      service: '',
-      message: ''
-    });
-    setIsSubmitting(false);
-    
-    // You can add actual form submission logic here
-    showSuccess('Message sent successfully!');
+
+    try {
+      // Send contact form email to admin
+      const response = await fetch('/.netlify/functions/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailType: 'contact_form',
+          recipientEmail: 'info@khtherapy.ie',
+          data: {
+            customer_name: formData.name,
+            customer_email: formData.email,
+            service_name: formData.service,
+            message: formData.message,
+            submission_date: new Date().toLocaleDateString(),
+            submission_time: new Date().toLocaleTimeString()
+          },
+          subject: `New Contact Form Submission - ${formData.service || 'General Inquiry'}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Email sending failed: ${response.status}`);
+      }
+
+      // Reset form after successful submission
+      setFormData({
+        name: '',
+        email: '',
+        service: '',
+        message: ''
+      });
+
+      // Clear any real-time errors
+      setRealTimeErrors({});
+
+      showSuccess('Message sent successfully! We\'ll get back to you within 24 hours.');
+    } catch (error) {
+      console.error('Error sending contact form:', error);
+      showSuccess('Message received! If you don\'t hear back within 24 hours, please call us directly at (083) 8009404.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
