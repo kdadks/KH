@@ -1143,6 +1143,58 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'contact_form':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">New Contact Form Submission</h1>
+            </div>
+            <div class="content">
+              <h2>📧 New Contact Form Message</h2>
+              <p>You have received a new message from your website contact form.</p>
+              
+              <div class="details">
+                <h3>👤 Contact Information</h3>
+                <p><strong>Name:</strong> ${data.customer_name}</p>
+                <p><strong>Email:</strong> ${data.customer_email}</p>
+                <p><strong>Service Interest:</strong> ${data.service_name || 'General Inquiry'}</p>
+                <p><strong>Submitted:</strong> ${data.submission_date} at ${data.submission_time}</p>
+              </div>
+              
+              <div class="details">
+                <h3>💬 Message</h3>
+                <p style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border-left: 4px solid #059669; white-space: pre-wrap;">${data.message}</p>
+              </div>
+              
+              <div class="highlight">
+                <p><strong>⚡ Action Required</strong></p>
+                <p>Please respond to this inquiry within 24 hours. You can reply directly to <strong>${data.customer_email}</strong> or call them if they provided a phone number.</p>
+              </div>
+              
+              <div class="details">
+                <h3>📞 Quick Actions</h3>
+                <p>• <a href="mailto:${data.customer_email}?subject=Re: Your inquiry about ${data.service_name || 'our services'}" style="color: #059669; text-decoration: none;">📧 Reply to ${data.customer_name}</a></p>
+                <p>• Review their service interest: <strong>${data.service_name || 'General Inquiry'}</strong></p>
+                <p>• Consider booking them for a consultation if appropriate</p>
+              </div>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy Admin System</strong> | Generated at ${new Date().toLocaleString()}</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from your website contact form. Please respond promptly to maintain excellent customer service.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     default:
       return `
         <!DOCTYPE html>
