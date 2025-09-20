@@ -14,7 +14,7 @@ const createTransporter = () => {
 };
 
 // Calendar ICS generation function
-const generateICS = (data) => {
+const generateICS = (data, isRescheduled = false) => {
   // Parse the appointment time more robustly
   let appointmentTime = data.appointment_time;
   
@@ -55,6 +55,24 @@ const generateICS = (data) => {
     return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   };
   
+  // For rescheduled appointments, increment sequence number to update calendar entries
+  const sequenceNumber = isRescheduled ? 1 : 0;
+  
+  // Enhanced description for rescheduled appointments
+  let description = `${data.service_name} appointment at KH Therapy\\nBooking Reference: ${data.booking_reference}`;
+  
+  if (isRescheduled && data.old_appointment_date && data.old_appointment_time) {
+    description += `\\nRescheduled from: ${data.old_appointment_date} at ${data.old_appointment_time}`;
+  }
+  
+  if (data.reschedule_reason) {
+    description += `\\nReschedule Reason: ${data.reschedule_reason}`;
+  }
+  
+  if (data.special_instructions) {
+    description += `\\nSpecial Instructions: ${data.special_instructions}`;
+  }
+  
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -63,11 +81,11 @@ const generateICS = (data) => {
     `UID:${data.booking_reference}@khtherapy.ie`,
     `DTSTART:${formatDate(startDate)}`,
     `DTEND:${formatDate(endDate)}`,
-    `SUMMARY:${data.service_name} - KH Therapy`,
-    `DESCRIPTION:${data.service_name} appointment at KH Therapy\\nBooking Reference: ${data.booking_reference}${data.special_instructions ? '\\nSpecial Instructions: ' + data.special_instructions : ''}`,
+    `SUMMARY:${data.service_name} - KH Therapy${isRescheduled ? ' (Rescheduled)' : ''}`,
+    `DESCRIPTION:${description}`,
     `LOCATION:${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}`,
     'STATUS:CONFIRMED',
-    'SEQUENCE:0',
+    `SEQUENCE:${sequenceNumber}`,
     'BEGIN:VALARM',
     'TRIGGER:-PT15M',
     'DESCRIPTION:Appointment reminder',
@@ -1558,23 +1576,28 @@ exports.handler = async (event, context) => {
       mailOptions.from.name = `KH Therapy Admin (${new Date().toLocaleDateString()})`;
     }
 
-    // Add calendar attachment for booking confirmations
-    if (emailType === 'admin_booking_confirmation' && data.appointment_date && data.appointment_time) {
-      console.log(`📅 Generating ICS calendar file for admin booking confirmation`);
-      const icsContent = generateICS(data);
+    // Add calendar attachment for booking confirmations and rescheduling
+    const emailTypesWithCalendar = ['admin_booking_confirmation', 'booking_rescheduled'];
+    
+    if (emailTypesWithCalendar.includes(emailType) && data.appointment_date && data.appointment_time) {
+      console.log(`📅 Generating ICS calendar file for ${emailType}`);
+      const isRescheduled = emailType === 'booking_rescheduled';
+      const icsContent = generateICS(data, isRescheduled);
       
       // Only add attachment if ICS content was generated successfully
       if (icsContent && icsContent.length > 0) {
         console.log(`✅ ICS calendar file generated successfully. Size: ${icsContent.length} characters`);
+        const filename = isRescheduled ? 'rescheduled_appointment.ics' : 'appointment.ics';
+        
         mailOptions.attachments = [
           {
-            filename: 'appointment.ics',
+            filename: filename,
             content: icsContent,
             contentType: 'text/calendar; charset=utf-8; method=REQUEST'
           }
         ];
       } else {
-        console.warn(`⚠️ Failed to generate ICS content for admin booking confirmation`);
+        console.warn(`⚠️ Failed to generate ICS content for ${emailType}`);
       }
     }
 
