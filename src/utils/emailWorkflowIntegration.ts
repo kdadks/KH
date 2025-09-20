@@ -123,7 +123,7 @@ export const integratePaymentEmailWorkflow = async (
  * Called when a new booking is created
  */
 export const integrateBookingCreationEmailWorkflow = async (
-  bookingId: number,
+  bookingId: string,
   customerId: number,
   paymentRequestId?: number
 ): Promise<{ success: boolean; results: any; errors: string[] }> => {
@@ -222,7 +222,7 @@ export const integrateBookingCreationEmailWorkflow = async (
  * Called when admin confirms a booking
  */
 export const integrateAdminConfirmationEmailWorkflow = async (
-  bookingId: number,
+  bookingId: string,
   adminEmail?: string
 ): Promise<{ success: boolean; results: any; errors: string[] }> => {
   
@@ -319,7 +319,7 @@ export const testEmailWorkflowIntegration = async (): Promise<{
       appointment_date: '2024-01-15',
       appointment_time: '10:00',
       booking_reference: 'KH-TEST-123',
-      booking_id: 123,
+      booking_id: 'test-uuid-123',
       customer_id: 456
     };
 
@@ -367,7 +367,7 @@ export const testEmailWorkflowIntegration = async (): Promise<{
  * Called when admin cancels a booking - handles email notification and payment request cancellation
  */
 export const integrateBookingCancellationWorkflow = async (
-  bookingId: number,
+  bookingId: string,
   cancellationReason?: string,
   refundInfo?: string
 ): Promise<{ success: boolean; results: any; errors: string[] }> => {
@@ -565,7 +565,7 @@ export const integrateBookingCancellationWorkflow = async (
  * Called when a booking is rescheduled by admin or customer
  */
 export const integrateBookingReschedulingWorkflow = async (
-  bookingId: number,
+  bookingId: string,
   newAppointmentDate: string,
   newAppointmentTime: string,
   reschedulingOptions: {

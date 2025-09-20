@@ -1380,7 +1380,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         const { integrateAdminConfirmationEmailWorkflow } = await import('../../utils/emailWorkflowIntegration');
         
         const result = await integrateAdminConfirmationEmailWorkflow(
-          Number(booking.id),
+          booking.id!,
           'info@khtherapy.ie' // Admin email
         );
 
@@ -1802,7 +1802,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       const { integrateBookingCancellationWorkflow } = await import('../../utils/emailWorkflowIntegration');
       
       const cancellationResult = await integrateBookingCancellationWorkflow(
-        Number(bookingToCancel.id),
+        bookingToCancel.id!,
         'Booking cancelled by admin',
         'If you made a payment, our team will contact you about refund processing within 2-3 business days.'
       );
@@ -1888,7 +1888,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
       
       const result = await integrateBookingReschedulingWorkflow(
-        Number(booking.id),
+        booking.id!,
         newDate,
         newTime,
         {
@@ -1941,7 +1941,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
         
         const result = await integrateBookingReschedulingWorkflow(
-          Number(bookingToReschedule.id),
+          bookingToReschedule.id!,
           newDate,
           newTime,
           {

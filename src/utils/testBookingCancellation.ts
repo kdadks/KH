@@ -19,7 +19,7 @@ const TEST_BOOKING_DATA: BookingEmailData = {
   appointment_date: '2024-02-15',
   appointment_time: '10:00',
   booking_reference: 'KH-TEST-123',
-  booking_id: 123,
+  booking_id: '123',
   customer_id: 456,
   therapist_name: 'KH Therapy Team',
   clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
@@ -92,7 +92,7 @@ export const testBookingCancellationEmail = async (): Promise<{
  * This function should only be run in development/staging environments
  */
 export const testCompleteCancellationWorkflow = async (
-  bookingId?: number
+  bookingId?: string
 ): Promise<{
   success: boolean;
   results: any;
@@ -106,7 +106,7 @@ export const testCompleteCancellationWorkflow = async (
 
   try {
     // Use provided booking ID or a test booking ID
-    const testBookingId = bookingId || 999999; // Use a non-existent ID for testing
+    const testBookingId = bookingId || 'test-uuid-999999'; // Use a non-existent ID for testing
     
     const result = await integrateBookingCancellationWorkflow(
       testBookingId,
@@ -216,7 +216,7 @@ export const validateCancellationEmailTemplate = (): {
  */
 export const runAllCancellationTests = async (
   includeIntegrationTest: boolean = false,
-  testBookingId?: number
+  testBookingId?: string
 ): Promise<{
   success: boolean;
   results: any;
