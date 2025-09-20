@@ -427,6 +427,63 @@ export const integrateBookingCancellationWorkflow = async (
       throw new Error(`Failed to update booking status: ${updateBookingError.message}`);
     }
 
+    // Restore availability slot if booking was confirmed and has timeslot information
+    let availabilitySlotRestored = false;
+    if (booking.status === 'confirmed' && booking.timeslot_start_time && booking.timeslot_end_time && booking.booking_date) {
+      console.log('🔍 Finding availability slot to restore for cancelled booking:', bookingId);
+      
+      // Extract booking date and time from booking_date
+      const bookingDate = booking.booking_date.split('T')[0]; // Get YYYY-MM-DD format
+      const bookingTime = booking.timeslot_start_time;
+      
+      // Find matching availability slot
+      const { data: availabilitySlots, error: availabilityQueryError } = await supabase
+        .from('availability')
+        .select('id, date, start_time, end_time, start, is_available')
+        .eq('date', bookingDate);
+
+      if (!availabilityQueryError && availabilitySlots && availabilitySlots.length > 0) {
+        // Convert booking time to minutes for comparison
+        const bookingMinutes = parseInt(bookingTime.substring(0, 2)) * 60 + parseInt(bookingTime.substring(3, 5));
+
+        // Find slot that contains this booking time
+        const matchingSlot = availabilitySlots.find(slot => {
+          const slotStartTime = slot.start_time || slot.start || '';
+          const slotEndTime = slot.end_time || '';
+
+          if (!slotStartTime || !slotEndTime) return false;
+
+          const slotStartMinutes = parseInt(slotStartTime.substring(0, 2)) * 60 + parseInt(slotStartTime.substring(3, 5));
+          const slotEndMinutes = parseInt(slotEndTime.substring(0, 2)) * 60 + parseInt(slotEndTime.substring(3, 5));
+
+          return bookingMinutes >= slotStartMinutes && bookingMinutes < slotEndMinutes;
+        });
+
+        if (matchingSlot) {
+          console.log('🔄 Restoring availability slot after booking cancellation:', matchingSlot.id);
+
+          const { error: availabilityRestoreError } = await supabase
+            .from('availability')
+            .update({ is_available: true })
+            .eq('id', matchingSlot.id);
+
+          if (availabilityRestoreError) {
+            console.error('❌ Failed to restore availability slot:', availabilityRestoreError);
+            // Don't throw error - booking is already cancelled, just log the issue
+          } else {
+            console.log('✅ Availability slot restored to available');
+            availabilitySlotRestored = true;
+          }
+        } else {
+          console.log('❌ No matching availability slot found to restore - this may be expected if slot was manually created');
+        }
+      } else {
+        console.log('❌ Failed to query availability slots or no slots found for date:', bookingDate);
+      }
+    } else {
+      console.log('ℹ️ Skipping availability slot restoration - booking was not confirmed or missing timeslot info');
+    }
+
     // Cancel all pending payment requests for this booking
     if (hasPaymentRequests) {
       const { error: updatePaymentError } = await supabase
@@ -486,9 +543,10 @@ export const integrateBookingCancellationWorkflow = async (
 
     console.log('✅ Booking cancellation workflow completed. Success:', result.success);
     
-    // Add information about payment request cancellation to results
+    // Add information about payment request cancellation and availability slot restoration to results
     result.results.paymentRequestsCancelled = hasPaymentRequests;
     result.results.bookingStatusUpdated = true;
+    result.results.availabilitySlotRestored = availabilitySlotRestored;
     
     return result;
 

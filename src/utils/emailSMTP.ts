@@ -478,27 +478,31 @@ export const sendAdminBookingNotificationOnly = async (
       ? decryptSensitiveData(bookingData.customer_name) 
       : bookingData.customer_name;
     
-    const emailData = {
-      ...bookingData,
-      customer_name: decryptedCustomerName
-    };
-    
     // Send to admin only - try alternative admin email first, then fallback to info@khtherapy.ie
     const adminEmailAddress = adminEmail || 
                               process.env.VITE_ADMIN_EMAIL || 
                               'info@khtherapy.ie';
     
+    // Use admin_notification template for new booking requests (not booking confirmations)
     const adminEmailData = {
-      ...emailData,
-      customer_name: `New Booking Alert: ${decryptedCustomerName}`,
-      // Add admin-specific fields to differentiate the email
-      is_admin_notification: true,
-      original_customer_name: decryptedCustomerName,
-      notification_type: 'new_booking'
+      customer_name: 'Admin',
+      notification_type: 'Booking Request',
+      message: `A new booking request has been received from ${decryptedCustomerName} and is pending review.`,
+      details: {
+        customer_name: decryptedCustomerName,
+        customer_email: bookingData.customer_email,
+        service_name: bookingData.service_name,
+        appointment_date: bookingData.appointment_date,
+        appointment_time: bookingData.appointment_time,
+        booking_reference: bookingData.booking_reference,
+        special_instructions: bookingData.special_instructions || 'None',
+        total_amount: bookingData.total_amount || 0,
+        status: 'Pending Review'
+      }
     };
-    const adminSubject = `🔔 New Booking Created - ${decryptedCustomerName} - ${emailData.service_name}`;
+    const adminSubject = `🔔 New Booking Request - ${decryptedCustomerName} - ${bookingData.service_name}`;
     
-    const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
+    const adminSuccess = await sendEmail('admin_notification', adminEmailAddress, adminEmailData, adminSubject);
     
     return { adminSuccess };
   } catch (error) {
