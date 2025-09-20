@@ -1560,10 +1560,12 @@ exports.handler = async (event, context) => {
 
     // Add calendar attachment for booking confirmations
     if (emailType === 'admin_booking_confirmation' && data.appointment_date && data.appointment_time) {
+      console.log(`📅 Generating ICS calendar file for admin booking confirmation`);
       const icsContent = generateICS(data);
       
       // Only add attachment if ICS content was generated successfully
       if (icsContent && icsContent.length > 0) {
+        console.log(`✅ ICS calendar file generated successfully. Size: ${icsContent.length} characters`);
         mailOptions.attachments = [
           {
             filename: 'appointment.ics',
@@ -1571,6 +1573,8 @@ exports.handler = async (event, context) => {
             contentType: 'text/calendar; charset=utf-8; method=REQUEST'
           }
         ];
+      } else {
+        console.warn(`⚠️ Failed to generate ICS content for admin booking confirmation`);
       }
     }
 

@@ -1,7 +1,6 @@
 // Import the new SMTP email service
 import {
   initializeEmailService,
-  sendBookingConfirmationEmail as smtpSendBookingConfirmation,
   sendPaymentReceiptEmail as smtpSendPaymentReceipt,
   sendDepositPaymentEmail as smtpSendDepositPayment,
   sendBookingCancellationEmail as smtpSendBookingCancellation,
@@ -13,7 +12,6 @@ import {
   sendInvoiceNotificationEmail as smtpSendInvoiceNotification,
   sendPasswordResetEmail as smtpSendPasswordReset,
   sendBookingWithPaymentEmail,
-  sendBookingConfirmationWithoutPayment,
   sendAdminBookingConfirmationEmail,
   sendAdminBookingNotificationOnly,
   sendBookingCapturedEmail as smtpSendBookingCaptured
@@ -95,20 +93,24 @@ export const initializeEmailJS = (): boolean => {
   return initializeEmailService();
 };
 
-// Booking confirmation email
+// Booking confirmation email (now uses admin_booking_confirmation for calendar attachments)
 export const sendBookingConfirmationEmail = async (data: BookingConfirmationData): Promise<boolean> => {
   try {
-    return await smtpSendBookingConfirmation(data.customer_email, {
+    // Use the admin booking confirmation function to ensure calendar attachments are included
+    const result = await sendAdminBookingConfirmationEmail(data.customer_email, {
       customer_name: data.customer_name,
       service_name: data.service_name,
       appointment_date: data.appointment_date,
       appointment_time: data.appointment_time,
-      total_amount: data.total_amount,
+      total_amount: data.total_amount || 0,
       booking_reference: data.booking_reference,
       therapist_name: data.therapist_name,
       clinic_address: data.clinic_address,
       special_instructions: data.special_instructions
     });
+    
+    // Return true if customer email was sent successfully (admin email is optional)
+    return result.customerSuccess;
   } catch (error) {
     console.error('Error sending booking confirmation email:', error);
     return false;
@@ -500,25 +502,29 @@ export const sendBookingNotificationWithPaymentStatus = async (
   }
 };
 
-// Booking confirmation without payment
+// Booking confirmation without payment (now uses admin_booking_confirmation for calendar attachments)
 export const sendSimpleBookingConfirmation = async (
   customerEmail: string,
   bookingData: BookingConfirmationData
 ): Promise<boolean> => {
   try {
-    return await sendBookingConfirmationWithoutPayment(customerEmail, {
+    // Use the admin booking confirmation function to ensure calendar attachments are included
+    const result = await sendAdminBookingConfirmationEmail(customerEmail, {
       customer_name: bookingData.customer_name,
       service_name: bookingData.service_name,
       appointment_date: bookingData.appointment_date,
       appointment_time: bookingData.appointment_time,
-      total_amount: bookingData.total_amount,
+      total_amount: bookingData.total_amount || 0,
       booking_reference: bookingData.booking_reference,
       therapist_name: bookingData.therapist_name,
       clinic_address: bookingData.clinic_address,
       special_instructions: bookingData.special_instructions
     });
+    
+    // Return true if customer email was sent successfully (admin email is optional)
+    return result.customerSuccess;
   } catch (error) {
-    console.error('Error sending booking confirmation without payment:', error);
+    console.error('Error sending booking confirmation:', error);
     return false;
   }
 };
