@@ -414,11 +414,11 @@ export const integrateBookingCancellationWorkflow = async (
     const hasPaymentRequests = paymentRequests && paymentRequests.length > 0;
 
     // Update booking status to cancelled
+    // Note: updated_at will be automatically set by database trigger if column exists
     const { error: updateBookingError } = await supabase
       .from('bookings')
       .update({ 
         status: 'cancelled',
-        updated_at: new Date().toISOString(),
         notes: booking.notes ? `${booking.notes}\n\nCancellation Reason: ${cancellationReason || 'Admin cancellation'}` : `Cancellation Reason: ${cancellationReason || 'Admin cancellation'}`
       })
       .eq('id', bookingId);
@@ -607,12 +607,13 @@ export const integrateBookingReschedulingWorkflow = async (
     const oldAppointmentTime = reschedulingOptions.old_appointment_time || currentBooking.appointment_time;
 
     // Update the booking with new appointment details
+    // Update booking with new appointment details
+    // Note: updated_at will be automatically set by database trigger if column exists
     const { error: updateError } = await supabase
       .from('bookings')
       .update({
         appointment_date: newAppointmentDate,
-        appointment_time: newAppointmentTime,
-        updated_at: new Date().toISOString()
+        appointment_time: newAppointmentTime
       })
       .eq('id', bookingId);
 
