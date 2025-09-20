@@ -310,7 +310,7 @@ export const sendBookingRescheduledNotification = async (
         reschedule_note: reschedulingData.reschedule_note,
         rescheduled_by: reschedulingData.rescheduled_by || 'admin'
       },
-      reschedulingData.is_admin_initiated ? 'info@khtherapy.ie' : undefined
+      'info@khtherapy.ie' // Always send to admin regardless of who initiated rescheduling
     );
 
     return { 
@@ -319,6 +319,171 @@ export const sendBookingRescheduledNotification = async (
     };
   } catch (error) {
     console.error('❌ Error sending booking rescheduled email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+/**
+ * 9. Rescheduling Request Submitted (Customer-initiated with approval workflow)
+ * Triggered when customer submits a rescheduling request that requires admin approval
+ */
+export const sendReschedulingRequestNotification = async (
+  bookingData: BookingEmailData,
+  requestData: {
+    requestId: string;
+    newAppointmentDate: string;
+    newAppointmentTime: string;
+    reschedule_reason?: string;
+    customer_notes?: string;
+  }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('📧 Sending Rescheduling Request notifications for booking:', bookingData.booking_reference);
+    
+    // Import the new notification functions
+    const {
+      sendAdminReschedulingNotification,
+      sendCustomerReschedulingConfirmation
+    } = await import('./reschedulingEmailNotifications');
+
+    // Prepare request details for email notifications
+    const requestDetails = {
+      id: requestData.requestId,
+      bookingId: bookingData.booking_id || '',
+      customerId: bookingData.customer_id || 0,
+      originalAppointmentDate: bookingData.old_appointment_date || bookingData.appointment_date,
+      originalAppointmentTime: bookingData.old_appointment_time || bookingData.appointment_time,
+      requestedAppointmentDate: requestData.newAppointmentDate,
+      requestedAppointmentTime: requestData.newAppointmentTime,
+      rescheduleReason: requestData.reschedule_reason,
+      customerNotes: requestData.customer_notes,
+      status: 'pending' as const,
+      bookingReference: bookingData.booking_reference,
+      serviceName: bookingData.service_name,
+      bookingStatus: 'confirmed', // Assume confirmed bookings for rescheduling
+      customerName: bookingData.customer_name,
+      customerEmail: bookingData.customer_email,
+      customerPhone: '',
+      canReschedule: true
+    };
+
+    // Send admin notification
+    const adminResult = await sendAdminReschedulingNotification(requestDetails);
+    
+    // Send customer confirmation
+    const customerResult = await sendCustomerReschedulingConfirmation(requestDetails);
+
+    // Return success if at least one email was sent
+    const overallSuccess = adminResult.success || customerResult.success;
+    
+    return { 
+      success: overallSuccess, 
+      error: overallSuccess ? undefined : 'Failed to send rescheduling request notifications' 
+    };
+  } catch (error) {
+    console.error('❌ Error sending rescheduling request notification:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+/**
+ * 10. Rescheduling Request Approved 
+ * Triggered when admin approves a customer's rescheduling request
+ */
+export const sendReschedulingApprovalNotification = async (
+  bookingData: BookingEmailData,
+  approvalData: {
+    requestId: string;
+    adminNotes?: string;
+    adminUserId: string;
+  }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('📧 Sending Rescheduling Approval notification for booking:', bookingData.booking_reference);
+    
+    // Import the approval notification function
+    const { sendReschedulingApprovalNotification } = await import('./reschedulingEmailNotifications');
+
+    // Prepare request details for email notification
+    const requestDetails = {
+      id: approvalData.requestId,
+      bookingId: bookingData.booking_id || '',
+      customerId: bookingData.customer_id || 0,
+      originalAppointmentDate: bookingData.old_appointment_date || '',
+      originalAppointmentTime: bookingData.old_appointment_time || '',
+      requestedAppointmentDate: bookingData.appointment_date,
+      requestedAppointmentTime: bookingData.appointment_time,
+      rescheduleReason: '',
+      customerNotes: '',
+      status: 'approved' as const,
+      adminNotes: approvalData.adminNotes,
+      adminUserId: approvalData.adminUserId,
+      bookingReference: bookingData.booking_reference,
+      serviceName: bookingData.service_name,
+      bookingStatus: 'confirmed',
+      customerName: bookingData.customer_name,
+      customerEmail: bookingData.customer_email,
+      customerPhone: '',
+      canReschedule: true
+    };
+
+    // Send approval notification with updated ICS calendar
+    const result = await sendReschedulingApprovalNotification(requestDetails);
+
+    return result;
+  } catch (error) {
+    console.error('❌ Error sending rescheduling approval notification:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+/**
+ * 11. Rescheduling Request Rejected
+ * Triggered when admin rejects a customer's rescheduling request
+ */
+export const sendReschedulingRejectionNotification = async (
+  bookingData: BookingEmailData,
+  rejectionData: {
+    requestId: string;
+    adminNotes?: string;
+    adminUserId: string;
+  }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('📧 Sending Rescheduling Rejection notification for booking:', bookingData.booking_reference);
+    
+    // Import the rejection notification function
+    const { sendReschedulingRejectionNotification } = await import('./reschedulingEmailNotifications');
+
+    // Prepare request details for email notification
+    const requestDetails = {
+      id: rejectionData.requestId,
+      bookingId: bookingData.booking_id || '',
+      customerId: bookingData.customer_id || 0,
+      originalAppointmentDate: bookingData.appointment_date,
+      originalAppointmentTime: bookingData.appointment_time,
+      requestedAppointmentDate: '',
+      requestedAppointmentTime: '',
+      rescheduleReason: '',
+      customerNotes: '',
+      status: 'rejected' as const,
+      adminNotes: rejectionData.adminNotes,
+      adminUserId: rejectionData.adminUserId,
+      bookingReference: bookingData.booking_reference,
+      serviceName: bookingData.service_name,
+      bookingStatus: 'confirmed',
+      customerName: bookingData.customer_name,
+      customerEmail: bookingData.customer_email,
+      customerPhone: '',
+      canReschedule: true
+    };
+
+    // Send rejection notification
+    const result = await sendReschedulingRejectionNotification(requestDetails);
+
+    return result;
+  } catch (error) {
+    console.error('❌ Error sending rescheduling rejection notification:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 };

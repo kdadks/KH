@@ -119,37 +119,92 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
         return;
       }
 
-      // Update the booking with new date and time
-      const newDateTime = `${formData.date}T${selectedSlot.start_time}`;
+      // Check if this requires approval workflow (24-hour rule for customers)
+      const appointmentDateTime = new Date(`${booking.booking_date}`);
+      const currentTime = new Date();
+      const hoursUntilAppointment = (appointmentDateTime.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
+      
+      const requiresApproval = hoursUntilAppointment < 24;
 
-      const { error: updateError } = await supabase
-        .from('bookings')
-        .update({
-          booking_date: newDateTime,
-          timeslot_start_time: selectedSlot.start_time,
-          timeslot_end_time: selectedSlot.end_time
-        })
-        .eq('id', booking.id);
+      if (requiresApproval) {
+        // Use approval workflow for requests within 24 hours
+        const { submitCustomerReschedulingRequest } = await import('../../utils/emailWorkflowIntegration');
+        
+        const result = await submitCustomerReschedulingRequest(
+          booking.id,
+          {
+            newAppointmentDate: formData.date,
+            newAppointmentTime: selectedSlot.start_time,
+            reschedule_reason: 'Customer requested rescheduling',
+            customer_notes: 'Rescheduling request submitted via customer portal'
+          }
+        );
 
-      if (updateError) {
-        console.error('Error updating booking:', updateError);
-        showError('Error', 'Failed to reschedule booking');
-        return;
+        if (result.success) {
+          showSuccess(
+            'Request Submitted', 
+            'Your rescheduling request has been submitted for admin approval. You will receive an email confirmation once processed.'
+          );
+          onRescheduleComplete();
+        } else {
+          showError('Error', result.error || 'Failed to submit rescheduling request');
+        }
+      } else {
+        // Direct rescheduling for requests more than 24 hours in advance
+        // Update the booking with new date and time
+        const newDateTime = `${formData.date}T${selectedSlot.start_time}`;
+
+        const { error: updateError } = await supabase
+          .from('bookings')
+          .update({
+            booking_date: newDateTime,
+            timeslot_start_time: selectedSlot.start_time,
+            timeslot_end_time: selectedSlot.end_time
+          })
+          .eq('id', booking.id);
+
+        if (updateError) {
+          console.error('Error updating booking:', updateError);
+          showError('Error', 'Failed to reschedule booking');
+          return;
+        }
+
+        // Mark the new slot as unavailable
+        const { error: slotError } = await supabase
+          .from('availability')
+          .update({ is_available: false })
+          .eq('id', selectedSlot.id);
+
+        if (slotError) {
+          console.error('Error updating slot availability:', slotError);
+          // Don't fail the reschedule for this, just log it
+        }
+
+        // Send immediate rescheduling notification
+        try {
+          const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
+          
+          await integrateBookingReschedulingWorkflow(
+            booking.id,
+            formData.date,
+            selectedSlot.start_time,
+            {
+              reschedule_reason: 'Customer self-rescheduled',
+              reschedule_note: 'Customer rescheduled their appointment through the customer portal.',
+              rescheduled_by: 'customer',
+              old_appointment_date: booking.booking_date?.split('T')[0] || '',
+              old_appointment_time: booking.timeslot_start_time || ''
+            }
+          );
+        } catch (emailError) {
+          console.warn('Email notification failed:', emailError);
+          // Don't fail the reschedule for email issues
+        }
+
+        showSuccess('Success', 'Booking rescheduled successfully! You will receive a confirmation email with the updated appointment details.');
+        onRescheduleComplete();
       }
 
-      // Mark the new slot as unavailable
-      const { error: slotError } = await supabase
-        .from('availability')
-        .update({ is_available: false })
-        .eq('id', selectedSlot.id);
-
-      if (slotError) {
-        console.error('Error updating slot availability:', slotError);
-        // Don't fail the reschedule for this, just log it
-      }
-
-      showSuccess('Success', 'Booking rescheduled successfully!');
-      onRescheduleComplete();
     } catch (error) {
       console.error('Error rescheduling booking:', error);
       showError('Error', 'Failed to reschedule booking');
@@ -177,6 +232,9 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
   };
 
   const formatTime = (startTime: string, endTime: string) => {
+    if (!startTime || !endTime) {
+      return 'Time not available';
+    }
     const start = startTime.substring(0, 5);
     const end = endTime.substring(0, 5);
     return `${start} - ${end}`;

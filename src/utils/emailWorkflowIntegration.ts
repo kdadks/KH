@@ -692,3 +692,314 @@ export const integrateBookingReschedulingWorkflow = async (
     };
   }
 };
+
+/**
+ * Integration function for customer-initiated rescheduling requests (with approval workflow)
+ * Called when a customer requests to reschedule a booking that requires admin approval
+ */
+export const submitCustomerReschedulingRequest = async (
+  bookingId: string,
+  requestData: {
+    newAppointmentDate: string;
+    newAppointmentTime: string;
+    reschedule_reason?: string;
+    customer_notes?: string;
+  }
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+  
+  try {
+    console.log('🔄 Processing customer rescheduling request for booking:', bookingId);
+
+    // Import validation and API functions
+    const { 
+      validateReschedulingRequest, 
+      canRescheduleBooking, 
+      isBookingEligibleForRescheduling 
+    } = await import('./reschedulingValidation');
+    
+    const { submitReschedulingRequest } = await import('./reschedulingApi');
+
+    // Import supabase to get booking details
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      import.meta.env.VITE_SUPABASE_URL || '',
+      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+    );
+
+    // Get current booking details
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        customer:customers(*),
+        service:services(*)
+      `)
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return {
+        success: false,
+        error: 'Booking not found'
+      };
+    }
+
+    // Check if booking status allows rescheduling
+    if (!isBookingEligibleForRescheduling(booking.booking_status)) {
+      return {
+        success: false,
+        error: `Bookings with status "${booking.booking_status}" cannot be rescheduled`
+      };
+    }
+
+    // Check 24-hour rule
+    if (!canRescheduleBooking(booking.appointment_date, booking.appointment_time)) {
+      return {
+        success: false,
+        error: 'Rescheduling requests must be submitted at least 24 hours before the appointment'
+      };
+    }
+
+    // Validate request data
+    const validation = validateReschedulingRequest({
+      bookingId,
+      originalDate: booking.appointment_date,
+      originalTime: booking.appointment_time,
+      newDate: requestData.newAppointmentDate,
+      newTime: requestData.newAppointmentTime,
+      reason: requestData.reschedule_reason
+    });
+
+    if (!validation.isValid) {
+      return {
+        success: false,
+        error: validation.errors.join(', ')
+      };
+    }
+
+    // Submit the rescheduling request to the database
+    const submitResult = await submitReschedulingRequest({
+      bookingId,
+      originalDate: booking.appointment_date,
+      originalTime: booking.appointment_time,
+      newDate: requestData.newAppointmentDate,
+      newTime: requestData.newAppointmentTime,
+      reason: requestData.reschedule_reason,
+      customerNotes: requestData.customer_notes
+    });
+
+    if (!submitResult.success) {
+      return submitResult;
+    }
+
+    // Send email notifications using the existing workflow
+    const { sendReschedulingRequestNotification } = await import('./bookingEmailWorkflow');
+
+    // Prepare booking data for email notifications
+    const bookingEmailData = {
+      customer_name: booking.customer?.name || booking.customer_name || 'Customer',
+      customer_email: booking.customer?.email || booking.customer_email,
+      service_name: booking.service?.name || booking.service_name || 'Physiotherapy Session',
+      appointment_date: booking.appointment_date,
+      appointment_time: booking.appointment_time,
+      booking_reference: booking.booking_reference || `KH-${bookingId}`,
+      booking_id: bookingId,
+      customer_id: booking.customer_id,
+      therapist_name: booking.therapist_name || 'KH Therapy Team',
+      clinic_address: booking.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
+      special_instructions: booking.special_instructions || '',
+      old_appointment_date: booking.appointment_date,
+      old_appointment_time: booking.appointment_time
+    };
+
+    // Send notification emails
+    const emailResult = await sendReschedulingRequestNotification(
+      bookingEmailData,
+      {
+        requestId: submitResult.data.id,
+        newAppointmentDate: requestData.newAppointmentDate,
+        newAppointmentTime: requestData.newAppointmentTime,
+        reschedule_reason: requestData.reschedule_reason,
+        customer_notes: requestData.customer_notes
+      }
+    );
+
+    return {
+      success: true,
+      data: {
+        ...submitResult.data,
+        emailNotificationSent: emailResult.success,
+        emailError: emailResult.error
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ Customer rescheduling request failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+};
+
+/**
+ * Integration function for admin approval of rescheduling requests
+ * Called when admin approves a customer's rescheduling request
+ */
+export const approveCustomerReschedulingRequest = async (
+  requestId: string,
+  adminUserId: string,
+  adminNotes?: string
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+  
+  try {
+    console.log('🔄 Processing rescheduling request approval:', requestId);
+
+    // Import the API functions
+    const { 
+      approveReschedulingRequest,
+      getReschedulingRequestDetails 
+    } = await import('./reschedulingApi');
+
+    // Get request details before approval
+    const detailsResult = await getReschedulingRequestDetails(requestId);
+    if (!detailsResult.success || !detailsResult.data) {
+      return {
+        success: false,
+        error: 'Rescheduling request not found'
+      };
+    }
+
+    // Approve the request
+    const approvalResult = await approveReschedulingRequest(requestId, adminUserId, adminNotes);
+    if (!approvalResult.success) {
+      return approvalResult;
+    }
+
+    // Send approval notification using existing workflow
+    const { sendReschedulingApprovalNotification } = await import('./bookingEmailWorkflow');
+
+    // Prepare booking data for email notification
+    const bookingEmailData = {
+      customer_name: detailsResult.data.customerName,
+      customer_email: detailsResult.data.customerEmail,
+      service_name: detailsResult.data.serviceName,
+      appointment_date: detailsResult.data.requestedAppointmentDate,
+      appointment_time: detailsResult.data.requestedAppointmentTime,
+      booking_reference: detailsResult.data.bookingReference,
+      booking_id: detailsResult.data.bookingId,
+      customer_id: detailsResult.data.customerId,
+      therapist_name: 'KH Therapy Team',
+      clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+      special_instructions: '',
+      old_appointment_date: detailsResult.data.originalAppointmentDate,
+      old_appointment_time: detailsResult.data.originalAppointmentTime
+    };
+
+    // Send approval notification
+    const emailResult = await sendReschedulingApprovalNotification(
+      bookingEmailData,
+      {
+        requestId,
+        adminNotes,
+        adminUserId
+      }
+    );
+
+    return {
+      success: true,
+      data: {
+        ...approvalResult.data,
+        emailNotificationSent: emailResult.success,
+        emailError: emailResult.error
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ Rescheduling request approval failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+};
+
+/**
+ * Integration function for admin rejection of rescheduling requests
+ * Called when admin rejects a customer's rescheduling request  
+ */
+export const rejectCustomerReschedulingRequest = async (
+  requestId: string,
+  adminUserId: string,
+  adminNotes?: string
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+  
+  try {
+    console.log('🔄 Processing rescheduling request rejection:', requestId);
+
+    // Import the API functions
+    const { 
+      rejectReschedulingRequest,
+      getReschedulingRequestDetails 
+    } = await import('./reschedulingApi');
+
+    // Get request details before rejection
+    const detailsResult = await getReschedulingRequestDetails(requestId);
+    if (!detailsResult.success || !detailsResult.data) {
+      return {
+        success: false,
+        error: 'Rescheduling request not found'
+      };
+    }
+
+    // Reject the request
+    const rejectionResult = await rejectReschedulingRequest(requestId, adminUserId, adminNotes);
+    if (!rejectionResult.success) {
+      return rejectionResult;
+    }
+
+    // Send rejection notification using existing workflow
+    const { sendReschedulingRejectionNotification } = await import('./bookingEmailWorkflow');
+
+    // Prepare booking data for email notification
+    const bookingEmailData = {
+      customer_name: detailsResult.data.customerName,
+      customer_email: detailsResult.data.customerEmail,
+      service_name: detailsResult.data.serviceName,
+      appointment_date: detailsResult.data.originalAppointmentDate,
+      appointment_time: detailsResult.data.originalAppointmentTime,
+      booking_reference: detailsResult.data.bookingReference,
+      booking_id: detailsResult.data.bookingId,
+      customer_id: detailsResult.data.customerId,
+      therapist_name: 'KH Therapy Team',
+      clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+      special_instructions: ''
+    };
+
+    // Send rejection notification
+    const emailResult = await sendReschedulingRejectionNotification(
+      bookingEmailData,
+      {
+        requestId,
+        adminNotes,
+        adminUserId
+      }
+    );
+
+    return {
+      success: true,
+      data: {
+        ...rejectionResult.data,
+        emailNotificationSent: emailResult.success,
+        emailError: emailResult.error
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ Rescheduling request rejection failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+};
