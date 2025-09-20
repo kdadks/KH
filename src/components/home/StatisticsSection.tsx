@@ -40,10 +40,8 @@ const StatisticsSection: React.FC = () => {
       
       <Container>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-          <Stat value="10+" label="Years Experience" delay={0} />
-          <Stat value="5,000+" label="Satisfied Patients" delay={0.1} />
-          <Stat value="15+" label="Expert Specialists" delay={0.2} />
-          <Stat value="98%" label="Success Rate" delay={0.3} />
+          <Stat value="5+" label="Years Experience" delay={0} />
+          <Stat value="2,000+" label="Satisfied Patients" delay={0.1} />
         </div>
       </Container>
     </section>

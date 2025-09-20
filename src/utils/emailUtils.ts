@@ -3,6 +3,8 @@ import {
   initializeEmailService,
   sendBookingConfirmationEmail as smtpSendBookingConfirmation,
   sendPaymentReceiptEmail as smtpSendPaymentReceipt,
+  sendDepositPaymentEmail as smtpSendDepositPayment,
+  sendBookingCancellationEmail as smtpSendBookingCancellation,
   sendBookingReminderEmail as smtpSendBookingReminder,
   sendAdminNotificationEmail as smtpSendAdminNotification,
   sendWelcomeEmail as smtpSendWelcome,
@@ -13,6 +15,7 @@ import {
   sendBookingWithPaymentEmail,
   sendBookingConfirmationWithoutPayment,
   sendAdminBookingConfirmationEmail,
+  sendAdminBookingNotificationOnly,
   sendBookingCapturedEmail as smtpSendBookingCaptured
 } from './emailSMTP';
 
@@ -124,6 +127,55 @@ export const sendPaymentReceiptEmail = async (data: PaymentReceiptData): Promise
     });
   } catch (error) {
     console.error('Error sending payment receipt email:', error);
+    return false;
+  }
+};
+
+// Deposit payment received email
+export const sendDepositPaymentEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    payment_amount: number;
+    remaining_balance?: number;
+    transaction_id?: string;
+    therapist_name?: string;
+    clinic_address?: string;
+    special_instructions?: string;
+  }
+): Promise<boolean> => {
+  try {
+    return await smtpSendDepositPayment(customerEmail, data);
+  } catch (error) {
+    console.error('Error sending deposit payment email:', error);
+    return false;
+  }
+};
+
+// Booking cancellation email
+export const sendBookingCancellationEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    cancellation_reason?: string;
+    therapist_name?: string;
+    clinic_address?: string;
+    has_payment_request?: boolean;
+    refund_info?: string;
+  }
+): Promise<boolean> => {
+  try {
+    return await smtpSendBookingCancellation(customerEmail, data);
+  } catch (error) {
+    console.error('Error sending booking cancellation email:', error);
     return false;
   }
 };
@@ -517,4 +569,48 @@ export const sendBookingCapturedNotification = async (
 };
 
 // Export the admin booking confirmation email function directly
-export { sendAdminBookingConfirmationEmail };
+export { sendAdminBookingConfirmationEmail, sendAdminBookingNotificationOnly };
+
+// Booking rescheduled email
+export const sendBookingRescheduledEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    therapist_name?: string;
+    clinic_address?: string;
+    special_instructions?: string;
+    old_appointment_date?: string;
+    old_appointment_time?: string;
+    reschedule_reason?: string;
+    reschedule_note?: string;
+    rescheduled_by?: string;
+  },
+  adminEmail?: string
+): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
+  try {
+    const { sendBookingRescheduledEmail: smtpSendBookingRescheduled } = await import('./emailSMTP');
+    return await smtpSendBookingRescheduled(customerEmail, {
+      customer_name: data.customer_name,
+      service_name: data.service_name,
+      appointment_date: data.appointment_date,
+      appointment_time: data.appointment_time,
+      total_amount: 0, // Not used in rescheduled template
+      booking_reference: data.booking_reference,
+      therapist_name: data.therapist_name || 'KH Therapy Team',
+      clinic_address: data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
+      special_instructions: data.special_instructions,
+      old_appointment_date: data.old_appointment_date,
+      old_appointment_time: data.old_appointment_time,
+      reschedule_reason: data.reschedule_reason,
+      reschedule_note: data.reschedule_note,
+      rescheduled_by: data.rescheduled_by
+    }, adminEmail);
+  } catch (error) {
+    console.error('Error sending booking rescheduled email:', error);
+    return { customerSuccess: false, adminSuccess: false };
+  }
+};
