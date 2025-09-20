@@ -19,7 +19,7 @@ const TEST_BOOKING_DATA: BookingEmailData = {
   appointment_date: '2024-02-20',
   appointment_time: '14:00',
   booking_reference: 'KH-TEST-456',
-  booking_id: 456,
+  booking_id: 'test-uuid-456',
   customer_id: 789,
   therapist_name: 'KH Therapy Team',
   clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
@@ -115,7 +115,7 @@ export const testBookingReschedulingEmail = async (): Promise<{
  * This function should only be run in development/staging environments
  */
 export const testCompleteReschedulingWorkflow = async (
-  bookingId?: number
+  bookingId?: string
 ): Promise<{
   success: boolean;
   results: any;
@@ -129,7 +129,7 @@ export const testCompleteReschedulingWorkflow = async (
 
   try {
     // Use provided booking ID or a test booking ID
-    const testBookingId = bookingId || 999999; // Use a non-existent ID for testing
+    const testBookingId = bookingId || 'test-uuid-999999'; // Use a non-existent ID for testing
     
     const result = await integrateBookingReschedulingWorkflow(
       testBookingId,
@@ -321,7 +321,7 @@ export const testReschedulingCalendarGeneration = (): {
  */
 export const runAllReschedulingTests = async (
   includeIntegrationTest: boolean = false,
-  testBookingId?: number
+  testBookingId?: string
 ): Promise<{
   success: boolean;
   results: any;

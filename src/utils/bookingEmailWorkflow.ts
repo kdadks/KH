@@ -34,7 +34,7 @@ export interface BookingEmailData {
   appointment_date: string;
   appointment_time: string;
   booking_reference: string;
-  booking_id?: number;
+  booking_id?: string;
   customer_id?: number;
   therapist_name?: string;
   clinic_address?: string;
