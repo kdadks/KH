@@ -1195,6 +1195,241 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'deposit_payment_received':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Deposit Payment Received</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Great news! Your deposit payment has been successfully received and processed. Your appointment is now secured and confirmed!</p>
+              
+              <div class="details">
+                <h3>📅 Booking Details</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+              </div>
+              
+              <div class="details">
+                <h3>💳 Payment Summary</h3>
+                <p><strong>Deposit Paid:</strong> €${data.payment_amount}</p>
+                ${data.remaining_balance ? `<p><strong>Remaining Balance:</strong> €${data.remaining_balance} (payable after treatment)</p>` : ''}
+                ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${data.transaction_id}</p>` : ''}
+                <p><strong>Status:</strong> <span class="success-icon">✅ Deposit Confirmed</span></p>
+              </div>
+              
+              <div class="highlight">
+                <h3>🎯 What's Next?</h3>
+                <p>• Your appointment is now confirmed and secured</p>
+                <p>• Please arrive 10 minutes early for check-in</p>
+                <p>• Bring any relevant medical documents or insurance cards</p>
+                <p>• Wear comfortable clothing appropriate for your treatment</p>
+                ${data.remaining_balance ? `<p>• The remaining balance of €${data.remaining_balance} will be collected after your session</p>` : ''}
+                <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
+              </div>
+              
+              ${data.special_instructions ? `
+                <div class="details">
+                  <h3>📝 Special Instructions</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <div class="highlight" style="background-color: #ecfdf5; border-left: 4px solid #059669;">
+                <p><strong>📧 Need to Contact Us?</strong></p>
+                <p>Email: info@khtherapy.ie | Phone: +353 83 800 9404</p>
+                <p>We're here to help with any questions or concerns!</p>
+              </div>
+              
+              <p>Thank you for choosing KH Therapy. We look forward to providing you with excellent care and helping you achieve your health goals!</p>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p>For any questions or changes, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    case 'booking_cancelled':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #dc2626; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">🚫 Booking Cancelled</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>We regret to inform you that your appointment has been cancelled by our team. We sincerely apologize for any inconvenience this may cause.</p>
+              
+              <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
+                <h3>📅 Cancelled Appointment Details</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Original Date:</strong> ${data.appointment_date}</p>
+                <p><strong>Original Time:</strong> ${data.appointment_time}</p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                <p><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">❌ CANCELLED</span></p>
+              </div>
+              
+              ${data.cancellation_reason ? `
+                <div class="details" style="background-color: #fffbeb; border-left: 4px solid #f59e0b;">
+                  <h3>📝 Cancellation Reason</h3>
+                  <p>${data.cancellation_reason}</p>
+                </div>
+              ` : ''}
+              
+              ${data.has_payment_request ? `
+                <div class="details" style="background-color: #ecfdf5; border-left: 4px solid #10b981;">
+                  <h3>💳 Payment Information</h3>
+                  <p><strong>Payment Request Status:</strong> <span style="color: #10b981; font-weight: bold;">✅ CANCELLED</span></p>
+                  <p>Any pending payment requests for this booking have been automatically cancelled. You will not be charged for this appointment.</p>
+                  ${data.refund_info ? `<p><strong>Refund Information:</strong> ${data.refund_info}</p>` : ''}
+                </div>
+              ` : ''}
+              
+              <div class="highlight" style="background-color: #dbeafe; border-left: 4px solid #3b82f6;">
+                <h3>🔄 What happens next?</h3>
+                <p>• You are not required to take any action</p>
+                <p>• Any pending payments have been automatically cancelled</p>
+                <p>• If you had made a payment, our team will contact you about refund processing</p>
+                <p>• You are welcome to book a new appointment at any time</p>
+                <p>• Our team may contact you to help reschedule if appropriate</p>
+              </div>
+              
+              <div class="highlight" style="background-color: #f0f9ff; border-left: 4px solid #0ea5e9;">
+                <h3>📞 Need Assistance?</h3>
+                <p>If you have any questions about this cancellation or would like to book a new appointment, please don't hesitate to contact us:</p>
+                <p><strong>Email:</strong> info@khtherapy.ie</p>
+                <p><strong>Phone:</strong> +353 83 800 9404</p>
+                <p>Our team is here to help and we look forward to serving you in the future.</p>
+              </div>
+              
+              <p>We apologize again for any inconvenience and appreciate your understanding. Thank you for choosing KH Therapy.</p>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p>For questions about this cancellation, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    case 'booking_rescheduled':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #2563eb; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">📅 Booking Rescheduled</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>Your appointment has been successfully rescheduled. Please note the updated details below and save the new appointment to your calendar.</p>
+              
+              ${data.old_appointment_date ? `
+                <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
+                  <h3>❌ Previous Appointment (Cancelled)</h3>
+                  <p><strong>Service:</strong> ${data.service_name}</p>
+                  <p><strong>Date:</strong> ${data.old_appointment_date}</p>
+                  <p><strong>Time:</strong> ${data.old_appointment_time}</p>
+                  <p><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">CANCELLED</span></p>
+                </div>
+              ` : ''}
+              
+              <div class="details" style="background-color: #ecfdf5; border-left: 4px solid #10b981;">
+                <h3>✅ New Appointment Details</h3>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>New Date:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_date}</span></p>
+                <p><strong>New Time:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_time}</span></p>
+                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
+                <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
+                <p><strong>Status:</strong> <span style="color: #059669; font-weight: bold;">✅ CONFIRMED</span></p>
+              </div>
+              
+              ${data.reschedule_reason ? `
+                <div class="details" style="background-color: #fffbeb; border-left: 4px solid #f59e0b;">
+                  <h3>📝 Reschedule Reason</h3>
+                  <p>${data.reschedule_reason}</p>
+                </div>
+              ` : ''}
+              
+              ${data.special_instructions ? `
+                <div class="details" style="background-color: #f8fafc; border-left: 4px solid #64748b;">
+                  <h3>📋 Special Instructions</h3>
+                  <p>${data.special_instructions}</p>
+                </div>
+              ` : ''}
+              
+              <div class="highlight" style="background-color: #dbeafe; border-left: 4px solid #3b82f6;">
+                <h3>📋 Important Reminders</h3>
+                <p>• Please arrive 10 minutes early for your new appointment</p>
+                <p>• Bring any relevant medical documents or reports</p>
+                <p>• Wear comfortable clothing suitable for physical examination</p>
+                <p>• A new calendar invite has been attached to this email</p>
+                <p>• If you need to make further changes, please contact us at least 24 hours in advance</p>
+              </div>
+              
+              ${data.reschedule_note ? `
+                <div class="highlight" style="background-color: #f0f9ff; border-left: 4px solid #0ea5e9;">
+                  <h3>💬 Additional Information</h3>
+                  <p>${data.reschedule_note}</p>
+                </div>
+              ` : ''}
+              
+              <p style="text-align: center; margin: 20px 0;">
+                📧 <strong>A new calendar invite has been attached to help you save this updated appointment to your calendar.</strong>
+              </p>
+              
+              <div class="highlight" style="background-color: #ecfdf5; border-left: 4px solid #059669;">
+                <p><strong>📧 Need to Contact Us?</strong></p>
+                <p>Email: info@khtherapy.ie | Phone: +353 83 800 9404</p>
+                <p>We're here to help with any questions or concerns about your rescheduled appointment!</p>
+              </div>
+              
+              <p>Thank you for your flexibility, and we look forward to seeing you at your new appointment time!</p>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p>For any questions or further changes, please contact us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     default:
       return `
         <!DOCTYPE html>

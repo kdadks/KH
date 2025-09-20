@@ -399,14 +399,14 @@ export const createBookingWithCustomer = async (
           console.error('❌ Booking captured notification failed:', capturedEmailError);
         }
 
-        // Send admin notification for new booking
+        // Send admin notification for new booking (without sending customer confirmation)
         console.log('📧 Sending admin notification for new booking...');
         try {
-          const { sendAdminBookingConfirmationEmail } = await import('./emailUtils');
-          const adminResult = await sendAdminBookingConfirmationEmail(
-            customerData.email,
+          const { sendAdminBookingNotificationOnly } = await import('./emailUtils');
+          const adminResult = await sendAdminBookingNotificationOnly(
             {
               customer_name: `${customerData.firstName} ${customerData.lastName}`,
+              customer_email: customerData.email,
               service_name: bookingData.package_name,
               appointment_date: new Date(bookingData.booking_date || new Date()).toLocaleDateString('en-IE'),
               appointment_time: `${(bookingData.timeslot_start_time || '').substring(0, 5)}-${(bookingData.timeslot_end_time || '').substring(0, 5)}`,
@@ -418,7 +418,7 @@ export const createBookingWithCustomer = async (
             }
           );
 
-          if (adminResult.customerSuccess) {
+          if (adminResult.adminSuccess) {
             console.log('✅ Admin booking notification sent successfully');
           } else {
             console.error('❌ Failed to send admin booking notification');

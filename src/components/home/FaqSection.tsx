@@ -48,7 +48,7 @@ const FaqSection: React.FC = () => {
   const faqs = [
     {
       question: "What should I expect during my first visit?",
-      answer: "Your first visit will include a comprehensive assessment of your condition, medical history review, physical examination, and discussion of your goals. We'll then develop a personalized treatment plan and may begin initial treatment the same day."
+      answer: "Your first visit will include a comprehensive assessment of your condition, medical history review, physical examination, and discussion of your goals. We'll then develop a personalised treatment plan and may begin initial treatment the same day."
     },
     {
       question: "How long will my recovery take?",

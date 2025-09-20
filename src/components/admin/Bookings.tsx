@@ -49,7 +49,6 @@ import { createPaymentRequest, fixBookingStatusBasedOnPayments } from '../../uti
 import { PAYMENT_CONFIG } from '../../config/paymentConfig';
 import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
 import RescheduleModal from '../user/RescheduleModal';
-import { sendAdminBookingConfirmation } from '../../utils/emailUtils';
 import { validateEmail, validateName, validatePhoneNumber, validateNotes } from '../../utils/formValidation';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -1373,74 +1372,25 @@ export const Bookings: React.FC<BookingsProps> = ({
         setAllBookings(updatedBookings);
       }
 
-      // Send booking confirmation emails with calendar attachment
+      // Send booking confirmation emails using the proper workflow
       try {
-        const customerEmail = booking.customer_email || booking.email;
+        console.log('📧 Sending booking confirmation via email workflow...');
         
-        if (!customerEmail) {
-          console.warn('⚠️ No customer email found for booking confirmation');
-          showSuccess('Booking Confirmed', 'The booking has been confirmed successfully. (No customer email found - please contact customer manually)');
-          return;
-        }
-
-        const bookingData = {
-          customer_name: getCustomerName(booking),
-          customer_email: customerEmail,
-          service_name: booking.package_name || booking.service || 'Therapy Session',
-          appointment_date: booking.booking_date ? 
-            booking.booking_date.split('T')[0] : 
-            booking.appointment_date || 
-            booking.date || 
-            new Date().toISOString().split('T')[0],
-          appointment_time: (() => {
-            // Try different sources for appointment time
-            if (booking.booking_date && booking.booking_date.includes('T')) {
-              const timeString = booking.booking_date.split('T')[1];
-              return timeString ? timeString.substring(0, 8) : '10:00:00'; // Keep full HH:MM:SS
-            }
-            if (booking.timeslot_start_time) {
-              return booking.timeslot_start_time.length === 5 ? 
-                booking.timeslot_start_time + ':00' : 
-                booking.timeslot_start_time;
-            }
-            if (booking.appointment_time) {
-              return booking.appointment_time.length === 5 ? 
-                booking.appointment_time + ':00' : 
-                booking.appointment_time;
-            }
-            if (booking.time) {
-              return booking.time.length === 5 ? 
-                booking.time + ':00' : 
-                booking.time;
-            }
-            return '10:00:00'; // Default fallback
-          })(),
-          booking_reference: booking.booking_reference || `KH-${booking.id}`,
-          therapist_name: 'KH Therapy Team',
-          clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
-          special_instructions: booking.notes || 'Please arrive 10 minutes early for your appointment.',
-          total_amount: 0
-        };
-        const emailResults = await sendAdminBookingConfirmation(
-          customerEmail,
-          bookingData
+        // Import the admin confirmation workflow integration
+        const { integrateAdminConfirmationEmailWorkflow } = await import('../../utils/emailWorkflowIntegration');
+        
+        const result = await integrateAdminConfirmationEmailWorkflow(
+          Number(booking.id),
+          'info@khtherapy.ie' // Admin email
         );
 
-        if (emailResults.customerSuccess) {        } else {
-          console.warn('⚠️ Failed to send customer booking confirmation email');
+        if (result.success) {
+          console.log('✅ Booking confirmation emails sent successfully via workflow');
+          showSuccess('Booking Confirmed', 'Booking confirmed and confirmation emails sent to customer and admin!');
+        } else {
+          console.error('❌ Failed to send booking confirmation emails:', result.errors);
+          showSuccess('Booking Confirmed', 'Booking confirmed! (Email sending failed - please contact customer manually)');
         }
-
-        if (emailResults.adminSuccess) {        } else {
-          console.warn('⚠️ Failed to send admin booking confirmation email');
-        }
-
-        const successMessage = emailResults.customerSuccess && emailResults.adminSuccess 
-          ? 'Booking confirmed and confirmation emails sent to customer and admin!'
-          : emailResults.customerSuccess 
-            ? 'Booking confirmed and confirmation email sent to customer!'
-            : 'Booking confirmed! (Email sending failed - please check manually)';
-
-        showSuccess('Booking Confirmed', successMessage);
 
         // Trigger availability view refresh to show the booking as confirmed
         // Add a small delay to ensure database transaction is committed
@@ -1848,12 +1798,23 @@ export const Bookings: React.FC<BookingsProps> = ({
         matchingSlot = await findMatchingAvailabilitySlot(bookingToCancel);
       }
 
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', bookingToCancel.id);
+      // Use the integrated booking cancellation workflow that handles email notification and payment request cancellation
+      const { integrateBookingCancellationWorkflow } = await import('../../utils/emailWorkflowIntegration');
+      
+      const cancellationResult = await integrateBookingCancellationWorkflow(
+        Number(bookingToCancel.id),
+        'Booking cancelled by admin',
+        'If you made a payment, our team will contact you about refund processing within 2-3 business days.'
+      );
 
-      if (error) throw error;
+      if (!cancellationResult.success) {
+        console.error('❌ Email notification failed:', cancellationResult.errors);
+        // Show warning but don't stop the process since booking was already cancelled
+        showError('Warning', `Booking cancelled successfully, but email notification failed: ${cancellationResult.errors.join(', ')}`);
+      } else {
+        console.log('✅ Booking cancellation workflow completed successfully');
+        showSuccess('Booking Cancelled', 'The booking has been cancelled successfully. Customer has been notified via email and any pending payment requests have been cancelled.');
+      }
 
       // Restore availability slot if one was found
       if (matchingSlot) {
@@ -1881,7 +1842,6 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       setShowCancelConfirmModal(false);
       setBookingToCancel(null);
-      showSuccess('Booking Cancelled', 'The booking has been cancelled successfully.');
 
       // Trigger availability view refresh
       setTimeout(() => {
@@ -1895,14 +1855,117 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
+  // Admin-specific reschedule function with email notifications
+  const handleAdminReschedule = async (
+    booking: BookingFormData,
+    newDate: string,
+    newTime: string,
+    reason?: string
+  ) => {
+    try {
+      console.log('🔄 Admin rescheduling booking:', booking.id);
+      
+      const oldDate = booking.appointment_date;
+      const oldTime = booking.appointment_time;
+
+      // Update the booking in the database
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+          appointment_date: newDate,
+          appointment_time: newTime,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', booking.id);
+
+      if (updateError) {
+        console.error('Error updating booking:', updateError);
+        showError('Error', 'Failed to reschedule booking');
+        return;
+      }
+
+      // Send email notification using the workflow integration
+      const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
+      
+      const result = await integrateBookingReschedulingWorkflow(
+        Number(booking.id),
+        newDate,
+        newTime,
+        {
+          reschedule_reason: reason || 'Rescheduled by admin',
+          reschedule_note: 'Your appointment has been rescheduled by our admin team. Please check the new details below.',
+          rescheduled_by: 'admin',
+          old_appointment_date: oldDate,
+          old_appointment_time: oldTime
+        }
+      );
+
+      if (result.success) {
+        console.log('✅ Booking rescheduled and email sent successfully');
+        showSuccess('Success', 'Booking rescheduled and customer notified via email');
+      } else {
+        console.error('❌ Email notification failed:', result.errors);
+        showError('Warning', 'Booking rescheduled but email notification failed');
+      }
+
+      // Refresh bookings data
+      window.dispatchEvent(new CustomEvent('refreshBookings'));
+
+    } catch (error) {
+      console.error('Error in admin reschedule workflow:', error);
+      showError('Error', 'Failed to reschedule booking');
+    }
+  };
+
   // Reschedule booking
   const handleReschedule = (booking: BookingFormData) => {
     setBookingToReschedule(booking);
     setShowRescheduleModal(true);
   };
 
-  const handleRescheduleComplete = () => {
+  const handleRescheduleComplete = async (
+    oldDate?: string,
+    oldTime?: string,
+    newDate?: string,
+    newTime?: string,
+    reason?: string
+  ) => {
     setShowRescheduleModal(false);
+    
+    try {
+      // If we have rescheduling details, send email notification
+      if (bookingToReschedule && oldDate && oldTime && newDate && newTime) {
+        console.log('📧 Sending rescheduling email notification...');
+        
+        // Import the rescheduling workflow integration
+        const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
+        
+        const result = await integrateBookingReschedulingWorkflow(
+          Number(bookingToReschedule.id),
+          newDate,
+          newTime,
+          {
+            reschedule_reason: reason || 'Rescheduled by admin',
+            reschedule_note: 'Your appointment has been rescheduled. Please check the new details below.',
+            rescheduled_by: 'admin',
+            old_appointment_date: oldDate,
+            old_appointment_time: oldTime
+          }
+        );
+
+        if (result.success) {
+          console.log('✅ Rescheduling email notification sent successfully');
+          showSuccess('Success', 'Booking rescheduled and customer notified via email');
+        } else {
+          console.error('❌ Failed to send rescheduling email:', result.errors);
+          showError('Warning', 'Booking rescheduled but email notification failed');
+        }
+      }
+    } catch (error) {
+      console.error('Error in rescheduling workflow:', error);
+      showError('Warning', 'Booking rescheduled but email notification failed');
+    }
+    
     setBookingToReschedule(null);
     // Refresh bookings data
     window.dispatchEvent(new CustomEvent('refreshBookings'));

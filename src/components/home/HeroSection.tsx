@@ -706,7 +706,7 @@ const HeroSection: React.FC = () => {
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                   </div>
-                  <p className="font-medium">Personalized Care</p>
+                  <p className="font-medium">Personalised Care</p>
                 </div>
               </div>
               

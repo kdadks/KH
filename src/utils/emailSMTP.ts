@@ -192,6 +192,68 @@ export const sendPaymentReceiptEmail = async (
   });
 };
 
+// Deposit payment received email
+export const sendDepositPaymentEmail = async (
+  customerEmail: string,
+  depositData: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    payment_amount: number;
+    remaining_balance?: number;
+    transaction_id?: string;
+    therapist_name?: string;
+    clinic_address?: string;
+    special_instructions?: string;
+  }
+): Promise<boolean> => {
+  return sendEmail('deposit_payment_received', customerEmail, {
+    customer_name: depositData.customer_name,
+    service_name: depositData.service_name,
+    appointment_date: depositData.appointment_date,
+    appointment_time: depositData.appointment_time,
+    booking_reference: depositData.booking_reference,
+    payment_amount: depositData.payment_amount,
+    remaining_balance: depositData.remaining_balance,
+    transaction_id: depositData.transaction_id,
+    therapist_name: depositData.therapist_name,
+    clinic_address: depositData.clinic_address,
+    special_instructions: depositData.special_instructions
+  });
+};
+
+// Booking cancellation email
+export const sendBookingCancellationEmail = async (
+  customerEmail: string,
+  cancellationData: {
+    customer_name: string;
+    service_name: string;
+    appointment_date: string;
+    appointment_time: string;
+    booking_reference: string;
+    cancellation_reason?: string;
+    therapist_name?: string;
+    clinic_address?: string;
+    has_payment_request?: boolean;
+    refund_info?: string;
+  }
+): Promise<boolean> => {
+  return sendEmail('booking_cancelled', customerEmail, {
+    customer_name: cancellationData.customer_name,
+    service_name: cancellationData.service_name,
+    appointment_date: cancellationData.appointment_date,
+    appointment_time: cancellationData.appointment_time,
+    booking_reference: cancellationData.booking_reference,
+    cancellation_reason: cancellationData.cancellation_reason,
+    therapist_name: cancellationData.therapist_name,
+    clinic_address: cancellationData.clinic_address,
+    has_payment_request: cancellationData.has_payment_request,
+    refund_info: cancellationData.refund_info
+  });
+};
+
 // Payment request email
 export const sendPaymentRequestEmail = async (
   customerEmail: string,
@@ -405,6 +467,46 @@ export const sendAdminBookingConfirmationEmail = async (
   }
 };
 
+// Admin notification only (sent when new booking is created - does NOT send confirmation to customer)
+export const sendAdminBookingNotificationOnly = async (
+  bookingData: BookingConfirmationData,
+  adminEmail?: string
+): Promise<{ adminSuccess: boolean }> => {
+  try {
+    // Prepare data with proper customer name decryption
+    const decryptedCustomerName = isDataEncrypted(bookingData.customer_name) 
+      ? decryptSensitiveData(bookingData.customer_name) 
+      : bookingData.customer_name;
+    
+    const emailData = {
+      ...bookingData,
+      customer_name: decryptedCustomerName
+    };
+    
+    // Send to admin only - try alternative admin email first, then fallback to info@khtherapy.ie
+    const adminEmailAddress = adminEmail || 
+                              process.env.VITE_ADMIN_EMAIL || 
+                              'info@khtherapy.ie';
+    
+    const adminEmailData = {
+      ...emailData,
+      customer_name: `New Booking Alert: ${decryptedCustomerName}`,
+      // Add admin-specific fields to differentiate the email
+      is_admin_notification: true,
+      original_customer_name: decryptedCustomerName,
+      notification_type: 'new_booking'
+    };
+    const adminSubject = `🔔 New Booking Created - ${decryptedCustomerName} - ${emailData.service_name}`;
+    
+    const adminSuccess = await sendEmail('admin_booking_confirmation', adminEmailAddress, adminEmailData, adminSubject);
+    
+    return { adminSuccess };
+  } catch (error) {
+    console.error('Error sending admin booking notification:', error);
+    return { adminSuccess: false };
+  }
+};
+
 /**
  * Send booking captured notification email
  */
@@ -438,4 +540,50 @@ export const sendBookingCapturedEmail = async (
 // Backward compatibility exports (these will replace the existing EmailJS functions)
 export {
   initializeEmailService as initializeEmailJS
+};
+
+// Booking rescheduled email (sent when booking is rescheduled)
+export const sendBookingRescheduledEmail = async (
+  customerEmail: string,
+  bookingData: BookingConfirmationData & {
+    old_appointment_date?: string;
+    old_appointment_time?: string;
+    reschedule_reason?: string;
+    reschedule_note?: string;
+    rescheduled_by?: string;
+  },
+  adminEmail?: string
+): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
+  try {
+    // Prepare data with proper customer name decryption
+    const decryptedCustomerName = isDataEncrypted(bookingData.customer_name) 
+      ? decryptSensitiveData(bookingData.customer_name) 
+      : bookingData.customer_name;
+    
+    const emailData = {
+      ...bookingData,
+      customer_name: decryptedCustomerName
+    };
+    
+    // Generate proper subject for booking rescheduled
+    const subject = `Booking Rescheduled - ${bookingData.service_name}`;
+    
+    // Send to customer
+    const customerSuccess = await sendEmail('booking_rescheduled', customerEmail, emailData, subject);
+    
+    // Send to admin if needed
+    let adminSuccess = true;
+    if (adminEmail) {
+      const adminEmailAddress = adminEmail || 
+                                process.env.VITE_ADMIN_EMAIL || 
+                                'info@khtherapy.ie';
+      
+      adminSuccess = await sendEmail('booking_rescheduled', adminEmailAddress, emailData, subject);
+    }
+    
+    return { customerSuccess, adminSuccess };
+  } catch (error) {
+    console.error('Error in sendBookingRescheduledEmail:', error);
+    return { customerSuccess: false, adminSuccess: false };
+  }
 };
