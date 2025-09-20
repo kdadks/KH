@@ -1,28 +1,38 @@
 # Booking Confirmation Email System with Calendar Integration
 
 ## Overview
-This document describes the implementation of automated booking confirmation emails that are sent when an admin confirms a booking in the admin console. The system sends professional email notifications with calendar attachments to both customers and administrators.
+This document describes the implementation of automated booking confirmation emails that are sent for ALL booking confirmations in the system. The system sends professional email notifications with calendar attachments to both customers and administrators for every booking confirmation email type.
 
 ## Features
 
-### ✅ **Automated Email Notifications**
-- **Customer Email**: Professional booking confirmation with appointment details
-- **Admin Email**: Notification to `info@khtherapy.ie` when a booking is confirmed
-- **Calendar Integration**: ICS calendar file attached to enable easy appointment saving
+### ✅ **Universal Calendar Integration**
+- **All Booking Confirmations**: ICS calendar files are now attached to ALL booking confirmation email types
+- **Customer Email**: Professional booking confirmation with appointment details and calendar attachment
+- **Admin Email**: Notification to admin when a booking is confirmed, also with calendar attachment
+- **Multiple Email Types**: Calendar attachments work for all confirmation email scenarios
 
-### 📅 **Calendar Functionality**
+### 📅 **Enhanced Calendar Functionality**
 - **ICS File Generation**: Standard calendar format compatible with all major calendar applications
 - **Appointment Details**: Service name, date, time, location, and booking reference
 - **Reminder Alarm**: Automatic 15-minute reminder notification
 - **Duration**: 1-hour appointment duration (configurable)
+- **Universal Support**: Works across all booking confirmation email types
 
 ### 🔧 **Technical Implementation**
 
+#### **Email Types with Calendar Attachments:**
+- `admin_booking_confirmation` - Admin confirmed bookings
+- `booking_confirmation` - Standard booking confirmations
+- `booking_confirmation_no_payment` - Bookings without payment required
+- `booking_with_payment_completed` - Bookings with successful payment
+- `booking_with_payment_pending` - Bookings with pending payment (calendar included for scheduling)
+
 #### **Files Modified:**
-1. **`netlify/functions/send-email.cjs`**
-   - Added `generateICS()` function for calendar file creation
-   - Enhanced email template for admin booking confirmations
-   - Added calendar attachment handling with validation
+1. **`netlify/functions/send-email.cjs`** (UPDATED)
+   - Extended `generateICS()` function to work with all booking confirmation types
+   - Updated calendar attachment logic to include all relevant email types
+   - Enhanced email templates to mention calendar attachments
+   - Added comprehensive debug logging for ICS generation
 
 2. **`src/utils/emailSMTP.ts`**
    - Added `sendAdminBookingConfirmationEmail()` function
