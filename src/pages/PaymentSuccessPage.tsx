@@ -89,7 +89,7 @@ const PaymentSuccessPage: React.FC = () => {
             <h4 className="font-medium text-blue-900 mb-2">What's Next?</h4>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• A confirmation email will be sent to you shortly</li>
-              <li>• Your booking is now confirmed</li>
+              <li>• Your booking will be reviewed and confirmed by our team</li>
               <li>• You can view your payment history in your account</li>
             </ul>
           </div>

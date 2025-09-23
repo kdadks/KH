@@ -46,7 +46,7 @@ interface PaymentState {
 const HeroSection: React.FC = () => {
   // Form and UI states
   interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; preferredDate?: string; time?: string; }
-  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<BookingFormData>();
+  const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<BookingFormData>();
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
@@ -55,6 +55,9 @@ const HeroSection: React.FC = () => {
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [realTimeErrors, setRealTimeErrors] = useState<{[key: string]: string}>({});
+  const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
+  const [loadingNextSlot, setLoadingNextSlot] = useState(false);
+  const [autoSelectTime, setAutoSelectTime] = useState<string | null>(null); // Track time to auto-select
 
   // Watch form fields for time slot fetching
   const watchedService = watch('service');
@@ -194,6 +197,70 @@ const HeroSection: React.FC = () => {
     }
   }, [watchedService, watchedDate, services]);
 
+  // Watch for service changes to fetch next available slot recommendation
+  useEffect(() => {
+    if (watchedService && services.length > 0) {
+      // Find selected service
+      let service = services.find(s => s.displayName === watchedService);
+      if (!service) {
+        service = services.find(s => s.name === watchedService);
+      }
+
+      if (service && service.booking_type !== 'contact_me') {
+        fetchNextAvailableSlot(service);
+      } else {
+        setNextAvailableSlot(null);
+      }
+    } else {
+      setNextAvailableSlot(null);
+    }
+  }, [watchedService, services]);
+
+  // Auto-select time when time slots are loaded (for "Select This Slot" functionality)
+  useEffect(() => {
+    if (autoSelectTime && timeSlots.length > 0 && !loadingTimeSlots) {
+      console.log('🔍 Auto-select debugging:', {
+        targetTime: autoSelectTime,
+        availableSlots: timeSlots,
+        slotCount: timeSlots.length
+      });
+      
+      // Find the matching time slot in the available options
+      const matchingSlot = timeSlots.find(slot => {
+        const [timeValue] = slot.split('|');
+        return timeValue === autoSelectTime;
+      });
+      
+      if (matchingSlot) {
+        const [timeValue] = matchingSlot.split('|');
+        setValue('time', timeValue);
+        console.log('✅ Auto-selected time slot:', timeValue);
+        setAutoSelectTime(null); // Clear the auto-select flag
+      } else {
+        console.warn('⚠️ Auto-select time not found in available slots:', autoSelectTime);
+        
+        // Try to extract just the time part from the target
+        const targetTimePart = autoSelectTime.split('|')[0];
+        console.log('🔍 Trying to match just time part:', targetTimePart);
+        
+        const alternativeMatch = timeSlots.find(slot => {
+          const [timeValue] = slot.split('|');
+          return timeValue === targetTimePart;
+        });
+        
+        if (alternativeMatch) {
+          const [timeValue] = alternativeMatch.split('|');
+          setValue('time', timeValue);
+          console.log('✅ Auto-selected time slot (alternative match):', timeValue);
+        } else {
+          console.error('❌ No matching time slot found at all');
+        }
+        
+        setAutoSelectTime(null); // Clear the flag even if not found
+      }
+    }
+  }, [autoSelectTime, timeSlots, loadingTimeSlots, setValue]);
+
   const fetchServices = async () => {
     try {
       setLoadingServices(true);
@@ -269,6 +336,100 @@ const HeroSection: React.FC = () => {
       console.error('Error fetching services:', error);
     } finally {
       setLoadingServices(false);
+    }
+  };
+
+  const fetchNextAvailableSlot = async (service: Service) => {
+    try {
+      setLoadingNextSlot(true);
+
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0]);
+        } else {
+          serviceId = parseInt(service.id);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId for next slot calculation');
+        setNextAvailableSlot(null);
+        return;
+      }
+
+      // Get current date and time for filtering
+      const now = new Date();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
+
+      // Fetch available slots starting from current date
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .gte('date', currentDate) // From today onwards
+        .eq('is_available', true)
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true })
+        .limit(50); // Get first 50 slots to find the next available one
+
+      // Filter by slot_type based on service pricing type
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+
+      const { data, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching next available slot:', error);
+        setNextAvailableSlot(null);
+        return;
+      }
+
+      // Find the first available slot that's in the future
+      const nextSlot = data?.find(slot => {
+        const slotDate = slot.date;
+        const startTime = slot.start_time.substring(0, 5);
+
+        // If slot is today, check if time is in the future
+        if (slotDate === currentDate) {
+          return startTime > currentTime;
+        }
+
+        // It's a future date, so it's available
+        return slotDate > currentDate;
+      });
+
+      if (nextSlot) {
+        const startTime = nextSlot.start_time.substring(0, 5);
+        const endTime = nextSlot.end_time.substring(0, 5);
+        const displayTime = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
+        const displayDate = new Date(nextSlot.date).toLocaleDateString('en-IE', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        setNextAvailableSlot({
+          date: nextSlot.date,
+          time: `${startTime}-${endTime}|${displayTime}`, // Format to match timeSlots format: "timeValue|displayTime"
+          display: `${displayDate} at ${displayTime}`
+        });
+      } else {
+        setNextAvailableSlot(null);
+      }
+
+    } catch (error) {
+      console.error('Error fetching next available slot:', error);
+      setNextAvailableSlot(null);
+    } finally {
+      setLoadingNextSlot(false);
     }
   };
 
@@ -862,37 +1023,146 @@ const HeroSection: React.FC = () => {
                    ))}
                  </select>
                 {errors.service && <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>}
+                <p className="mt-1 text-xs text-gray-600">
+                  ℹ️ 8am-9am and 5pm-7pm is out of hours
+                </p>
                </div>
 
-              {/* Date Selection - Only show for Book Now services */}
+              {/* Next Available Slot Recommendation */}
+              {watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' && (
+                <div className="mb-4">
+                  {loadingNextSlot ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-blue-800 text-sm">
+                        🔍 Finding next available slot...
+                      </p>
+                    </div>
+                  ) : nextAvailableSlot ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-green-800 font-medium text-sm mb-1">
+                            ⚡ Next Available Slot
+                          </p>
+                          <p className="text-green-700 text-sm">
+                            {nextAvailableSlot.display}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            console.log('🎯 Hero Select This Slot clicked:', {
+                              date: nextAvailableSlot.date,
+                              time: nextAvailableSlot.time,
+                              display: nextAvailableSlot.display
+                            });
+
+                            // Set the date first
+                            setValue('preferredDate', nextAvailableSlot.date);
+                            
+                            // Extract just the time part (before |) for auto-select
+                            const timeValue = nextAvailableSlot.time.split('|')[0];
+                            setAutoSelectTime(timeValue);
+                            
+                            // Find the selected service and trigger time slots loading
+                            const selectedService = services.find(s => 
+                              s.displayName === watchedService || s.name === watchedService
+                            );
+                            
+                            if (selectedService) {
+                              try {
+                                // Manually trigger time slots loading for the new date
+                                await fetchTimeSlots(selectedService, nextAvailableSlot.date);
+                                console.log('✅ Hero time slots loaded, auto-select will trigger');
+                              } catch (error) {
+                                console.error('❌ Error loading time slots:', error);
+                                // Fallback - try direct setValue with delay
+                                setTimeout(() => {
+                                  setValue('time', nextAvailableSlot.time);
+                                  console.log('✅ Hero time slot set (error fallback):', nextAvailableSlot.time);
+                                }, 200);
+                              }
+                            } else {
+                              console.warn('⚠️ Service not found, using fallback timing');
+                              // Fallback - wait for useEffect to trigger, then set time
+                              setTimeout(() => {
+                                setValue('time', nextAvailableSlot.time);
+                                console.log('✅ Hero time slot set (service fallback):', nextAvailableSlot.time);
+                              }, 300);
+                            }
+                          }}
+                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors ml-2"
+                        >
+                          Select This Slot
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <p className="text-yellow-800 text-sm">
+                        📅 No available slots found for this service. Please contact us directly.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Date Selection - Mandatory for Book Now services */}
               {(!watchedService || services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me') && (
                 <div>
                   <label htmlFor="preferredDate" className="block text-sm font-medium text-neutral-700 mb-1">
-                    Preferred Date (Optional)
+                    Preferred Date *
                   </label>
                   <input
                     type="date"
                     id="preferredDate"
-                    {...register('preferredDate')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    {...register('preferredDate', {
+                      required: watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' ? 'Please select a date' : false,
+                      validate: (value) => {
+                        if (!value && watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me') {
+                          return 'Please select a date';
+                        }
+                        if (value) {
+                          const selectedDate = new Date(value + 'T00:00:00');
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          if (selectedDate < today) {
+                            return 'Cannot book appointments in the past';
+                          }
+                        }
+                        return true;
+                      }
+                    })}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      errors.preferredDate ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                     min={new Date().toISOString().split('T')[0]}
                   />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Leave blank and we'll schedule your appointment for the next available slot
-                  </p>
+                  {errors.preferredDate && (
+                    <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
+                  )}
+                  {!watchedDate && watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Please select a date to see available time slots
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* Time Selection - Only show if date is selected AND service is book_now type */}
+              {/* Time Selection - Mandatory if date is selected AND service is book_now type */}
               {watchedDate && watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' && (
                 <div>
                   <label htmlFor="time" className="block text-sm font-medium text-neutral-700 mb-1">
-                    Preferred Time {watchedService ? '' : ''}
+                    Preferred Time *
                   </label>
                   <select
                     id="time"
-                    {...register('time')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    {...register('time', {
+                      required: watchedDate && watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' ? 'Please select a time slot' : false
+                    })}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      errors.time ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   >
                     <option value="">
                       {!watchedService ? 'Please select a service first' :
@@ -909,13 +1179,27 @@ const HeroSection: React.FC = () => {
                       );
                     })}
                   </select>
+                  {errors.time && (
+                    <p className="mt-1 text-sm text-red-600">{errors.time.message}</p>
+                  )}
                   <p className="text-xs text-neutral-500 mt-1">
-                    Available time slots based on our availability. Leave blank for default scheduling.
+                    Available time slots based on our availability. Time selection is required.
                   </p>
                 </div>
               )}
 
-              <Button type="submit" variant="primary" fullWidth size="lg" disabled={sendingEmail}>
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                size="lg"
+                disabled={Boolean(
+                  sendingEmail ||
+                  (watchedService &&
+                   services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type !== 'contact_me' &&
+                   (!watchedDate || !watch('time')))
+                )}
+              >
                 {sendingEmail ? 'Processing...' :
                  watchedService && services.find(s => s.displayName === watchedService || s.name === watchedService)?.booking_type === 'contact_me'
                    ? 'Contact for Consultation'
