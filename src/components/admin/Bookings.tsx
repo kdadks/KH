@@ -1425,8 +1425,53 @@ export const Bookings: React.FC<BookingsProps> = ({
         // Check availability before confirming and try to find matching slot
         const availabilityCheck = await checkBookingAvailabilityWithAutoMatch(booking);
 
-        if (!availabilityCheck.hasAvailability) {          showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
-          return;
+        if (!availabilityCheck.hasAvailability) {
+          console.log('⚠️ No matching availability slot found, attempting to auto-create one...');
+          
+          // Extract booking date and time for auto-creation
+          const bookingDate = booking.booking_date?.split('T')[0] || booking.appointment_date;
+          const bookingStartTime = booking.timeslot_start_time || '10:00:00';
+          const bookingEndTime = booking.timeslot_end_time || '10:50:00';
+          
+          if (bookingDate && bookingStartTime && bookingEndTime) {
+            try {
+              console.log('🔧 Auto-creating availability slot:', {
+                date: bookingDate,
+                start_time: bookingStartTime,
+                end_time: bookingEndTime
+              });
+              
+              // Create the missing availability slot
+              const { data: newSlot, error: createSlotError } = await supabase
+                .from('availability')
+                .insert([{
+                  date: bookingDate,
+                  start_time: bookingStartTime,
+                  end_time: bookingEndTime,
+                  is_available: false, // Mark as unavailable since we're confirming the booking
+                  slot_type: 'in-hour' // Default slot type
+                }])
+                .select()
+                .single();
+              
+              if (createSlotError) {
+                console.error('❌ Failed to auto-create availability slot:', createSlotError);
+                showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
+                return;
+              }
+              
+              console.log('✅ Auto-created availability slot:', newSlot);
+              
+              // Continue with confirmation since we just created the slot
+            } catch (createError) {
+              console.error('❌ Error auto-creating availability slot:', createError);
+              showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
+              return;
+            }
+          } else {
+            showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
+            return;
+          }
         }        // Check for conflicting bookings
         console.log('🔍 About to check for conflicting bookings...');
         const conflictCheck = await checkForConflictingBookings(booking);
