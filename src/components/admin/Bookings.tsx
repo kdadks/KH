@@ -8,7 +8,6 @@ import {
   User, 
   Check, 
   X, 
-  RefreshCw,
   Trash2,
   Eye,
   FileSpreadsheet,
@@ -42,6 +41,58 @@ interface BookingCalendarEvent {
   resource: BookingEventResource;
   allDay: boolean;
 }
+
+interface ServiceType {
+  id: string;
+  name: string;
+  displayName: string;
+  price?: number | string;
+  in_hour_price?: string;
+  out_of_hour_price?: string;
+  duration?: number;
+  description?: string;
+  priceType?: string;
+}
+
+interface PaymentRequest {
+  id: string;
+  booking_id?: string;
+  customer_id: number;
+  amount: number;
+  status: string;
+  notes?: string;
+  payment_due_date?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+interface Payment {
+  id: string;
+  booking_id?: string;
+  customer_id: number;
+  amount: number;
+  status: string;
+  payment_method?: string;
+  payment_date?: string;
+  created_at: string;
+}
+
+interface BookingPaymentStatus {
+  paymentRequest: PaymentRequest | null;
+  payment: Payment | null;
+}
+
+interface AvailabilitySlot {
+  id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  start?: string; // Alternative field name used in some contexts
+  end?: string;   // Alternative field name used in some contexts
+  is_available: boolean;
+  slot_type?: string;
+}
+
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
@@ -136,14 +187,14 @@ export const Bookings: React.FC<BookingsProps> = ({
   });
 
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<ServiceType[]>([]);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [creatingBooking, setCreatingBooking] = useState(false);
   
   // Payment request state
-  const [bookingPaymentStatus, setBookingPaymentStatus] = useState<Map<string, {paymentRequest: any, payment: any}>>(new Map());
+  const [bookingPaymentStatus, setBookingPaymentStatus] = useState<Map<string, BookingPaymentStatus>>(new Map());
   const [bookingDepositAmounts, setBookingDepositAmounts] = useState<Map<string, number>>(new Map());
   const [loadingPaymentStatus, setLoadingPaymentStatus] = useState(false);
   
@@ -183,22 +234,23 @@ export const Bookings: React.FC<BookingsProps> = ({
       window.dispatchEvent(new CustomEvent('refreshBookings'));
     };
 
-    const handleBookingStatusUpdate = (event: any) => {
-      console.log('🔄 Admin received booking status update event:', event.detail);
+    const handleBookingStatusUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('🔄 Admin received booking status update event:', customEvent.detail);
       // Force refresh of bookings to reflect the status change
       window.dispatchEvent(new CustomEvent('refreshBookings'));
 
       // Also refresh payment status for the affected booking
-      if (event.detail?.bookingId) {
-        console.log('🔄 Refreshing payment status for booking:', event.detail.bookingId);
+      if (customEvent.detail?.bookingId) {
+        console.log('🔄 Refreshing payment status for booking:', customEvent.detail.bookingId);
         setTimeout(() => {
           // Use a small delay to ensure the booking refresh happens first
           const refreshPaymentStatus = async () => {
             try {
-              const affectedBooking = allBookings.find(b => b.id === event.detail.bookingId);
+              const affectedBooking = allBookings.find(b => b.id === customEvent.detail.bookingId);
               if (affectedBooking) {
                 const updatedStatus = await checkBookingPaymentStatus(affectedBooking);
-                setBookingPaymentStatus(prev => new Map(prev.set(event.detail.bookingId, updatedStatus)));
+                setBookingPaymentStatus(prev => new Map(prev.set(customEvent.detail.bookingId, updatedStatus)));
               }
             } catch (error) {
               console.error('Error refreshing payment status:', error);
@@ -218,7 +270,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       window.removeEventListener('availabilityUpdated', handleBookingUpdate);
       window.removeEventListener('bookingStatusUpdated', handleBookingStatusUpdate);
     };
-  }, []);
+  }, [allBookings]); // Include allBookings since it's used in handleBookingStatusUpdate
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -283,7 +335,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   const checkBookingAvailabilityWithAutoMatch = async (booking: BookingFormData): Promise<{
     hasAvailability: boolean;
     message?: string;
-    matchedSlot?: any;
+    matchedSlot?: AvailabilitySlot;
     bookingDate?: string
   }> => {
     try {
@@ -702,7 +754,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   };
 
   // Helper function to find the availability slot that matches a booking
-  const findMatchingAvailabilitySlot = async (booking: any): Promise<any | null> => {
+  const findMatchingAvailabilitySlot = async (booking: BookingFormData): Promise<AvailabilitySlot | null> => {
     try {
       console.log('🔍 DEBUGGING: Full booking object for slot matching:', booking);
 
@@ -1015,7 +1067,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   };
 
   // Helper function to check for existing confirmed bookings in the same time slot
-  const checkForConflictingBookings = async (booking: BookingFormData): Promise<{ hasConflict: boolean; conflictDetails?: any; message?: string }> => {
+  const checkForConflictingBookings = async (booking: BookingFormData): Promise<{ hasConflict: boolean; conflictDetails?: Record<string, unknown>; message?: string }> => {
     try {
       console.log('🔍 CONFLICT CHECK: Starting conflict check for booking:', {
         id: booking.id,
@@ -1299,7 +1351,7 @@ export const Bookings: React.FC<BookingsProps> = ({
 
         // Now get ALL slots for the date (both available and unavailable) to mark them as unavailable
         console.log('🔍 Fetching ALL slots for the date to mark as unavailable:', bookingDate);
-        const { data: allSlots, error: allSlotsError } = await supabase
+        const { data: allSlots } = await supabase
           .from('availability')
           .select('id, start_time, end_time, is_available')
           .eq('date', bookingDate);
@@ -1318,7 +1370,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         console.log(`✅ Found ${availableSlots.length} available slots for full-day booking`);
 
         // Update booking status
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
           status: 'confirmed'
         };
 
@@ -1389,7 +1441,7 @@ export const Bookings: React.FC<BookingsProps> = ({
         console.log('✅ No conflicts found, proceeding with booking update...');
 
         // Update booking with confirmed status and matched slot time if available
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
           status: 'confirmed'
         };
 
@@ -1530,11 +1582,14 @@ export const Bookings: React.FC<BookingsProps> = ({
     
     try {
       // Check for payment requests - first try to match by booking_id, then fall back to customer_id + service matching
-      let { data: paymentRequests, error: requestError } = await supabase
+      const paymentRequestQuery = await supabase
         .from('payment_requests')
         .select('*')
         .eq('booking_id', booking.id)
         .order('created_at', { ascending: false });
+
+      let paymentRequests = paymentRequestQuery.data;
+      const requestError = paymentRequestQuery.error;
 
       if (requestError) {
         console.error('Error checking payment requests by booking_id:', requestError);
@@ -1776,7 +1831,9 @@ export const Bookings: React.FC<BookingsProps> = ({
     statusFilter, 
     filterDate,
     filterRange?.start,
-    filterRange?.end
+    filterRange?.end,
+    currentPageBookings, // Include currentPageBookings since it's used in loadPaymentStatus
+    setAllBookings // Include setAllBookings since it's called in loadPaymentStatus
   ]);
 
   // Helper function to process booking data for editing
@@ -1957,68 +2014,6 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
-  // Admin-specific reschedule function with email notifications
-  const handleAdminReschedule = async (
-    booking: BookingFormData,
-    newDate: string,
-    newTime: string,
-    reason?: string
-  ) => {
-    try {
-      console.log('🔄 Admin rescheduling booking:', booking.id);
-      
-      const oldDate = booking.appointment_date;
-      const oldTime = booking.appointment_time;
-
-      // Update the booking in the database
-      const { error: updateError } = await supabase
-        .from('bookings')
-        .update({
-          appointment_date: newDate,
-          appointment_time: newTime,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', booking.id);
-
-      if (updateError) {
-        console.error('Error updating booking:', updateError);
-        showError('Error', 'Failed to reschedule booking');
-        return;
-      }
-
-      // Send email notification using the workflow integration
-      const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
-      
-      const result = await integrateBookingReschedulingWorkflow(
-        booking.id!,
-        newDate,
-        newTime,
-        {
-          reschedule_reason: reason || 'Rescheduled by admin',
-          reschedule_note: 'Your appointment has been rescheduled by our admin team. Please check the new details below.',
-          rescheduled_by: 'admin',
-          old_appointment_date: oldDate,
-          old_appointment_time: oldTime
-        }
-      );
-
-      if (result.success) {
-        console.log('✅ Booking rescheduled and email sent successfully');
-        showSuccess('Success', 'Booking rescheduled and customer notified via email');
-      } else {
-        console.error('❌ Email notification failed:', result.errors);
-        showError('Warning', 'Booking rescheduled but email notification failed');
-      }
-
-      // Refresh bookings data
-      window.dispatchEvent(new CustomEvent('refreshBookings'));
-
-    } catch (error) {
-      console.error('Error in admin reschedule workflow:', error);
-      showError('Error', 'Failed to reschedule booking');
-    }
-  };
-
   // Reschedule booking
   const handleReschedule = (booking: BookingFormData) => {
     setBookingToReschedule(booking);
@@ -2086,11 +2081,11 @@ export const Bookings: React.FC<BookingsProps> = ({
       if (error) throw error;
 
       // Transform services to include pricing options
-      const transformedServices: any[] = [];
-      data?.forEach((service: any) => {
-        const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
-        const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
-        const hasMainPrice = service.price && service.price.trim() !== '';
+      const transformedServices: ServiceType[] = [];
+      data?.forEach((service) => {
+        const hasInHour = service.in_hour_price && typeof service.in_hour_price === 'string' && service.in_hour_price.trim() !== '';
+        const hasOutOfHour = service.out_of_hour_price && typeof service.out_of_hour_price === 'string' && service.out_of_hour_price.trim() !== '';
+        const hasMainPrice = service.price && typeof service.price === 'string' && service.price.trim() !== '';
 
         if (hasInHour && hasOutOfHour) {
           transformedServices.push({
@@ -2171,10 +2166,10 @@ export const Bookings: React.FC<BookingsProps> = ({
     const selectedService = services.find(s => s.displayName === serviceDisplayName);
     if (selectedService) {
       return (
-        (selectedService.price && selectedService.price.toLowerCase().includes('contact for quote')) ||
+        (selectedService.price && typeof selectedService.price === 'string' && selectedService.price.toLowerCase().includes('contact for quote')) ||
         (selectedService.in_hour_price && selectedService.in_hour_price.toLowerCase().includes('contact for quote')) ||
         (selectedService.out_of_hour_price && selectedService.out_of_hour_price.toLowerCase().includes('contact for quote'))
-      );
+      ) ? true : false;
     }
     
     // Fallback: check against original packages data (for raw service names from database)
@@ -2520,7 +2515,7 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // Respect the user's selected status - NO auto-confirmation from admin booking modal
       // Admin bookings should follow the normal booking creation and confirmation process
-      let finalBookingData = { ...bookingData };
+      const finalBookingData = { ...bookingData };
 
       console.log('📝 Admin booking modal - respecting user-selected status:', newBookingData.status);
       console.log('📝 Admin booking modal - skipping auto-confirmation to maintain manual control');
@@ -2711,7 +2706,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       styles: { fontSize: 8 },
       headStyles: { fillColor: '#3b82f6' },
       alternateRowStyles: { fillColor: '#f5f7fa' },
-      didParseCell: (data: any) => {
+      didParseCell: (data: { cell: { raw: unknown; text: string[] } }) => {
         // Ensure empty cells show N/A explicitly
         if (data.cell.raw === '' || data.cell.raw == null) {
           data.cell.text = ['N/A'];
@@ -3665,13 +3660,6 @@ export const Bookings: React.FC<BookingsProps> = ({
             timeslot_end_time: bookingToReschedule.timeslot_end_time,
             notes: bookingToReschedule.notes,
             status: bookingToReschedule.status
-          }}
-          customer={{
-            id: bookingToReschedule.customer_details?.id || bookingToReschedule.customer_id || 0,
-            first_name: bookingToReschedule.customer_details?.first_name || bookingToReschedule.customer_name.split(' ')[0] || '',
-            last_name: bookingToReschedule.customer_details?.last_name || bookingToReschedule.customer_name.split(' ').slice(1).join(' ') || '',
-            email: bookingToReschedule.customer_details?.email || bookingToReschedule.customer_email,
-            phone: bookingToReschedule.customer_details?.phone || bookingToReschedule.customer_phone
           }}
           onRescheduleComplete={handleRescheduleComplete}
         />

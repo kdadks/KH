@@ -1,23 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Calendar, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../shared/toastContext';
 import { UserBooking } from '../../types/userManagement';
 
-interface Customer {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string;
-}
-
 interface RescheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
   booking: UserBooking;
-  customer: Customer;
-  onRescheduleComplete: () => void;
+  onRescheduleComplete: (oldDate?: string, oldTime?: string, newDate?: string, newTime?: string, reason?: string) => void;
 }
 
 interface AvailabilitySlot {
@@ -33,7 +24,6 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
   isOpen,
   onClose,
   booking,
-  customer,
   onRescheduleComplete
 }) => {
   const { showError, showSuccess } = useToast();
@@ -51,13 +41,7 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
     display: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchAvailableSlots();
-    }
-  }, [isOpen]);
-
-  const fetchAvailableSlots = async () => {
+  const fetchAvailableSlots = useCallback(async () => {
     setLoading(true);
     try {
       // Get available slots for the next 30 days
@@ -212,7 +196,13 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [booking.package_name, booking.id, showError]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchAvailableSlots();
+    }
+  }, [isOpen, fetchAvailableSlots]);
 
   const handleReschedule = async () => {
     if (!formData.date || !formData.timeSlot) {
@@ -257,9 +247,10 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
             'Request Submitted', 
             'Your rescheduling request has been submitted for admin approval. You will receive an email confirmation once processed.'
           );
+          // For approval workflow, pass undefined parameters since email will be sent upon approval
           onRescheduleComplete();
         } else {
-          showError('Error', result.error || 'Failed to submit rescheduling request');
+          showError('Error', result.errors?.[0] || 'Failed to submit rescheduling request');
         }
       } else {
         // Direct rescheduling for requests more than 24 hours in advance
@@ -314,7 +305,15 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
         }
 
         showSuccess('Success', 'Booking rescheduled successfully! You will receive a confirmation email with the updated appointment details.');
-        onRescheduleComplete();
+        
+        // Pass the rescheduling details to the callback for admin email notification
+        const oldDate = booking.booking_date?.split('T')[0] || '';
+        const oldTime = booking.timeslot_start_time || '';
+        const newDate = formData.date;
+        const newTime = selectedSlot.start_time;
+        const reason = 'Customer self-rescheduled';
+        
+        onRescheduleComplete(oldDate, oldTime, newDate, newTime, reason);
       }
 
     } catch (error) {

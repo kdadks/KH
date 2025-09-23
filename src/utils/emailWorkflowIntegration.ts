@@ -14,12 +14,16 @@ import {
 } from './bookingEmailWorkflow';
 
 /**
- * Integration function for payment reque    // Prepare cancellation data
-    const cancellationData = {
-      cancellation_reason: cancellationReason,
-      has_payment_request: hasPaymentRequests || false,
-      refund_info: refundInfo
-    };cessing
+ * Generic workflow result interface
+ */
+interface WorkflowResult {
+  success: boolean;
+  results: Record<string, unknown>;
+  errors: string[];
+}
+
+/**
+ * Integration function for payment processing
  * Called when a payment is successfully processed
  */
 export const integratePaymentEmailWorkflow = async (
@@ -31,7 +35,7 @@ export const integratePaymentEmailWorkflow = async (
     bookingId?: string;
   },
   totalServiceCost: number = 150 // Default service cost for calculation
-): Promise<{ success: boolean; results: any; errors: string[] }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Integrating payment email workflow for payment request:', paymentRequestId);
@@ -124,9 +128,9 @@ export const integratePaymentEmailWorkflow = async (
  */
 export const integrateBookingCreationEmailWorkflow = async (
   bookingId: string,
-  customerId: number,
+  _customerId: number,
   paymentRequestId?: number
-): Promise<{ success: boolean; results: any; errors: string[] }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Integrating booking creation email workflow for booking:', bookingId);
@@ -224,7 +228,7 @@ export const integrateBookingCreationEmailWorkflow = async (
 export const integrateAdminConfirmationEmailWorkflow = async (
   bookingId: string,
   adminEmail?: string
-): Promise<{ success: boolean; results: any; errors: string[] }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Integrating admin confirmation email workflow for booking:', bookingId);
@@ -254,13 +258,53 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       throw new Error(`Failed to get booking details: ${bookingError?.message}`);
     }
 
-    // Prepare booking data for email
+    // Prepare booking data for email with proper date/time formatting
+    const formatDateForICS = (dateStr: string | null): string => {
+      if (!dateStr) {
+        return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
+      
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+          return new Date().toISOString().split('T')[0];
+        }
+        return date.toISOString().split('T')[0];
+      } catch {
+        return new Date().toISOString().split('T')[0];
+      }
+    };
+    
+    const formatTimeForICS = (timeStr: string | null): string => {
+      if (!timeStr || timeStr === 'To be scheduled') {
+        return '10:00:00'; // Default to 10 AM
+      }
+      
+      // If it's already in HH:MM:SS format, keep it
+      if (timeStr.match(/^\d{2}:\d{2}:\d{2}$/)) {
+        return timeStr;
+      }
+      // If it's in HH:MM format, add seconds
+      else if (timeStr.match(/^\d{2}:\d{2}$/)) {
+        return timeStr + ':00';
+      }
+      // If it contains extra text, try to extract time
+      else {
+        const timeMatch = timeStr.match(/(\d{1,2}:\d{2})/);
+        if (timeMatch) {
+          return timeMatch[1].padStart(5, '0') + ':00';
+        } else {
+          return '10:00:00'; // Fallback
+        }
+      }
+    };
+
     const bookingEmailData: BookingEmailData = {
       customer_name: `${booking.customer.first_name} ${booking.customer.last_name}`,
       customer_email: booking.customer.email,
       service_name: booking.package_name,
-      appointment_date: booking.booking_date || new Date().toLocaleDateString('en-IE'),
-      appointment_time: booking.timeslot_start_time || 'To be scheduled',
+      appointment_date: formatDateForICS(booking.booking_date),
+      appointment_time: formatTimeForICS(booking.timeslot_start_time),
       booking_reference: booking.booking_reference || `KH-${booking.id}`,
       booking_id: booking.id,
       customer_id: booking.customer_id,
@@ -268,6 +312,13 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
       special_instructions: booking.notes
     };
+    
+    console.log('🔍 DEBUG: Booking email data for ICS:', {
+      appointment_date: bookingEmailData.appointment_date,
+      appointment_time: bookingEmailData.appointment_time,
+      booking_date_raw: booking.booking_date,
+      timeslot_start_time_raw: booking.timeslot_start_time
+    });
 
     // Validate data before processing
     const validation = validateEmailWorkflowData(bookingEmailData);
@@ -301,12 +352,12 @@ export const integrateAdminConfirmationEmailWorkflow = async (
  */
 export const testEmailWorkflowIntegration = async (): Promise<{ 
   success: boolean; 
-  results: { [key: string]: any }; 
+  results: Record<string, unknown>; 
   errors: string[] 
 }> => {
   console.log('🧪 Testing email workflow integration...');
   
-  const results: { [key: string]: any } = {};
+  const results: Record<string, unknown> = {};
   const errors: string[] = [];
   let overallSuccess = true;
 
@@ -370,7 +421,7 @@ export const integrateBookingCancellationWorkflow = async (
   bookingId: string,
   cancellationReason?: string,
   refundInfo?: string
-): Promise<{ success: boolean; results: any; errors: string[] }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Integrating booking cancellation workflow for booking:', bookingId);
@@ -575,7 +626,7 @@ export const integrateBookingReschedulingWorkflow = async (
     old_appointment_date?: string;
     old_appointment_time?: string;
   } = {}
-): Promise<{ success: boolean; results: any; errors: string[] }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Integrating booking rescheduling workflow for booking:', bookingId);
@@ -602,16 +653,25 @@ export const integrateBookingReschedulingWorkflow = async (
       throw new Error('Failed to get booking details for rescheduling');
     }
 
-    // Store old appointment details if not provided
-    const oldAppointmentDate = reschedulingOptions.old_appointment_date || currentBooking.appointment_date;
-    const oldAppointmentTime = reschedulingOptions.old_appointment_time || currentBooking.appointment_time;
+    // Store old appointment details if not provided - handle both field patterns
+    const oldAppointmentDate = reschedulingOptions.old_appointment_date || 
+                              currentBooking.appointment_date || 
+                              currentBooking.booking_date?.split('T')[0] ||
+                              currentBooking.date;
+    const oldAppointmentTime = reschedulingOptions.old_appointment_time || 
+                              currentBooking.appointment_time || 
+                              currentBooking.timeslot_start_time ||
+                              currentBooking.time;
 
-    // Update the booking with new appointment details
-    // Update booking with new appointment details
-    // Note: updated_at will be automatically set by database trigger if column exists
+    // Update the booking with new appointment details - update both field patterns for compatibility
     const { error: updateError } = await supabase
       .from('bookings')
       .update({
+        // Update new field pattern (primary)
+        booking_date: `${newAppointmentDate}T${newAppointmentTime}:00`,
+        timeslot_start_time: `${newAppointmentTime}:00`,
+        timeslot_end_time: `${newAppointmentTime.split(':')[0]}:${(parseInt(newAppointmentTime.split(':')[1]) + 50).toString().padStart(2, '0')}:00`,
+        // Also update legacy fields for backward compatibility
         appointment_date: newAppointmentDate,
         appointment_time: newAppointmentTime
       })
@@ -621,8 +681,10 @@ export const integrateBookingReschedulingWorkflow = async (
       throw new Error('Failed to update booking with new appointment details');
     }
 
-    // Get customer name (encrypted/decrypted handling)
-    const customerName = currentBooking.customer?.name || currentBooking.customer_name || 'Customer';
+    // Get customer name and email (handle encrypted/decrypted and different field patterns)
+    const customerName = currentBooking.customer?.first_name && currentBooking.customer?.last_name 
+                        ? `${currentBooking.customer.first_name} ${currentBooking.customer.last_name}`
+                        : currentBooking.customer?.name || currentBooking.customer_name || 'Customer';
     const customerEmail = currentBooking.customer?.email || currentBooking.customer_email;
 
     if (!customerEmail) {
@@ -705,7 +767,7 @@ export const submitCustomerReschedulingRequest = async (
     reschedule_reason?: string;
     customer_notes?: string;
   }
-): Promise<{ success: boolean; data?: any; error?: string }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Processing customer rescheduling request for booking:', bookingId);
@@ -740,7 +802,8 @@ export const submitCustomerReschedulingRequest = async (
     if (bookingError || !booking) {
       return {
         success: false,
-        error: 'Booking not found'
+        results: {},
+        errors: ['Booking not found']
       };
     }
 
@@ -748,7 +811,8 @@ export const submitCustomerReschedulingRequest = async (
     if (!isBookingEligibleForRescheduling(booking.booking_status)) {
       return {
         success: false,
-        error: `Bookings with status "${booking.booking_status}" cannot be rescheduled`
+        results: {},
+        errors: [`Bookings with status "${booking.booking_status}" cannot be rescheduled`]
       };
     }
 
@@ -756,7 +820,8 @@ export const submitCustomerReschedulingRequest = async (
     if (!canRescheduleBooking(booking.appointment_date, booking.appointment_time)) {
       return {
         success: false,
-        error: 'Rescheduling requests must be submitted at least 24 hours before the appointment'
+        results: {},
+        errors: ['Rescheduling requests must be submitted at least 24 hours before the appointment']
       };
     }
 
@@ -773,7 +838,8 @@ export const submitCustomerReschedulingRequest = async (
     if (!validation.isValid) {
       return {
         success: false,
-        error: validation.errors.join(', ')
+        results: {},
+        errors: validation.errors
       };
     }
 
@@ -789,7 +855,11 @@ export const submitCustomerReschedulingRequest = async (
     });
 
     if (!submitResult.success) {
-      return submitResult;
+      return {
+        success: false,
+        results: {},
+        errors: submitResult.error ? [submitResult.error] : ['Failed to submit rescheduling request']
+      };
     }
 
     // Send email notifications using the existing workflow
@@ -826,18 +896,20 @@ export const submitCustomerReschedulingRequest = async (
 
     return {
       success: true,
-      data: {
+      results: {
         ...submitResult.data,
         emailNotificationSent: emailResult.success,
         emailError: emailResult.error
-      }
+      },
+      errors: []
     };
 
   } catch (error) {
     console.error('❌ Customer rescheduling request failed:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      results: {},
+      errors: [error instanceof Error ? error.message : 'Unknown error occurred']
     };
   }
 };
@@ -850,7 +922,7 @@ export const approveCustomerReschedulingRequest = async (
   requestId: string,
   adminUserId: string,
   adminNotes?: string
-): Promise<{ success: boolean; data?: any; error?: string }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Processing rescheduling request approval:', requestId);
@@ -866,14 +938,19 @@ export const approveCustomerReschedulingRequest = async (
     if (!detailsResult.success || !detailsResult.data) {
       return {
         success: false,
-        error: 'Rescheduling request not found'
+        results: {},
+        errors: ['Rescheduling request not found']
       };
     }
 
     // Approve the request
     const approvalResult = await approveReschedulingRequest(requestId, adminUserId, adminNotes);
     if (!approvalResult.success) {
-      return approvalResult;
+      return {
+        success: false,
+        results: {},
+        errors: approvalResult.error ? [approvalResult.error] : ['Failed to approve rescheduling request']
+      };
     }
 
     // Send approval notification using existing workflow
@@ -908,18 +985,20 @@ export const approveCustomerReschedulingRequest = async (
 
     return {
       success: true,
-      data: {
+      results: {
         ...approvalResult.data,
         emailNotificationSent: emailResult.success,
         emailError: emailResult.error
-      }
+      },
+      errors: []
     };
 
   } catch (error) {
     console.error('❌ Rescheduling request approval failed:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      results: {},
+      errors: [error instanceof Error ? error.message : 'Unknown error occurred']
     };
   }
 };
@@ -932,7 +1011,7 @@ export const rejectCustomerReschedulingRequest = async (
   requestId: string,
   adminUserId: string,
   adminNotes?: string
-): Promise<{ success: boolean; data?: any; error?: string }> => {
+): Promise<WorkflowResult> => {
   
   try {
     console.log('🔄 Processing rescheduling request rejection:', requestId);
@@ -948,14 +1027,19 @@ export const rejectCustomerReschedulingRequest = async (
     if (!detailsResult.success || !detailsResult.data) {
       return {
         success: false,
-        error: 'Rescheduling request not found'
+        results: {},
+        errors: ['Rescheduling request not found']
       };
     }
 
     // Reject the request
     const rejectionResult = await rejectReschedulingRequest(requestId, adminUserId, adminNotes);
     if (!rejectionResult.success) {
-      return rejectionResult;
+      return {
+        success: false,
+        results: {},
+        errors: rejectionResult.error ? [rejectionResult.error] : ['Failed to reject rescheduling request']
+      };
     }
 
     // Send rejection notification using existing workflow
@@ -988,18 +1072,20 @@ export const rejectCustomerReschedulingRequest = async (
 
     return {
       success: true,
-      data: {
+      results: {
         ...rejectionResult.data,
         emailNotificationSent: emailResult.success,
         emailError: emailResult.error
-      }
+      },
+      errors: []
     };
 
   } catch (error) {
     console.error('❌ Rescheduling request rejection failed:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      results: {},
+      errors: [error instanceof Error ? error.message : 'Unknown error occurred']
     };
   }
 };
