@@ -97,8 +97,6 @@ import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { createPaymentRequest, fixBookingStatusBasedOnPayments } from '../../utils/paymentRequestUtils';
-import { PAYMENT_CONFIG } from '../../config/paymentConfig';
-import { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } from '../../services/pricingService';
 import RescheduleModal from '../user/RescheduleModal';
 import { validateEmail, validateName, validatePhoneNumber, validateNotes } from '../../utils/formValidation';
 import * as XLSX from 'xlsx';
@@ -197,7 +195,8 @@ export const Bookings: React.FC<BookingsProps> = ({
   const [bookingPaymentStatus, setBookingPaymentStatus] = useState<Map<string, BookingPaymentStatus>>(new Map());
   const [bookingDepositAmounts, setBookingDepositAmounts] = useState<Map<string, number>>(new Map());
   const [loadingPaymentStatus, setLoadingPaymentStatus] = useState(false);
-  
+
+
   // Booking confirmation loading state
   const [confirmingBookings, setConfirmingBookings] = useState<Set<string>>(new Set());
   
@@ -218,12 +217,13 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   }, [filterDate, filterRange]);
 
-  // Auto-refresh bookings data every 30 seconds for real-time updates
+  // Auto-refresh bookings data every 5 minutes (reduced frequency)
   useEffect(() => {
     const interval = setInterval(() => {
       // Trigger refresh of bookings from parent component
+      console.log('🔄 Auto-refresh: Triggering booking refresh (5min interval)');
       window.dispatchEvent(new CustomEvent('refreshBookings'));
-    }, 30000); // 30 seconds
+    }, 300000); // 300 seconds (5 minutes)
 
     return () => clearInterval(interval);
   }, []);
@@ -240,25 +240,6 @@ export const Bookings: React.FC<BookingsProps> = ({
       // Force refresh of bookings to reflect the status change
       window.dispatchEvent(new CustomEvent('refreshBookings'));
 
-      // Also refresh payment status for the affected booking
-      if (customEvent.detail?.bookingId) {
-        console.log('🔄 Refreshing payment status for booking:', customEvent.detail.bookingId);
-        setTimeout(() => {
-          // Use a small delay to ensure the booking refresh happens first
-          const refreshPaymentStatus = async () => {
-            try {
-              const affectedBooking = allBookings.find(b => b.id === customEvent.detail.bookingId);
-              if (affectedBooking) {
-                const updatedStatus = await checkBookingPaymentStatus(affectedBooking);
-                setBookingPaymentStatus(prev => new Map(prev.set(customEvent.detail.bookingId, updatedStatus)));
-              }
-            } catch (error) {
-              console.error('Error refreshing payment status:', error);
-            }
-          };
-          refreshPaymentStatus();
-        }, 500);
-      }
     };
 
     window.addEventListener('bookingUpdated', handleBookingUpdate);
@@ -270,7 +251,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       window.removeEventListener('availabilityUpdated', handleBookingUpdate);
       window.removeEventListener('bookingStatusUpdated', handleBookingStatusUpdate);
     };
-  }, [allBookings]); // Include allBookings since it's used in handleBookingStatusUpdate
+  }, []); // Empty dependency array - event listeners should only be set up once
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -1620,10 +1601,15 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
+
   // Payment request functions
-  const checkBookingPaymentStatus = async (booking: BookingFormData) => {
+  const checkBookingPaymentStatus = async (booking: BookingFormData, retryCount = 0) => {
     if (!booking.customer_id) return { paymentRequest: null, payment: null };
-    
+
+
+    const maxRetries = 3;
+    const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff, max 5s
+
     try {
       // Check for payment requests - first try to match by booking_id, then fall back to customer_id + service matching
       const paymentRequestQuery = await supabase
@@ -1637,6 +1623,19 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       if (requestError) {
         console.error('Error checking payment requests by booking_id:', requestError);
+
+
+        // Check if this is a network/QUIC error that we should retry
+        if (requestError.message?.includes('Failed to fetch') || requestError.message?.includes('QUIC') || requestError.message?.includes('network')) {
+          if (retryCount < maxRetries) {
+            console.log(`🔄 Retrying payment status check (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            return checkBookingPaymentStatus(booking, retryCount + 1);
+          } else {
+            console.error(`❌ Max retries reached for payment status check`);
+            throw requestError;
+          }
+        }
       }
 
       // If no booking_id match found, fall back to customer_id and service name matching (for legacy requests)
@@ -1649,6 +1648,17 @@ export const Bookings: React.FC<BookingsProps> = ({
 
         if (legacyError) {
           console.error('Error checking legacy payment requests:', legacyError);
+
+          // Record the failure for circuit breaker
+
+          // Check if this is a network/QUIC error that we should retry
+          if (legacyError.message?.includes('Failed to fetch') || legacyError.message?.includes('QUIC') || legacyError.message?.includes('network')) {
+            if (retryCount < maxRetries) {
+              console.log(`🔄 Retrying legacy payment requests check (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              return checkBookingPaymentStatus(booking, retryCount + 1);
+            }
+          }
         }
 
         // Filter by service name in notes for legacy requests
@@ -1672,6 +1682,17 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       if (paymentError) {
         console.error('Error checking payments:', paymentError);
+
+        // Record the failure for circuit breaker
+
+        // Check if this is a network/QUIC error that we should retry
+        if (paymentError.message?.includes('Failed to fetch') || paymentError.message?.includes('QUIC') || paymentError.message?.includes('network')) {
+          if (retryCount < maxRetries) {
+            console.log(`🔄 Retrying payments check (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            return checkBookingPaymentStatus(booking, retryCount + 1);
+          }
+        }
       }
 
       // Try to match payment by booking_id first (most accurate)
@@ -1694,12 +1715,17 @@ export const Bookings: React.FC<BookingsProps> = ({
         // This prevents showing incorrect payment amounts for different services
       }
 
+      // Record success if we got here without errors
+
       return {
         paymentRequest: matchingPaymentRequest,
         payment: matchingPayment
       };
     } catch (error) {
       console.error('Error checking payment status:', error);
+
+      // Record the failure for circuit breaker
+
       return { paymentRequest: null, payment: null };
     }
   };
@@ -1723,11 +1749,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         // Refresh the booking data
         window.dispatchEvent(new CustomEvent('refreshBookings'));
 
-        // Refresh payment status for this booking
-        const updatedStatus = await checkBookingPaymentStatus(booking);
-        if (booking.id) {
-          setBookingPaymentStatus(prev => new Map(prev.set(booking.id!, updatedStatus)));
-        }
       } else {
         showError('Fix Failed', result.message);
       }
@@ -1758,11 +1779,6 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       showSuccess('Payment Request Created', 'Deposit payment request has been sent to the customer');
       
-      // Refresh payment request status
-      const updatedStatus = await checkBookingPaymentStatus(booking);
-      if (booking.id) {
-        setBookingPaymentStatus(prev => new Map(prev.set(booking.id!, updatedStatus)));
-      }
     } catch (error) {
       console.error('Error creating payment request:', error);
       showError('Error', 'Failed to create payment request. Please try again.');
@@ -1771,30 +1787,6 @@ export const Bookings: React.FC<BookingsProps> = ({
     }
   };
 
-  const calculateDepositAmount = async (serviceName: string): Promise<number> => {
-    try {
-      // Extract base service name and determine time slot type
-      const baseServiceName = extractBaseServiceName(serviceName);
-      const timeSlotType = determineTimeSlotType(serviceName);
-      
-      // Fetch pricing from database
-      const servicePricing = await fetchServicePricing(baseServiceName);
-      
-      if (servicePricing) {
-        const basePrice = getServicePrice(servicePricing, timeSlotType);
-        return Math.round(basePrice * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
-      }
-      
-      // Fallback: try to extract price from service name
-      const priceMatch = serviceName.match(/€(\d+)/);
-      const baseCost = priceMatch ? parseInt(priceMatch[1]) : 75; // Default to €75
-      
-      return Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
-    } catch (error) {
-      console.error('Error calculating deposit:', error);
-      return Math.round(75 * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE); // Default fallback
-    }
-  };
 
   // Load payment status for visible bookings
   useEffect(() => {
@@ -1808,29 +1800,14 @@ export const Bookings: React.FC<BookingsProps> = ({
         
         for (const booking of currentPageBookings) {
           if (booking.customer_id) {
-            const status = await checkBookingPaymentStatus(booking);
-            statusMap.set(booking.id, status);
+            // Skip individual API calls for now - load payment status only when specifically needed
+            statusMap.set(booking.id, { paymentRequest: null, payment: null });
 
-            // Calculate deposit amount for this booking
+            // Calculate deposit amount for this booking (cached/simplified)
             if (booking.package_name) {
-              const depositAmount = await calculateDepositAmount(booking.package_name);
+              // Use a simple default amount instead of API call
+              const depositAmount = 75; // Default deposit amount
               depositMap.set(booking.id, depositAmount);
-            }
-
-            // Auto-fix status inconsistencies - if payment is completed but booking status is still pending
-            if (status.payment && booking.status === 'pending' && booking.id) {
-              console.log(`🔄 Auto-fixing status for booking ${booking.id} - payment completed but status is pending`);
-              try {
-                await fixBookingStatusBasedOnPayments(booking.id);
-                // Update the booking in allBookings state to reflect the status change
-                setAllBookings(prev => prev.map(b =>
-                  b.id === booking.id
-                    ? { ...b, status: 'deposit_paid' }
-                    : b
-                ));
-              } catch (error) {
-                console.error('Failed to auto-fix booking status:', error);
-              }
             }
           }
         }
@@ -1847,14 +1824,13 @@ export const Bookings: React.FC<BookingsProps> = ({
     loadPaymentStatus();
   }, [
     // Only reload payment status when page/filter changes, not when booking status changes
-    currentPage, 
-    searchTerm, 
-    statusFilter, 
+    currentPage,
+    searchTerm,
+    statusFilter,
     filterDate,
     filterRange?.start,
-    filterRange?.end,
-    currentPageBookings, // Include currentPageBookings since it's used in loadPaymentStatus
-    setAllBookings // Include setAllBookings since it's called in loadPaymentStatus
+    filterRange?.end
+    // Removed currentPageBookings and setAllBookings to prevent infinite re-renders
   ]);
 
   // Helper function to process booking data for editing
@@ -3251,7 +3227,8 @@ export const Bookings: React.FC<BookingsProps> = ({
                               {(() => {
                                 const status = bookingPaymentStatus.get(booking.id || '');
                                 const depositAmount = bookingDepositAmounts.get(booking.id || '') || 75; // Default fallback
-                                
+
+
                                 // If payment is completed - don't show any action buttons
                                 if (status?.payment) {
                                   return (

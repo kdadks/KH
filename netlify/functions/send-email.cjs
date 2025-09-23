@@ -626,10 +626,17 @@ const getEmailTemplate = (type, data) => {
                   <p style="margin: 0;">Visit our website and click on "Patient Login" or use the button below to go directly to the login page.</p>
                 </div>
 
-                <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
-                  <h4 style="color: white; margin-top: 0; margin-bottom: 10px;">Step 2: Set Up Your Password</h4>
-                  <p style="margin: 0;"><strong>Email:</strong> ${data.customer_email || 'Your registered email address'}</p>
-                  <p style="margin: 5px 0 0 0;"> Use your email address given during booking as user id and same as password.</p>
+                <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; border: 2px solid #ffc107; margin: 15px 0; box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);">
+                  <h4 style="color: #856404; margin-top: 0; margin-bottom: 15px; text-align: center;">🔑 Step 2: Your First-Time Login Credentials</h4>
+                  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745; margin: 10px 0;">
+                    <p style="margin: 0; font-size: 16px; font-weight: bold; color: #155724;">📧 Your Login Email: <span style="color: #007bff;">${data.customer_email || 'Your registered email address'}</span></p>
+                  </div>
+                  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #dc3545; margin: 10px 0;">
+                    <p style="margin: 0; font-size: 16px; font-weight: bold; color: #721c24;">🔐 Your Temporary Password: <span style="color: #dc3545;">Same as your email address</span></p>
+                  </div>
+                  <div style="background-color: #e7f3ff; padding: 12px; border-radius: 6px; margin: 10px 0; text-align: center;">
+                    <p style="margin: 0; font-size: 14px; color: #0066cc; font-weight: bold;">⚠️ IMPORTANT: Use your email address as both username AND password for first login</p>
+                  </div>
                 </div>
 
                 <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #d1fae5; margin: 15px 0;">
