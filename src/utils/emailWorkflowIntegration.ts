@@ -630,13 +630,18 @@ export const integrateBookingReschedulingWorkflow = async (
                               currentBooking.time;
 
     // Update the booking with new appointment details - use only confirmed fields
+    // Handle time format - newAppointmentTime might already include seconds
+    const timeForTimestamp = newAppointmentTime.includes(':') && newAppointmentTime.split(':').length === 3 
+      ? newAppointmentTime  // Already has seconds (HH:MM:SS)
+      : `${newAppointmentTime}:00`; // Add seconds (HH:MM -> HH:MM:SS)
+    
     const updateData = {
-      booking_date: `${newAppointmentDate}T${newAppointmentTime}:00`,
-      timeslot_start_time: `${newAppointmentTime}:00`,
+      booking_date: `${newAppointmentDate}T${timeForTimestamp}`,
+      timeslot_start_time: timeForTimestamp,
       timeslot_end_time: `${newAppointmentTime.split(':')[0]}:${(parseInt(newAppointmentTime.split(':')[1]) + 50).toString().padStart(2, '0')}:00`
     };
     
-    console.log('🔄 Updating booking with data:', { bookingId, updateData });
+    console.log('🔄 Updating booking with data:', { bookingId, updateData, originalTime: newAppointmentTime });
     
     const { error: updateError } = await supabase
       .from('bookings')
