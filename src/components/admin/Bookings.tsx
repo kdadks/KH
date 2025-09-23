@@ -756,8 +756,6 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Helper function to find the availability slot that matches a booking
   const findMatchingAvailabilitySlot = async (booking: BookingFormData): Promise<AvailabilitySlot | null> => {
     try {
-      console.log('🔍 DEBUGGING: Full booking object for slot matching:', booking);
-
       // Extract booking date and time from the booking
       let bookingDate: string;
       let bookingTime: string;
@@ -1618,16 +1616,6 @@ export const Bookings: React.FC<BookingsProps> = ({
       // Get the most recent matching payment request
       const matchingPaymentRequest = paymentRequests && paymentRequests.length > 0 ? paymentRequests[0] : null;
 
-      console.log(`[Admin] Payment request lookup for booking ${booking.id} (${booking.package_name}):`, {
-        bookingIdMatches: paymentRequests?.length || 0,
-        matchingRequest: matchingPaymentRequest ? {
-          id: matchingPaymentRequest.id,
-          amount: matchingPaymentRequest.amount,
-          booking_id: matchingPaymentRequest.booking_id,
-          hasBookingId: !!matchingPaymentRequest.booking_id
-        } : null
-      });
-
       // Check for completed payments - match by booking_id first, then fallback to service name matching
       const { data: payments, error: paymentError } = await supabase
         .from('payments')
@@ -1645,16 +1633,6 @@ export const Bookings: React.FC<BookingsProps> = ({
       if (payments && booking.id) {
         matchingPayment = payments.find(payment => payment.booking_id === booking.id);
         
-        console.log(`[Admin] Payment lookup for booking ${booking.id} (${booking.package_name}):`, {
-          totalPayments: payments.length,
-          bookingIdMatch: !!matchingPayment,
-          matchedPayment: matchingPayment ? {
-            id: matchingPayment.id,
-            amount: matchingPayment.amount,
-            booking_id: matchingPayment.booking_id
-          } : null
-        });
-        
         // Fallback: try to match by service name in notes (for legacy payments)
         if (!matchingPayment && booking.package_name) {
           matchingPayment = payments.find(payment => 
@@ -1662,15 +1640,12 @@ export const Bookings: React.FC<BookingsProps> = ({
           );
           
           if (matchingPayment) {
-            console.log(`[Admin] Fallback: Found payment by service name matching for ${booking.package_name}`);
+            // Payment found by service name matching for legacy payments
           }
         }
         
         // Last resort: don't use any payment to avoid showing wrong amounts
         // This prevents showing incorrect payment amounts for different services
-        if (!matchingPayment) {
-          console.log(`[Admin] No specific payment found for booking ${booking.id} - avoiding incorrect payment display`);
-        }
       }
 
       return {

@@ -495,8 +495,6 @@ export const createBookingWithCustomer = async (
  */
 export const getBookingsWithCustomers = async (forceRefresh: boolean = false): Promise<{ bookings: any[] | null; error: string | null }> => {
   try {
-    console.log('🔍 getBookingsWithCustomers called, forceRefresh:', forceRefresh);
-    
     const query = supabase
       .from('bookings')
       .select(`
@@ -517,16 +515,6 @@ export const getBookingsWithCustomers = async (forceRefresh: boolean = false): P
       });
       return { bookings: null, error: error.message };
     }
-
-    console.log('📋 Booking data fetched:', {
-      totalBookings: data?.length || 0,
-      sampleBooking: data?.[0] ? {
-        id: data[0].id,
-        booking_reference: data[0].booking_reference,
-        package_name: data[0].package_name,
-        booking_date: data[0].booking_date
-      } : null
-    });
 
     // Decrypt customer data for admin viewing
     const decryptedBookings = data?.map(booking => {
