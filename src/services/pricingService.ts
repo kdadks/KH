@@ -26,7 +26,10 @@ export function extractNumericPrice(priceString: string): number {
 /**
  * Fetches service pricing information from the database
  */
-export async function fetchServicePricing(serviceName: string): Promise<ServicePricing | null> {
+export async function fetchServicePricing(serviceName: string, retryCount = 0): Promise<ServicePricing | null> {
+  const maxRetries = 3;
+  const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff, max 5s
+
   try {
     // First try exact match - use limit(1) instead of maybeSingle() to handle duplicates
     const { data: exactMatchData, error } = await supabase
@@ -40,6 +43,13 @@ export async function fetchServicePricing(serviceName: string): Promise<ServiceP
 
     if (error) {
       console.error('Error fetching service pricing (exact match):', error.message);
+
+      // Check if this is a network/QUIC error that we should retry
+      if ((error.message?.includes('Failed to fetch') || error.message?.includes('QUIC') || error.message?.includes('network')) && retryCount < maxRetries) {
+        console.log(`🔄 Retrying service pricing fetch (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return fetchServicePricing(serviceName, retryCount + 1);
+      }
 
       // Try case-insensitive search if exact match fails
       console.log('🔄 Trying case-insensitive search...');

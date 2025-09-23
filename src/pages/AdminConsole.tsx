@@ -177,21 +177,60 @@ const AdminConsole = () => {
   useEffect(() => {
     if (!isLoggedIn) return;
 
+    let refreshDebounceTimer: NodeJS.Timeout | null = null;
+    let dashboardDebounceTimer: NodeJS.Timeout | null = null;
+
     const handleRefreshBookings = () => {
-      console.log('🔄 AdminConsole received refreshBookings event, refreshing booking and payment data...');
-      fetchAllBookings();
-      fetchAllPaymentData(); // Also refresh payment data since booking payments are linked
+      // Debounce refresh events to prevent loops
+      if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+      }
+
+      refreshDebounceTimer = setTimeout(async () => {
+        console.log('🔄 AdminConsole received refreshBookings event, refreshing booking and payment data...');
+        setIsLoading(true);
+        try {
+          await Promise.all([
+            fetchAllBookings(),
+            fetchAllPaymentData() // Also refresh payment data since booking payments are linked
+          ]);
+        } catch (error) {
+          console.error('❌ Error during refresh:', error);
+        } finally {
+          setIsLoading(false);
+        }
+        refreshDebounceTimer = null;
+      }, 1000); // 1 second debounce
     };
 
     const handleRefreshDashboard = () => {
-      console.log('🔄 AdminConsole received refreshDashboard event, refreshing all data...');
-      handleManualRefresh();
+      // Debounce dashboard refresh events
+      if (dashboardDebounceTimer) {
+        clearTimeout(dashboardDebounceTimer);
+      }
+
+      dashboardDebounceTimer = setTimeout(async () => {
+        console.log('🔄 AdminConsole received refreshDashboard event, refreshing all data...');
+        setIsLoading(true);
+        try {
+          await handleManualRefresh();
+        } catch (error) {
+          console.error('❌ Error during dashboard refresh:', error);
+        } finally {
+          setIsLoading(false);
+        }
+        dashboardDebounceTimer = null;
+      }, 1000); // 1 second debounce
     };
 
     window.addEventListener('refreshBookings', handleRefreshBookings);
     window.addEventListener('refreshDashboard', handleRefreshDashboard);
 
     return () => {
+      // Clean up timers
+      if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
+      if (dashboardDebounceTimer) clearTimeout(dashboardDebounceTimer);
+
       window.removeEventListener('refreshBookings', handleRefreshBookings);
       window.removeEventListener('refreshDashboard', handleRefreshDashboard);
     };
