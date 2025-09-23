@@ -638,7 +638,8 @@ export const integrateBookingReschedulingWorkflow = async (
     const updateData = {
       booking_date: `${newAppointmentDate}T${timeForTimestamp}`,
       timeslot_start_time: timeForTimestamp,
-      timeslot_end_time: `${newAppointmentTime.split(':')[0]}:${(parseInt(newAppointmentTime.split(':')[1]) + 50).toString().padStart(2, '0')}:00`
+      timeslot_end_time: `${newAppointmentTime.split(':')[0]}:${(parseInt(newAppointmentTime.split(':')[1]) + 50).toString().padStart(2, '0')}:00`,
+      status: 'confirmed'  // Confirm booking when rescheduling is completed
     };
     
     console.log('🔄 Updating booking with data:', { bookingId, updateData, originalTime: newAppointmentTime });
