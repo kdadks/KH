@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getUserBookings } from '../../utils/userManagementUtils';
 import { UserBooking } from '../../types/userManagement';
@@ -30,13 +30,7 @@ const UserBookings: React.FC = () => {
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [bookingToReschedule, setBookingToReschedule] = useState<UserBooking | null>(null);
 
-  useEffect(() => {
-    if (user?.id) {
-      loadBookings();
-    }
-  }, [user]);
-
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     if (!user?.id) return;
 
     setLoading(true);
@@ -54,17 +48,27 @@ const UserBookings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, showError]);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadBookings();
+    }
+  }, [user, loadBookings]);
 
   const handleReschedule = (booking: UserBooking) => {
     setBookingToReschedule(booking);
     setShowRescheduleModal(true);
   };
 
-  const handleRescheduleComplete = () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleRescheduleComplete = (_oldDate?: string, _oldTime?: string, _newDate?: string, _newTime?: string, _reason?: string) => {
     setShowRescheduleModal(false);
     setBookingToReschedule(null);
     loadBookings(); // Refresh the bookings list
+    
+    // For user context, we don't need to do anything with the email parameters
+    // The email workflow is already handled within the RescheduleModal
   };
 
   // Filter bookings based on search and status
@@ -257,13 +261,6 @@ const UserBookings: React.FC = () => {
           isOpen={showRescheduleModal}
           onClose={() => setShowRescheduleModal(false)}
           booking={bookingToReschedule}
-          customer={{
-            id: user.id,
-            first_name: user.first_name,
-            last_name: user.last_name,
-            email: user.email,
-            phone: user.phone
-          }}
           onRescheduleComplete={handleRescheduleComplete}
         />
       )}

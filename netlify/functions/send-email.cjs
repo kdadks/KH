@@ -60,6 +60,14 @@ const formatDisplayDate = (dateString) => {
 
 // Calendar ICS generation function
 const generateICS = (data, isRescheduled = false) => {
+  console.log('🔍 DEBUG: generateICS called with data:', {
+    appointment_date: data.appointment_date,
+    appointment_time: data.appointment_time,
+    service_name: data.service_name,
+    booking_reference: data.booking_reference,
+    isRescheduled
+  });
+  
   // Parse the appointment time more robustly
   let appointmentTime = data.appointment_time;
   
@@ -88,11 +96,18 @@ const generateICS = (data, isRescheduled = false) => {
     appointmentTime = '10:00:00';
   }
   
+  console.log('🔍 DEBUG: Processed appointment time:', appointmentTime);
+  console.log('🔍 DEBUG: Date string to parse:', `${data.appointment_date}T${appointmentTime}`);
+  
   const startDate = new Date(`${data.appointment_date}T${appointmentTime}`);
   const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 1 hour
   
+  console.log('🔍 DEBUG: Parsed dates - Start:', startDate, 'End:', endDate);
+  console.log('🔍 DEBUG: startDate.getTime():', startDate.getTime());
+  
   // Validate dates
   if (isNaN(startDate.getTime())) {
+    console.error('❌ DEBUG: Invalid date generated, returning empty ICS');
     return ''; // Return empty string if date is invalid
   }
   
@@ -1624,6 +1639,17 @@ exports.handler = async (event, context) => {
     // Add calendar attachment for booking confirmations and rescheduling
     const emailTypesWithCalendar = ['admin_booking_confirmation', 'booking_rescheduled'];
     
+    console.log('🔍 DEBUG: Email type:', emailType, 'Types with calendar:', emailTypesWithCalendar);
+    console.log('🔍 DEBUG: Should include calendar?', emailTypesWithCalendar.includes(emailType));
+    console.log('🔍 DEBUG: Has appointment data?', {
+      appointment_date: data.appointment_date,
+      appointment_time: data.appointment_time,
+      appointment_date_type: typeof data.appointment_date,
+      appointment_time_type: typeof data.appointment_time,
+      appointment_date_truthy: !!data.appointment_date,
+      appointment_time_truthy: !!data.appointment_time
+    });
+    
     if (emailTypesWithCalendar.includes(emailType) && data.appointment_date && data.appointment_time) {
       console.log(`📅 Generating ICS calendar file for ${emailType}`);
       const isRescheduled = emailType === 'booking_rescheduled';
@@ -1641,9 +1667,18 @@ exports.handler = async (event, context) => {
             contentType: 'text/calendar; charset=utf-8; method=REQUEST'
           }
         ];
+        console.log(`📎 ICS attachment added to email with filename: ${filename}`);
       } else {
-        console.warn(`⚠️ Failed to generate ICS content for ${emailType}`);
+        console.warn(`⚠️ Failed to generate ICS content for ${emailType}. ICS content:`, icsContent);
       }
+    } else {
+      console.log(`📅 Skipping calendar attachment for ${emailType}. Reasons:`, {
+        isCalendarEmailType: emailTypesWithCalendar.includes(emailType),
+        hasAppointmentDate: !!data.appointment_date,
+        hasAppointmentTime: !!data.appointment_time,
+        appointmentDate: data.appointment_date,
+        appointmentTime: data.appointment_time
+      });
     }
 
     // Add general attachments if provided
