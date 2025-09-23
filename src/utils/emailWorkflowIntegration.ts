@@ -629,22 +629,30 @@ export const integrateBookingReschedulingWorkflow = async (
                               currentBooking.timeslot_start_time ||
                               currentBooking.time;
 
-    // Update the booking with new appointment details - update both field patterns for compatibility
+    // Update the booking with new appointment details - use only confirmed fields
+    const updateData = {
+      booking_date: `${newAppointmentDate}T${newAppointmentTime}:00`,
+      timeslot_start_time: `${newAppointmentTime}:00`,
+      timeslot_end_time: `${newAppointmentTime.split(':')[0]}:${(parseInt(newAppointmentTime.split(':')[1]) + 50).toString().padStart(2, '0')}:00`
+    };
+    
+    console.log('🔄 Updating booking with data:', { bookingId, updateData });
+    
     const { error: updateError } = await supabase
       .from('bookings')
-      .update({
-        // Update new field pattern (primary)
-        booking_date: `${newAppointmentDate}T${newAppointmentTime}:00`,
-        timeslot_start_time: `${newAppointmentTime}:00`,
-        timeslot_end_time: `${newAppointmentTime.split(':')[0]}:${(parseInt(newAppointmentTime.split(':')[1]) + 50).toString().padStart(2, '0')}:00`,
-        // Also update legacy fields for backward compatibility
-        appointment_date: newAppointmentDate,
-        appointment_time: newAppointmentTime
-      })
+      .update(updateData)
       .eq('id', bookingId);
 
     if (updateError) {
-      throw new Error('Failed to update booking with new appointment details');
+      console.error('❌ Booking update failed:', {
+        error: updateError,
+        bookingId,
+        updateData,
+        errorCode: updateError.code,
+        errorMessage: updateError.message,
+        errorDetails: updateError.details
+      });
+      throw new Error(`Failed to update booking: ${updateError.message}`);
     }
 
     // Get customer name and email (handle encrypted/decrypted and different field patterns)
