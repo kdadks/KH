@@ -1447,6 +1447,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                 .insert([{
                   date: bookingDate,
                   start_time: bookingStartTime,
+                  start: bookingStartTime, // Also set the 'start' field for compatibility
                   end_time: bookingEndTime,
                   is_available: false, // Mark as unavailable since we're confirming the booking
                   slot_type: 'in-hour' // Default slot type
