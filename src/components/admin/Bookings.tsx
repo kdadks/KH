@@ -1017,61 +1017,84 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Helper function to check for existing confirmed bookings in the same time slot
   const checkForConflictingBookings = async (booking: BookingFormData): Promise<{ hasConflict: boolean; conflictDetails?: any; message?: string }> => {
     try {
+      console.log('🔍 CONFLICT CHECK: Starting conflict check for booking:', {
+        id: booking.id,
+        booking_date: booking.booking_date,
+        timeslot_start_time: booking.timeslot_start_time,
+        timeslot_end_time: booking.timeslot_end_time
+      });
       
       // Extract booking date and time
       let bookingDate: string = '';
-      let bookingTime: string = '';
+      let bookingStartTime: string = '';
+      let bookingEndTime: string = '';
 
+      // Helper function to convert time to minutes
+      const timeToMinutes = (timeStr: string): number => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      // Extract date from booking_date (which is usually just the date part)
       if (booking.booking_date) {
         const bookingDateTime = new Date(booking.booking_date);
         if (!isNaN(bookingDateTime.getTime())) {
-          // Check if the booking_date has timezone information
-          const hasTimezone = booking.booking_date.includes('+') || booking.booking_date.includes('Z');
-          
-          if (hasTimezone) {
-            // Use UTC methods for dates with timezone
-            const year = bookingDateTime.getUTCFullYear();
-            const month = String(bookingDateTime.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(bookingDateTime.getUTCDate()).padStart(2, '0');
-            const hours = String(bookingDateTime.getUTCHours()).padStart(2, '0');
-            const minutes = String(bookingDateTime.getUTCMinutes()).padStart(2, '0');
-            
-            bookingDate = `${year}-${month}-${day}`;
-            bookingTime = `${hours}:${minutes}`;
-          } else {
-            // For dates without timezone, treat as local time (don't convert to UTC)
-            const year = bookingDateTime.getFullYear();
-            const month = String(bookingDateTime.getMonth() + 1).padStart(2, '0');
-            const day = String(bookingDateTime.getDate()).padStart(2, '0');
-            const hours = String(bookingDateTime.getHours()).padStart(2, '0');
-            const minutes = String(bookingDateTime.getMinutes()).padStart(2, '0');
-            
-            bookingDate = `${year}-${month}-${day}`;
-            bookingTime = `${hours}:${minutes}`;
-          }
+          const year = bookingDateTime.getUTCFullYear();
+          const month = String(bookingDateTime.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(bookingDateTime.getUTCDate()).padStart(2, '0');
+          bookingDate = `${year}-${month}-${day}`;
         }
-      } else if (booking.appointment_date && (booking.appointment_time || booking.time)) {
+      } else if (booking.appointment_date) {
         bookingDate = booking.appointment_date;
-        bookingTime = booking.appointment_time || booking.time || '';
-      } else if (booking.date && (booking.appointment_time || booking.time)) {
+      } else if (booking.date) {
         bookingDate = booking.date;
-        bookingTime = booking.appointment_time || booking.time || '';
       }
 
-      if (!bookingDate || !bookingTime) {
+      // Extract time from timeslot fields (this is the actual appointment time)
+      if (booking.timeslot_start_time && booking.timeslot_end_time) {
+        bookingStartTime = booking.timeslot_start_time;
+        bookingEndTime = booking.timeslot_end_time;
+      } else if (booking.appointment_time) {
+        bookingStartTime = booking.appointment_time;
+        // Estimate end time as 50 minutes later if not provided
+        const startMinutes = timeToMinutes(booking.appointment_time);
+        const endMinutes = startMinutes + 50;
+        bookingEndTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+      }
+
+      if (!bookingDate || !bookingStartTime) {
+        console.log('🔍 CONFLICT CHECK: Missing date/time data:', { bookingDate, bookingStartTime, bookingEndTime });
         return {
           hasConflict: false,
           message: 'Cannot check for conflicts: Missing date or time information.'
         };
       }
+      
+      console.log('🔍 CONFLICT CHECK: Extracted booking details:', { 
+        bookingDate, 
+        bookingStartTime, 
+        bookingEndTime,
+        originalBookingDate: booking.booking_date,
+        timeslots: {
+          start: booking.timeslot_start_time,
+          end: booking.timeslot_end_time
+        }
+      });
 
       // Check for other confirmed bookings at the same date and time
       // We need to exclude the current booking if we're updating an existing one
+      console.log('🔍 CONFLICT CHECK: Querying database for existing bookings...');
       const { data: existingBookings, error } = await supabase
         .from('bookings')
         .select('id, booking_reference, booking_date, timeslot_start_time, timeslot_end_time, status, customer_id, package_name')
         .eq('status', 'confirmed')
         .neq('id', booking.id || '00000000-0000-0000-0000-000000000000'); // Exclude current booking if exists
+
+      console.log('🔍 CONFLICT CHECK: Database query result:', { 
+        error, 
+        bookingsCount: existingBookings?.length || 0,
+        existingBookings: existingBookings?.map(b => ({ id: b.id, booking_date: b.booking_date, status: b.status }))
+      });
 
       if (error) {
         console.error('Error checking for conflicting bookings:', error);
@@ -1083,26 +1106,63 @@ export const Bookings: React.FC<BookingsProps> = ({
       }
 
       // Check each existing booking to see if it conflicts with our time slot
+      console.log('🔍 CONFLICT CHECK: Starting detailed conflict analysis...');
       const conflictingBookings = existingBookings?.filter(existingBooking => {
 
-        // Extract date and time from existing booking
-        if (existingBooking.booking_date) {
-          const existingDateTime = new Date(existingBooking.booking_date);
-          const newDateTime = new Date(booking.booking_date || '');
-          
-          if (!isNaN(existingDateTime.getTime()) && !isNaN(newDateTime.getTime())) {
-            // Compare timestamps with a small tolerance (1 minute = 60000ms)
-            const timeDifference = Math.abs(existingDateTime.getTime() - newDateTime.getTime());
-            const isConflict = timeDifference < 60000; // Within 1 minute
-            
-            return isConflict;
-          }
+        // First check if dates match
+        const existingDateTime = new Date(existingBooking.booking_date);
+        const year = existingDateTime.getUTCFullYear();
+        const month = String(existingDateTime.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(existingDateTime.getUTCDate()).padStart(2, '0');
+        const existingDate = `${year}-${month}-${day}`;
+
+        if (existingDate !== bookingDate) {
+          console.log('🔍 CONFLICT CHECK: Different dates, no conflict:', {
+            existing: existingDate,
+            new: bookingDate
+          });
+          return false; // Different dates, no conflict
         }
-        
-        return false;
+
+        // Same date, now check time overlap using timeslot fields
+        const existingStartTime = existingBooking.timeslot_start_time;
+        const existingEndTime = existingBooking.timeslot_end_time;
+
+        if (!existingStartTime || !existingEndTime) {
+          console.log('🔍 CONFLICT CHECK: Existing booking missing timeslot data:', {
+            id: existingBooking.id,
+            start: existingStartTime,
+            end: existingEndTime
+          });
+          return false; // Can't compare without time data
+        }
+
+        // Convert times to minutes for easier comparison
+        const newStartMinutes = timeToMinutes(bookingStartTime);
+        const newEndMinutes = timeToMinutes(bookingEndTime);
+        const existingStartMinutes = timeToMinutes(existingStartTime);
+        const existingEndMinutes = timeToMinutes(existingEndTime);
+
+        // Check for time overlap: two time ranges overlap if one doesn't end before the other starts
+        const hasTimeOverlap = !(newEndMinutes <= existingStartMinutes || newStartMinutes >= existingEndMinutes);
+
+        console.log('🔍 CONFLICT CHECK: Time overlap analysis:', {
+          newTimeRange: `${bookingStartTime}-${bookingEndTime} (${newStartMinutes}-${newEndMinutes} min)`,
+          existingTimeRange: `${existingStartTime}-${existingEndTime} (${existingStartMinutes}-${existingEndMinutes} min)`,
+          hasTimeOverlap,
+          bookingId: existingBooking.id
+        });
+
+        return hasTimeOverlap;
       }) || [];
 
+      console.log('🔍 CONFLICT CHECK: Conflict analysis complete:', {
+        conflictingBookingsCount: conflictingBookings.length,
+        hasConflicts: conflictingBookings.length > 0
+      });
+
       if (conflictingBookings.length > 0) {
+        console.log('🔍 CONFLICT CHECK: Found conflicts, gathering customer details...');
         const conflictedBooking = conflictingBookings[0];
         
         // Get customer details for the conflicting booking
@@ -1110,36 +1170,54 @@ export const Bookings: React.FC<BookingsProps> = ({
         let customerEmail = '';
         
         if (conflictedBooking.customer_id) {
+          console.log('🔍 CONFLICT CHECK: Fetching customer data for ID:', conflictedBooking.customer_id);
           const { data: customerData, error: customerError } = await supabase
             .from('customers')
             .select('first_name, last_name, email')
             .eq('id', conflictedBooking.customer_id)
             .single();
             
+          console.log('🔍 CONFLICT CHECK: Customer data result:', { customerError, hasData: !!customerData });
+            
           if (customerData && !customerError) {
             // Decrypt customer data for admin viewing
-            const decryptedCustomer = decryptCustomerDataForAdmin(customerData);
-            customerName = `${decryptedCustomer.first_name} ${decryptedCustomer.last_name}`;
-            customerEmail = decryptedCustomer.email || '';
+            console.log('🔍 CONFLICT CHECK: Decrypting customer data...');
+            try {
+              const decryptedCustomer = decryptCustomerDataForAdmin(customerData);
+              customerName = `${decryptedCustomer.first_name} ${decryptedCustomer.last_name}`;
+              customerEmail = decryptedCustomer.email || '';
+              console.log('🔍 CONFLICT CHECK: Customer data decrypted successfully');
+            } catch (decryptError) {
+              console.error('🔍 CONFLICT CHECK: Decryption failed:', decryptError);
+              customerName = 'Customer Data Unavailable';
+              customerEmail = 'Email Unavailable';
+            }
           } else {
+            console.log('🔍 CONFLICT CHECK: No customer data found or error occurred');
           }
         }
         
         const packageName = conflictedBooking.package_name || 'Unknown Package';
 
-        // Format the conflicting booking date and time
-        const conflictedDateTime = new Date(conflictedBooking.booking_date);
-        const formattedDate = conflictedDateTime.toLocaleDateString('en-US', { 
+        // Format the conflicting booking date and time using the timeslot fields
+        const conflictedDate = new Date(conflictedBooking.booking_date);
+        const formattedDate = conflictedDate.toLocaleDateString('en-US', { 
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric'
         });
-        const formattedTime = conflictedDateTime.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
+        
+        // Use timeslot_start_time for the actual appointment time
+        const conflictedStartTime = conflictedBooking.timeslot_start_time || '00:00';
+        const conflictedEndTime = conflictedBooking.timeslot_end_time || '00:50';
+        
+        const formatTime = (timeStr: string) => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+          return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        };
 
         return {
           hasConflict: true,
@@ -1147,7 +1225,7 @@ export const Bookings: React.FC<BookingsProps> = ({
           message: `🚫 BOOKING CONFLICT DETECTED\n\n` +
                   `❌ Cannot confirm booking - this time slot is already taken!\n\n` +
                   `📅 Conflicting Date: ${formattedDate}\n` +
-                  `🕐 Conflicting Time: ${formattedTime}\n\n` +
+                  `🕐 Conflicting Time: ${formatTime(conflictedStartTime)} - ${formatTime(conflictedEndTime)}\n\n` +
                   `📋 EXISTING BOOKING DETAILS:\n` +
                   `👤 Customer Name: ${customerName}\n` +
                   `📧 Email Address: ${customerEmail}\n` +
@@ -1159,9 +1237,10 @@ export const Bookings: React.FC<BookingsProps> = ({
                   `Note: You can edit or cancel the existing booking using the reference ID above.`
         };
       }
+      console.log('🔍 CONFLICT CHECK: No conflicts found, returning success');
       return { hasConflict: false };
     } catch (error) {
-      console.error('Error checking for conflicting bookings:', error);
+      console.error('❌ CONFLICT CHECK: Error checking for conflicting bookings:', error);
       return {
         hasConflict: false,
         message: 'Error checking for existing bookings. Please try again.'
@@ -1299,11 +1378,15 @@ export const Bookings: React.FC<BookingsProps> = ({
         if (!availabilityCheck.hasAvailability) {          showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
           return;
         }        // Check for conflicting bookings
+        console.log('🔍 About to check for conflicting bookings...');
         const conflictCheck = await checkForConflictingBookings(booking);
+        console.log('🔍 Conflict check result:', conflictCheck);
 
         if (conflictCheck.hasConflict) {          showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
           return;
         }
+        
+        console.log('✅ No conflicts found, proceeding with booking update...');
 
         // Update booking with confirmed status and matched slot time if available
         const updateData: any = {
@@ -1337,15 +1420,20 @@ export const Bookings: React.FC<BookingsProps> = ({
 
         console.log('📍 Updating booking with data:', updateData);
 
+        console.log('🔄 About to execute database update...');
         const { error } = await supabase
           .from('bookings')
           .update(updateData)
           .eq('id', booking.id);
 
+        console.log('🔄 Database update result:', { error, success: !error });
+
         if (error) {
           console.error('❌ Database update error:', error);
           throw new Error(`Failed to update booking: ${error.message}`);
         }
+        
+        console.log('✅ Database update successful, proceeding with availability update...');
 
         // CRITICAL: Update the availability table to mark the slot as unavailable
         if (availabilityCheck.matchedSlot && availabilityCheck.matchedSlot.id) {
@@ -1362,7 +1450,11 @@ export const Bookings: React.FC<BookingsProps> = ({
           } else {
             console.log('✅ Availability slot marked as unavailable');
           }
+        } else {
+          console.log('⚠️ No matched slot found to mark as unavailable');
         }
+        
+        console.log('✅ Booking confirmation completed, updating UI state...');
       }
 
       const updatedBookings = [...allBookings];
@@ -1377,12 +1469,16 @@ export const Bookings: React.FC<BookingsProps> = ({
         console.log('📧 Sending booking confirmation via email workflow...');
         
         // Import the admin confirmation workflow integration
+        console.log('📧 Importing email workflow integration...');
         const { integrateAdminConfirmationEmailWorkflow } = await import('../../utils/emailWorkflowIntegration');
+        console.log('📧 Email workflow integration imported successfully');
         
+        console.log('📧 Calling integrateAdminConfirmationEmailWorkflow...');
         const result = await integrateAdminConfirmationEmailWorkflow(
           booking.id!,
           'info@khtherapy.ie' // Admin email
         );
+        console.log('📧 Email workflow result:', result);
 
         if (result.success) {
           console.log('✅ Booking confirmation emails sent successfully via workflow');
@@ -1410,8 +1506,14 @@ export const Bookings: React.FC<BookingsProps> = ({
         }, 500);
       }
     } catch (error) {
-      console.error('Error confirming booking:', error);
-      showError('Error', 'Failed to confirm booking. Please try again.');
+      console.error('❌ BOOKING CONFIRMATION ERROR: Full error details:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        bookingId: booking.id,
+        bookingDate: booking.booking_date
+      });
+      showError('Error', `Failed to confirm booking. ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       // Remove booking from confirming set
       setConfirmingBookings(prev => {
