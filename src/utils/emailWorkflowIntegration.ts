@@ -5,6 +5,7 @@
  * to ensure emails are sent at the correct triggers according to the requirements.
  */
 
+import { supabase } from '../supabaseClient';
 import { 
   processBookingEmailWorkflow,
   determinePaymentType,
@@ -39,13 +40,6 @@ export const integratePaymentEmailWorkflow = async (
   
   try {
     console.log('🔄 Integrating payment email workflow for payment request:', paymentRequestId);
-
-    // Import supabase to get booking and customer details
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-    );
 
     // Get payment request details with customer and booking info
     const { data: paymentRequest, error: prError } = await supabase
@@ -134,13 +128,6 @@ export const integrateBookingCreationEmailWorkflow = async (
   
   try {
     console.log('🔄 Integrating booking creation email workflow for booking:', bookingId);
-
-    // Import supabase to get booking details
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-    );
 
     // Get booking details with customer info
     const { data: booking, error: bookingError } = await supabase
@@ -232,13 +219,6 @@ export const integrateAdminConfirmationEmailWorkflow = async (
   
   try {
     console.log('🔄 Integrating admin confirmation email workflow for booking:', bookingId);
-
-    // Import supabase to get booking details
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-    );
 
     // Get booking details with customer info
     const { data: booking, error: bookingError } = await supabase
@@ -418,13 +398,6 @@ export const integrateBookingCancellationWorkflow = async (
   
   try {
     console.log('🔄 Integrating booking cancellation workflow for booking:', bookingId);
-
-    // Import supabase to get booking details
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-    );
 
     // Get booking details with customer info
     const { data: booking, error: bookingError } = await supabase
@@ -624,26 +597,26 @@ export const integrateBookingReschedulingWorkflow = async (
   try {
     console.log('🔄 Integrating booking rescheduling workflow for booking:', bookingId);
 
-    // Import supabase to update booking and get details
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-    );
-
     // First, get the current booking details before updating
     const { data: currentBooking, error: currentBookingError } = await supabase
       .from('bookings')
-      .select(`
-        *,
-        customer:customers(*),
-        service:services(*)
-      `)
+      .select('*')
       .eq('id', bookingId)
       .single();
 
     if (currentBookingError || !currentBooking) {
       throw new Error('Failed to get booking details for rescheduling');
+    }
+
+    // Get customer details separately for more reliable query
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', currentBooking.customer_id)
+      .single();
+
+    if (customerError || !customer) {
+      console.warn('Could not fetch customer details separately, falling back to booking fields');
     }
 
     // Store old appointment details if not provided - handle both field patterns
@@ -675,10 +648,10 @@ export const integrateBookingReschedulingWorkflow = async (
     }
 
     // Get customer name and email (handle encrypted/decrypted and different field patterns)
-    const customerName = currentBooking.customer?.first_name && currentBooking.customer?.last_name 
-                        ? `${currentBooking.customer.first_name} ${currentBooking.customer.last_name}`
-                        : currentBooking.customer?.name || currentBooking.customer_name || 'Customer';
-    const customerEmail = currentBooking.customer?.email || currentBooking.customer_email;
+    const customerName = customer?.first_name && customer?.last_name 
+                        ? `${customer.first_name} ${customer.last_name}`
+                        : customer?.name || currentBooking.customer_name || 'Customer';
+    const customerEmail = customer?.email || currentBooking.customer_email;
 
     if (!customerEmail) {
       throw new Error('Customer email not found for rescheduling notification');
@@ -832,13 +805,6 @@ export const submitCustomerReschedulingRequest = async (
     } = await import('./reschedulingValidation');
     
     const { submitReschedulingRequest } = await import('./reschedulingApi');
-
-    // Import supabase to get booking details
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-    );
 
     // Get current booking details
     const { data: booking, error: bookingError } = await supabase
