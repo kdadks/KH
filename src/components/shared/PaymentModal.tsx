@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, CreditCard, Shield, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
 import { createSumUpCheckoutSession } from '../../utils/sumupRealApiImplementation';
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
@@ -195,6 +195,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error'>('confirm');
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [bookingDetails, setBookingDetails] = useState<{
+    booking_date: string;
+    timeslot_start_time: string;
+    timeslot_end_time: string;
+    package_name: string;
+    notes?: string;
+  } | null>(null);
 
   const getRedirectUrl = (isSuccess: boolean = true): string | null => {
     // If redirectAfterPayment is explicitly set, use it
@@ -216,14 +223,42 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
+  // Fetch booking details if booking_id is available
+  const fetchBookingDetails = async () => {
+    if (!paymentRequest.booking_id) {
+      setBookingDetails(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('booking_date, timeslot_start_time, timeslot_end_time, package_name, notes')
+        .eq('id', paymentRequest.booking_id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching booking details:', error);
+        setBookingDetails(null);
+      } else {
+        setBookingDetails(data);
+      }
+    } catch (error) {
+      console.error('Error fetching booking details:', error);
+      setBookingDetails(null);
+    }
+  };
+
   // Reset modal state when opened
   useEffect(() => {
     if (isOpen) {
       setCurrentStep('confirm');
       setCheckoutUrl('');
       setErrorMessage('');
+      console.log('PaymentModal opening with booking_id:', paymentRequest.booking_id);
+      fetchBookingDetails();
     }
-  }, [isOpen]);
+  }, [isOpen, paymentRequest.booking_id]);
 
   const handleStartPayment = async () => {
     try {
@@ -337,7 +372,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           window.dispatchEvent(new CustomEvent('bookingStatusUpdated', {
             detail: {
               bookingId: paymentRequest.booking_id,
-              newStatus: 'confirmed',
+              newStatus: 'paid', // Changed from 'confirmed' to 'paid' - requires manual admin confirmation
               paymentRequestId: paymentRequest.id,
               customerId: paymentRequest.customer_id
             }
@@ -407,6 +442,34 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       style: 'currency',
       currency: currency
     }).format(amount);
+  };
+
+  const formatBookingDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-IE', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  const formatTimeForDisplay = (timeString: string) => {
+    try {
+      if (!timeString) return '';
+
+      // Handle time in HH:MM:SS or HH:MM format
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    } catch (error) {
+      return timeString;
+    }
   };
 
   if (!isOpen) return null;
@@ -489,6 +552,43 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   <span className="text-gray-600">Email:</span>
                   <span className="font-medium">{paymentRequest.customer.email}</span>
                 </div>
+
+                {/* Show booking details if available */}
+                {bookingDetails && (
+                  <>
+                    <div className="border-t border-gray-200 pt-2 mt-2">
+                      <div className="flex items-center text-gray-700 mb-2">
+                        <Calendar className="w-4 h-4 mr-1" />
+                        <span className="font-medium">Appointment Details</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Service:</span>
+                      <span className="font-medium">{bookingDetails.package_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Date:</span>
+                      <span className="font-medium">{formatBookingDate(bookingDetails.booking_date)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Time:</span>
+                      <span className="font-medium flex items-center">
+                        <Clock className="w-3 h-3 mr-1" />
+                        {formatTimeForDisplay(bookingDetails.timeslot_start_time)} - {formatTimeForDisplay(bookingDetails.timeslot_end_time)}
+                      </span>
+                    </div>
+                    {bookingDetails.notes && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Notes:</span>
+                        <span className="font-medium text-right max-w-xs truncate" title={bookingDetails.notes}>
+                          {bookingDetails.notes}
+                        </span>
+                      </div>
+                    )}
+                    <div className="border-t border-gray-200 pt-2 mt-2"></div>
+                  </>
+                )}
+
                 <div className="flex justify-between">
                   <span className="text-gray-600">Payment ID:</span>
                   <span className="font-medium font-mono">#{paymentRequest.id}</span>

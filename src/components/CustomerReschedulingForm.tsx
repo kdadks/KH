@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  canRescheduleBooking, 
+import {
+  canRescheduleBooking,
   validateReschedulingRequest,
   formatTimeUntilDeadline,
   getHoursUntilRescheduleDeadline
 } from '../utils/reschedulingValidation';
 import { submitReschedulingRequestWithNotifications } from '../utils/reschedulingWorkflow';
+import { supabase } from '../supabaseClient';
 
 interface CustomerReschedulingFormProps {
   booking: {
@@ -41,6 +42,13 @@ const CustomerReschedulingForm: React.FC<CustomerReschedulingFormProps> = ({
   const [errors, setErrors] = useState<string[]>([]);
   const [canReschedule, setCanReschedule] = useState(false);
   const [timeUntilDeadline, setTimeUntilDeadline] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [nextAvailableSlot, setNextAvailableSlot] = useState<{
+    date: string;
+    time: string;
+    display: string;
+  } | null>(null);
 
   // Check if booking can be rescheduled
   useEffect(() => {
@@ -50,8 +58,98 @@ const CustomerReschedulingForm: React.FC<CustomerReschedulingFormProps> = ({
     if (eligible) {
       const hours = getHoursUntilRescheduleDeadline(booking.appointmentDate, booking.appointmentTime);
       setTimeUntilDeadline(formatTimeUntilDeadline(hours));
+      fetchAvailableSlots();
     }
   }, [booking.appointmentDate, booking.appointmentTime]);
+
+  const fetchAvailableSlots = async () => {
+    setLoadingSlots(true);
+    try {
+      // Get available slots for the next 30 days
+      const today = new Date();
+      const endDate = new Date();
+      endDate.setDate(today.getDate() + 30);
+
+      // Determine service type from the booking's service name
+      let slotTypeFilter = null;
+      if (booking.serviceName) {
+        if (booking.serviceName.includes('In Hour')) {
+          slotTypeFilter = 'in-hour';
+        } else if (booking.serviceName.includes('Out of Hour')) {
+          slotTypeFilter = 'out-of-hour';
+        }
+      }
+
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .gte('date', today.toISOString().split('T')[0])
+        .lte('date', endDate.toISOString().split('T')[0])
+        .eq('is_available', true)
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      // Apply slot type filter if determined
+      if (slotTypeFilter) {
+        availabilityQuery = availabilityQuery.eq('slot_type', slotTypeFilter);
+      }
+
+      const { data, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching availability:', error);
+        return;
+      }
+
+      setAvailableSlots(data || []);
+
+      // Find next available slot recommendation
+      if (data && data.length > 0) {
+        const now = new Date();
+        const currentDate = now.toISOString().split('T')[0];
+        const currentTime = now.toTimeString().substring(0, 5);
+
+        const nextSlot = data.find(slot => {
+          const slotDate = slot.date;
+          const startTime = slot.start_time.substring(0, 5);
+
+          if (slotDate === currentDate) {
+            return startTime > currentTime;
+          }
+          return slotDate > currentDate;
+        });
+
+        if (nextSlot) {
+          const displayDate = new Date(nextSlot.date).toLocaleDateString('en-IE', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          const startTime = nextSlot.start_time.substring(0, 5);
+          const endTime = nextSlot.end_time.substring(0, 5);
+          const displayTime = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
+
+          setNextAvailableSlot({
+            date: nextSlot.date,
+            time: startTime,
+            display: `${displayDate} at ${displayTime}`
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching slots:', error);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  const formatTimeForDisplay = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -177,6 +275,35 @@ const CustomerReschedulingForm: React.FC<CustomerReschedulingFormProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Next Available Slot Recommendation */}
+        {nextAvailableSlot && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-green-800 font-medium text-sm mb-1">
+                  ⚡ Recommended: Next Available Slot
+                </p>
+                <p className="text-green-700 text-sm">
+                  {nextAvailableSlot.display}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({
+                    ...prev,
+                    newDate: nextAvailableSlot.date,
+                    newTime: nextAvailableSlot.time
+                  }));
+                }}
+                className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors ml-2"
+              >
+                Select This Slot
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -200,34 +327,38 @@ const CustomerReschedulingForm: React.FC<CustomerReschedulingFormProps> = ({
           <label htmlFor="newTime" className="block text-sm font-medium text-gray-700 mb-1">
             New Appointment Time *
           </label>
-          <select
-            id="newTime"
-            name="newTime"
-            value={formData.newTime}
-            onChange={handleInputChange}
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">Select a time</option>
-            <option value="09:00">9:00 AM</option>
-            <option value="09:30">9:30 AM</option>
-            <option value="10:00">10:00 AM</option>
-            <option value="10:30">10:30 AM</option>
-            <option value="11:00">11:00 AM</option>
-            <option value="11:30">11:30 AM</option>
-            <option value="12:00">12:00 PM</option>
-            <option value="12:30">12:30 PM</option>
-            <option value="13:00">1:00 PM</option>
-            <option value="13:30">1:30 PM</option>
-            <option value="14:00">2:00 PM</option>
-            <option value="14:30">2:30 PM</option>
-            <option value="15:00">3:00 PM</option>
-            <option value="15:30">3:30 PM</option>
-            <option value="16:00">4:00 PM</option>
-            <option value="16:30">4:30 PM</option>
-            <option value="17:00">5:00 PM</option>
-            <option value="17:30">5:30 PM</option>
-          </select>
+          {loadingSlots ? (
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+              Loading available times...
+            </div>
+          ) : (
+            <select
+              id="newTime"
+              name="newTime"
+              value={formData.newTime}
+              onChange={handleInputChange}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select a time</option>
+              {formData.newDate && availableSlots
+                .filter(slot => slot.date === formData.newDate)
+                .map(slot => {
+                  const startTime = slot.start_time.substring(0, 5);
+                  const endTime = slot.end_time.substring(0, 5);
+                  const displayTime = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
+                  return (
+                    <option key={slot.id} value={startTime}>
+                      {displayTime} {slot.slot_type === 'out-of-hour' ? '(Out of hours)' : ''}
+                    </option>
+                  );
+                })
+              }
+              {formData.newDate && availableSlots.filter(slot => slot.date === formData.newDate).length === 0 && (
+                <option value="" disabled>No available slots for this date</option>
+              )}
+            </select>
+          )}
         </div>
 
         <div>

@@ -61,7 +61,7 @@ interface PaymentState {
 }
 
 const BookingPage: React.FC = () => {
-  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<BookingFormData>();
+  const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<BookingFormData>();
   const navigate = useNavigate();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -81,6 +81,8 @@ const BookingPage: React.FC = () => {
   const [countdown, setCountdown] = useState<number>(20);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
+  const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
+  const [loadingNextSlot, setLoadingNextSlot] = useState(false);
 
   // Watch the service and date fields to trigger time slot updates
   const watchedService = watch('service');
@@ -172,6 +174,119 @@ const BookingPage: React.FC = () => {
       setTimeSlots([]);
     }
   }, [watchedService, watchedDate, services]);
+
+  // Watch for service changes to fetch next available slot recommendation
+  useEffect(() => {
+    if (watchedService && services.length > 0) {
+      // Find selected service
+      let service = services.find(s => s.displayName === watchedService);
+      if (!service) {
+        service = services.find(s => s.name === watchedService);
+      }
+
+      if (service) {
+        fetchNextAvailableSlot(service);
+      } else {
+        setNextAvailableSlot(null);
+      }
+    } else {
+      setNextAvailableSlot(null);
+    }
+  }, [watchedService, services]);
+
+  const fetchNextAvailableSlot = async (service: Service) => {
+    try {
+      setLoadingNextSlot(true);
+
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0]);
+        } else {
+          serviceId = parseInt(service.id);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId for next slot calculation');
+        setNextAvailableSlot(null);
+        return;
+      }
+
+      // Get current date and time for filtering
+      const now = new Date();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
+
+      // Fetch available slots starting from current date
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .gte('date', currentDate) // From today onwards
+        .eq('is_available', true)
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true })
+        .limit(50); // Get first 50 slots to find the next available one
+
+      // Filter by slot_type based on service pricing type
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+
+      const { data, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching next available slot:', error);
+        setNextAvailableSlot(null);
+        return;
+      }
+
+      // Find the first available slot that's in the future
+      const nextSlot = data?.find(slot => {
+        const slotDate = slot.date;
+        const startTime = slot.start_time.substring(0, 5);
+
+        // If slot is today, check if time is in the future
+        if (slotDate === currentDate) {
+          return startTime > currentTime;
+        }
+
+        // It's a future date, so it's available
+        return slotDate > currentDate;
+      });
+
+      if (nextSlot) {
+        const startTime = nextSlot.start_time.substring(0, 5);
+        const endTime = nextSlot.end_time.substring(0, 5);
+        const displayTime = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
+        const displayDate = new Date(nextSlot.date).toLocaleDateString('en-IE', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        setNextAvailableSlot({
+          date: nextSlot.date,
+          time: `${nextSlot.date}T${startTime}-${endTime}`, // Format for the booking page time field
+          display: `${displayDate} at ${displayTime}`
+        });
+      } else {
+        setNextAvailableSlot(null);
+      }
+
+    } catch (error) {
+      console.error('Error fetching next available slot:', error);
+      setNextAvailableSlot(null);
+    } finally {
+      setLoadingNextSlot(false);
+    }
+  };
 
   const fetchTimeSlots = async (service: Service, selectedDate?: string) => {
     try {
@@ -750,7 +865,8 @@ const BookingPage: React.FC = () => {
             email: customerData.email || ''
           },
           service_name: paymentState.booking?.package_name,
-          booking_date: paymentState.booking?.booking_date
+          booking_date: paymentState.booking?.booking_date,
+          booking_id: paymentState.paymentRequest.booking_id // Ensure booking_id is preserved
         };
 
         console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
@@ -783,7 +899,7 @@ const BookingPage: React.FC = () => {
 
   const handlePaymentSuccess = () => {
     setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
-    setSuccessMsg('Payment completed successfully! Your booking is confirmed.');
+    setSuccessMsg('Payment completed successfully! Your booking will be reviewed and confirmed by our team.');
     setCountdown(20);
 
     // Dispatch event to notify admin views of payment completion
@@ -849,7 +965,7 @@ const BookingPage: React.FC = () => {
               <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto transform animate-slideUp">
                 <div className="p-6 md:p-8">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-gray-900">Booking Confirmed! 🎉</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">Payment Received! 🎉</h2>
                     <button
                       onClick={redirectToHome}
                       className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -865,7 +981,7 @@ const BookingPage: React.FC = () => {
                       </svg>
                     </div>
                     <p className="text-gray-600 mb-6">
-                      Your payment has been processed and your booking is confirmed.
+                      Your payment has been processed and your booking will be reviewed and confirmed by our team.
                     </p>
                   </div>
 
@@ -991,10 +1107,6 @@ const BookingPage: React.FC = () => {
                             Pay Full Amount - €{paymentState.paymentOptions.full.amount}
                           </Button>
                         </div>
-                      </div>
-
-                      <div className="mt-4 text-center text-sm text-blue-700 bg-blue-100 rounded p-2">
-                        💡 Both options will immediately confirm your booking
                       </div>
                     </div>
 
@@ -1145,8 +1257,57 @@ const BookingPage: React.FC = () => {
                   {errors.service && (
                     <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>
                   )}
+                  <p className="mt-1 text-xs text-gray-600">
+                    ℹ️ 8am-9am and 5pm-7pm is out of hours
+                  </p>
                 </div>
-                
+
+                {/* Next Available Slot Recommendation */}
+                {watchedService && (
+                  <div className="col-span-1 md:col-span-2 mb-4">
+                    {loadingNextSlot ? (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-blue-800 text-sm">
+                          🔍 Finding next available slot...
+                        </p>
+                      </div>
+                    ) : nextAvailableSlot ? (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="text-green-800 font-medium text-sm mb-1">
+                              ⚡ Recommended: Next Available Slot
+                            </p>
+                            <p className="text-green-700 text-sm">
+                              {nextAvailableSlot.display}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Set the recommended date and time using react-hook-form setValue
+                              setValue('date', nextAvailableSlot.date);
+                              // Wait for date to be set, then set time (which depends on date being selected)
+                              setTimeout(() => {
+                                setValue('time', nextAvailableSlot.time);
+                              }, 100);
+                            }}
+                            className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors ml-3"
+                          >
+                            Select This Slot
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <p className="text-yellow-800 text-sm">
+                          📅 No available slots found for this service. Please contact us directly.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="date" className="block text-sm font-medium text-neutral-700 mb-1">
                     Preferred Date *
@@ -1295,7 +1456,7 @@ const BookingPage: React.FC = () => {
               
               <div>
                 <label htmlFor="notes" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Additional Notes
+                  Notes
                 </label>
                 <textarea
                   id="notes"
@@ -1309,7 +1470,7 @@ const BookingPage: React.FC = () => {
                   className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
                     realTimeErrors.notes ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="Please provide any additional information about your condition or specific requirements"
+                  placeholder="Please provide information about your area of complaint, brief description about your condition or specific requirements"
                 ></textarea>
                 {realTimeErrors.notes && (
                   <p className="mt-1 text-sm text-red-600">{realTimeErrors.notes}</p>

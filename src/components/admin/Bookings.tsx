@@ -97,7 +97,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   
   // State management
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'deposit_paid' | 'confirmed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'deposit_paid' | 'paid' | 'confirmed' | 'cancelled'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<BookingFormData | null>(null);
@@ -2716,6 +2716,7 @@ export const Bookings: React.FC<BookingsProps> = ({
     let backgroundColor = '#6b7280'; // gray for pending
     
     if (booking.status === 'confirmed') backgroundColor = '#10b981'; // green
+    else if (booking.status === 'paid') backgroundColor = '#8b5cf6'; // purple for paid (awaiting confirmation)
     else if (booking.status === 'deposit_paid') backgroundColor = '#3b82f6'; // blue
     else if (booking.status === 'cancelled') backgroundColor = '#ef4444'; // red
     else if (!(booking.appointment_date || booking.date) || !(booking.appointment_time || booking.time)) backgroundColor = '#f59e0b'; // orange
@@ -2837,12 +2838,13 @@ export const Bookings: React.FC<BookingsProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'deposit_paid' | 'confirmed' | 'cancelled')}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'deposit_paid' | 'paid' | 'confirmed' | 'cancelled')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
                 <option value="deposit_paid">Deposit Paid</option>
+                <option value="paid">Paid (Awaiting Confirmation)</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -3238,12 +3240,14 @@ export const Bookings: React.FC<BookingsProps> = ({
                                 }
                                 
                                 // No payment request exists
-                                // Don't show payment request options for confirmed or deposit_paid bookings
-                                if (booking.status === 'confirmed' || booking.status === 'deposit_paid') {
+                                // Don't show payment request options for confirmed, paid, or deposit_paid bookings
+                                if (booking.status === 'confirmed' || booking.status === 'paid' || booking.status === 'deposit_paid') {
+                                  const statusText = booking.status === 'confirmed' ? 'confirmed' : 
+                                                   booking.status === 'paid' ? 'paid (awaiting confirmation)' : 'deposit paid';
                                   return (
                                     <div className="space-y-1">
                                       <p className="text-xs text-green-600">
-                                        ✅ Booking {booking.status === 'confirmed' ? 'confirmed' : 'deposit paid'} - No action needed
+                                        ✅ Booking {statusText} - No action needed
                                       </p>
                                       <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
                                         Service: {booking.package_name}
@@ -3991,6 +3995,8 @@ export const Bookings: React.FC<BookingsProps> = ({
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   >
                     <option value="pending">Pending</option>
+                    <option value="deposit_paid">Deposit Paid</option>
+                    <option value="paid">Paid (Awaiting Confirmation)</option>
                     <option value="confirmed">Confirmed</option>
                   </select>
                 </div>

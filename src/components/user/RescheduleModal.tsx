@@ -45,6 +45,11 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
     date: '',
     timeSlot: ''
   });
+  const [nextAvailableSlot, setNextAvailableSlot] = useState<{
+    date: string;
+    timeSlot: string;
+    display: string;
+  } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -60,40 +65,147 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
       const endDate = new Date();
       endDate.setDate(today.getDate() + 30);
 
+      console.log('🔍 Reschedule Modal - Fetching availability between:', {
+        start: today.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0],
+        originalBooking: {
+          package_name: booking.package_name,
+          id: booking.id
+        }
+      });
+
       // Determine service type from the original booking's package_name
       let slotTypeFilter = null;
+      
       if (booking.package_name) {
-        if (booking.package_name.includes('In Hour')) {
+        // More comprehensive matching for slot types
+        const packageLower = booking.package_name.toLowerCase();
+        if (packageLower.includes('in hour') || packageLower.includes('in-hour')) {
           slotTypeFilter = 'in-hour';
-        } else if (booking.package_name.includes('Out of Hour')) {
+        } else if (packageLower.includes('out of hour') || packageLower.includes('out-of-hour')) {
           slotTypeFilter = 'out-of-hour';
         }
-        // If neither, show all slots (no filter)
+        // If neither pattern matches, show all slots (no filter)
       }
 
+      console.log('🎯 Determined slot type filter:', slotTypeFilter, 'from package:', booking.package_name);
+
+      // Base query for availability - include both manual and template schedules
       let availabilityQuery = supabase
         .from('availability')
         .select('*')
         .gte('date', today.toISOString().split('T')[0])
         .lte('date', endDate.toISOString().split('T')[0])
         .eq('is_available', true)
+        .in('schedule_type', ['manual', 'template']) // Include both manual and template schedules
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 
-      // Apply slot type filter if determined
+      // Apply slot type filter if determined, otherwise show all slots
       if (slotTypeFilter) {
         availabilityQuery = availabilityQuery.eq('slot_type', slotTypeFilter);
+        console.log('🔍 Applying slot type filter:', slotTypeFilter);
+      } else {
+        console.log('🔍 No slot type filter - showing all available slots');
       }
 
       const { data, error } = await availabilityQuery;
 
       if (error) {
-        console.error('Error fetching availability:', error);
+        console.error('❌ Error fetching availability:', error);
         showError('Error', 'Failed to load available time slots');
         return;
       }
 
-      setAvailableSlots(data || []);
+      console.log('📅 Raw availability data fetched:', {
+        totalSlots: data?.length || 0,
+        scheduleTypeBreakdown: data?.reduce((acc, slot) => {
+          const type = slot.schedule_type || 'NULL';
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {}),
+        sampleSlots: data?.slice(0, 3),
+        dateRange: data?.length > 0 ? {
+          first: data[0]?.date,
+          last: data[data.length - 1]?.date
+        } : null
+      });
+
+      console.log('Fetched availability slots:', data);
+
+      // Filter out any slots with missing time data
+      const validSlots = (data || []).filter(slot => {
+        const hasStartTime = slot.start_time || slot.start;
+        const hasEndTime = slot.end_time;
+        const isValid = hasStartTime && hasEndTime;
+        
+        if (!isValid) {
+          console.warn('❌ Filtered out invalid slot:', {
+            id: slot.id,
+            date: slot.date,
+            start_time: slot.start_time,
+            start: slot.start,
+            end_time: slot.end_time,
+            schedule_type: slot.schedule_type,
+            reason: !hasStartTime ? 'Missing start time' : 'Missing end time'
+          });
+          return false;
+        }
+        return true;
+      });
+
+      console.log('✅ Valid slots after filtering:', {
+        total: validSlots.length,
+        uniqueDates: [...new Set(validSlots.map(s => s.date))].sort()
+      });
+
+      // Normalize slot data to ensure consistent field names
+      const normalizedSlots = validSlots.map(slot => ({
+        ...slot,
+        start_time: slot.start_time || slot.start, // Use start_time if available, fallback to start
+      }));
+
+      setAvailableSlots(normalizedSlots);
+
+      // Find next available slot recommendation
+      if (normalizedSlots && normalizedSlots.length > 0) {
+        const now = new Date();
+        const currentDate = now.toISOString().split('T')[0];
+        const currentTime = now.toTimeString().substring(0, 5);
+
+        // Find the first slot that's in the future
+        const nextSlot = normalizedSlots.find(slot => {
+          const slotDate = slot.date;
+          const startTime = slot.start_time.substring(0, 5);
+
+          // If slot is today, check if time is in the future
+          if (slotDate === currentDate) {
+            return startTime > currentTime;
+          }
+          // It's a future date, so it's available
+          return slotDate > currentDate;
+        });
+
+        if (nextSlot) {
+          const displayDate = new Date(nextSlot.date).toLocaleDateString('en-IE', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          const displayTime = formatTime(nextSlot.start_time, nextSlot.end_time);
+
+          setNextAvailableSlot({
+            date: nextSlot.date,
+            timeSlot: `${nextSlot.start_time}-${nextSlot.end_time}`,
+            display: `${displayDate} at ${displayTime}`
+          });
+        } else {
+          setNextAvailableSlot(null);
+        }
+      } else {
+        setNextAvailableSlot(null);
+      }
     } catch (error) {
       console.error('Error fetching slots:', error);
       showError('Error', 'Failed to load available time slots');
@@ -233,11 +345,26 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
 
   const formatTime = (startTime: string, endTime: string) => {
     if (!startTime || !endTime) {
+      console.warn('formatTime: Missing time data', { startTime, endTime });
       return 'Time not available';
     }
-    const start = startTime.substring(0, 5);
-    const end = endTime.substring(0, 5);
-    return `${start} - ${end}`;
+    try {
+      const start = startTime.substring(0, 5);
+      const end = endTime.substring(0, 5);
+
+      // Convert to 12-hour format for better readability
+      const formatTo12Hour = (time: string) => {
+        const [hours, minutes] = time.split(':').map(Number);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+      };
+
+      return `${formatTo12Hour(start)} - ${formatTo12Hour(end)}`;
+    } catch (error) {
+      console.error('Error formatting time:', error, { startTime, endTime });
+      return 'Time format error';
+    }
   };
 
   if (!isOpen) return null;
@@ -273,6 +400,36 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
             </div>
           ) : (
             <>
+              {/* Next Available Slot Recommendation */}
+              {nextAvailableSlot && (
+                <div className="mb-6">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-green-800 font-medium text-sm mb-1">
+                          ⚡ Recommended: Next Available Slot
+                        </p>
+                        <p className="text-green-700 text-sm">
+                          {nextAvailableSlot.display}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData({
+                            date: nextAvailableSlot.date,
+                            timeSlot: nextAvailableSlot.timeSlot
+                          });
+                        }}
+                        className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors ml-2"
+                      >
+                        Select This Slot
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Date Selection */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">

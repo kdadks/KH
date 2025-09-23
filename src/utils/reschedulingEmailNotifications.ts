@@ -13,7 +13,14 @@ const sendEmail = async (emailData: {
   subject: string;
   body: string;
   type: string;
-  appointmentData?: any;
+  appointment_date?: string;
+  appointment_time?: string;
+  customer_name?: string;
+  customer_email?: string;
+  booking_reference?: string;
+  service_name?: string;
+  therapist_name?: string;
+  clinic_address?: string;
 }): Promise<{ success: boolean; error?: string }> => {
   try {
     const response = await fetch('/.netlify/functions/send-email', {
@@ -378,15 +385,14 @@ export const sendReschedulingApprovalNotification = async (
       subject: subject,
       body: emailContent,
       type: 'booking_rescheduled',
-      appointmentData: {
-        customerName: requestDetails.customerName,
-        customerEmail: requestDetails.customerEmail,
-        bookingReference: requestDetails.bookingReference,
-        serviceName: requestDetails.serviceName,
-        appointmentDate: requestDetails.requestedAppointmentDate,
-        appointmentTime: requestDetails.requestedAppointmentTime,
-        isRescheduled: true
-      }
+      appointment_date: requestDetails.requestedAppointmentDate,
+      appointment_time: requestDetails.requestedAppointmentTime,
+      customer_name: requestDetails.customerName,
+      customer_email: requestDetails.customerEmail,
+      booking_reference: requestDetails.bookingReference,
+      service_name: requestDetails.serviceName,
+      therapist_name: 'KH Therapy Team',
+      clinic_address: 'KH Therapy Clinic, Dublin, Ireland'
     });
 
     // Send to admin with ICS attachment
@@ -395,15 +401,14 @@ export const sendReschedulingApprovalNotification = async (
       subject: `Appointment Rescheduled - ${requestDetails.bookingReference}`,
       body: emailContent.replace('Dear ' + requestDetails.customerName, 'Dear Admin'),
       type: 'booking_rescheduled',
-      appointmentData: {
-        customerName: requestDetails.customerName,
-        customerEmail: requestDetails.customerEmail,
-        bookingReference: requestDetails.bookingReference,
-        serviceName: requestDetails.serviceName,
-        appointmentDate: requestDetails.requestedAppointmentDate,
-        appointmentTime: requestDetails.requestedAppointmentTime,
-        isRescheduled: true
-      }
+      appointment_date: requestDetails.requestedAppointmentDate,
+      appointment_time: requestDetails.requestedAppointmentTime,
+      customer_name: requestDetails.customerName,
+      customer_email: requestDetails.customerEmail,
+      booking_reference: requestDetails.bookingReference,
+      service_name: requestDetails.serviceName,
+      therapist_name: 'KH Therapy Team',
+      clinic_address: 'KH Therapy Clinic, Dublin, Ireland'
     });
 
     // Return success if at least customer email was sent

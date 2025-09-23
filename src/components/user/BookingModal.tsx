@@ -68,6 +68,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
   });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
+  const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
+  const [loadingNextSlot, setLoadingNextSlot] = useState(false);
 
   const [formData, setFormData] = useState({
     service: '',
@@ -131,6 +133,119 @@ const BookingModal: React.FC<BookingModalProps> = ({
       setTimeSlots([]);
     }
   }, [selectedService, formData.date]);
+
+  // Fetch next available slot when service changes
+  useEffect(() => {
+    if (formData.service && services.length > 0) {
+      // Find selected service
+      let service = services.find(s => s.displayName === formData.service);
+      if (!service) {
+        service = services.find(s => s.name === formData.service);
+      }
+
+      if (service) {
+        fetchNextAvailableSlot(service);
+      } else {
+        setNextAvailableSlot(null);
+      }
+    } else {
+      setNextAvailableSlot(null);
+    }
+  }, [formData.service, services]);
+
+  const fetchNextAvailableSlot = async (service: Service) => {
+    try {
+      setLoadingNextSlot(true);
+
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0]);
+        } else {
+          serviceId = parseInt(service.id);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId for next slot calculation');
+        setNextAvailableSlot(null);
+        return;
+      }
+
+      // Get current date and time for filtering
+      const now = new Date();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
+
+      // Fetch available slots starting from current date
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .gte('date', currentDate) // From today onwards
+        .eq('is_available', true)
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true })
+        .limit(50); // Get first 50 slots to find the next available one
+
+      // Filter by slot_type based on service pricing type
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+
+      const { data, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching next available slot:', error);
+        setNextAvailableSlot(null);
+        return;
+      }
+
+      // Find the first available slot that's in the future
+      const nextSlot = data?.find(slot => {
+        const slotDate = slot.date;
+        const startTime = slot.start_time.substring(0, 5);
+
+        // If slot is today, check if time is in the future
+        if (slotDate === currentDate) {
+          return startTime > currentTime;
+        }
+
+        // It's a future date, so it's available
+        return slotDate > currentDate;
+      });
+
+      if (nextSlot) {
+        const startTime = nextSlot.start_time.substring(0, 5);
+        const endTime = nextSlot.end_time.substring(0, 5);
+        const displayTime = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
+        const displayDate = new Date(nextSlot.date).toLocaleDateString('en-IE', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        setNextAvailableSlot({
+          date: nextSlot.date,
+          time: `${startTime}-${endTime}|${displayTime}`, // Format for the modal time field
+          display: `${displayDate} at ${displayTime}`
+        });
+      } else {
+        setNextAvailableSlot(null);
+      }
+
+    } catch (error) {
+      console.error('Error fetching next available slot:', error);
+      setNextAvailableSlot(null);
+    } finally {
+      setLoadingNextSlot(false);
+    }
+  };
 
   const fetchServices = async () => {
     try {
@@ -346,7 +461,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
             email: customerData.email
           },
           service_name: paymentState.booking?.package_name,
-          booking_date: paymentState.booking?.booking_date
+          booking_date: paymentState.booking?.booking_date,
+          booking_id: paymentState.paymentRequest.booking_id // Ensure booking_id is preserved
         };
 
         console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
@@ -694,7 +810,56 @@ const BookingModal: React.FC<BookingModalProps> = ({
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-gray-600">
+                  ℹ️ 8am-9am and 5pm-7pm is out of hours
+                </p>
               </div>
+
+              {/* Next Available Slot Recommendation */}
+              {formData.service && (
+                <div className="col-span-2 mb-4">
+                  {loadingNextSlot ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-blue-800 text-sm">
+                        🔍 Finding next available slot...
+                      </p>
+                    </div>
+                  ) : nextAvailableSlot ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-green-800 font-medium text-sm mb-1">
+                            ⚡ Recommended: Next Available Slot
+                          </p>
+                          <p className="text-green-700 text-sm">
+                            {nextAvailableSlot.display}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Set the recommended date and time
+                            setFormData(prev => ({
+                              ...prev,
+                              date: nextAvailableSlot.date,
+                              time: nextAvailableSlot.time
+                            }));
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors ml-3"
+                        >
+                          Select This Slot
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <p className="text-yellow-800 text-sm">
+                        📅 No available slots found for this service. Please contact us directly.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Preferred Date */}
               <div>
@@ -910,10 +1075,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
                       Pay Full Amount - €{paymentState.paymentOptions.full.amount}
                     </button>
                   </div>
-                </div>
-
-                <div className="mt-4 text-center text-sm text-blue-700 bg-blue-100 rounded p-2">
-                  💡 Both options will immediately confirm your booking
                 </div>
               </div>
 

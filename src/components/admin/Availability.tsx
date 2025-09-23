@@ -523,12 +523,21 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     }
 
     try {
+      // Calculate slot duration in minutes
+      const startTime = new Date(`1970-01-01T${newSlotStartTime}:00`);
+      const endTime = new Date(`1970-01-01T${newSlotEndTime}:00`);
+      const slotDuration = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
+
       const { error } = await supabase
         .from('availability')
         .insert([{
           date: newSlotDate,
           start: newSlotStartTime,
-          end_time: newSlotEndTime
+          start_time: newSlotStartTime, // Set both start and start_time for consistency
+          end_time: newSlotEndTime,
+          schedule_type: 'manual', // Mark as manually created
+          slot_duration: slotDuration,
+          is_available: true
         }])
         .select();
 

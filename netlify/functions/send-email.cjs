@@ -13,6 +13,51 @@ const createTransporter = () => {
   });
 };
 
+// Date formatting function for email display
+const formatDisplayDate = (dateString) => {
+  try {
+    // Handle various date formats
+    let date;
+
+    // If it's already a readable format (e.g., "15th January 2025"), return as is
+    if (isNaN(Date.parse(dateString)) && /\d+(st|nd|rd|th)/.test(dateString)) {
+      return dateString;
+    }
+
+    // Parse the date string
+    date = new Date(dateString);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return dateString; // Return original if can't parse
+    }
+
+    // Format as "Wednesday, 15th January 2025"
+    const options = {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    };
+
+    let formatted = date.toLocaleDateString('en-IE', options);
+
+    // Add ordinal suffix to day (1st, 2nd, 3rd, 4th, etc.)
+    const day = date.getDate();
+    let suffix = 'th';
+    if (day % 10 === 1 && day !== 11) suffix = 'st';
+    else if (day % 10 === 2 && day !== 12) suffix = 'nd';
+    else if (day % 10 === 3 && day !== 13) suffix = 'rd';
+
+    // Replace the day number with day + suffix
+    formatted = formatted.replace(/\b\d+\b/, day + suffix);
+
+    return formatted;
+  } catch (error) {
+    return dateString; // Return original if any error occurs
+  }
+};
+
 // Calendar ICS generation function
 const generateICS = (data, isRescheduled = false) => {
   // Parse the appointment time more robustly
@@ -1003,7 +1048,7 @@ const getEmailTemplate = (type, data) => {
                   <h3>📅 Appointment Details:</h3>
                   <p><strong>Customer:</strong> ${customerName}</p>
                   <p><strong>Service:</strong> ${data.service_name}</p>
-                  <p><strong>Date:</strong> ${data.appointment_date}</p>
+                  <p><strong>Date:</strong> ${formatDisplayDate(data.appointment_date)}</p>
                   <p><strong>Time:</strong> ${data.appointment_time}</p>
                   <p><strong>Reference:</strong> ${data.booking_reference}</p>
                   <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
@@ -1058,7 +1103,7 @@ const getEmailTemplate = (type, data) => {
                 <div class="details">
                   <h3>📅 Appointment Details:</h3>
                   <p><strong>Service:</strong> ${data.service_name}</p>
-                  <p><strong>Date:</strong> ${data.appointment_date}</p>
+                  <p><strong>Date:</strong> ${formatDisplayDate(data.appointment_date)}</p>
                   <p><strong>Time:</strong> ${data.appointment_time}</p>
                   <p><strong>Reference:</strong> ${data.booking_reference}</p>
                   ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}

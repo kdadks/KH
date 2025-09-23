@@ -535,7 +535,8 @@ export async function processPaymentRequest(
           console.log('🔍 Current booking status for', paymentRequest.booking_id, ':', currentBooking?.status);
 
           // Update booking status based on payment type
-          const targetStatus = isFullPayment ? 'confirmed' : 'deposit_paid';
+          // Note: All bookings require manual admin confirmation, even with full payment
+          const targetStatus = isFullPayment ? 'paid' : 'deposit_paid';
 
           console.log('🎯 Booking status update decision:', {
             currentBookingStatus: currentBooking?.status,
@@ -588,7 +589,7 @@ export async function processPaymentRequest(
           const mostRecentBooking = customerBookings[0];
           console.log('🔍 Found most recent booking:', mostRecentBooking.id, 'with status:', mostRecentBooking.status);
 
-          const targetStatus = isFullPayment ? 'confirmed' : 'deposit_paid';
+          const targetStatus = isFullPayment ? 'paid' : 'deposit_paid';
 
           if (mostRecentBooking.status !== targetStatus) {
             const fallbackResult = await supabase
@@ -625,7 +626,7 @@ export async function processPaymentRequest(
         console.log('🔍 Booking status verification:', {
           bookingId: verificationData[0].id,
           currentStatus: verificationData[0].status,
-          expectedStatus: 'confirmed'
+          expectedStatus: 'paid' // Changed from 'confirmed' to 'paid'
         });
 
         // Dispatch event to notify admin views of booking status change
@@ -1254,7 +1255,7 @@ export async function fixBookingStatusBasedOnPayments(bookingId: string): Promis
 
     const depositAmount = Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
     const isFullPayment = matchingPayment.amount >= (serviceCost - 2);
-    const targetStatus = isFullPayment ? 'confirmed' : 'deposit_paid';
+    const targetStatus = isFullPayment ? 'paid' : 'deposit_paid';
 
     console.log('🎯 Payment analysis for manual fix:', {
       serviceCost,
