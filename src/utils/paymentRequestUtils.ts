@@ -461,12 +461,7 @@ export async function processPaymentRequest(
       let isFullPayment = false;
 
       try {
-        console.log('🔍 Debugging service cost detection:', {
-          paymentRequestId: paymentRequestId,
-          paymentRequestServiceName: paymentRequest.service_name,
-          paymentRequestAmount: paymentRequest.amount,
-          bookingId: paymentRequest.booking_id
-        });
+        // Detect service cost and payment type
 
         // Try to get service cost from the payment request's service_name or booking
         if (paymentRequest.service_name) {

@@ -219,12 +219,6 @@ const HeroSection: React.FC = () => {
   // Auto-select time when time slots are loaded (for "Select This Slot" functionality)
   useEffect(() => {
     if (autoSelectTime && timeSlots.length > 0 && !loadingTimeSlots) {
-      console.log('🔍 Auto-select debugging:', {
-        targetTime: autoSelectTime,
-        availableSlots: timeSlots,
-        slotCount: timeSlots.length
-      });
-      
       // Find the matching time slot in the available options
       const matchingSlot = timeSlots.find(slot => {
         const [timeValue] = slot.split('|');

@@ -79,8 +79,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     // Listen to Supabase auth changes for admin login detection
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: string, session: Session | null) => {
-        console.log('Auth state changed:', event, session?.user?.id);
-        
         if (event === 'SIGNED_IN' && session?.user) {
           setAuthUser(session.user);
           
@@ -88,8 +86,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
           const isAdminContext = window.location.pathname.startsWith('/admin');
           if (!isAdminContext) {
             await loadUserProfile(session.user.id);
-          } else {
-            console.log('Skipping customer profile load for admin context');
           }
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);

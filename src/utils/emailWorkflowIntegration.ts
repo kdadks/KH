@@ -313,13 +313,6 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       special_instructions: booking.notes
     };
     
-    console.log('🔍 DEBUG: Booking email data for ICS:', {
-      appointment_date: bookingEmailData.appointment_date,
-      appointment_time: bookingEmailData.appointment_time,
-      booking_date_raw: booking.booking_date,
-      timeslot_start_time_raw: booking.timeslot_start_time
-    });
-
     // Validate data before processing
     const validation = validateEmailWorkflowData(bookingEmailData);
     if (!validation.isValid) {
@@ -691,22 +684,63 @@ export const integrateBookingReschedulingWorkflow = async (
       throw new Error('Customer email not found for rescheduling notification');
     }
 
-    // Prepare booking email data
+    // Use the same date/time formatting functions we implemented for booking confirmations
+    const formatDateForICS = (dateStr: string | null): string => {
+      if (!dateStr) {
+        return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
+      
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+          return new Date().toISOString().split('T')[0];
+        }
+        return date.toISOString().split('T')[0];
+      } catch {
+        return new Date().toISOString().split('T')[0];
+      }
+    };
+    
+    const formatTimeForICS = (timeStr: string | null): string => {
+      if (!timeStr || timeStr === 'To be scheduled') {
+        return '10:00:00'; // Default to 10 AM
+      }
+      
+      // If it's already in HH:MM:SS format, keep it
+      if (timeStr.match(/^\d{2}:\d{2}:\d{2}$/)) {
+        return timeStr;
+      }
+      // If it's in HH:MM format, add seconds
+      else if (timeStr.match(/^\d{2}:\d{2}$/)) {
+        return timeStr + ':00';
+      }
+      // If it contains extra text, try to extract time
+      else {
+        const timeMatch = timeStr.match(/(\d{1,2}:\d{2})/);
+        if (timeMatch) {
+          return timeMatch[1].padStart(5, '0') + ':00';
+        } else {
+          return '10:00:00'; // Fallback
+        }
+      }
+    };
+
+    // Prepare booking email data with proper date/time formatting
     const bookingEmailData: BookingEmailData = {
       customer_name: customerName,
       customer_email: customerEmail,
       service_name: currentBooking.service?.name || currentBooking.service_name || 'Physiotherapy Session',
-      appointment_date: newAppointmentDate,
-      appointment_time: newAppointmentTime,
+      appointment_date: formatDateForICS(newAppointmentDate),
+      appointment_time: formatTimeForICS(newAppointmentTime),
       booking_reference: currentBooking.booking_reference || `KH-${bookingId}`,
       booking_id: bookingId,
       customer_id: currentBooking.customer_id,
       therapist_name: currentBooking.therapist_name || 'KH Therapy Team',
       clinic_address: currentBooking.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
       special_instructions: currentBooking.special_instructions,
-      // Include old appointment details
-      old_appointment_date: oldAppointmentDate,
-      old_appointment_time: oldAppointmentTime
+      // Include old appointment details with proper formatting
+      old_appointment_date: formatDateForICS(oldAppointmentDate),
+      old_appointment_time: formatTimeForICS(oldAppointmentTime)
     };
 
     // Prepare rescheduling data
@@ -724,6 +758,12 @@ export const integrateBookingReschedulingWorkflow = async (
     }
 
     // Process the rescheduling email workflow
+    console.log('📧 Processing rescheduling email workflow with data:', {
+      trigger: 'booking_rescheduled',
+      customerEmail: bookingEmailData.customer_email,
+      bookingReference: bookingEmailData.booking_reference
+    });
+    
     const result = await processBookingEmailWorkflow(
       'booking_rescheduled',
       bookingEmailData,
@@ -734,6 +774,10 @@ export const integrateBookingReschedulingWorkflow = async (
     );
 
     console.log('✅ Booking rescheduling workflow completed. Success:', result.success);
+    
+    if (!result.success) {
+      console.error('❌ Rescheduling email workflow failed:', result.errors);
+    }
     
     // Add information about the rescheduling to results
     result.results.oldAppointmentDate = oldAppointmentDate;
@@ -747,6 +791,14 @@ export const integrateBookingReschedulingWorkflow = async (
 
   } catch (error) {
     console.error('❌ Booking rescheduling workflow integration failed:', error);
+    console.error('❌ Error details:', {
+      bookingId,
+      newAppointmentDate,
+      newAppointmentTime,
+      reschedulingOptions,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorStack: error instanceof Error ? error.stack : undefined
+    });
     return {
       success: false,
       results: {},

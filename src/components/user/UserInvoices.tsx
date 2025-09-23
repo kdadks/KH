@@ -77,29 +77,6 @@ const UserInvoices: React.FC = () => {
       const roundedOtherPayments = Math.round(otherPaymentsAmount * 100) / 100;
       const roundedTotalPaid = Math.round(totalPaidAmount * 100) / 100;
 
-      console.log('UserInvoice Payment Debug:', {
-        invoiceId: invoice.id,
-        invoiceBookingId: invoice.booking_id,
-        invoiceTotal: invoice.total_amount,
-        paymentsCount: invoice.payments?.length || 0,
-        paidPayments: invoice.payments?.filter(p => p.status === 'paid').length || 0,
-        depositAmount: roundedDepositAmount,
-        otherPaymentsAmount: roundedOtherPayments,
-        totalPaidAmount: roundedTotalPaid,
-        paymentBreakdown: invoice.payments?.map(p => ({
-          id: p.id,
-          amount: p.amount,
-          status: p.status,
-          booking_id: p.booking_id,
-          invoice_id: p.invoice_id,
-          notes: p.notes,
-          payment_method: p.payment_method,
-          sumup_checkout_id: p.sumup_checkout_id,
-          isDeposit: p.booking_id && !p.invoice_id,
-          classification: p.booking_id && !p.invoice_id ? 'DEPOSIT' : 'ADDITIONAL_PAYMENT'
-        }))
-      });
-
       // Transform UserInvoice to the format expected by the service
       const invoiceData = {
         id: invoice.id,

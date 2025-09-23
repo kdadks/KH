@@ -28,10 +28,8 @@ export function extractNumericPrice(priceString: string): number {
  */
 export async function fetchServicePricing(serviceName: string): Promise<ServicePricing | null> {
   try {
-    console.log('🔍 Fetching service pricing for:', serviceName);
-
     // First try exact match - use limit(1) instead of maybeSingle() to handle duplicates
-    let { data: exactMatchData, error } = await supabase
+    const { data: exactMatchData, error } = await supabase
       .from('services')
       .select('id, name, category, price, in_hour_price, out_of_hour_price, features, description, is_active')
       .eq('name', serviceName)
@@ -103,7 +101,6 @@ export async function fetchServicePricing(serviceName: string): Promise<ServiceP
       return null;
     }
 
-    console.log('✅ Service pricing found:', data);
     return data;
   } catch (error) {
     console.error('Error in fetchServicePricing:', error);
@@ -157,18 +154,13 @@ export function extractBaseServiceName(serviceNameWithDetails: string): string {
 
   let serviceName = serviceNameWithDetails.trim();
 
-  console.log('🔍 Extracting base service name from:', serviceName);
-
   // Remove price in parentheses (e.g., "(€90)" or "(€25 / class)")
   serviceName = serviceName.replace(/\s*\([^)]*\)\s*$/, '');
-  console.log('After removing price:', serviceName);
 
   // Remove " - In Hour" or " - Out of Hour" suffixes
   serviceName = serviceName.replace(/\s*-\s*(In|Out of)\s+Hour\s*$/i, '');
-  console.log('After removing hour suffix:', serviceName);
 
   const finalName = serviceName.trim();
-  console.log('✅ Final extracted service name:', finalName);
 
   return finalName;
 }
