@@ -823,7 +823,7 @@ const HeroSection: React.FC = () => {
                 Your Journey to <span>Recovery</span> and <span>Wellness</span>
               </h1>
               <p className="text-lg md:text-xl mb-8 max-w-2xl">
-                Professional physiotherapy services with personalized care plans 
+                Professional physiotherapy services with personalised care plans 
                 designed to help you move better, feel better, and live better.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
