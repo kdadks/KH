@@ -1,37 +1,187 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CheckCircle, ArrowLeft, Home } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { getSumUpCheckoutStatus } from '../utils/sumupRealApiImplementation';
+import { getPaymentRequestById, processPaymentRequest } from '../utils/paymentRequestUtils';
+
+type VerificationStatus = 'pending' | 'confirmed' | 'already-paid' | 'waiting' | 'error';
+
+const VERIFICATION_STYLES: Record<VerificationStatus, { bg: string; border: string; text: string; heading: string }> = {
+  pending: {
+    bg: 'bg-gray-50',
+    border: 'border-gray-200',
+    text: 'text-gray-600',
+    heading: 'Payment Status'
+  },
+  confirmed: {
+    bg: 'bg-green-50',
+    border: 'border-green-200',
+    text: 'text-green-700',
+    heading: 'Payment Verified'
+  },
+  'already-paid': {
+    bg: 'bg-blue-50',
+    border: 'border-blue-200',
+    text: 'text-blue-700',
+    heading: 'Already Processed'
+  },
+  waiting: {
+    bg: 'bg-yellow-50',
+    border: 'border-yellow-200',
+    text: 'text-yellow-700',
+    heading: 'Awaiting Confirmation'
+  },
+  error: {
+    bg: 'bg-red-50',
+    border: 'border-red-200',
+    text: 'text-red-700',
+    heading: 'Verification Issue'
+  }
+};
+
+const DEFAULT_VERIFICATION_MESSAGES: Record<VerificationStatus, string> = {
+  pending: '',
+  confirmed: 'Payment verified successfully.',
+  'already-paid': 'This payment was already confirmed earlier.',
+  waiting: 'Awaiting confirmation from SumUp. Payments usually finalise within a few minutes.',
+  error: 'We were unable to verify this payment automatically. Please contact support if you have a receipt.'
+};
 
 const PaymentSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const transactionId = searchParams.get('transaction_id');
+  const transactionIdParam = searchParams.get('transaction_id');
   const checkoutReference = searchParams.get('checkout_reference');
-  const amount = searchParams.get('amount');
-  const currency = searchParams.get('currency') || 'EUR';
+  const amountParam = searchParams.get('amount');
+  const currencyParam = searchParams.get('currency') || 'EUR';
+  const paymentRequestIdParam = searchParams.get('payment_request_id');
+  const checkoutIdParam = searchParams.get('checkout_id');
+  const statusParam = searchParams.get('status');
+
+  const [resolvedTransactionId, setResolvedTransactionId] = useState<string | null>(transactionIdParam);
+  const [resolvedAmount, setResolvedAmount] = useState<string | null>(amountParam);
+  const [resolvedCurrency, setResolvedCurrency] = useState<string>(currencyParam);
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('pending');
+  const [verificationMessage, setVerificationMessage] = useState<string>(DEFAULT_VERIFICATION_MESSAGES.pending);
+  const [verifying, setVerifying] = useState<boolean>(false);
+
+  const applyVerificationState = (status: VerificationStatus, message?: string) => {
+    setVerificationStatus(status);
+    setVerificationMessage(message ?? DEFAULT_VERIFICATION_MESSAGES[status]);
+  };
+
+  const verificationStyle = VERIFICATION_STYLES[verificationStatus];
 
   useEffect(() => {
-    // Log the payment success for debugging
     console.log('Payment success page loaded with params:', {
-      transactionId,
+      transactionIdParam,
       checkoutReference,
-      amount,
-      currency
+      amountParam,
+      currencyParam,
+      paymentRequestIdParam,
+      checkoutIdParam,
+      statusParam
     });
 
-    // In a real application, you would:
-    // 1. Verify the payment with SumUp API
-    // 2. Update your database with the payment status
-    // 3. Send confirmation emails
-    // 4. Update the user's account
-  }, [transactionId, checkoutReference, amount, currency]);
+    const verifyPayment = async () => {
+      if (!paymentRequestIdParam || !checkoutReference) {
+        applyVerificationState('waiting', 'Missing payment reference. If you have been charged, please contact support.');
+        return;
+      }
 
-  const formatAmount = (amountStr: string | null) => {
-    if (!amountStr) return '€0.00';
-    const amountNum = parseInt(amountStr) / 100; // Convert from cents
+      setVerifying(true);
+
+      try {
+        const existingRequest = await getPaymentRequestById(Number(paymentRequestIdParam));
+        if (existingRequest?.status === 'paid') {
+          applyVerificationState('already-paid');
+          if (existingRequest.updated_at) {
+            setResolvedTransactionId(existingRequest.notes || transactionIdParam);
+          }
+          setResolvedAmount(amountParam);
+          setResolvedCurrency(currencyParam);
+          return;
+        }
+
+        let checkoutId = checkoutIdParam || undefined;
+        try {
+          const storedMetadataRaw = localStorage.getItem(`sumupCheckout:${checkoutReference}`);
+          if (!checkoutId && storedMetadataRaw) {
+            const storedMetadata = JSON.parse(storedMetadataRaw);
+            checkoutId = storedMetadata?.checkoutId;
+          }
+        } catch (storageError) {
+          console.warn('Unable to read stored SumUp checkout metadata:', storageError);
+        }
+
+        if (!checkoutId) {
+          applyVerificationState('waiting', 'Payment initiated. Waiting for SumUp confirmation...');
+          return;
+        }
+
+        const checkoutStatus = await getSumUpCheckoutStatus(checkoutId);
+
+        const normalizedStatus = checkoutStatus.status?.toUpperCase?.() ?? 'PENDING';
+        const firstTransaction = checkoutStatus.transactions?.[0];
+
+        if (normalizedStatus === 'PAID') {
+          const transactionCode = firstTransaction?.transaction_code || firstTransaction?.id || transactionIdParam || `sumup-${Date.now()}`;
+
+          await processPaymentRequest(Number(paymentRequestIdParam), {
+            payment_request_id: Number(paymentRequestIdParam),
+            sumup_checkout_id: checkoutId,
+            sumup_transaction_id: transactionCode,
+            payment_method: 'sumup',
+            sumup_payment_type: firstTransaction?.payment_type?.toLowerCase?.() || 'card'
+          });
+
+          setResolvedTransactionId(transactionCode);
+          const resolvedAmountValue = firstTransaction?.amount?.toString() || checkoutStatus.amount?.toString() || amountParam;
+          setResolvedAmount(resolvedAmountValue ?? null);
+          setResolvedCurrency(firstTransaction?.currency || checkoutStatus.currency || currencyParam);
+
+          applyVerificationState('confirmed', 'Your payment has been verified successfully.');
+
+          try {
+            localStorage.removeItem(`sumupCheckout:${checkoutReference}`);
+          } catch (storageError) {
+            console.warn('Unable to remove stored SumUp metadata:', storageError);
+          }
+          return;
+        }
+
+        if (normalizedStatus === 'PENDING') {
+          applyVerificationState('waiting', 'Your payment is still processing. Please refresh this page in a moment.');
+          return;
+        }
+
+        applyVerificationState('error', `SumUp reported status: ${normalizedStatus}. Please contact support if you have questions.`);
+      } catch (error) {
+        console.error('Error verifying SumUp payment:', error);
+        applyVerificationState('error', error instanceof Error ? error.message : undefined);
+      } finally {
+        setVerifying(false);
+      }
+    };
+
+    verifyPayment();
+  }, [paymentRequestIdParam, checkoutReference, checkoutIdParam, transactionIdParam, amountParam, currencyParam, statusParam]);
+
+  const formatAmount = (amountStr: string | null, currencyCode: string) => {
+    if (!amountStr) {
+      return new Intl.NumberFormat('en-IE', {
+        style: 'currency',
+        currency: currencyCode
+      }).format(0);
+    }
+
+    const numericValue = Number(amountStr);
+    const isCents = Number.isFinite(numericValue) && !amountStr.includes('.') && numericValue >= 1000;
+    const normalizedAmount = Number.isFinite(numericValue) ? (isCents ? numericValue / 100 : numericValue) : 0;
+
     return new Intl.NumberFormat('en-IE', {
       style: 'currency',
-      currency: currency
-    }).format(amountNum);
+      currency: currencyCode
+    }).format(normalizedAmount);
   };
 
   return (
@@ -51,20 +201,27 @@ const PaymentSuccessPage: React.FC = () => {
             Your payment has been processed successfully.
           </p>
 
+          <div className={`${verificationStyle.bg} ${verificationStyle.border} rounded-lg p-4 mb-8`}>
+            <h4 className={`font-medium ${verificationStyle.text} mb-1`}>{verificationStyle.heading}</h4>
+            <p className={`${verificationStyle.text} text-sm`}>
+              {verifying ? 'Verifying payment with SumUp...' : verificationMessage}
+            </p>
+          </div>
+
           {/* Payment Details */}
           <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Details</h3>
             <div className="space-y-3 text-sm">
-              {amount && (
+              {resolvedAmount && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Amount:</span>
-                  <span className="font-medium text-gray-900">{formatAmount(amount)}</span>
+                  <span className="font-medium text-gray-900">{formatAmount(resolvedAmount, resolvedCurrency)}</span>
                 </div>
               )}
-              {transactionId && (
+              {resolvedTransactionId && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Transaction ID:</span>
-                  <span className="font-mono text-xs text-gray-900">{transactionId}</span>
+                  <span className="font-mono text-xs text-gray-900">{resolvedTransactionId}</span>
                 </div>
               )}
               {checkoutReference && (
@@ -75,7 +232,13 @@ const PaymentSuccessPage: React.FC = () => {
               )}
               <div className="flex justify-between">
                 <span className="text-gray-600">Status:</span>
-                <span className="text-green-600 font-medium">Completed</span>
+                <span className={`${verificationStyle.text} font-medium`}>
+                  {verificationStatus === 'confirmed' || verificationStatus === 'already-paid'
+                    ? 'Completed'
+                    : verificationStatus === 'error'
+                    ? 'Action required'
+                    : 'Pending confirmation'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Date:</span>

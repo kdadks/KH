@@ -824,7 +824,14 @@ export const getActiveSumUpGateway = async (): Promise<{
       .single();
 
     if (error || !data) {
-      console.warn('No active SumUp gateway found in database, falling back to environment variables');
+      if (error?.code === 'PGRST116' || error?.code === 'PGRST123') {
+        console.warn('No active SumUp gateway accessible via Supabase (likely blocked by RLS or no matching row). Falling back to environment variables.');
+      } else if (error) {
+        console.warn('Failed to fetch SumUp gateway from database:', error.message || error);
+        console.warn('Falling back to environment variables.');
+      } else {
+        console.warn('No active SumUp gateway found in database, falling back to environment variables');
+      }
       
       // Fallback to environment variables if database config is not available
       const envApiKey = import.meta.env.VITE_SUMUP_API_KEY;

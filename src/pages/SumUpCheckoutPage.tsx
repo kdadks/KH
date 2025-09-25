@@ -5,6 +5,8 @@ import { CreditCard, CheckCircle } from 'lucide-react';
 const SumUpCheckoutPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const sumupEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
+  const isProductionMode = sumupEnvironment === 'production';
   
   // Extract checkout parameters from URL
   const amount = searchParams.get('amount') || '0';
@@ -305,12 +307,20 @@ const SumUpCheckoutPage: React.FC = () => {
           {/* Payment Form - Only show if not already paid */}
           {(!paymentRequestId || (!loadingStatus && paymentRequestStatus !== 'paid')) && !statusError && (
             <>
-              {/* Test Mode Notice */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
-                <p className="text-yellow-800 text-sm">
-                  <strong>TEST MODE:</strong> This is a sandbox payment. No real money will be charged.
-                </p>
-              </div>
+              {!isProductionMode && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
+                  <p className="text-yellow-800 text-sm">
+                    <strong>TEST MODE:</strong> This is a sandbox payment. No real money will be charged.
+                  </p>
+                </div>
+              )}
+              {isProductionMode && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+                  <p className="text-blue-800 text-sm">
+                    This page is intended for sandbox simulations. Real payments are processed via SumUp's hosted checkout.
+                  </p>
+                </div>
+              )}
 
               {/* Payment Details */}
               <div className="text-center mb-6">
