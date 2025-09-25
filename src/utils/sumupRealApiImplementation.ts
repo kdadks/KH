@@ -120,6 +120,9 @@ export const createSumUpCheckoutSession = async (
         currency: checkoutData.currency,
         merchant_code: gatewayConfig.merchant_id,
         description: checkoutData.description,
+        hosted_checkout: {
+          enabled: true
+        },
         ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
         ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {})
       })

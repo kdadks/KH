@@ -191,10 +191,10 @@ const extractCheckoutUrl = (
   }
 
   const directUrlCandidates = [
+    (checkout as any).hosted_checkout_url,
     (checkout as any).checkout_url,
     (checkout as any).redirect_url,
-    (checkout as any).payment_link,
-    (checkout as any).hosted_checkout_url
+    (checkout as any).payment_link
   ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 
   if (directUrlCandidates.length > 0) {
