@@ -1104,13 +1104,15 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
             </div>
           </div>
           
-          <div className="overflow-x-auto">
-            {activeMainTab === 'bookings' ? (
-              // Bookings Table
-              reportData.filteredBookings.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No bookings match the selected filters.</div>
-              ) : (
-                <>
+          {/* Desktop and Mobile Views */}
+          {activeMainTab === 'bookings' ? (
+            // Bookings Table
+            reportData.filteredBookings.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No bookings match the selected filters.</div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-gray-50">
                       <tr>
@@ -1158,9 +1160,54 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                           </td>
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View for Bookings */}
+                <div className="lg:hidden space-y-3 p-4">
+                  {getCurrentPageData(reportData.filteredBookings, currentPage, itemsPerPage).map((b, idx) => {
+                    const status = b.status || 'pending';
+                    const phone = b.customer_phone || b.phone;
+                    const email = b.customer_email || b.email;
+                    const service = b.package_name || b.service || '—';
+
+                    let customerName = '—';
+                    if (b.customer_details?.first_name && b.customer_details?.last_name) {
+                      customerName = `${b.customer_details.first_name} ${b.customer_details.last_name}`;
+                    } else if (b.customer_name) {
+                      customerName = b.customer_name;
+                    } else if (b.name) {
+                      customerName = b.name;
+                    }
+
+                    const { date } = deriveDateTime(b);
+                    return (
+                      <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-white">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <h4 className="font-medium text-gray-900">{customerName}</h4>
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                              status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {status}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <div><strong>Service:</strong> {service}</div>
+                            <div><strong>Date:</strong> {date}</div>
+                            {email && <div><strong>Email:</strong> {email}</div>}
+                            {phone && <div><strong>Phone:</strong> {phone}</div>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <PaginationComponent
                   currentPage={currentPage}
                   totalPages={getTotalPages(reportData.filteredBookings.length, itemsPerPage)}
@@ -1177,18 +1224,20 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                 <div className="p-8 text-center text-gray-500">No invoices match the selected filters.</div>
               ) : (
                 <>
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Invoice #</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Customer</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Due Date</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Amount</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  {/* Desktop Table View for Invoices */}
+                  <div className="hidden lg:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-medium text-gray-600">Invoice #</th>
+                          <th className="px-4 py-2 text-left font-medium text-gray-600">Customer</th>
+                          <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
+                          <th className="px-4 py-2 text-left font-medium text-gray-600">Due Date</th>
+                          <th className="px-4 py-2 text-left font-medium text-gray-600">Amount</th>
+                          <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
                     {getCurrentPageData(reportData.filteredInvoices, currentPage, itemsPerPage).map((inv, idx) => {
                       // Decrypt customer data for display
                       const decryptedCustomer = inv.customer ? decryptCustomerPII(inv.customer) : null;
@@ -1219,9 +1268,51 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                           </td>
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View for Invoices */}
+                <div className="lg:hidden space-y-3 p-4">
+                  {getCurrentPageData(reportData.filteredInvoices, currentPage, itemsPerPage).map((inv, idx) => {
+                    const decryptedCustomer = inv.customer ? decryptCustomerPII(inv.customer) : null;
+                    const customerName = decryptedCustomer ? `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() : '—';
+
+                    const getStatusColor = (status: string) => {
+                      switch (status) {
+                        case 'paid': return 'bg-green-100 text-green-800';
+                        case 'sent': return 'bg-blue-100 text-blue-800';
+                        case 'overdue': return 'bg-red-100 text-red-800';
+                        case 'draft': return 'bg-yellow-100 text-yellow-800';
+                        case 'cancelled': return 'bg-gray-100 text-gray-800';
+                        default: return 'bg-gray-100 text-gray-800';
+                      }
+                    };
+
+                    return (
+                      <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-white">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-medium text-gray-900">#{inv.invoice_number}</h4>
+                              <p className="text-sm text-gray-600">{customerName}</p>
+                            </div>
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full capitalize ${getStatusColor(inv.status)}`}>
+                              {inv.status}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <div><strong>Amount:</strong> {formatCurrency(inv.total_amount)}</div>
+                            <div><strong>Date:</strong> {inv.invoice_date}</div>
+                            <div><strong>Due Date:</strong> {inv.due_date}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <PaginationComponent
                   currentPage={currentPage}
                   totalPages={getTotalPages(reportData.filteredInvoices.length, itemsPerPage)}
@@ -1233,7 +1324,6 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                 </>
               )
             )}
-          </div>
         </div>
       )}
     </>

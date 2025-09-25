@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import Button from '../shared/Button';
 import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
@@ -14,8 +15,7 @@ import {
   serviceValidation,
   validateEmailRealTime,
   validatePhoneRealTime,
-  validateNameRealTime,
-  validateNotesRealTime
+  validateNameRealTime
 } from '../../utils/formValidation';
 
 interface Service {
@@ -47,6 +47,7 @@ const HeroSection: React.FC = () => {
   // Form and UI states
   interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; preferredDate?: string; time?: string; }
   const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<BookingFormData>();
+  const navigate = useNavigate();
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
@@ -546,34 +547,16 @@ const HeroSection: React.FC = () => {
       );
 
       if (selectedServiceObj?.booking_type === 'contact_me') {
-        // Handle "Contact Me" services by sending consultation message directly
-        try {
-          const consultationMessage = {
-            name: `${data.firstName} ${data.lastName}`,
-            email: data.email,
-            service: selectedServiceObj.displayName || selectedServiceObj.name,
-            message: `Hi, I'm interested in ${selectedServiceObj.displayName || selectedServiceObj.name} and would like to schedule a consultation. Please contact me to discuss my needs and availability.`
-          };
+        // Handle "Contact Me" services by redirecting to contact page with pre-filled data
+        const contactParams = new URLSearchParams({
+          name: `${data.firstName} ${data.lastName}`,
+          email: data.email,
+          service: String(selectedServiceObj.id),
+          message: `Hi, I'm interested in ${selectedServiceObj.displayName || selectedServiceObj.name} and would like to schedule a consultation. Please contact me to discuss my needs and availability.`
+        });
 
-          // Send consultation email using contact form functionality
-          const { data: emailData, error: emailError } = await supabase.functions.invoke('send-email', {
-            body: {
-              type: 'contact',
-              data: consultationMessage
-            }
-          });
-
-          if (emailError) {
-            console.error('Error sending consultation message:', emailError);
-            setSuccessMsg('Failed to send consultation request. Please try again or contact us directly.');
-          } else {
-            setSuccessMsg('Consultation request sent successfully! We will contact you within 24 hours to discuss your needs and schedule an appointment.');
-            reset(); // Clear the form after successful submission
-          }
-        } catch (error) {
-          console.error('Error sending consultation request:', error);
-          setSuccessMsg('Failed to send consultation request. Please try again or contact us directly.');
-        }
+        // Navigate to contact page with pre-filled data
+        navigate(`/contact?${contactParams.toString()}`);
         setSendingEmail(false);
         return;
       }

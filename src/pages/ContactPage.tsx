@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MapPin, Clock, User, Send, MessageSquare } from 'lucide-react';
 import { FaInstagram, FaLinkedinIn } from 'react-icons/fa';
+import { useSearchParams } from 'react-router-dom';
 import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
@@ -23,6 +24,7 @@ interface Service {
 }
 
 const ContactPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -126,6 +128,25 @@ const ContactPage: React.FC = () => {
 
     fetchServices();
   }, []);
+
+  // Pre-fill form from URL parameters
+  useEffect(() => {
+    if (!servicesLoading && services.length > 0) {
+      const name = searchParams.get('name');
+      const email = searchParams.get('email');
+      const service = searchParams.get('service');
+      const message = searchParams.get('message');
+
+      if (name || email || service || message) {
+        setFormData(prev => ({
+          name: name || prev.name,
+          email: email || prev.email,
+          service: service || prev.service,
+          message: message || prev.message
+        }));
+      }
+    }
+  }, [servicesLoading, services.length, searchParams]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;

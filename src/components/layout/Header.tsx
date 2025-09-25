@@ -63,7 +63,6 @@ const Header: React.FC = () => {
               <NavLink to="/services" className={navLinkClasses}>Services</NavLink>
               <NavLink to="/testimonials" className={navLinkClasses}>Testimonials</NavLink>
               <NavLink to="/contact" className={navLinkClasses}>Contact</NavLink>
-              <NavLink to="/admin" className={navLinkClasses}>Admin</NavLink>
             </nav>
           )}
 
@@ -162,15 +161,6 @@ const Header: React.FC = () => {
               >
                 Contact
               </NavLink>
-          <NavLink 
-            to="/admin" 
-            className={({ isActive }) => 
-              `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-            } 
-            onClick={closeMenu}
-          >
-            Admin
-          </NavLink>
           {/* Mobile Book Now Button and My Account */}
               <Link 
                 to="/my-account" 

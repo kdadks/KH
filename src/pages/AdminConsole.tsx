@@ -746,8 +746,39 @@ const AdminConsole = () => {
       {/* Navigation Tabs */}
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-      {[
+          {/* Mobile Navigation - Horizontal Scrolling */}
+          <div className="block md:hidden">
+            <div className="flex space-x-1 overflow-x-auto scrollbar-hide pb-2 pt-2">
+              {[
+                { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+                { id: 'bookings', label: 'Bookings', icon: Calendar },
+                { id: 'package', label: 'Services', icon: Package },
+                { id: 'availability', label: 'Availability', icon: Clock },
+                { id: 'customers', label: 'Customers', icon: Users },
+                { id: 'invoices', label: 'Invoices', icon: FileText },
+                { id: 'payments', label: 'Payments', icon: CreditCard },
+                { id: 'reports', label: 'Reports', icon: TrendingUp },
+                { id: 'help', label: 'Help', icon: HelpCircle }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
+                  className={`flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4 mr-1" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop Navigation - Standard Tabs */}
+          <div className="hidden md:flex space-x-8">
+            {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'bookings', label: 'Bookings', icon: Calendar },
               { id: 'package', label: 'Services', icon: Package },
@@ -760,7 +791,7 @@ const AdminConsole = () => {
             ].map(tab => (
               <button
                 key={tab.id}
-        onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
+                onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
                 className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'

@@ -809,22 +809,24 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
             {searchTerm || statusFilter !== 'all' ? 'No customers found matching your criteria.' : 'No customers found. Add your first customer!'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-blue-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-blue-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                      Contact
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
                 {paginatedCustomers.map((customer) => {
                   const isInactive = customer.is_active === false;
                   return (
@@ -897,9 +899,84 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                     </tr>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3 p-4">
+              {paginatedCustomers.map((customer) => {
+                const isInactive = customer.is_active === false;
+                return (
+                  <div
+                    key={customer.id}
+                    onClick={() => handleCustomerSelect(customer)}
+                    className={`border border-gray-200 rounded-lg p-4 cursor-pointer transition-colors ${
+                      selectedCustomerId === customer.id ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                    } ${isInactive ? 'opacity-50 bg-gray-50' : ''}`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900 truncate">
+                                {getCustomerDisplayName(customer)}
+                              </p>
+                              {isInactive && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Inactive
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1 space-y-1">
+                              {customer.email && (
+                                <div className="flex items-center text-sm text-gray-500">
+                                  <Mail className="w-3 h-3 mr-1" />
+                                  <span className="truncate">{customer.email}</span>
+                                </div>
+                              )}
+                              {customer.phone && (
+                                <div className="flex items-center text-sm text-gray-500">
+                                  <Phone className="w-3 h-3 mr-1" />
+                                  <span>{customer.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(customer);
+                              }}
+                              className="text-blue-600 hover:text-blue-900 p-1"
+                              title="Edit customer"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick(customer);
+                              }}
+                              className="text-red-600 hover:text-red-900 p-1"
+                              title="Delete customer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

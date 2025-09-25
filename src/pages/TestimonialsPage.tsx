@@ -1,8 +1,8 @@
 import React from 'react';
 import Container from '../components/shared/Container';
-import SectionHeading from '../components/shared/SectionHeading';
+// import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
-import GoogleReviewsGrid from '../components/testimonials/GoogleReviewsGrid';
+// import GoogleReviewsGrid from '../components/testimonials/GoogleReviewsGrid';
 
 const TestimonialsPage: React.FC = () => {
   return (
@@ -13,39 +13,51 @@ const TestimonialsPage: React.FC = () => {
         canonicalUrl="/testimonials"
       />
       <Container>
-        <div className="py-16">
-          <SectionHeading
-            title="Client Testimonials & Reviews"
-            subtitle="Real experiences from our valued clients who have benefited from our personalized physiotherapy services"
-            centered={true}
-          />
-          
-          <div className="mt-12">
-            <GoogleReviewsGrid 
-              maxReviews={12}
-              showPagination={true}
-            />
-          </div>
-          
-          {/* Call to action */}
-          <div className="mt-16 text-center">
-            <div className="bg-green-50 rounded-xl p-8">
-              <h3 className="text-2xl font-bold text-neutral-800 mb-4">
-                Experience Personalized Care
-              </h3>
+        <div className="py-12">
+          {/* Hero Section with Title, Subtitle and CTA */}
+          <div className="text-center">
+            <div className="bg-green-50 rounded-xl p-6">
+              <h1 className="text-2xl font-bold text-neutral-800 mb-4">
+                Client Testimonials & Reviews
+              </h1>
               <p className="text-neutral-600 mb-6 max-w-2xl mx-auto">
-                Join our satisfied clients and start your journey to better health. 
-                Book your consultation today and experience the difference personalized physiotherapy can make.
+                Real experiences from our valued clients who have benefited from our personalized physiotherapy services
               </p>
+            
               <a 
                 href="/booking" 
-                className="inline-flex items-center px-8 py-3 bg-[#71db77] text-white font-semibold rounded-lg hover:bg-[#5fcf68] transition-colors duration-300"
+                className="inline-flex items-center px-6 py-3 bg-[#71db77] text-white font-semibold rounded-lg hover:bg-[#5fcf68] transition-colors duration-300"
               >
                 Book Your Consultation
                 <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                 </svg>
               </a>
+              <div className="mt-4">
+                <a 
+                  href="https://maps.app.goo.gl/HJqQEHFwp6jHmH6PA"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors duration-300"
+                >
+                  Read Our Google Reviews
+                  <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-12">
+            {/* <GoogleReviewsGrid 
+              maxReviews={12}
+              showPagination={true}
+            /> */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <img src="/Review.jpeg" alt="Client Review 1" className="w-full h-96 object-contain rounded-lg shadow-lg bg-white" />
+              <img src="/Review1.jpeg" alt="Client Review 2" className="w-full h-96 object-contain rounded-lg shadow-lg bg-white" />
+              <img src="/Review2.jpeg" alt="Client Review 3" className="w-full h-96 object-contain rounded-lg shadow-lg bg-white" />
             </div>
           </div>
         </div>
