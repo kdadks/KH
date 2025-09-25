@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Shield, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
-import { createSumUpCheckoutSession } from '../../utils/sumupRealApiImplementation';
+import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
+import type { SumUpCreateCheckoutResponse } from '../../utils/sumupRealApiImplementation';
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
 import { getActiveSumUpGateway } from '../../utils/paymentManagementUtils';
 import { useToast } from './toastContext';
@@ -182,6 +183,47 @@ interface PaymentModalProps {
   context?: 'email' | 'dashboard' | 'admin' | 'booking'; // Context to determine redirect behavior
 }
 
+const extractCheckoutUrl = (
+  checkout: SumUpCreateCheckoutResponse | Record<string, any> | null | undefined
+): string | null => {
+  if (!checkout) {
+    return null;
+  }
+
+  const directUrlCandidates = [
+    (checkout as any).checkout_url,
+    (checkout as any).redirect_url,
+    (checkout as any).payment_link,
+    (checkout as any).hosted_checkout_url
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  if (directUrlCandidates.length > 0) {
+    return directUrlCandidates[0];
+  }
+
+  const links = (checkout as any).links;
+  if (Array.isArray(links)) {
+    const linkMatch = links.find((link: any) => {
+      if (!link || typeof link !== 'object') return false;
+      const relation = typeof link.rel === 'string' ? link.rel.toLowerCase() : '';
+      return relation.includes('checkout') || relation.includes('redirect');
+    });
+    if (linkMatch?.href && typeof linkMatch.href === 'string') {
+      return linkMatch.href;
+    }
+  } else if (links && typeof links === 'object') {
+    const linkKeys = ['checkout_url', 'redirect_url', 'pay_to_url', 'pay_to_card_url'];
+    for (const key of linkKeys) {
+      const candidate = links[key];
+      if (typeof candidate === 'string' && candidate.length > 0) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+};
+
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
@@ -192,7 +234,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   context = 'booking' // Default context
 }) => {
   const { showSuccess, showError, showInfo } = useToast();
-  const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error'>('confirm');
+  const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error' | 'redirect'>('confirm');
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [bookingDetails, setBookingDetails] = useState<{
@@ -202,6 +244,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     package_name: string;
     notes?: string;
   } | null>(null);
+  const [isDevelopmentMode, setIsDevelopmentMode] = useState<boolean>(false);
+  const [gatewayEnvironment, setGatewayEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [checkoutReference, setCheckoutReference] = useState<string | null>(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
 
   const getRedirectUrl = (isSuccess: boolean = true): string | null => {
     // If redirectAfterPayment is explicitly set, use it
@@ -255,6 +301,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCurrentStep('confirm');
       setCheckoutUrl('');
       setErrorMessage('');
+      setIsDevelopmentMode(false);
+      setGatewayEnvironment('sandbox');
+      setCheckoutReference(null);
+      setCheckoutSessionId(null);
       console.log('PaymentModal opening with booking_id:', paymentRequest.booking_id);
       fetchBookingDetails();
     }
@@ -270,30 +320,128 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       if (!gatewayConfig || !gatewayConfig.merchant_id) {
         throw new Error('Payment gateway not configured. Please contact support.');
       }
-      
-      // Create SumUp checkout session
-      console.log('Creating SumUp checkout session...');
+      const developmentMode = gatewayConfig.api_key === 'development-mode';
+      setIsDevelopmentMode(developmentMode);
+      setGatewayEnvironment(gatewayConfig.environment);
+
+      const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
+      setCheckoutReference(newCheckoutReference);
+
+      const returnUrl = new URL(`${window.location.origin}/payment-success`);
+      returnUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
+      returnUrl.searchParams.set('checkout_reference', newCheckoutReference);
+      returnUrl.searchParams.set('context', context);
+
+      const cancelUrl = new URL(`${window.location.origin}/payment-cancelled`);
+      cancelUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
+      cancelUrl.searchParams.set('checkout_reference', newCheckoutReference);
+      cancelUrl.searchParams.set('context', context);
+
+      console.log('Creating SumUp checkout session...', {
+        amount: paymentRequest.amount,
+        currency: paymentRequest.currency,
+        merchant_code: gatewayConfig.merchant_id,
+        environment: gatewayConfig.environment,
+        return_url: returnUrl.toString(),
+        cancel_url: cancelUrl.toString()
+      });
+
       const checkoutResponse = await createSumUpCheckoutSession({
-        checkout_reference: `payment-request-${paymentRequest.id}-${Date.now()}`,
+        checkout_reference: newCheckoutReference,
         amount: paymentRequest.amount,
         currency: paymentRequest.currency || 'EUR',
         merchant_code: gatewayConfig.merchant_id,
-        description: `Payment for ${paymentRequest.service_name || 'Service'}`
+        description: `Payment for ${paymentRequest.service_name || 'Service'}`,
+        return_url: returnUrl.toString(),
+        cancel_url: cancelUrl.toString()
       });
-      
+
       console.log('SumUp checkout session created:', checkoutResponse);
-      
-      // Create checkout URL pointing to our internal checkout page
-      const checkoutUrl = `/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=${paymentRequest.currency || 'EUR'}&description=${encodeURIComponent(`Payment for ${paymentRequest.service_name || 'Service'}`)}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}`;
-      
-      setCheckoutUrl(checkoutUrl);
-      setCurrentStep('payment');
-      
-      console.log('Payment checkout created:', {
-        checkoutUrl,
-        amount: paymentRequest.amount,
-        currency: paymentRequest.currency
+
+      setCheckoutSessionId(checkoutResponse.id);
+
+      const resolveCheckoutUrl = async (
+        initial: SumUpCreateCheckoutResponse
+      ): Promise<string | null> => {
+        let latestPayload: SumUpCreateCheckoutResponse | Record<string, any> | null = initial;
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const derivedUrl = extractCheckoutUrl(latestPayload);
+          if (derivedUrl) {
+            if (attempt > 0) {
+              console.info('Resolved SumUp checkout URL after retry.', { attempts: attempt + 1 });
+            }
+            return derivedUrl;
+          }
+
+          if (attempt < 2) {
+            await new Promise(resolve => setTimeout(resolve, 400));
+          }
+
+          try {
+            latestPayload = await getSumUpCheckoutStatus(initial.id);
+          } catch (statusError) {
+            console.warn('Failed to fetch SumUp checkout status while searching for redirect URL.', statusError);
+            return null;
+          }
+        }
+
+        console.warn('SumUp checkout missing redirect URL after multiple attempts.', {
+          initial,
+          latestPayload
+        });
+
+        return null;
+      };
+
+      try {
+        localStorage.setItem(
+          `sumupCheckout:${newCheckoutReference}`,
+          JSON.stringify({
+            paymentRequestId: paymentRequest.id,
+            checkoutId: checkoutResponse.id,
+            merchantCode: checkoutResponse.merchant_code,
+            environment: gatewayConfig.environment,
+            createdAt: new Date().toISOString()
+          })
+        );
+      } catch (storageError) {
+        console.warn('Unable to persist SumUp checkout metadata locally:', storageError);
+      }
+
+      const responseCheckoutUrl = await resolveCheckoutUrl(checkoutResponse);
+      const shouldStayInApp = developmentMode || gatewayConfig.environment !== 'production';
+
+      if (shouldStayInApp) {
+        const fallbackCheckoutUrl = responseCheckoutUrl || `/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=${paymentRequest.currency || 'EUR'}&description=${encodeURIComponent(`Payment for ${paymentRequest.service_name || 'Service'}`)}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&return_url=${encodeURIComponent(returnUrl.toString())}&cancel_url=${encodeURIComponent(cancelUrl.toString())}`;
+        setCheckoutUrl(fallbackCheckoutUrl);
+        setCurrentStep('payment');
+
+        console.log('Sandbox checkout session ready:', {
+          checkoutUrl: fallbackCheckoutUrl,
+          amount: paymentRequest.amount,
+          currency: paymentRequest.currency
+        });
+        return;
+      }
+
+      if (!responseCheckoutUrl) {
+        console.error('SumUp checkout response missing checkout URL after refresh attempts.', checkoutResponse);
+        throw new Error('SumUp did not return a checkout URL. Please ensure hosted checkout is enabled for your SumUp account or try again later.');
+      }
+
+      setCheckoutUrl(responseCheckoutUrl);
+      setCurrentStep('redirect');
+
+      console.log('Redirecting to SumUp hosted checkout', {
+        checkoutUrl: responseCheckoutUrl,
+        checkoutId: checkoutResponse.id,
+        reference: newCheckoutReference
       });
+
+      setTimeout(() => {
+        window.location.href = responseCheckoutUrl;
+      }, 350);
       
     } catch (error) {
       console.error('Failed to create payment checkout:', error);
@@ -311,14 +459,22 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handlePaymentComplete = async () => {
+    if (!isDevelopmentMode) {
+      console.warn('handlePaymentComplete invoked outside development mode; ignoring direct completion call.');
+      return;
+    }
+
     try {
       setCurrentStep('processing');
       
+      const fallbackCheckoutId = checkoutSessionId || checkoutReference || `dev-checkout-${Date.now()}`;
+      const generatedTransactionId = `dev-transaction-${Date.now()}`;
+
       // Create payment processing data
       const paymentData: ProcessPaymentData = {
         payment_request_id: paymentRequest.id,
-        sumup_checkout_id: `demo-checkout-${Date.now()}`,
-        sumup_transaction_id: `demo-transaction-${Date.now()}`,
+        sumup_checkout_id: fallbackCheckoutId,
+        sumup_transaction_id: generatedTransactionId,
         payment_method: 'card',
         sumup_payment_type: 'card'
       };
@@ -538,7 +694,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
               <div className="flex items-center justify-center space-x-3 text-sm text-gray-600">
                 <Shield className="w-5 h-5 text-green-600" />
-                <span>Secured by SumUp • 256-bit SSL encryption</span>
+                <span>
+                  Secured by SumUp • 256-bit SSL encryption • {gatewayEnvironment === 'production' ? 'Production mode' : 'Sandbox mode'}
+                </span>
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 text-left space-y-2 text-sm">
@@ -641,29 +799,77 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     {formatCurrency(paymentRequest.amount, paymentRequest.currency)}
                   </p>
                   <p className="text-sm text-green-600">
-                    ✅ SumUp API integration active
+                    {isDevelopmentMode ? 'Sandbox mode (no real charges)' : 'Production mode — redirecting to SumUp checkout'}
                   </p>
                 </div>
 
-                {/* Integrated Payment Form */}
-                <SumUpPaymentForm 
-                  amount={paymentRequest.amount}
-                  currency={paymentRequest.currency || 'EUR'}
-                  description={`Payment for ${paymentRequest.service_name || 'Service'}`}
-                  onPaymentComplete={handlePaymentComplete}
-                  onPaymentError={(error) => {
-                    setCurrentStep('error');
-                    setErrorMessage(error);
-                    handlePaymentFailure(error);
-                  }}
-                />
+                {isDevelopmentMode ? (
+                  <SumUpPaymentForm 
+                    amount={paymentRequest.amount}
+                    currency={paymentRequest.currency || 'EUR'}
+                    description={`Payment for ${paymentRequest.service_name || 'Service'}`}
+                    onPaymentComplete={handlePaymentComplete}
+                    onPaymentError={(error) => {
+                      setCurrentStep('error');
+                      setErrorMessage(error);
+                      handlePaymentFailure(error);
+                    }}
+                  />
+                ) : (
+                  <div className="space-y-4 text-sm text-gray-600">
+                    <p>
+                      We have opened a secure SumUp checkout in a new browser tab. Please complete your payment there to finish this request.
+                    </p>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                      <p className="text-blue-800 font-medium mb-1">Don&apos;t see the checkout window?</p>
+                      <button
+                        type="button"
+                        className="text-blue-700 hover:text-blue-900 font-semibold underline"
+                        onClick={() => checkoutUrl && window.open(checkoutUrl, '_blank', 'noopener')}
+                      >
+                        Open SumUp checkout
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="text-xs text-gray-500 text-center">
-                <p>Checkout URL (for reference): <br />
-                <code className="bg-gray-100 px-2 py-1 rounded text-xs break-all">
-                  {checkoutUrl}
-                </code></p>
+              {checkoutUrl && (
+                <div className="text-xs text-gray-500 text-center">
+                  <p>Checkout URL (for reference): <br />
+                  <code className="bg-gray-100 px-2 py-1 rounded text-xs break-all">
+                    {checkoutUrl}
+                  </code></p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentStep === 'redirect' && (
+            <div className="text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
+              </div>
+              <div>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">
+                  Redirecting to SumUp
+                </h4>
+                <p className="text-gray-600">
+                  We're opening SumUp's secure payment page for you in a new tab. Complete the payment there and you'll return here automatically.
+                </p>
+              </div>
+              <div className="text-sm text-gray-500">
+                <p>
+                  If the page doesn't open,{' '}
+                  <button
+                    type="button"
+                    className="text-blue-600 underline"
+                    onClick={() => checkoutUrl && window.open(checkoutUrl, '_blank', 'noopener')}
+                  >
+                    click here to launch SumUp checkout
+                  </button>
+                  .
+                </p>
               </div>
             </div>
           )}

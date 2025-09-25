@@ -12,6 +12,8 @@ export interface SumUpCreateCheckoutRequest {
   currency: string;
   merchant_code: string;
   description: string;
+  return_url?: string;
+  cancel_url?: string;
 }
 
 export interface SumUpCreateCheckoutResponse {
@@ -24,7 +26,7 @@ export interface SumUpCreateCheckoutResponse {
   status: 'PENDING' | 'PAID' | 'FAILED';
   date: string; // ISO date
   checkout_url?: string; // URL for the checkout page (development mode)
-  transactions: any[];
+  transactions: SumUpTransaction[];
 }
 
 export interface SumUpProcessPaymentRequest {
@@ -97,7 +99,7 @@ export const createSumUpCheckoutSession = async (
         id: `dev-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         status: 'PENDING',
         date: new Date().toISOString(),
-        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${gatewayConfig.merchant_id}&checkout_id=dev-mock-${Date.now()}`,
+        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${gatewayConfig.merchant_id}&checkout_id=dev-mock-${Date.now()}${checkoutData.return_url ? `&return_url=${encodeURIComponent(checkoutData.return_url)}` : ''}${checkoutData.cancel_url ? `&cancel_url=${encodeURIComponent(checkoutData.cancel_url)}` : ''}`,
         transactions: []
       };
 
@@ -113,8 +115,13 @@ export const createSumUpCheckoutSession = async (
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        ...checkoutData,
-        merchant_code: gatewayConfig.merchant_id
+        checkout_reference: checkoutData.checkout_reference,
+        amount: checkoutData.amount,
+        currency: checkoutData.currency,
+        merchant_code: gatewayConfig.merchant_id,
+        description: checkoutData.description,
+        ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
+        ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {})
       })
     });
 
