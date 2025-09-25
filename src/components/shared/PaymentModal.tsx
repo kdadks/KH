@@ -302,11 +302,29 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCheckoutUrl('');
       setErrorMessage('');
       setIsDevelopmentMode(false);
-      setGatewayEnvironment('sandbox');
       setCheckoutReference(null);
       setCheckoutSessionId(null);
       console.log('PaymentModal opening with booking_id:', paymentRequest.booking_id);
       fetchBookingDetails();
+      
+      // Pre-fetch gateway config to show correct environment immediately
+      const loadGatewayConfig = async () => {
+        try {
+          const gatewayConfig = await getActiveSumUpGateway();
+          if (gatewayConfig) {
+            const developmentMode = gatewayConfig.api_key === 'development-mode';
+            setIsDevelopmentMode(developmentMode);
+            setGatewayEnvironment(gatewayConfig.environment);
+          } else {
+            setGatewayEnvironment('sandbox');
+          }
+        } catch (error) {
+          console.warn('Failed to pre-fetch gateway config:', error);
+          setGatewayEnvironment('sandbox');
+        }
+      };
+      
+      loadGatewayConfig();
     }
   }, [isOpen, paymentRequest.booking_id]);
 
