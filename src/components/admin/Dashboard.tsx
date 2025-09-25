@@ -133,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {[
           {
             title: 'Today\'s Bookings',
@@ -179,15 +179,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div
             key={index}
             onClick={stat.action}
-            className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow cursor-pointer border border-gray-200"
+            className="bg-white rounded-xl shadow-sm p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer border border-gray-200"
           >
             <div className="flex items-center">
-              <div className={`${stat.color} rounded-lg p-3 mr-4`}>
-                <stat.icon className="w-6 h-6 text-white" />
+              <div className={`${stat.color} rounded-lg p-2 sm:p-3 mr-3 sm:mr-4`}>
+                <stat.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{stat.title}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stat.value}</p>
               </div>
             </div>
           </div>
@@ -199,26 +199,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Recent Bookings</h3>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {recentBookings.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No recent bookings</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {recentBookings.map((booking, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                      <Users className="w-5 h-5 text-primary-600" />
+                <div key={idx} className="flex items-start sm:items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-start sm:items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary-600" />
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{getCustomerName(booking)}</p>
-                      <p className="text-sm text-gray-500">{booking.package_name || booking.service}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{getCustomerName(booking)}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 truncate">{booking.package_name || booking.service}</p>
+                      {/* Show date on mobile under the service */}
+                      <p className="text-xs text-gray-500 mt-1 sm:hidden">{formatDisplayDate(booking)}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{formatDisplayDate(booking)}</p>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    {/* Date hidden on mobile, shown on larger screens */}
+                    <p className="text-sm font-medium text-gray-900 mb-1 hidden sm:block">{formatDisplayDate(booking)}</p>
                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      booking.status === 'confirmed' 
+                      booking.status === 'confirmed'
                         ? 'bg-green-100 text-green-800'
                         : booking.status === 'cancelled'
                         ? 'bg-red-100 text-red-800'

@@ -15,8 +15,6 @@ import {
   firstNameValidation,
   lastNameValidation,
   serviceValidation,
-  dateValidation,
-  timeValidation,
   optionalNotesValidation,
   validateEmailRealTime,
   validatePhoneRealTime,
@@ -444,6 +442,7 @@ const BookingPage: React.FC = () => {
         .from('services')
         .select('id, name, category, price, in_hour_price, out_of_hour_price')
         .eq('is_active', true)
+        .neq('booking_type', 'contact_me')
         .order('name', { ascending: true });
 
       if (error) {

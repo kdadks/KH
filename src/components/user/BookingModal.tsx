@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar, Clock, User, FileText, AlertCircle, CreditCard } from 'lucide-react';
+import { X, Calendar, Clock, User, FileText, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../shared/toastContext';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
@@ -53,6 +54,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
   onBookingCreated
 }) => {
   const { showError, showSuccess } = useToast();
+  const navigate = useNavigate();
   const [services, setServices] = useState<Service[]>([]);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
@@ -588,6 +590,28 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
       // Check if this is a service that doesn't need payment (Contact for Quote, per-session pricing, etc.)
       const needsQuoteOrPerSession = /contact\s+for\s+quote|€\d+\s*\/\s*(class|session)|€\d+\s*per\s*(class|session)/i.test(formData.service);
+
+      // For contact for quote services, redirect to contact page with data
+      if (needsQuoteOrPerSession) {
+        // Prepare data for contact page
+        const contactParams = new URLSearchParams({
+          name: `${customer.first_name} ${customer.last_name}`,
+          email: customer.email,
+          service: selectedService ? String(selectedService.id) : formData.service,
+          message: `Hi, I'm interested in booking ${formData.service}. ` +
+                  `Preferred date: ${formData.date ? new Date(formData.date).toLocaleDateString('en-IE') : 'Not specified'}. ` +
+                  `Preferred time: ${formData.time ? formData.time.split('|')[1] || formData.time : 'Not specified'}. ` +
+                  `${formData.notes ? `Additional notes: ${formData.notes}` : ''}`.trim()
+        });
+
+        // Close modal first
+        onClose();
+
+        // Navigate to contact page with pre-filled data
+        navigate(`/contact?${contactParams.toString()}`);
+
+        return;
+      }
 
       // Only show payment options for services that have fixed pricing
       if (!needsQuoteOrPerSession) {
