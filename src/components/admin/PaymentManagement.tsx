@@ -18,13 +18,15 @@ import { useToast } from '../shared/toastContext';
 import PaymentGatewayManagement from './PaymentGatewayManagement';
 
 // Import utility functions
-import { 
+import {
   getAllPaymentRequests,
   getAllPayments,
   getRecentPayments,
   getBookingsWithoutPaymentRequests,
   getAllPaymentGateways,
   getPaymentStatistics,
+  updatePaymentRequest,
+  deletePaymentRequest,
   PaymentRequest as PaymentRequestType,
   Payment as PaymentType,
   BookingWithoutPayment,
@@ -59,6 +61,12 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   const [gateways, setGateways] = useState<PaymentGatewayType[]>(propGateways || []);
   const [loading, setLoading] = useState(!propPaymentRequests); // Only show loading if no data provided
   const [statistics, setStatistics] = useState<any>(propStatistics || null);
+
+  // Modal states for view/edit functionality
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequestType | null>(null);
   
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -425,7 +433,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
           console.error('Error sending payment request email:', emailError);
           showSuccess('Payment Request Created', `20% deposit payment request created for ${booking.customer_name} (email sending failed)`);
         }
-        
+
         // Refresh the bookings list
         await loadBookingsForPaymentRequest();
       } else {
@@ -436,6 +444,71 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
       showError('Error', 'Failed to create payment request. Please try again.');
     } finally {
       setCreatingPaymentRequest(prev => ({ ...prev, [bookingId]: false }));
+    }
+  };
+
+  // Payment Request Action Handlers
+  const handleViewPaymentRequest = (request: PaymentRequestType) => {
+    setSelectedPaymentRequest(request);
+    setShowViewModal(true);
+  };
+
+  const handleEditPaymentRequest = (request: PaymentRequestType) => {
+    setSelectedPaymentRequest(request);
+    setShowEditModal(true);
+  };
+
+  const handleDeletePaymentRequest = (request: PaymentRequestType) => {
+    setSelectedPaymentRequest(request);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeletePaymentRequest = async () => {
+    if (!selectedPaymentRequest) return;
+
+    try {
+      const success = await deletePaymentRequest(selectedPaymentRequest.id);
+
+      if (success) {
+        showSuccess('Payment Request Deleted', `Payment request for ${selectedPaymentRequest.customer_name} has been deleted`);
+
+        // Refresh data
+        await loadPaymentRequests();
+        setShowDeleteModal(false);
+        setSelectedPaymentRequest(null);
+      } else {
+        showError('Error', 'Failed to delete payment request');
+      }
+    } catch (error) {
+      console.error('Error deleting payment request:', error);
+      showError('Error', 'Failed to delete payment request');
+    }
+  };
+
+  const handleUpdatePaymentRequest = async (updatedRequest: { amount: number; due_date: string; notes: string; status: string }) => {
+    if (!selectedPaymentRequest) return;
+
+    try {
+      const success = await updatePaymentRequest(selectedPaymentRequest.id, {
+        amount: updatedRequest.amount,
+        due_date: updatedRequest.due_date,
+        notes: updatedRequest.notes,
+        status: updatedRequest.status as 'pending' | 'paid' | 'failed' | 'cancelled'
+      });
+
+      if (success) {
+        showSuccess('Payment Request Updated', `Payment request has been updated successfully`);
+
+        // Refresh data
+        await loadPaymentRequests();
+        setShowEditModal(false);
+        setSelectedPaymentRequest(null);
+      } else {
+        showError('Error', 'Failed to update payment request');
+      }
+    } catch (error) {
+      console.error('Error updating payment request:', error);
+      showError('Error', 'Failed to update payment request');
     }
   };
 
@@ -807,13 +880,25 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
-                            <button className="text-blue-600 hover:text-blue-900">
+                            <button
+                              onClick={() => handleViewPaymentRequest(request)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="View payment request details"
+                            >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button className="text-green-600 hover:text-green-900">
+                            <button
+                              onClick={() => handleEditPaymentRequest(request)}
+                              className="text-green-600 hover:text-green-900"
+                              title="Edit payment request"
+                            >
                               <Edit className="w-4 h-4" />
                             </button>
-                            <button className="text-red-600 hover:text-red-900">
+                            <button
+                              onClick={() => handleDeletePaymentRequest(request)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Delete payment request"
+                            >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -1088,6 +1173,200 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
           setGateways={setGateways}
           onRefresh={() => loadGateways()}
         />
+      )}
+
+      {/* View Payment Request Modal */}
+      {showViewModal && selectedPaymentRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Payment Request Details</h3>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Customer</p>
+                <p className="text-base text-gray-900">{selectedPaymentRequest.customer_name}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Email</p>
+                <p className="text-base text-gray-900">{selectedPaymentRequest.customer_email || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Service</p>
+                <p className="text-base text-gray-900">{selectedPaymentRequest.service_name}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Amount</p>
+                <p className="text-base font-bold text-gray-900">€{selectedPaymentRequest.amount.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Status</p>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  selectedPaymentRequest.status === 'paid' ? 'bg-green-100 text-green-800' :
+                  selectedPaymentRequest.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {selectedPaymentRequest.status}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Due Date</p>
+                <p className="text-base text-gray-900">
+                  {selectedPaymentRequest.due_date ? new Date(selectedPaymentRequest.due_date).toLocaleDateString() : 'No due date'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Created</p>
+                <p className="text-base text-gray-900">
+                  {new Date(selectedPaymentRequest.created_at).toLocaleDateString()}
+                </p>
+              </div>
+              {selectedPaymentRequest.notes && (
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Notes</p>
+                  <p className="text-base text-gray-900">{selectedPaymentRequest.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payment Request Modal */}
+      {showEditModal && selectedPaymentRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Payment Request</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const updatedRequest = {
+                amount: parseFloat(formData.get('amount') as string),
+                due_date: formData.get('due_date') as string,
+                notes: formData.get('notes') as string,
+                status: formData.get('status') as string
+              };
+              handleUpdatePaymentRequest(updatedRequest);
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                  <p className="text-base text-gray-900">{selectedPaymentRequest.customer_name}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
+                  <p className="text-base text-gray-900">{selectedPaymentRequest.service_name}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                  <input
+                    type="number"
+                    name="amount"
+                    step="0.01"
+                    defaultValue={selectedPaymentRequest.amount}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={selectedPaymentRequest.status}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="sent">Sent</option>
+                    <option value="paid">Paid</option>
+                    <option value="failed">Failed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    name="due_date"
+                    defaultValue={selectedPaymentRequest.due_date ? selectedPaymentRequest.due_date.split('T')[0] : ''}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    name="notes"
+                    rows={3}
+                    defaultValue={selectedPaymentRequest.notes || ''}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Update
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedPaymentRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 w-10 h-10 mx-auto bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Payment Request</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Are you sure you want to delete the payment request for {selectedPaymentRequest.customer_name}?
+                This action cannot be undone.
+              </p>
+              <div className="flex justify-center space-x-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeletePaymentRequest}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

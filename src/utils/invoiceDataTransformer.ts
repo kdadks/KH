@@ -64,8 +64,8 @@ const COMPANY_INFO = {
 const BANKING_INFO = {
   bankName: 'Bank of Ireland',
   accountName: 'KH Therapy',
-  iban: 'IE00 BOFI 1234 5678 9012 34',
-  bic: 'BOFIIE2D'
+  iban: 'IE11 BOFI 9001 2140 1957 46',
+  bic: 'BOFIIE2DXXX'
 };
 
 /**
