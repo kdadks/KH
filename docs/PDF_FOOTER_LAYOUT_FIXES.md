@@ -82,8 +82,8 @@
 Payment Details (Left Side):
 - Bank: Bank of Ireland
 - Account Name: KH Therapy  
-- IBAN: IE00 BOFI 1234 5678 9012 34
-- BIC: BOFIIE2D
+- IBAN: IE11 BOFI 9001 2140 1957 46
+- BIC: BOFIIE2DXXX
 
 [40px spacing]
 

@@ -176,9 +176,9 @@ const COMPANY_INFO = {
 // Located in invoiceDataTransformer.ts
 const BANKING_INFO = {
   bankName: 'Bank of Ireland',
-  accountName: 'Kingsmills Hotel Ltd',
-  iban: 'IE29 BOFI 9000 0112 3456 78',
-  bic: 'BOFIIE2D'
+  accountName: 'KH Therapy',
+  iban: 'IE11 BOFI 9001 2140 1957 46',
+  bic: 'BOFIIE2DXXX'
 };
 ```
 

@@ -14,6 +14,7 @@ export interface PaymentRequest {
   created_at: string;
   booking_id?: string; // UUID as string
   invoice_id?: number;
+  notes?: string; // Added for additional notes
 }
 
 export interface Payment {
@@ -647,6 +648,36 @@ export const updatePaymentRequestStatus = async (
     return true;
   } catch (error) {
     console.error('Error in updatePaymentRequestStatus:', error);
+    return false;
+  }
+};
+
+/**
+ * Update payment request with comprehensive data
+ */
+export const updatePaymentRequest = async (
+  requestId: number,
+  updateData: {
+    amount?: number;
+    due_date?: string;
+    notes?: string;
+    status?: 'pending' | 'paid' | 'failed' | 'cancelled';
+  }
+): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('payment_requests')
+      .update({ ...updateData, updated_at: new Date().toISOString() })
+      .eq('id', requestId);
+
+    if (error) {
+      console.error('Error updating payment request:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in updatePaymentRequest:', error);
     return false;
   }
 };

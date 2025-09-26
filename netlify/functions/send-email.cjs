@@ -478,8 +478,8 @@ const getEmailTemplate = (type, data) => {
                   <h4 style="color: white; margin-top: 0;">🏦 Bank Transfer Details</h4>
                   <p style="margin: 8px 0;"><strong>Bank:</strong> Bank of Ireland</p>
                   <p style="margin: 8px 0;"><strong>Account Name:</strong> KH Therapy</p>
-                  <p style="margin: 8px 0;"><strong>IBAN:</strong> IE00 BOFI 1234 5678 9012 34</p>
-                  <p style="margin: 8px 0;"><strong>BIC:</strong> BOFIIE2D</p>
+                  <p style="margin: 8px 0;"><strong>IBAN:</strong> IE11 BOFI 9001 2140 1957 46</p>
+                  <p style="margin: 8px 0;"><strong>BIC:</strong> BOFIIE2DXXX</p>
                   <p style="margin-top: 15px; font-size: 14px; color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px;">
                     <strong>📝 Important:</strong> Please include your invoice number (${data.invoice_number}) as the payment reference.
                   </p>
