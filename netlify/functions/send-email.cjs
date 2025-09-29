@@ -98,7 +98,13 @@ const generateICS = (data, isRescheduled = false) => {
   }
   
   const formatDate = (date) => {
-    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}${month}${day}T${hours}${minutes}${seconds}`;
   };
   
   // For rescheduled appointments, increment sequence number to update calendar entries
@@ -123,10 +129,27 @@ const generateICS = (data, isRescheduled = false) => {
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//KH Therapy//Booking System//EN',
+    'BEGIN:VTIMEZONE',
+    'TZID:Europe/Dublin',
+    'BEGIN:STANDARD',
+    'DTSTART:20231029T020000',
+    'TZOFFSETFROM:+0100',
+    'TZOFFSETTO:+0000',
+    'TZNAME:GMT',
+    'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+    'END:STANDARD',
+    'BEGIN:DAYLIGHT',
+    'DTSTART:20240331T010000',
+    'TZOFFSETFROM:+0000',
+    'TZOFFSETTO:+0100',
+    'TZNAME:IST',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+    'END:DAYLIGHT',
+    'END:VTIMEZONE',
     'BEGIN:VEVENT',
     `UID:${data.booking_reference}@khtherapy.ie`,
-    `DTSTART:${formatDate(startDate)}`,
-    `DTEND:${formatDate(endDate)}`,
+    `DTSTART;TZID=Europe/Dublin:${formatDate(startDate)}`,
+    `DTEND;TZID=Europe/Dublin:${formatDate(endDate)}`,
     `SUMMARY:${data.service_name} - KH Therapy${isRescheduled ? ' (Rescheduled)' : ''}`,
     `DESCRIPTION:${description}`,
     `LOCATION:${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}`,
