@@ -1001,7 +1001,7 @@ const HeroSection: React.FC = () => {
                  </select>
                 {errors.service && <p className="mt-1 text-sm text-red-600">{errors.service.message}</p>}
                 <p className="mt-1 text-xs text-gray-600">
-                  ℹ️ 8am-9am and 5pm-7pm is out of hours
+                  ℹ️ 8am-9am and 5pm-9pm is out of hours
                 </p>
                </div>
 
