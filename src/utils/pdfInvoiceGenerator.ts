@@ -34,6 +34,7 @@ export interface InvoiceData {
       email: string;
       website: string;
     };
+    registrationNumber?: string;
     logo?: string;
   };
   
@@ -279,6 +280,11 @@ export class PDFInvoiceGenerator {
     this.doc.setTextColor(this.COLORS.secondary);
     
     let currentY = y + 8;
+    if (company.registrationNumber) {
+      this.doc.text(`Registration: ${company.registrationNumber}`, x, currentY);
+      currentY += 5;
+    }
+    
     company.address.forEach(line => {
       this.doc.text(line, x, currentY);
       currentY += 5;
