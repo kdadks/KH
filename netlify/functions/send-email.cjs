@@ -167,6 +167,80 @@ const generateICS = (data, isRescheduled = false) => {
   return icsContent;
 };
 
+// Generate plain text version of email
+const getPlainTextEmail = (type, data) => {
+  const customerName = data.is_admin_notification ? data.original_customer_name : data.customer_name;
+
+  switch (type) {
+    case 'admin_booking_confirmation':
+      if (data.is_admin_notification) {
+        return `
+KH THERAPY BOOKING SYSTEM
+Booking Confirmed - Admin Copy
+
+Admin Notification
+
+${customerName}'s booking has been confirmed by an administrator.
+
+APPOINTMENT DETAILS
+Customer: ${customerName}
+Service: ${data.service_name}
+Date: ${formatDisplayDate(data.appointment_date)}
+Time: ${data.appointment_time}
+Reference: ${data.booking_reference}
+Location: ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}
+
+${data.special_instructions ? `SPECIAL INSTRUCTIONS\n${data.special_instructions}\n\n` : ''}ACTION REQUIRED
+• Customer confirmation email has been sent automatically
+• Calendar invite has been attached to customer email
+• Appointment is now confirmed in the system
+• Please ensure all necessary preparations are made
+
+This is a system notification from the KH Therapy booking system.
+
+---
+KH Therapy Booking System
+Dublin, Ireland
+        `;
+      } else {
+        return `
+KH THERAPY
+Booking Confirmed
+
+Hello ${customerName},
+
+Great news! Your booking has been confirmed by our team.
+
+APPOINTMENT DETAILS
+Service: ${data.service_name}
+Date: ${formatDisplayDate(data.appointment_date)}
+Time: ${data.appointment_time}
+Reference: ${data.booking_reference}
+${data.therapist_name ? `Therapist: ${data.therapist_name}\n` : ''}Location: ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}
+
+${data.special_instructions ? `SPECIAL INSTRUCTIONS\n${data.special_instructions}\n\n` : ''}IMPORTANT INFORMATION
+• Please arrive 10 minutes early for your appointment
+• Bring any relevant medical documents or reports
+• Wear comfortable clothing suitable for physical examination
+• If you need to reschedule, please contact us at least 24 hours in advance
+
+A calendar invite has been attached to help you save this appointment to your calendar.
+
+We look forward to seeing you for your appointment!
+
+---
+KH Therapy
+info@khtherapy.ie
+Dublin, Ireland
+
+For questions or changes, please contact us at info@khtherapy.ie
+        `;
+      }
+    default:
+      return '';
+  }
+};
+
 // Email templates
 const getEmailTemplate = (type, data) => {
   const commonStyles = `
@@ -175,140 +249,136 @@ const getEmailTemplate = (type, data) => {
       body, table, td, p, a, li, blockquote { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
       table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-collapse: collapse; }
       img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
-      
+
       /* Gmail-compatible main styles */
-      body { 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important; 
-        line-height: 1.6; 
-        color: #333333 !important; 
-        background-color: #f9fafb; 
-        margin: 0; 
-        padding: 0; 
-        width: 100% !important;
+      body {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        color: #333333;
+        background-color: #f9fafb;
+        margin: 0;
+        padding: 0;
+        width: 100%;
         min-width: 100%;
       }
-      .container { 
-        max-width: 600px; 
-        margin: 0 auto; 
-        padding: 20px; 
-        background-color: #ffffff; 
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); 
-        border-radius: 12px; 
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        border-radius: 12px;
       }
-      .header { 
-        background-color: #059669; 
-        background: linear-gradient(135deg, #059669 0%, #10B981 100%); 
-        color: white !important; 
-        padding: 25px 20px; 
-        text-align: center; 
-        border-radius: 12px 12px 0 0; 
-        position: relative; 
+      .header {
+        background-color: #059669;
+        color: white;
+        padding: 25px 20px;
+        text-align: center;
+        border-radius: 12px 12px 0 0;
+        position: relative;
       }
-      .logo { 
-        width: 80px !important; 
-        height: auto !important; 
-        margin: 0 4px 10px 4px !important; 
-        border-radius: 8px; 
-        display: inline-block !important; 
+      .logo {
+        width: 80px;
+        height: auto;
+        margin: 0 4px 10px 4px;
+        border-radius: 8px;
+        display: inline-block;
         vertical-align: middle;
       }
-      .header h1 { 
-        margin: 5px 0 0 0 !important; 
-        font-size: 24px !important; 
-        font-weight: 600 !important; 
-        color: white !important; 
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3); 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .header h1 {
+        margin: 5px 0 0 0;
+        font-size: 24px;
+        font-weight: 600;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .content { 
-        padding: 25px 20px; 
-        background-color: #ffffff; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .content {
+        padding: 25px 20px;
+        background-color: #ffffff;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .footer { 
-        background-color: #f3f4f6; 
-        padding: 20px; 
-        text-align: center; 
-        font-size: 14px; 
-        color: #6b7280; 
-        border-radius: 0 0 12px 12px; 
-        border-top: 1px solid #e5e7eb; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .footer {
+        background-color: #f3f4f6;
+        padding: 20px;
+        text-align: center;
+        font-size: 14px;
+        color: #6b7280;
+        border-radius: 0 0 12px 12px;
+        border-top: 1px solid #e5e7eb;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .button { 
-        display: inline-block; 
-        padding: 14px 28px; 
-        background-color: #059669; 
-        background: linear-gradient(135deg, #059669 0%, #10B981 100%); 
-        color: white !important; 
-        text-decoration: none; 
-        border-radius: 8px; 
-        margin: 15px 0; 
-        font-weight: 600; 
-        box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2); 
-        transition: all 0.3s ease; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .button {
+        display: inline-block;
+        padding: 14px 28px;
+        background-color: #059669;
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        margin: 15px 0;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .button:hover { 
-        background: linear-gradient(135deg, #047857 0%, #059669 100%); 
-        transform: translateY(-1px); 
-        box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3); 
+      .button:hover {
+        background-color: #047857;
+        box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3);
       }
-      .details { 
-        background-color: #f0fdf4; 
-        padding: 20px; 
-        border-radius: 10px; 
-        margin: 20px 0; 
-        border-left: 4px solid #10B981; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .details {
+        background-color: #f0fdf4;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border-left: 4px solid #10B981;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .details h3 { 
-        color: #047857; 
-        margin-top: 0; 
-        margin-bottom: 15px; 
-        font-size: 18px; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .details h3 {
+        color: #047857;
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-size: 18px;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .highlight { 
-        background-color: #d1fae5; 
-        border: 1px solid #a7f3d0; 
-        color: #065f46; 
-        padding: 15px; 
-        border-radius: 8px; 
-        margin: 15px 0; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .highlight {
+        background-color: #d1fae5;
+        border: 1px solid #a7f3d0;
+        color: #065f46;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .payment-instructions { 
-        background-color: #ecfdf5; 
-        border: 1px solid #a7f3d0; 
-        padding: 20px; 
-        border-radius: 10px; 
-        margin: 20px 0; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .payment-instructions {
+        background-color: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .payment-instructions h3 { 
-        color: #047857; 
-        margin-top: 0; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .payment-instructions h3 {
+        color: #047857;
+        margin-top: 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-      .bank-details { 
-        background-color: #ffffff; 
-        padding: 15px; 
-        border-radius: 8px; 
-        border: 1px solid #d1fae5; 
-        margin-top: 15px; 
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      .bank-details {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #d1fae5;
+        margin-top: 15px;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
       .success-icon { color: #059669; font-size: 20px; }
       .warning-icon { color: #f59e0b; font-size: 18px; }
-      
+
       /* Gmail-specific fixes */
-      u + .body .container { width: 600px !important; }
+      u + .body .container { width: 600px; }
       @media only screen and (max-width: 600px) {
-        .container { width: 100% !important; margin: 0 !important; padding: 10px !important; }
-        .header { padding: 15px 10px !important; }
-        .content { padding: 15px 10px !important; }
-        .logo { width: 60px !important; margin: 0 2px 8px 2px !important; }
+        .container { width: 100%; margin: 0; padding: 10px; }
+        .header { padding: 15px 10px; }
+        .content { padding: 15px 10px; }
+        .logo { width: 60px; margin: 0 2px 8px 2px; }
       }
     </style>
   `;
@@ -1059,9 +1129,13 @@ const getEmailTemplate = (type, data) => {
       if (isAdminNotification) {
         // Special template for admin notifications
         return `
-          <!DOCTYPE html>
-          <html>
-          <head>${commonStyles}</head>
+          <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+          <html xmlns="http://www.w3.org/1999/xhtml">
+          <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            ${commonStyles}
+          </head>
           <body>
             <div class="container">
               <div class="header" style="background-color: #dc2626;">
@@ -1069,14 +1143,14 @@ const getEmailTemplate = (type, data) => {
                   <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
                   <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
                 </div>
-                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">🔔 Admin Alert: Booking Confirmed</h1>
+                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmed - Admin Copy</h1>
               </div>
               <div class="content">
                 <h2>Admin Notification</h2>
                 <p><strong>${customerName}'s booking has been confirmed by an administrator.</strong></p>
-                
+
                 <div class="details">
-                  <h3>📅 Appointment Details:</h3>
+                  <h3>Appointment Details</h3>
                   <p><strong>Customer:</strong> ${customerName}</p>
                   <p><strong>Service:</strong> ${data.service_name}</p>
                   <p><strong>Date:</strong> ${formatDisplayDate(data.appointment_date)}</p>
@@ -1084,28 +1158,28 @@ const getEmailTemplate = (type, data) => {
                   <p><strong>Reference:</strong> ${data.booking_reference}</p>
                   <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
                 </div>
-                
+
                 ${data.special_instructions ? `
                   <div class="details">
-                    <h3>📝 Special Instructions:</h3>
+                    <h3>Special Instructions</h3>
                     <p>${data.special_instructions}</p>
                   </div>
                 ` : ''}
-                
-                <div class="details" style="background-color: #fef3c7; border: 1px solid #f59e0b;">
-                  <h3>⚠️ Action Required:</h3>
+
+                <div class="details" style="background-color: #fef3c7; border: 1px solid #f59e0b; border-left: 4px solid #f59e0b;">
+                  <h3>Action Required</h3>
                   <p>• Customer confirmation email has been sent automatically</p>
                   <p>• Calendar invite has been attached to customer email</p>
                   <p>• Appointment is now confirmed in the system</p>
                   <p>• Please ensure all necessary preparations are made</p>
                 </div>
-                
-                <p style="text-align: center; margin: 20px 0;">
-                  📧 <strong>This is an automated notification from the KH Therapy booking system.</strong>
+
+                <p style="text-align: center; margin: 20px 0; color: #6b7280; font-size: 14px;">
+                  This is a system notification from the KH Therapy booking system.
                 </p>
               </div>
               <div class="footer">
-                <p>KH Therapy Booking System | Automated Notification</p>
+                <p>KH Therapy Booking System</p>
                 <p>Dublin, Ireland</p>
               </div>
             </div>
@@ -1115,24 +1189,28 @@ const getEmailTemplate = (type, data) => {
       } else {
         // Original customer confirmation template
         return `
-          <!DOCTYPE html>
-          <html>
-          <head>${commonStyles}</head>
+          <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+          <html xmlns="http://www.w3.org/1999/xhtml">
+          <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            ${commonStyles}
+          </head>
           <body>
             <div class="container">
-              <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div class="header" style="background-color: #059669; color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
                 <div style="text-align: center; margin-bottom: 10px;">
                   <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
                   <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
                 </div>
-                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">✅ Booking Confirmed!</h1>
+                <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600;">Booking Confirmed</h1>
               </div>
               <div class="content">
                 <h2>Hello ${customerName},</h2>
                 <p>Great news! Your booking has been <strong>confirmed</strong> by our team.</p>
-                
+
                 <div class="details">
-                  <h3>📅 Appointment Details:</h3>
+                  <h3>Appointment Details</h3>
                   <p><strong>Service:</strong> ${data.service_name}</p>
                   <p><strong>Date:</strong> ${formatDisplayDate(data.appointment_date)}</p>
                   <p><strong>Time:</strong> ${data.appointment_time}</p>
@@ -1140,26 +1218,26 @@ const getEmailTemplate = (type, data) => {
                   ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
                   <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
                 </div>
-                
+
                 ${data.special_instructions ? `
                   <div class="details">
-                    <h3>📝 Special Instructions:</h3>
+                    <h3>Special Instructions</h3>
                     <p>${data.special_instructions}</p>
                   </div>
                 ` : ''}
-                
+
                 <div class="details">
-                  <h3>📋 Important Information:</h3>
+                  <h3>Important Information</h3>
                   <p>• Please arrive 10 minutes early for your appointment</p>
                   <p>• Bring any relevant medical documents or reports</p>
                   <p>• Wear comfortable clothing suitable for physical examination</p>
                   <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
                 </div>
-                
-                <p style="text-align: center; margin: 20px 0;">
-                  📧 <strong>A calendar invite has been attached to help you save this appointment to your calendar.</strong>
+
+                <p style="text-align: center; margin: 20px 0; color: #6b7280; font-size: 14px;">
+                  A calendar invite has been attached to help you save this appointment to your calendar.
                 </p>
-                
+
                 <p>We look forward to seeing you for your appointment!</p>
               </div>
               <div class="footer">
@@ -1600,6 +1678,7 @@ exports.handler = async (event, context) => {
 
     // Generate email content
     const htmlContent = getEmailTemplate(emailType, data);
+    const plainTextContent = getPlainTextEmail(emailType, data);
 
     // Default subject if not provided
     const emailSubject = subject || `KH Therapy - ${emailType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
@@ -1613,17 +1692,15 @@ exports.handler = async (event, context) => {
       to: recipientEmail,
       subject: emailSubject,
       html: htmlContent,
+      text: plainTextContent || undefined,
       // Add headers to improve deliverability
       headers: {
         'X-Mailer': 'KH Therapy Booking System',
-        'X-Priority': data.is_admin_notification ? '1' : '3',
-        'X-MSMail-Priority': data.is_admin_notification ? 'High' : 'Normal',
         'Reply-To': process.env.SMTP_USER || 'info@khtherapy.ie',
-        'Message-ID': `<${Date.now()}-${Math.random().toString(36).substr(2, 9)}@khtherapy.ie>`,
+        'Message-ID': `<${Date.now()}-${Math.random().toString(36).substring(2, 11)}@khtherapy.ie>`,
         'Return-Path': process.env.SMTP_USER || 'info@khtherapy.ie',
         'X-Auto-Response-Suppress': 'OOF, AutoReply',
-        'List-Unsubscribe': '<mailto:noreply@khtherapy.ie?subject=unsubscribe>',
-        'Precedence': data.is_admin_notification ? 'special-delivery' : 'bulk'
+        'List-Unsubscribe': '<mailto:noreply@khtherapy.ie?subject=unsubscribe>'
       }
     };
 
@@ -1632,24 +1709,12 @@ exports.handler = async (event, context) => {
       mailOptions.from.name = 'KH Therapy Booking System';
       mailOptions.headers['X-Admin-Notification'] = 'true';
       mailOptions.headers['X-Booking-Reference'] = data.booking_reference || 'N/A';
-      mailOptions.headers['X-Same-Domain-Delivery'] = 'true';
-      
+      mailOptions.headers['Auto-Submitted'] = 'auto-generated';
+
       // Try using BCC as an alternative delivery method for same-domain emails
       if (process.env.ADMIN_BCC_EMAIL) {
         mailOptions.bcc = process.env.ADMIN_BCC_EMAIL;
       }
-      
-      // Enhanced headers for same-domain delivery instead of changing sender
-      mailOptions.headers['X-Priority'] = '1'; // High priority
-      mailOptions.headers['X-MSMail-Priority'] = 'High';
-      mailOptions.headers['Importance'] = 'High';
-      mailOptions.headers['X-Original-Sender'] = process.env.SMTP_USER || 'info@khtherapy.ie';
-      mailOptions.headers['Auto-Submitted'] = 'auto-generated';
-      mailOptions.headers['X-Auto-Response-Suppress'] = 'All';
-      mailOptions.headers['X-Spam-Status'] = 'No';
-      
-      // Try to make it look less like automated email to avoid filtering
-      mailOptions.from.name = `KH Therapy Admin (${new Date().toLocaleDateString()})`;
     }
 
     // Add calendar attachment for booking confirmations and rescheduling

@@ -55,7 +55,8 @@ const COMPANY_INFO = {
     phone: '(083) 8009404',
     email: 'info@khtherapy.ie',
     website: 'www.khtherapy.ie'
-  }
+  },
+  registrationNumber: 'PT 040091'
 };
 
 /**

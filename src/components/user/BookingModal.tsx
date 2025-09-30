@@ -835,7 +835,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-600">
-                  ℹ️ 8am-9am and 5pm-7pm is out of hours
+                  ℹ️ 8am-9am and 5pm-9pm is out of hours
                 </p>
               </div>
 
