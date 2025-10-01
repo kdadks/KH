@@ -9,7 +9,6 @@ import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
 import PaymentModal from '../components/shared/PaymentModal';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
-import { cancelPaymentRequest } from '../utils/paymentCancellation';
 import {
   emailValidation,
   phoneValidation,
@@ -929,12 +928,15 @@ const BookingPage: React.FC = () => {
   };
 
   const resetForm = async () => {
-    // Cancel any active payment request
+    // Silently cancel any active payment request (no email - user may have already received one from modal close)
     if (paymentState.paymentRequest?.id) {
       try {
-        await cancelPaymentRequest(paymentState.paymentRequest.id);
+        // Use silent cancel to avoid duplicate cancellation emails
+        const { silentCancelPaymentRequest } = await import('../utils/paymentCancellation');
+        await silentCancelPaymentRequest(paymentState.paymentRequest.id, 'Form reset by user');
+        console.log('🔇 Payment request silently cancelled during form reset');
       } catch (error) {
-        console.error('Error cancelling payment request:', error);
+        console.error('Error silently cancelling payment request:', error);
       }
     }
 

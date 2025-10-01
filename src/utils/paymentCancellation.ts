@@ -11,6 +11,36 @@ export const cancelPaymentRequest = async (paymentRequestId: number, reason?: st
   try {
     console.log('🚫 Cancelling payment request:', paymentRequestId, 'Reason:', reason || 'User cancelled');
 
+    // First check current status to avoid duplicate operations
+    const { data: currentStatus, error: statusError } = await supabase
+      .from('payment_requests')
+      .select('id, status, notes')
+      .eq('id', paymentRequestId)
+      .single();
+
+    if (statusError) {
+      console.error('❌ Could not fetch payment request status:', statusError);
+      return {
+        success: false,
+        error: `Could not verify payment request status: ${statusError.message}`
+      };
+    }
+
+    // If already cancelled, don't send another email
+    if (currentStatus.status === 'cancelled') {
+      console.log('⚠️ Payment request already cancelled, skipping duplicate cancellation');
+      return { success: true };
+    }
+
+    // If already paid, don't allow cancellation
+    if (currentStatus.status === 'paid') {
+      console.log('⚠️ Cannot cancel already paid payment request');
+      return {
+        success: false,
+        error: 'Cannot cancel payment request that has already been paid'
+      };
+    }
+
     // Update the payment request status to 'cancelled'
     const { data: updatedRecord, error: updateError } = await supabase
       .from('payment_requests')
@@ -20,7 +50,7 @@ export const cancelPaymentRequest = async (paymentRequestId: number, reason?: st
         updated_at: new Date().toISOString()
       })
       .eq('id', paymentRequestId)
-      .neq('status', 'paid') // Don't cancel already paid requests
+      .eq('status', currentStatus.status) // Only update if status hasn't changed
       .select();
 
     if (updateError) {
@@ -152,6 +182,56 @@ export const canCancelPaymentRequest = async (paymentRequestId: number): Promise
 /**
  * Handle payment modal cancellation with proper cleanup
  */
+/**
+ * Silent cancel - just update status without sending email (for internal resets)
+ */
+export const silentCancelPaymentRequest = async (paymentRequestId: number, reason?: string): Promise<{
+  success: boolean;
+  error?: string;
+}> => {
+  try {
+    console.log('🔇 Silent cancelling payment request:', paymentRequestId);
+    
+    // Check current status
+    const { data: currentStatus, error: statusError } = await supabase
+      .from('payment_requests')
+      .select('id, status')
+      .eq('id', paymentRequestId)
+      .single();
+
+    if (statusError) {
+      return { success: false, error: statusError.message };
+    }
+
+    // If already cancelled or paid, no action needed
+    if (currentStatus.status === 'cancelled' || currentStatus.status === 'paid') {
+      console.log('⚠️ Payment request already in final state:', currentStatus.status);
+      return { success: true };
+    }
+
+    // Update status without sending email
+    const { error: updateError } = await supabase
+      .from('payment_requests')
+      .update({
+        status: 'cancelled',
+        notes: reason ? `Silent cancel: ${reason}` : 'Silently cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', paymentRequestId)
+      .eq('status', currentStatus.status);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    console.log('✅ Payment request silently cancelled');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Silent cancellation error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+};
+
 export const handlePaymentModalCancellation = async (
   paymentRequestId: number,
   onClose: () => void,
@@ -167,7 +247,7 @@ export const handlePaymentModalCancellation = async (
       return;
     }
 
-    // Cancel the payment request
+    // Cancel the payment request with email notification
     const result = await cancelPaymentRequest(paymentRequestId, 'Modal closed by user');
     
     if (result.success) {
