@@ -15,8 +15,11 @@ const initializeSupabase = async () => {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ Missing Supabase configuration');
-      throw new Error('Missing Supabase configuration');
+      console.error('❌ Missing required Netlify environment variables:');
+      console.error('   - SUPABASE_URL (should be: https://hlmqgghrrmvstbmvwsni.supabase.co)');
+      console.error('   - SUPABASE_SERVICE_ROLE_KEY (service role key from Supabase dashboard)');
+      console.error('📝 Please add these in Netlify Dashboard > Site Settings > Environment Variables');
+      throw new Error('Missing Supabase configuration - please check Netlify environment variables');
     }
     
     supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
