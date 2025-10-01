@@ -1033,6 +1033,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   } catch (error) {
                     console.error('Debug webhook failed:', error);
                   }
+
+                  // Test environment variables endpoint
+                  console.log('Testing environment variables debug...');
+                  try {
+                    const envDebugUrl = `${window.location.origin}/.netlify/functions/debug-env`;
+                    const envResponse = await fetch(envDebugUrl, { method: 'GET' });
+                    const envText = await envResponse.text();
+                    console.log('Environment debug response:', envResponse.status, envText);
+                  } catch (error) {
+                    console.error('Environment debug failed:', error);
+                  }
                   
                   console.log('=================================');
                   console.log('WEBHOOK ENDPOINT DEBUG:');
