@@ -1099,7 +1099,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         checkout_reference: actualCheckoutReference,
                         amount: paymentRequest.amount,
                         currency: paymentRequest.currency || 'EUR',
-                        status: 'COMPLETED',
+                        status: 'paid',
                         transaction_id: `test_txn_${Date.now()}`,
                         payment_request_id: paymentRequest.id,
                         customer_id: paymentRequest.customer_id,
