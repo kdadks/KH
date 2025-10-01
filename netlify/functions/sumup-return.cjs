@@ -218,6 +218,54 @@ const processWebhookData = async (supabase, webhookData) => {
         checkoutReference: paymentData.checkout_reference,
         checkoutId: paymentData.id
       });
+      
+      // For testing purposes, if this is a test event, create a mock payment record
+      if (eventId && eventId.includes('test_event') && paymentData.payment_request_id) {
+        console.log('🧪 Test mode detected - creating mock payment record for testing');
+        
+        const mockPaymentData = {
+          payment_request_id: paymentData.payment_request_id,
+          amount: paymentData.amount,
+          currency: paymentData.currency || 'EUR',
+          status: 'pending',
+          sumup_checkout_reference: paymentData.checkout_reference,
+          sumup_checkout_id: paymentData.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        console.log('🧪 Creating mock payment:', mockPaymentData);
+        
+        const { data: newPayment, error: createError } = await supabase
+          .from('payments')
+          .insert(mockPaymentData)
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('❌ Error creating mock payment:', createError);
+          return null;
+        }
+        
+        console.log('✅ Mock payment created:', newPayment.id);
+        
+        // Now update it with webhook data
+        const { data: updatedPayment, error: updateError } = await supabase
+          .from('payments')
+          .update(updateData)
+          .eq('id', newPayment.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('❌ Error updating mock payment:', updateError);
+          throw updateError;
+        }
+
+        console.log('✅ Mock payment updated with webhook data:', updatedPayment.id);
+        return updatedPayment;
+      }
+      
       return null;
     }
 

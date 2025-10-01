@@ -972,13 +972,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   logToStorage('Testing webhook endpoint', { url: webhookUrl });
                   
                   try {
+                    // Use a real checkout reference format that the webhook can find
+                    const realCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
+                    
                     const testPayload = {
                       id: 'test_event_123',
                       type: 'checkout.completed',
                       timestamp: new Date().toISOString(),
                       data: {
                         id: 'test_checkout_456',
-                        checkout_reference: `test_ref_${Date.now()}`,
+                        checkout_reference: realCheckoutReference,
                         amount: paymentRequest.amount,
                         currency: paymentRequest.currency || 'EUR',
                         status: 'COMPLETED',
@@ -986,6 +989,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         payment_request_id: paymentRequest.id
                       }
                     };
+                    
+                    console.log('=================================');
+                    console.log('WEBHOOK TEST PAYLOAD:');
+                    console.log('Checkout Reference:', realCheckoutReference);
+                    console.log('Payment Request ID:', paymentRequest.id);
+                    console.log('=================================');
                     
                     logToStorage('Sending webhook test payload', testPayload);
                     
