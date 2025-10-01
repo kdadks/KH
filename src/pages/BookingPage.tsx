@@ -9,6 +9,7 @@ import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
 import PaymentModal from '../components/shared/PaymentModal';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
+import { cancelPaymentRequest } from '../utils/paymentCancellation';
 import {
   emailValidation,
   phoneValidation,
@@ -95,12 +96,12 @@ const BookingPage: React.FC = () => {
 
   // Handle escape key to close modals
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = async (event: KeyboardEvent) => {
       if (event.key === 'Escape' && (paymentState.showPayment || paymentState.paymentCompleted)) {
         if (paymentState.paymentCompleted) {
-          redirectToHome();
+          await redirectToHome();
         } else {
-          resetForm();
+          await resetForm();
         }
       }
     };
@@ -922,12 +923,21 @@ const BookingPage: React.FC = () => {
     }, 1000);
   };
 
-  const redirectToHome = () => {
-    resetForm();
+  const redirectToHome = async () => {
+    await resetForm();
     navigate('/');
   };
 
-  const resetForm = () => {
+  const resetForm = async () => {
+    // Cancel any active payment request
+    if (paymentState.paymentRequest?.id) {
+      try {
+        await cancelPaymentRequest(paymentState.paymentRequest.id);
+      } catch (error) {
+        console.error('Error cancelling payment request:', error);
+      }
+    }
+
     reset();
     setSuccessMsg('');
     setCountdown(20);
