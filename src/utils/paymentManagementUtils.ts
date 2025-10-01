@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { getPaymentEnvironment, getSumUpEnvironmentConfig } from './environmentDetection';
 
 export interface PaymentRequest {
   id: number; // Changed from string to number to match SERIAL
@@ -840,6 +841,7 @@ export const getPaymentStatistics = async () => {
 
 /**
  * Get the active SumUp payment gateway configuration
+ * Now enhanced with domain-based environment detection
  */
 export const getActiveSumUpGateway = async (): Promise<{
   api_key: string;
@@ -847,10 +849,18 @@ export const getActiveSumUpGateway = async (): Promise<{
   environment: 'sandbox' | 'production';
 } | null> => {
   try {
+    // First, detect the current environment based on domain
+    const currentEnvironment = getPaymentEnvironment();
+    const sumupEnvConfig = getSumUpEnvironmentConfig();
+    
+    console.log(`🔍 Getting SumUp gateway config for ${currentEnvironment} environment`);
+    
+    // Try to get environment-specific configuration from database
     const { data, error } = await supabase
       .from('payment_gateways')
       .select('api_key, merchant_id, environment')
       .eq('provider', 'sumup')
+      .eq('environment', currentEnvironment) // Filter by detected environment
       .eq('is_active', true)
       .single();
 
@@ -864,14 +874,14 @@ export const getActiveSumUpGateway = async (): Promise<{
         console.warn('No active SumUp gateway found in database, falling back to environment variables');
       }
       
-      // Fallback to environment variables if database config is not available
-      const envApiKey = import.meta.env.VITE_SUMUP_API_KEY;
-      const envMerchantId = import.meta.env.VITE_SUMUP_MERCHANT_CODE;
-      const envEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
+      // Fallback to environment variables with domain-based configuration
+      const envApiKey = sumupEnvConfig.apiKey || import.meta.env.VITE_SUMUP_API_KEY;
+      const envMerchantId = sumupEnvConfig.merchantCode || import.meta.env.VITE_SUMUP_MERCHANT_CODE;
+      const envEnvironment = currentEnvironment; // Use detected environment
       
       if (!envApiKey || !envMerchantId) {
-        console.error('❌ SumUp configuration missing in both database and environment variables');
-        console.error('📝 Please set VITE_SUMUP_API_KEY and VITE_SUMUP_MERCHANT_CODE in .env file');
+        console.error(`❌ SumUp ${currentEnvironment} configuration missing in both database and environment variables`);
+        console.error(`📝 Please set VITE_SUMUP_${currentEnvironment.toUpperCase()}_API_KEY and VITE_SUMUP_${currentEnvironment.toUpperCase()}_MERCHANT_CODE in .env file`);
         console.error('🔗 Get your API key from: https://developer.sumup.com');
         return null;
       }
@@ -897,11 +907,11 @@ export const getActiveSumUpGateway = async (): Promise<{
       }
       
       if (envApiKey && envMerchantId) {
-        console.log('Using SumUp configuration from environment variables');
+        console.log(`Using SumUp ${currentEnvironment} configuration from environment variables`);
         return {
           api_key: envApiKey,
           merchant_id: envMerchantId,
-          environment: envEnvironment as 'sandbox' | 'production'
+          environment: currentEnvironment
         };
       }
       
@@ -909,11 +919,11 @@ export const getActiveSumUpGateway = async (): Promise<{
       return null;
     }
 
-    console.log('Using SumUp configuration from database');
+    console.log(`Using SumUp ${currentEnvironment} configuration from database`);
     return {
       api_key: data.api_key,
       merchant_id: data.merchant_id,
-      environment: data.environment as 'sandbox' | 'production'
+      environment: currentEnvironment // Use detected environment instead of database value
     };
   } catch (error) {
     console.error('Error in getActiveSumUpGateway:', error);

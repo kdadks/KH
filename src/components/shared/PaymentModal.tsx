@@ -4,6 +4,7 @@ import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paym
 import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
 import type { SumUpCreateCheckoutResponse } from '../../utils/sumupRealApiImplementation';
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
+import { PaymentEnvironmentIndicator } from '../ui/PaymentEnvironmentIndicator';
 import { getActiveSumUpGateway } from '../../utils/paymentManagementUtils';
 import { useToast } from './toastContext';
 import { supabase } from '../../supabaseClient';
@@ -721,8 +722,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <div className="flex items-center">
             <CreditCard className="w-6 h-6 text-blue-600 mr-3" />
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-3">
                 Secure Payment
+                <PaymentEnvironmentIndicator />
               </h3>
               <p className="text-sm text-gray-600">
                 {paymentRequest.service_name || 'Service Payment'}

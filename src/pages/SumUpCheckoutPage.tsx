@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CreditCard, CheckCircle } from 'lucide-react';
+import { PaymentEnvironmentIndicator } from '../components/ui/PaymentEnvironmentIndicator';
 
 const SumUpCheckoutPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -249,7 +250,10 @@ const SumUpCheckoutPage: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-6">
           {/* SumUp Header */}
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-blue-700 mb-1">SumUp</h2>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <h2 className="text-2xl font-bold text-blue-700">SumUp</h2>
+              <PaymentEnvironmentIndicator />
+            </div>
             <p className="text-gray-600 text-sm">Secure Payment</p>
           </div>
 
