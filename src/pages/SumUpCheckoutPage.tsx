@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CreditCard, CheckCircle } from 'lucide-react';
 import { PaymentEnvironmentIndicator } from '../components/ui/PaymentEnvironmentIndicator';
@@ -20,6 +20,8 @@ const SumUpCheckoutPage: React.FC = () => {
   const checkoutId = searchParams.get('checkout_id') || '';
   const paymentRequestId = searchParams.get('payment_request_id') || ''; // Extract payment request ID
   const context = searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
+  // Note: testMode and autoSuccess can be added back when needed for additional functionality
+  const environment = searchParams.get('env') || 'sandbox';
 
   // Card form state
   const [cardNumber, setCardNumber] = useState('');
@@ -32,6 +34,9 @@ const SumUpCheckoutPage: React.FC = () => {
   const [paymentRequestStatus, setPaymentRequestStatus] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  
+  // Sandbox test simulation
+  const [showTestSimulation, setShowTestSimulation] = useState(false);
 
   // Format amount for display
   const formatAmount = (amountEuros: string) => {
@@ -62,13 +67,7 @@ const SumUpCheckoutPage: React.FC = () => {
   };
 
   // Check payment request status on component mount to prevent double payments
-  useEffect(() => {
-    if (paymentRequestId) {
-      checkPaymentRequestStatus();
-    }
-  }, [paymentRequestId]);
-
-  const checkPaymentRequestStatus = async () => {
+  const checkPaymentRequestStatus = useCallback(async () => {
     setLoadingStatus(true);
     setStatusError(null);
     
@@ -100,7 +99,14 @@ const SumUpCheckoutPage: React.FC = () => {
     } finally {
       setLoadingStatus(false);
     }
-  };
+  }, [paymentRequestId]);
+
+  // Check payment request status when component mounts and paymentRequestId changes
+  useEffect(() => {
+    if (paymentRequestId) {
+      checkPaymentRequestStatus();
+    }
+  }, [paymentRequestId, checkPaymentRequestStatus]);
 
   const processPayment = async (success: boolean) => {
     setProcessing(true);
@@ -236,6 +242,14 @@ const SumUpCheckoutPage: React.FC = () => {
     }
   };
 
+  // Simulate payment outcomes for sandbox testing
+  const simulatePaymentOutcome = async (outcome: 'success' | 'failure') => {
+    console.log(`🧪 Simulating ${outcome} payment outcome for checkout ${checkoutId}`);
+    
+    // Call the existing processPayment function with the outcome
+    await processPayment(outcome === 'success');
+  };
+
   // Auto-focus first input on mount
   useEffect(() => {
     const cardInput = document.getElementById('cardNumber') as HTMLInputElement;
@@ -256,6 +270,45 @@ const SumUpCheckoutPage: React.FC = () => {
             </div>
             <p className="text-gray-600 text-sm">Secure Payment</p>
           </div>
+
+          {/* Test Mode Simulation (Sandbox Only) */}
+          {environment === 'sandbox' && checkoutId.includes('mock') && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex items-start">
+                <div className="text-yellow-600 mr-3">🧪</div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-yellow-800 mb-2">
+                    Sandbox Test Mode - Payment Workflow Testing
+                  </h3>
+                  <p className="text-xs text-yellow-700 mb-4">
+                    Simulate different payment scenarios to test the complete workflow including database updates and webhook processing.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      onClick={() => simulatePaymentOutcome('success')}
+                      disabled={processing}
+                      className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      ✅ Simulate Success
+                    </button>
+                    <button
+                      onClick={() => simulatePaymentOutcome('failure')}
+                      disabled={processing}
+                      className="px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      ❌ Simulate Failure
+                    </button>
+                    <button
+                      onClick={() => setShowTestSimulation(!showTestSimulation)}
+                      className="px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      💳 Manual Entry
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Loading Status Check */}
           {paymentRequestId && loadingStatus && (

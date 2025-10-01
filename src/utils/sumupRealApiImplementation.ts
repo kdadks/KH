@@ -105,9 +105,9 @@ export const createSumUpCheckoutSession = async (
       throw new Error(`SumUp ${currentEnvironment} configuration not found. Please configure ${currentEnvironment.toUpperCase()} API credentials.`);
     }
 
-    // Development/Sandbox mode - return mock response for localhost/testing
-    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
-      console.warn(`🧪 ${environmentConfig.displayName}: Creating mock SumUp checkout session`);
+    // Sandbox mode - return mock response for testing complete workflow
+    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
+      console.warn(`🧪 ${environmentConfig.displayName}: Creating mock SumUp checkout session with full workflow testing`);
       
       const mockResponse: SumUpCreateCheckoutResponse = {
         checkout_reference: checkoutData.checkout_reference,
@@ -118,7 +118,7 @@ export const createSumUpCheckoutSession = async (
         id: `${currentEnvironment}-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         status: 'PENDING',
         date: new Date().toISOString(),
-        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${effectiveConfig.merchant_id}&checkout_id=${currentEnvironment}-mock-${Date.now()}&env=${currentEnvironment}${checkoutData.return_url ? `&return_url=${encodeURIComponent(checkoutData.return_url)}` : ''}${checkoutData.cancel_url ? `&cancel_url=${encodeURIComponent(checkoutData.cancel_url)}` : ''}`,
+        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${effectiveConfig.merchant_id}&checkout_id=${currentEnvironment}-mock-${Date.now()}&env=${currentEnvironment}&test_mode=true&auto_success=true${checkoutData.return_url ? `&return_url=${encodeURIComponent(checkoutData.return_url)}` : ''}${checkoutData.cancel_url ? `&cancel_url=${encodeURIComponent(checkoutData.cancel_url)}` : ''}`,
         transactions: []
       };
 
@@ -196,9 +196,9 @@ export const processSumUpPayment = async (
       throw new Error(`SumUp ${currentEnvironment} configuration not found. Please configure ${currentEnvironment.toUpperCase()} API credentials.`);
     }
 
-    // Development/Sandbox mode - return mock response for localhost/testing
-    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
-      console.warn(`🧪 ${environmentConfig.displayName}: Processing mock SumUp payment`);
+    // Sandbox mode - return mock response for testing complete workflow
+    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
+      console.warn(`🧪 ${environmentConfig.displayName}: Processing mock SumUp payment with database updates`);
       
       const mockResponse: SumUpProcessPaymentResponse = {
         id: checkoutId,
@@ -273,9 +273,9 @@ export const getSumUpCheckoutStatus = async (checkoutId: string): Promise<SumUpC
       throw new Error(`SumUp ${currentEnvironment} configuration not found. Please configure ${currentEnvironment.toUpperCase()} API credentials.`);
     }
 
-    // Development/Sandbox mode - return mock response for localhost/testing
-    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
-      console.warn(`🧪 ${environmentConfig.displayName}: Getting mock SumUp checkout status`);
+    // Sandbox mode - return mock response for testing complete workflow
+    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
+      console.warn(`🧪 ${environmentConfig.displayName}: Getting mock SumUp checkout status with workflow testing`);
       
       const mockResponse: SumUpCreateCheckoutResponse = {
         checkout_reference: `${currentEnvironment}-status-${Date.now()}`,

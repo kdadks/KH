@@ -19,21 +19,37 @@ const getWebhookEnvironment = () => {
   const netlifyContext = process.env.CONTEXT;
   const nodeEnv = process.env.NODE_ENV;
   const netlifyUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+  const branchName = process.env.HEAD || process.env.BRANCH;
   
-  // Production detection based on URL and context
-  const isProduction = (
+  // Force sandbox for UAT/staging/preview deployments
+  const isUATOrStaging = (
+    netlifyContext !== 'production' ||
+    (netlifyUrl && (
+      netlifyUrl.includes('netlify.app') ||
+      netlifyUrl.includes('staging') ||
+      netlifyUrl.includes('uat') ||
+      netlifyUrl.includes('preview')
+    )) ||
+    (branchName && branchName !== 'main' && branchName !== 'master')
+  );
+  
+  // Only production if: production context + khtherapy.ie domain + main branch
+  const isExactProduction = (
     netlifyContext === 'production' && 
     nodeEnv === 'production' &&
     netlifyUrl && 
-    netlifyUrl.includes('khtherapy.ie')
+    netlifyUrl.includes('khtherapy.ie') &&
+    !isUATOrStaging
   );
   
-  const environment = isProduction ? 'production' : 'sandbox';
+  const environment = isExactProduction ? 'production' : 'sandbox';
   
   console.log('🌐 Webhook environment detection:', {
     netlifyContext,
     nodeEnv,
     netlifyUrl,
+    branchName,
+    isUATOrStaging,
     detectedEnvironment: environment
   });
   

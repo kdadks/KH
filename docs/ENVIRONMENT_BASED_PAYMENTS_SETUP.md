@@ -4,8 +4,11 @@
 
 The application now automatically detects whether to use production or sandbox mode based on the domain:
 
-- **Production**: `https://khtherapy.ie/` (Live payments)
-- **Sandbox**: All other domains including `localhost`, Netlify previews, etc. (Test payments)
+- **Production**: `https://khtherapy.ie/` ONLY (Live payments)
+- **Sandbox**: All other domains (Test payments):
+  - `localhost` (local development)
+  - `*.netlify.app` (Netlify deployments including UAT)
+  - Any domain containing: `staging`, `uat`, `preview`, `dev`, `test`
 
 ## Environment Variables Setup
 
@@ -55,14 +58,17 @@ VITE_SUMUP_SANDBOX_MERCHANT_CODE = your_sandbox_merchant
 
 ### Client-Side (React Components)
 - Checks `window.location.hostname`
-- If hostname is `khtherapy.ie` with HTTPS → Production mode
-- All other hostnames → Sandbox mode
+- If hostname is EXACTLY `khtherapy.ie` with HTTPS → Production mode
+- If hostname contains `netlify.app`, `staging`, `uat`, `preview`, `dev`, `test`, or `localhost` → Sandbox mode
+- All other hostnames → Sandbox mode (safe default)
 
 ### Server-Side (Netlify Functions/Webhooks)
 - Checks `CONTEXT` environment variable (Netlify deployment context)
-- Checks `URL` environment variable (deployment URL)
-- If context is "production" and URL contains "khtherapy.ie" → Production mode
-- Otherwise → Sandbox mode
+- Checks `URL` environment variable (deployment URL)  
+- Checks `HEAD`/`BRANCH` environment variable (git branch)
+- Production ONLY if: context="production" AND URL contains "khtherapy.ie" AND branch="main"
+- UAT/staging/preview deployments always use sandbox mode
+- All other scenarios → Sandbox mode (safe default)
 
 ## Visual Indicators
 
@@ -135,10 +141,17 @@ If you have existing environment variables without the new naming:
 
 ## Troubleshooting
 
+### Issue: UAT showing production checkout URLs
+- **Expected**: UAT should always show sandbox mode with test indicators
+- **Solution**: Clear browser cache and hard refresh (Ctrl+F5)
+- **Check**: Browser console should show "🧪 UAT/Staging environment detected"
+- **Verify**: URL should contain `netlify.app` or `uat` to trigger sandbox mode
+
 ### Issue: Wrong environment detected
-- Check domain exactly matches `khtherapy.ie`
+- Check domain exactly matches `khtherapy.ie` (production only)
 - Verify HTTPS is being used in production
 - Check browser console for environment detection logs
+- Ensure UAT/staging domains contain identifying keywords
 
 ### Issue: API keys not working
 - Ensure you're using the correct API key for the detected environment
