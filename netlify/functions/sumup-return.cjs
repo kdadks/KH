@@ -235,8 +235,12 @@ exports.handler = async (event, context) => {
     method: event.httpMethod,
     query: event.queryStringParameters,
     headers: Object.keys(event.headers),
-    bodyLength: event.body?.length || 0
+    bodyLength: event.body?.length || 0,
+    userAgent: event.headers['user-agent'],
+    contentType: event.headers['content-type']
   });
+  
+  console.log('📋 Full event body:', event.body);
 
   try {
     let checkoutId, checkoutReference, paymentRequestId, context;
@@ -253,10 +257,17 @@ exports.handler = async (event, context) => {
       const supabase = createSupabaseClient();
       
       try {
-        await processWebhookData(supabase, webhookData);
-        console.log('✅ Webhook processing completed');
+        console.log('🔄 Starting webhook data processing...');
+        const result = await processWebhookData(supabase, webhookData);
+        console.log('✅ Webhook processing completed successfully, result:', result);
       } catch (error) {
-        console.error('❌ Webhook processing failed:', error);
+        console.error('❌ Webhook processing failed with error:', {
+          message: error.message,
+          stack: error.stack,
+          webhookData: JSON.stringify(webhookData, null, 2)
+        });
+        
+        // Don't break the redirect flow even if webhook processing fails
       }
       
       // Extract data for redirect
@@ -280,6 +291,20 @@ exports.handler = async (event, context) => {
       checkoutReference = params.checkout_reference || params.reference;
       paymentRequestId = params.payment_request_id;
       context = params.context || 'booking';
+    } else {
+      // Handle other methods for debugging
+      console.log('❓ Unexpected HTTP method:', event.httpMethod);
+      return {
+        statusCode: 405,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          error: 'Method not allowed',
+          method: event.httpMethod,
+          message: 'SumUp return handler - use POST for webhooks'
+        })
+      };
     }
 
     // Determine redirect URL based on the context and payment status
