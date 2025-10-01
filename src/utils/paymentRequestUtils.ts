@@ -409,6 +409,27 @@ export async function processPaymentRequest(
       throw new Error('Payment request not found');
     }
 
+    // Check if payment request is in a valid state for processing
+    if (paymentRequest.status === 'cancelled') {
+      console.error('❌ Attempted to process cancelled payment request:', paymentRequestId);
+      throw new Error('This payment request has been cancelled and can no longer be processed. Please contact us if you need assistance.');
+    }
+
+    if (paymentRequest.status === 'paid') {
+      console.error('❌ Attempted to process already paid payment request:', paymentRequestId);
+      throw new Error('This payment has already been processed. If you believe this is an error, please contact us.');
+    }
+
+    if (paymentRequest.status === 'expired') {
+      console.error('❌ Attempted to process expired payment request:', paymentRequestId);
+      throw new Error('This payment request has expired. Please contact us to generate a new payment link.');
+    }
+
+    if (paymentRequest.status !== 'pending' && paymentRequest.status !== 'sent') {
+      console.error('❌ Attempted to process payment request with invalid status:', paymentRequest.status);
+      throw new Error('This payment request is not available for processing. Please contact us for assistance.');
+    }
+
     // Create payment record
     const paymentRecord = {
       customer_id: paymentRequest.customer_id,

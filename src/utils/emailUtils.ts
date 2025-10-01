@@ -8,6 +8,7 @@ import {
   sendAdminNotificationEmail as smtpSendAdminNotification,
   sendWelcomeEmail as smtpSendWelcome,
   sendPaymentRequestEmail as smtpSendPaymentRequest,
+  sendPaymentRequestCancellationEmail as smtpSendPaymentRequestCancellation,
   sendPaymentConfirmationEmail as smtpSendPaymentConfirmation,
   sendInvoiceNotificationEmail as smtpSendInvoiceNotification,
   sendPasswordResetEmail as smtpSendPasswordReset,
@@ -254,6 +255,38 @@ export const sendPaymentRequestEmail = async (
     return { success: result };
   } catch (error) {
     console.error('Error sending payment request email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
+// Payment request cancellation email
+export const sendPaymentRequestCancellationEmail = async (
+  customerEmail: string,
+  data: {
+    customer_name: string;
+    amount: number;
+    service_name: string;
+    booking_date?: string;
+    booking_id?: string;
+    cancellation_reason?: string;
+  }
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const result = await smtpSendPaymentRequestCancellation(customerEmail, {
+      customer_name: data.customer_name,
+      amount: data.amount,
+      service_name: data.service_name,
+      booking_date: data.booking_date,
+      booking_id: data.booking_id,
+      cancellation_reason: data.cancellation_reason
+    });
+    
+    return { success: result };
+  } catch (error) {
+    console.error('Error sending payment request cancellation email:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error'
