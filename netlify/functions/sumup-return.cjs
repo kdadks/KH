@@ -75,11 +75,11 @@ const processWebhookData = async (supabase, data, isTest = false) => {
 
     console.log(`🔍 Processing ${isTest ? 'TEST' : 'LIVE'} checkout reference:`, checkoutRef);
 
-    // Find matching payment record
+    // Find matching payment record using correct column name
     const { data: payments, error: searchError } = await supabase
       .from('payments')
-      .select('id, booking_id, amount, status, payment_request_id, checkout_reference')
-      .eq('checkout_reference', checkoutRef)
+      .select('id, booking_id, amount, status, payment_request_id, sumup_checkout_reference')
+      .eq('sumup_checkout_reference', checkoutRef)
       .limit(1);
 
     if (searchError) {
@@ -96,7 +96,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
       const { data: newPayment, error: createError } = await supabase
         .from('payments')
         .insert({
-          checkout_reference: checkoutRef,
+          sumup_checkout_reference: checkoutRef,
           amount: data.amount || 50.00,
           currency: data.currency || 'EUR',
           status: 'pending',
@@ -132,7 +132,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
       id: payment.id, 
       status: payment.status,
       amount: payment.amount,
-      checkout_reference: payment.checkout_reference 
+      sumup_checkout_reference: payment.sumup_checkout_reference 
     });
 
     // Update payment with webhook data
