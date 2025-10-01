@@ -37,6 +37,44 @@ const SumUpCheckoutPage: React.FC = () => {
   
   // Sandbox test simulation
   const [showTestSimulation, setShowTestSimulation] = useState(false);
+  
+  // Check if returning from SumUp and log debug info
+  useEffect(() => {
+    const isReturnFromSumup = searchParams.get('checkout-id') && searchParams.get('success');
+    
+    if (isReturnFromSumup) {
+      console.log('=== POST-REDIRECT DEBUG INFO ===');
+      console.log('Returned from SumUp with checkout-id:', searchParams.get('checkout-id'));
+      console.log('Success:', searchParams.get('success'));
+      
+      // Check webhook simulation results
+      const lastWebhookSuccess = localStorage.getItem('last_webhook_success');
+      const lastWebhookFailure = localStorage.getItem('last_webhook_failure');
+      const webhookErrors = localStorage.getItem('webhook_simulation_errors');
+      
+      if (lastWebhookSuccess) {
+        console.log('✅ Last webhook success:', JSON.parse(lastWebhookSuccess));
+      }
+      if (lastWebhookFailure) {
+        console.log('❌ Last webhook failure:', JSON.parse(lastWebhookFailure));
+      }
+      if (webhookErrors) {
+        console.log('🚫 Webhook simulation errors:', JSON.parse(webhookErrors));
+      }
+      
+      // Show alert with debug info for immediate visibility
+      if (lastWebhookSuccess || lastWebhookFailure || webhookErrors) {
+        const debugInfo = [];
+        if (lastWebhookSuccess) debugInfo.push('✅ Webhook success recorded');
+        if (lastWebhookFailure) debugInfo.push('❌ Webhook failure recorded');
+        if (webhookErrors) debugInfo.push('🚫 Webhook errors recorded');
+        
+        console.log('Debug info available:', debugInfo.join(', '));
+      } else {
+        console.log('⚠️ No webhook debug info found in localStorage');
+      }
+    }
+  }, [searchParams]);
 
   // Format amount for display
   const formatAmount = (amountEuros: string) => {
@@ -108,6 +146,70 @@ const SumUpCheckoutPage: React.FC = () => {
     }
   }, [paymentRequestId, checkPaymentRequestStatus]);
 
+  // Manual debug function to check webhook status
+  const checkWebhookDebugInfo = () => {
+    console.log('=== MANUAL WEBHOOK DEBUG CHECK ===');
+    
+    const lastSuccess = localStorage.getItem('last_webhook_success');
+    const lastFailure = localStorage.getItem('last_webhook_failure');
+    const errors = localStorage.getItem('webhook_simulation_errors');
+    
+    console.log('Last webhook success:', lastSuccess ? JSON.parse(lastSuccess) : 'None');
+    console.log('Last webhook failure:', lastFailure ? JSON.parse(lastFailure) : 'None');
+    console.log('Webhook errors:', errors ? JSON.parse(errors) : 'None');
+    
+    // Also check if we can access the debug info
+    console.log('Current checkout reference:', checkoutReference);
+    console.log('Current payment request ID:', paymentRequestId);
+    
+    return {
+      success: lastSuccess ? JSON.parse(lastSuccess) : null,
+      failure: lastFailure ? JSON.parse(lastFailure) : null,
+      errors: errors ? JSON.parse(errors) : null
+    };
+  };
+  
+  // Test webhook endpoint connectivity
+  const testWebhookEndpoint = async () => {
+    const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+    console.log('🧪 Testing webhook endpoint connectivity:', webhookUrl);
+    
+    try {
+      const testPayload = {
+        id: 'test_event_123',
+        type: 'test.connection',
+        timestamp: new Date().toISOString(),
+        data: {
+          test: true,
+          checkout_reference: 'test_checkout_ref',
+          amount: 10.00,
+          currency: 'EUR',
+          status: 'TESTING'
+        }
+      };
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testPayload)
+      });
+      
+      const responseText = await response.text();
+      console.log('🧪 Test webhook response:', response.status, responseText);
+      alert(`Webhook Test Result: ${response.status} - ${responseText.substring(0, 100)}`);
+      
+    } catch (error) {
+      console.error('🧪 Webhook endpoint test failed:', error);
+      alert(`Webhook Test Failed: ${error}`);
+    }
+  };
+
+  // Make debug functions globally available for testing
+  (window as unknown as { checkWebhookDebugInfo: () => object; testWebhookEndpoint: () => void }).checkWebhookDebugInfo = checkWebhookDebugInfo;
+  (window as unknown as { testWebhookEndpoint: () => void }).testWebhookEndpoint = testWebhookEndpoint;
+
   const processPayment = async (success: boolean) => {
     setProcessing(true);
     
@@ -121,14 +223,42 @@ const SumUpCheckoutPage: React.FC = () => {
         // Simulate webhook event in sandbox/UAT environment to update payments table
         // Only simulate in sandbox mode - production will receive real SumUp webhooks
         const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
+        
+        // IMMEDIATE DEBUG: Alert to show environment detection
+        alert(`🚨 DEBUG: Environment detected as ${currentEnvironment}, hostname: ${window.location.hostname}`);
+        console.log('🚨 ENVIRONMENT CHECK - Current hostname:', window.location.hostname);
+        console.log('🚨 ENVIRONMENT CHECK - Detected environment:', currentEnvironment);
+        
         if (currentEnvironment === 'sandbox') {
-          await simulateWebhookEvent(success ? 'checkout.completed' : 'checkout.failed', {
+          alert(`🚨 DEBUG: Entering SANDBOX webhook simulation path!`);
+          console.log('🎯 About to simulate webhook for SUCCESS scenario');
+          console.log('📋 Webhook data:', {
             checkout_reference: checkoutReference,
             transaction_id: transactionId,
             amount: parseFloat(amount),
             currency: currency,
             status: success ? 'COMPLETED' : 'FAILED'
           });
+          
+          try {
+            await simulateWebhookEvent(success ? 'checkout.completed' : 'checkout.failed', {
+              checkout_reference: checkoutReference,
+              transaction_id: transactionId,
+              amount: parseFloat(amount),
+              currency: currency,
+              status: success ? 'COMPLETED' : 'FAILED'
+            });
+            console.log('✅ Webhook simulation completed successfully');
+          } catch (webhookError) {
+            console.error('❌ Webhook simulation failed:', webhookError);
+            // Store error in localStorage so we can check it later
+            const errorMessage = webhookError instanceof Error ? webhookError.message : String(webhookError);
+            localStorage.setItem('last_webhook_error', JSON.stringify({
+              error: errorMessage,
+              timestamp: new Date().toISOString(),
+              checkoutReference
+            }));
+          }
         }
         
         // If this is for a payment request, process the payment and send confirmation
@@ -218,13 +348,27 @@ const SumUpCheckoutPage: React.FC = () => {
         // Only simulate in sandbox mode - production will receive real SumUp webhooks
         const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
         if (currentEnvironment === 'sandbox') {
-          await simulateWebhookEvent('checkout.failed', {
-            checkout_reference: checkoutReference,
-            transaction_id: transactionId,
-            amount: parseFloat(amount),
-            currency: currency,
-            status: 'FAILED'
-          });
+          console.log('🎯 About to simulate webhook for FAILURE scenario');
+          
+          try {
+            await simulateWebhookEvent('checkout.failed', {
+              checkout_reference: checkoutReference,
+              transaction_id: transactionId,
+              amount: parseFloat(amount),
+              currency: currency,
+              status: 'FAILED'
+            });
+            console.log('✅ Webhook simulation completed successfully for failure');
+          } catch (webhookError) {
+            console.error('❌ Webhook simulation failed:', webhookError);
+            const errorMessage = webhookError instanceof Error ? webhookError.message : String(webhookError);
+            localStorage.setItem('last_webhook_error', JSON.stringify({
+              error: errorMessage,
+              timestamp: new Date().toISOString(),
+              checkoutReference,
+              scenario: 'failure'
+            }));
+          }
         }
         
         const failureUrl = cancelUrl || '/payment-cancelled';
@@ -279,6 +423,12 @@ const SumUpCheckoutPage: React.FC = () => {
     currency: string;
     status: string;
   }) => {
+    // IMMEDIATE DEBUG: Alert to verify function is being called
+    alert(`🚨 DEBUG: simulateWebhookEvent called! Event: ${eventType}, Checkout: ${paymentData.checkout_reference}`);
+    console.log('🚨 WEBHOOK FUNCTION ENTRY POINT - Function is being called!');
+    console.log('🚨 Event Type:', eventType);
+    console.log('🚨 Payment Data:', paymentData);
+    
     try {
       console.log('🔗 Simulating webhook event:', { eventType, paymentData });
       
@@ -322,9 +472,26 @@ const SumUpCheckoutPage: React.FC = () => {
       if (response.ok) {
         const responseText = await response.text();
         console.log('✅ Webhook simulation successful, response:', responseText);
+        
+        // Store success info in localStorage for debugging
+        localStorage.setItem('last_webhook_success', JSON.stringify({
+          status: response.status,
+          response: responseText,
+          timestamp: new Date().toISOString(),
+          checkoutReference: paymentData.checkout_reference
+        }));
       } else {
         const errorText = await response.text();
         console.warn('⚠️ Webhook simulation failed:', response.status, response.statusText, errorText);
+        
+        // Store failure info in localStorage for debugging
+        localStorage.setItem('last_webhook_failure', JSON.stringify({
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          timestamp: new Date().toISOString(),
+          checkoutReference: paymentData.checkout_reference
+        }));
       }
     } catch (error) {
       console.error('❌ Webhook simulation error:', error);
@@ -334,7 +501,12 @@ const SumUpCheckoutPage: React.FC = () => {
 
   // Simulate payment outcomes for sandbox testing
   const simulatePaymentOutcome = async (outcome: 'success' | 'failure') => {
+    // IMMEDIATE DEBUG: Alert to verify this function is being called
+    alert(`🚨 DEBUG: simulatePaymentOutcome called with outcome: ${outcome}`);
+    console.log('🚨 SIMULATE PAYMENT OUTCOME ENTRY POINT');
     console.log(`🧪 Simulating ${outcome} payment outcome for checkout ${checkoutId}`);
+    console.log('🧪 Current checkout reference:', checkoutReference);
+    console.log('🧪 Current payment request ID:', paymentRequestId);
     
     // Call the existing processPayment function with the outcome
     await processPayment(outcome === 'success');
@@ -373,7 +545,7 @@ const SumUpCheckoutPage: React.FC = () => {
                   <p className="text-xs text-yellow-700 mb-4">
                     Simulate different payment scenarios to test the complete workflow including database updates and webhook processing.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
                     <button
                       onClick={() => simulatePaymentOutcome('success')}
                       disabled={processing}
@@ -393,6 +565,21 @@ const SumUpCheckoutPage: React.FC = () => {
                       className="px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
                     >
                       💳 Manual Entry
+                    </button>
+                    <button
+                      onClick={() => {
+                        const info = checkWebhookDebugInfo();
+                        alert(`Debug Info:\n✅ Success: ${info.success ? 'Yes' : 'No'}\n❌ Failure: ${info.failure ? 'Yes' : 'No'}\n🚫 Errors: ${info.errors ? 'Yes' : 'No'}\n\nCheck console for full details.`);
+                      }}
+                      className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      🐛 Check Debug
+                    </button>
+                    <button
+                      onClick={testWebhookEndpoint}
+                      className="px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      🔌 Test Endpoint
                     </button>
                   </div>
                 </div>
