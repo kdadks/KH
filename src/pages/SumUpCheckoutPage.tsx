@@ -118,6 +118,19 @@ const SumUpCheckoutPage: React.FC = () => {
 
         const transactionId = `txn_sumup_${Date.now()}`;
         
+        // Simulate webhook event in sandbox/UAT environment to update payments table
+        // Only simulate in sandbox mode - production will receive real SumUp webhooks
+        const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
+        if (currentEnvironment === 'sandbox') {
+          await simulateWebhookEvent(success ? 'checkout.completed' : 'checkout.failed', {
+            checkout_reference: checkoutReference,
+            transaction_id: transactionId,
+            amount: parseFloat(amount),
+            currency: currency,
+            status: success ? 'COMPLETED' : 'FAILED'
+          });
+        }
+        
         // If this is for a payment request, process the payment and send confirmation
         if (paymentRequestId) {
           try {
@@ -197,7 +210,22 @@ const SumUpCheckoutPage: React.FC = () => {
           }
         }
       } else {
-        // User cancelled or simulation failure
+        // User cancelled or simulation failure - also simulate webhook for failure
+        const transactionId = `txn_sumup_failed_${Date.now()}`;
+        
+        // Simulate webhook event for failure to update payments table
+        // Only simulate in sandbox mode - production will receive real SumUp webhooks
+        const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
+        if (currentEnvironment === 'sandbox') {
+          await simulateWebhookEvent('checkout.failed', {
+            checkout_reference: checkoutReference,
+            transaction_id: transactionId,
+            amount: parseFloat(amount),
+            currency: currency,
+            status: 'FAILED'
+          });
+        }
+        
         const failureUrl = cancelUrl || '/payment-cancelled';
         
         if (cancelUrl) {
@@ -239,6 +267,61 @@ const SumUpCheckoutPage: React.FC = () => {
       }
     } finally {
       setProcessing(false);
+    }
+  };
+
+  // Simulate webhook event to trigger payments table update
+  const simulateWebhookEvent = async (eventType: string, paymentData: {
+    checkout_reference: string;
+    transaction_id: string;
+    amount: number;
+    currency: string;
+    status: string;
+  }) => {
+    try {
+      console.log('🔗 Simulating webhook event:', { eventType, paymentData });
+      
+      // Create mock webhook payload matching SumUp's expected format
+      const webhookPayload = {
+        id: `evt_sandbox_${Date.now()}`,
+        type: eventType,
+        timestamp: new Date().toISOString(),
+        data: {
+          id: checkoutId || `checkout_${Date.now()}`,
+          checkout_reference: paymentData.checkout_reference,
+          amount: paymentData.amount,
+          currency: paymentData.currency,
+          status: paymentData.status,
+          transaction_id: paymentData.transaction_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          merchant_code: 'SANDBOX_TEST'
+        }
+      };
+
+      // Call the webhook endpoint directly
+      const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-webhook`;
+      
+      console.log('📡 Sending simulated webhook to:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Sumup-Webhook-Signature': 'sandbox-signature', // Mock signature for sandbox
+          'User-Agent': 'SumUp-Webhook/Sandbox'
+        },
+        body: JSON.stringify(webhookPayload)
+      });
+
+      if (response.ok) {
+        console.log('✅ Webhook simulation successful');
+      } else {
+        console.warn('⚠️ Webhook simulation failed:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('❌ Webhook simulation error:', error);
+      // Don't let webhook errors break the payment flow
     }
   };
 
