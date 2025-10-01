@@ -236,6 +236,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   redirectAfterPayment,
   context = 'booking' // Default context
 }) => {
+  // IMMEDIATE DEBUG: Verify PaymentModal is loading
+  console.log('🚨 PaymentModal component initialized!');
+  if (isOpen) {
+    alert('🚨 DEBUG: PaymentModal is OPEN and active!');
+  }
+  
   const { showSuccess, showError, showInfo } = useToast();
 
   // Handle modal close with payment cancellation
@@ -369,6 +375,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [isOpen, paymentRequest.booking_id]);
 
   const handleStartPayment = async () => {
+    // IMMEDIATE DEBUG: Alert when payment process starts
+    alert('🚨 DEBUG: handleStartPayment called! Starting payment process...');
+    console.log('🚨 PAYMENT PROCESS STARTED');
+    console.log('🚨 Payment Request ID:', paymentRequest.id);
+    console.log('🚨 Amount:', paymentRequest.amount);
+    console.log('🚨 Context:', context);
+    
     try {
       setCurrentStep('processing');
       
@@ -543,9 +556,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         reference: newCheckoutReference
       });
 
-      setTimeout(() => {
-        window.location.href = responseCheckoutUrl;
-      }, 350);
+      // DEBUGGING: Prevent redirect and show debug info
+      alert(`🚨 DEBUG: SUMUP REDIRECT PREVENTED!\n\nCheckout URL: ${responseCheckoutUrl}\nCheckout ID: ${checkoutResponse.id}\nReference: ${newCheckoutReference}\n\nReturn URL: ${sumupReturnUrl}`);
+      console.log('🚨 SUMUP REDIRECT PREVENTED - Checkout session created successfully');
+      console.log('🚨 Return URL that SumUp will call:', sumupReturnUrl);
+      console.log('🚨 Full checkout response:', checkoutResponse);
+      
+      // ORIGINAL REDIRECT - COMMENTED OUT FOR DEBUGGING
+      // setTimeout(() => {
+      //   window.location.href = responseCheckoutUrl;
+      // }, 350);
       
     } catch (error) {
       console.error('Failed to create payment checkout:', error);
@@ -857,6 +877,45 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   <span className="font-medium font-mono">#{paymentRequest.id}</span>
                 </div>
               </div>
+
+              {/* DEBUG: Add test webhook button */}
+              <button
+                onClick={async () => {
+                  const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+                  console.log('🧪 Testing webhook endpoint:', webhookUrl);
+                  
+                  try {
+                    const testPayload = {
+                      id: 'test_event_123',
+                      type: 'checkout.completed',
+                      timestamp: new Date().toISOString(),
+                      data: {
+                        id: 'test_checkout_456',
+                        checkout_reference: `test_ref_${Date.now()}`,
+                        amount: paymentRequest.amount,
+                        currency: paymentRequest.currency || 'EUR',
+                        status: 'COMPLETED',
+                        transaction_id: `test_txn_${Date.now()}`
+                      }
+                    };
+                    
+                    const response = await fetch(webhookUrl, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(testPayload)
+                    });
+                    
+                    const responseText = await response.text();
+                    alert(`🧪 Webhook Test: ${response.status} - ${responseText}`);
+                    
+                  } catch (error) {
+                    alert(`🧪 Webhook Test Failed: ${error}`);
+                  }
+                }}
+                className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium mb-3"
+              >
+                🧪 Test Webhook Endpoint
+              </button>
 
               <button
                 onClick={handleStartPayment}
