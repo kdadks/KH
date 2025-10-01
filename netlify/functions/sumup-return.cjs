@@ -93,29 +93,79 @@ const processWebhookData = async (supabase, webhookData) => {
     // Find payment record by checkout reference or checkout ID
     let paymentRecord = null;
     
+    console.log('🔍 Searching for payment record with:', {
+      checkout_reference: paymentData.checkout_reference,
+      checkout_id: paymentData.id
+    });
+    
     if (paymentData.checkout_reference) {
       // First try to find by checkout reference
-      const { data: payments } = await supabase
+      console.log('📋 Searching by checkout_reference:', paymentData.checkout_reference);
+      
+      const { data: payments, error: refError } = await supabase
         .from('payments')
         .select('*')
         .eq('sumup_checkout_reference', paymentData.checkout_reference)
         .limit(1);
       
+      if (refError) {
+        console.error('❌ Error searching by checkout_reference:', refError);
+      }
+      
+      console.log('📋 Found payments by checkout_reference:', payments?.length || 0);
+      
       if (payments && payments.length > 0) {
         paymentRecord = payments[0];
+        console.log('✅ Found payment record by checkout_reference:', paymentRecord.id);
       }
     }
     
     if (!paymentRecord && paymentData.id) {
       // Try to find by SumUp checkout ID
-      const { data: payments } = await supabase
+      console.log('🆔 Searching by checkout_id:', paymentData.id);
+      
+      const { data: payments, error: idError } = await supabase
         .from('payments')
         .select('*')
         .eq('sumup_checkout_id', paymentData.id)
         .limit(1);
       
+      if (idError) {
+        console.error('❌ Error searching by checkout_id:', idError);
+      }
+      
+      console.log('🆔 Found payments by checkout_id:', payments?.length || 0);
+      
       if (payments && payments.length > 0) {
         paymentRecord = payments[0];
+        console.log('✅ Found payment record by checkout_id:', paymentRecord.id);
+      }
+    }
+    
+    // If still no payment record found, try broader search by payment_request_id
+    if (!paymentRecord && paymentData.checkout_reference) {
+      // Extract payment_request_id from checkout_reference
+      const refParts = paymentData.checkout_reference.split('-');
+      if (refParts.length >= 3 && refParts[0] === 'payment' && refParts[1] === 'request') {
+        const paymentRequestId = refParts[2];
+        console.log('🔗 Searching by payment_request_id:', paymentRequestId);
+        
+        const { data: payments, error: prError } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('payment_request_id', parseInt(paymentRequestId))
+          .limit(1);
+        
+        if (prError) {
+          console.error('❌ Error searching by payment_request_id:', prError);
+        }
+        
+        console.log('🔗 Found payments by payment_request_id:', payments?.length || 0);
+        
+        if (payments && payments.length > 0) {
+          paymentRecord = payments[0];
+          console.log('✅ Found payment record by payment_request_id:', paymentRecord.id);
+        }
       }
     }
 

@@ -299,8 +299,8 @@ const SumUpCheckoutPage: React.FC = () => {
         }
       };
 
-      // Call the webhook endpoint directly
-      const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-webhook`;
+      // Call the SumUp return handler (which processes webhooks and handles redirects)
+      const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
       
       console.log('📡 Sending simulated webhook to:', webhookUrl);
       
