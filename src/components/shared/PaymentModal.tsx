@@ -425,23 +425,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
 
-      const returnUrl = new URL(`${window.location.origin}/payment-success`);
-      returnUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
-      returnUrl.searchParams.set('checkout_reference', newCheckoutReference);
-      returnUrl.searchParams.set('context', context);
+      // Set up return URL for SumUp to call (handles both webhook processing and user redirect)
+      const sumupReturnUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+      
+      // Set up user redirect URLs (these will be handled by our payment success/cancel pages)
+      const successRedirectUrl = new URL(`${window.location.origin}/payment-success`);
+      successRedirectUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
+      successRedirectUrl.searchParams.set('checkout_reference', newCheckoutReference);
+      successRedirectUrl.searchParams.set('context', context);
 
-      const cancelUrl = new URL(`${window.location.origin}/payment-cancelled`);
-      cancelUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
-      cancelUrl.searchParams.set('checkout_reference', newCheckoutReference);
-      cancelUrl.searchParams.set('context', context);
+      const cancelRedirectUrl = new URL(`${window.location.origin}/payment-cancelled`);
+      cancelRedirectUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
+      cancelRedirectUrl.searchParams.set('checkout_reference', newCheckoutReference);
+      cancelRedirectUrl.searchParams.set('context', context);
 
       console.log('Creating SumUp checkout session...', {
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
         merchant_code: environmentConfig.merchantCode,
         environment: currentEnvironment,
-        return_url: returnUrl.toString(),
-        cancel_url: cancelUrl.toString()
+        return_url: sumupReturnUrl,
+        success_redirect: successRedirectUrl.toString(),
+        cancel_redirect: cancelRedirectUrl.toString()
       });
 
       const checkoutResponse = await createSumUpCheckoutSession({
@@ -450,8 +455,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         currency: paymentRequest.currency || 'EUR',
         merchant_code: environmentConfig.merchantCode,
         description: `Payment for ${paymentRequest.service_name || 'Service'}`,
-        return_url: returnUrl.toString(),
-        cancel_url: cancelUrl.toString()
+        return_url: sumupReturnUrl, // SumUp calls this for both webhook and user redirect
+        cancel_url: cancelRedirectUrl.toString() // This is where users go when they cancel
       });
 
       console.log('SumUp checkout session created:', checkoutResponse);
