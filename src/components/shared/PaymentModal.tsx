@@ -419,6 +419,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [isOpen, paymentRequest.booking_id]);
 
   const handleStartPayment = async () => {
+    // SIMPLE CONSOLE OUTPUT
+    console.log('=================================');
+    console.log('PAYMENT STARTED');
+    console.log('Payment Request ID:', paymentRequest.id);
+    console.log('Amount:', paymentRequest.amount);
+    console.log('=================================');
+    
     logToStorage('Payment process started', {
       paymentRequestId: paymentRequest.id,
       amount: paymentRequest.amount,
@@ -990,18 +997,27 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     
                     const responseText = await response.text();
                     
+                    // SIMPLE CONSOLE OUTPUT
+                    console.log('=================================');
+                    console.log('WEBHOOK TEST RESULT:');
+                    console.log('Status:', response.status);
+                    console.log('Response:', responseText);
+                    console.log('=================================');
+                    
                     logToStorage('Webhook test response', {
                       status: response.status,
                       statusText: response.statusText,
                       response: responseText
                     });
                     
-                    console.log(`🧪 Webhook Test Result: ${response.status} - ${responseText}`);
-                    console.log('📋 Full details stored in payment logs. Run viewPaymentLogs() to see all logs.');
-                    
                   } catch (error) {
+                    // SIMPLE ERROR OUTPUT
+                    console.log('=================================');
+                    console.log('WEBHOOK TEST FAILED:');
+                    console.log('Error:', error);
+                    console.log('=================================');
+                    
                     logToStorage('Webhook test failed', { error: String(error) });
-                    console.error(`🧪 Webhook Test Failed: ${error}`);
                   }
                 }}
                 className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium mb-3"
