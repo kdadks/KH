@@ -69,64 +69,116 @@ const isTestMode = (event) => {
 const processWebhookData = async (supabase, data, isTest = false) => {
   try {
     const checkoutRef = data.checkout_reference;
-    if (!checkoutRef) {
-      throw new Error('No checkout_reference provided');
+    const paymentRequestId = data.payment_request_id;
+    
+    console.log(`🔍 Processing ${isTest ? 'TEST' : 'LIVE'} webhook data:`, { checkoutRef, paymentRequestId });
+
+    let payment = null;
+    let paymentRequestData = null;
+
+    // First, get payment request data if available (contains customer_id and booking_id)
+    if (paymentRequestId) {
+      console.log('🔍 Looking up payment request:', paymentRequestId);
+      const { data: paymentRequest, error: prError } = await supabase
+        .from('payment_requests')
+        .select('id, customer_id, booking_id, amount, currency, status, service_name')
+        .eq('id', paymentRequestId)
+        .single();
+
+      if (prError) {
+        console.error('❌ Payment request lookup error:', prError);
+      } else if (paymentRequest) {
+        paymentRequestData = paymentRequest;
+        console.log('✅ Found payment request data:', { 
+          id: paymentRequestData.id,
+          customer_id: paymentRequestData.customer_id,
+          booking_id: paymentRequestData.booking_id,
+          amount: paymentRequestData.amount
+        });
+      }
     }
 
-    console.log(`🔍 Processing ${isTest ? 'TEST' : 'LIVE'} checkout reference:`, checkoutRef);
+    // Find matching payment record - try multiple approaches
+    let searchError = null;
+    
+    // Try 1: Search by checkout reference
+    if (checkoutRef) {
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('id, booking_id, amount, status, payment_request_id, sumup_checkout_reference, customer_id')
+        .eq('sumup_checkout_reference', checkoutRef)
+        .limit(1);
 
-    // Find matching payment record using correct column name
-    const { data: payments, error: searchError } = await supabase
-      .from('payments')
-      .select('id, booking_id, amount, status, payment_request_id, sumup_checkout_reference')
-      .eq('sumup_checkout_reference', checkoutRef)
-      .limit(1);
+      if (!error && payments && payments.length > 0) {
+        payment = payments[0];
+        console.log('✅ Found payment by checkout_reference:', payment.id);
+      } else if (error) {
+        searchError = error;
+      }
+    }
+
+    // Try 2: Search by payment_request_id if no payment found yet
+    if (!payment && paymentRequestId) {
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('id, booking_id, amount, status, payment_request_id, sumup_checkout_reference, customer_id')
+        .eq('payment_request_id', paymentRequestId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && payments && payments.length > 0) {
+        payment = payments[0];
+        console.log('✅ Found payment by payment_request_id:', payment.id);
+      } else if (error) {
+        searchError = error;
+      }
+    }
 
     if (searchError) {
       console.error('❌ Payment search error:', searchError);
       throw searchError;
     }
 
-    let payment = payments?.[0];
+    // Handle missing payment record
+    if (!payment) {
+      if (isTest && paymentRequestData) {
+        // For test mode, create payment using payment_request data to avoid FK violations
+        console.log('🧪 Creating test payment using payment_request data...');
+        
+        const { data: newPayment, error: createError } = await supabase
+          .from('payments')
+          .insert({
+            customer_id: paymentRequestData.customer_id,
+            booking_id: paymentRequestData.booking_id,
+            sumup_checkout_reference: checkoutRef,
+            amount: paymentRequestData.amount,
+            currency: paymentRequestData.currency || 'EUR',
+            status: 'pending',
+            payment_method: 'sumup',
+            payment_request_id: paymentRequestData.id,
+            notes: `Webhook test payment for payment request #${paymentRequestData.id}`
+          })
+          .select()
+          .single();
 
-    // Auto-create mock payment for test mode if not found
-    if (!payment && isTest) {
-      console.log('🧪 Creating mock payment for test mode...');
-      
-      // Generate a proper UUID v4 format for booking_id
-      const generateUUID = () => {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-          const r = Math.random() * 16 | 0;
-          const v = c == 'x' ? r : (r & 0x3 | 0x8);
-          return v.toString(16);
-        });
-      };
-      
-      const mockBookingId = generateUUID();
-      
-      const { data: newPayment, error: createError } = await supabase
-        .from('payments')
-        .insert({
-          customer_id: 1, // Required field - use default customer for test
-          sumup_checkout_reference: checkoutRef,
-          amount: data.amount || 50.00,
-          currency: data.currency || 'EUR',
-          status: 'pending',
-          payment_method: 'sumup',
-          payment_request_id: data.payment_request_id,
-          booking_id: mockBookingId, // Use proper UUID format
-          notes: 'Mock payment for webhook testing'
-        })
-        .select()
-        .single();
+        if (createError) {
+          console.error('❌ Test payment creation failed:', createError);
+          throw createError;
+        }
 
-      if (createError) {
-        console.error('❌ Mock payment creation failed:', createError);
-        throw createError;
+        payment = newPayment;
+        console.log('✅ Test payment created with valid references:', payment.id);
+      } else if (!isTest) {
+        // For real webhooks, payment should already exist
+        const errorMsg = `Payment record not found for checkout reference: ${checkoutRef}`;
+        console.error('❌', errorMsg);
+        throw new Error(errorMsg);
+      } else {
+        // Test mode but no payment request data - fallback error
+        const errorMsg = `Test mode: No payment_request data found for ID: ${paymentRequestId}`;
+        console.error('❌', errorMsg);
+        throw new Error(errorMsg);
       }
-
-      payment = newPayment;
-      console.log('✅ Mock payment created:', payment.id);
     }
 
     if (!payment) {
