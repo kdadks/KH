@@ -124,6 +124,7 @@ export interface CreatePaymentRequestData {
 export interface ProcessPaymentData {
   payment_request_id: number;
   sumup_checkout_id: string;
+  sumup_checkout_reference?: string;
   sumup_transaction_id?: string;
   payment_method?: string;
   sumup_payment_type?: string;

@@ -142,7 +142,8 @@ const SumUpCheckoutPage: React.FC = () => {
               parseInt(paymentRequestId),
               {
                 payment_request_id: parseInt(paymentRequestId),
-                sumup_checkout_id: checkoutId || checkoutReference,
+                sumup_checkout_id: checkoutId,
+                sumup_checkout_reference: checkoutReference,
                 sumup_transaction_id: transactionId,
                 payment_method: 'sumup',
                 sumup_payment_type: 'card'
