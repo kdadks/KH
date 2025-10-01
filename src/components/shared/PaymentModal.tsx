@@ -344,6 +344,41 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     try {
       setCurrentStep('processing');
       
+      // Validate payment request status before proceeding
+      const { data: currentPaymentRequest, error: fetchError } = await supabase
+        .from('payment_requests')
+        .select('id, status, amount, service_name')
+        .eq('id', paymentRequest.id)
+        .single();
+
+      if (fetchError || !currentPaymentRequest) {
+        throw new Error('Payment request not found. Please refresh the page and try again.');
+      }
+
+      if (currentPaymentRequest.status === 'cancelled') {
+        setCurrentStep('error');
+        setErrorMessage('This payment request has been cancelled and can no longer be processed. Please contact us if you need assistance.');
+        return;
+      }
+
+      if (currentPaymentRequest.status === 'paid') {
+        setCurrentStep('error');
+        setErrorMessage('This payment has already been processed. If you believe this is an error, please contact us.');
+        return;
+      }
+
+      if (currentPaymentRequest.status === 'expired') {
+        setCurrentStep('error');
+        setErrorMessage('This payment request has expired. Please contact us to generate a new payment link.');
+        return;
+      }
+
+      if (currentPaymentRequest.status !== 'pending' && currentPaymentRequest.status !== 'sent') {
+        setCurrentStep('error');
+        setErrorMessage('This payment request is not available for processing. Please contact us for assistance.');
+        return;
+      }
+      
       // Get SumUp configuration from database
       const gatewayConfig = await getActiveSumUpGateway();
       

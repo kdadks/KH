@@ -269,6 +269,28 @@ export const sendPaymentRequestEmail = async (
   });
 };
 
+// Payment request cancellation email
+export const sendPaymentRequestCancellationEmail = async (
+  customerEmail: string,
+  cancellationData: {
+    customer_name: string;
+    amount: number;
+    service_name: string;
+    booking_date?: string;
+    booking_id?: string;
+    cancellation_reason?: string;
+  }
+): Promise<boolean> => {
+  return sendEmail('payment_request_cancelled', customerEmail, {
+    customer_name: cancellationData.customer_name,
+    amount: cancellationData.amount,
+    service_name: cancellationData.service_name,
+    booking_date: cancellationData.booking_date,
+    booking_id: cancellationData.booking_id,
+    cancellation_reason: cancellationData.cancellation_reason
+  });
+};
+
 // Booking reminder email
 export const sendBookingReminderEmail = async (
   customerEmail: string,
