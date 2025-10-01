@@ -69,7 +69,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
     // Find matching payment record
     const { data: payments, error: searchError } = await supabase
       .from('payments')
-      .select('id, booking_id, amount, status, payment_request_id')
+      .select('id, booking_id, amount, status, payment_request_id, checkout_reference')
       .eq('checkout_reference', checkoutRef)
       .limit(1);
 
@@ -80,7 +80,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
 
     let payment = payments?.[0];
 
-    // Auto-create mock payment for test mode
+    // Auto-create mock payment for test mode if not found
     if (!payment && isTest) {
       console.log('🧪 Creating mock payment for test mode...');
       
@@ -91,9 +91,11 @@ const processWebhookData = async (supabase, data, isTest = false) => {
           amount: data.amount || 50.00,
           currency: data.currency || 'EUR',
           status: 'pending',
+          payment_method: 'sumup',
           payment_request_id: data.payment_request_id,
           booking_id: data.payment_request_id, // Simplified for test
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          notes: 'Mock payment for webhook testing'
         })
         .select()
         .single();
@@ -108,8 +110,21 @@ const processWebhookData = async (supabase, data, isTest = false) => {
     }
 
     if (!payment) {
-      throw new Error(`Payment not found for checkout reference: ${checkoutRef}`);
+      // For real payments, the payment record should exist (created in PaymentModal)
+      console.error('❌ No payment record found for checkout reference:', checkoutRef);
+      console.log('💡 This might indicate:');
+      console.log('   - Payment record was not created during checkout initiation');
+      console.log('   - Checkout reference mismatch between frontend and webhook');
+      console.log('   - Payment record was deleted or corrupted');
+      throw new Error(`Payment record not found for checkout reference: ${checkoutRef}`);
     }
+
+    console.log('✅ Found payment record:', { 
+      id: payment.id, 
+      status: payment.status,
+      amount: payment.amount,
+      checkout_reference: payment.checkout_reference 
+    });
 
     // Update payment with webhook data
     const updateData = {
