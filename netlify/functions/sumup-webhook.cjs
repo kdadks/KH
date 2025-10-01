@@ -12,6 +12,51 @@ const crypto = require('crypto');
  * - transaction.failed (transaction failed)
  */
 
+// Date formatting function for consistent display (matches payment cancellation emails)
+const formatDisplayDate = (dateString) => {
+  try {
+    // Handle various date formats
+    let date;
+
+    // If it's already a readable format (e.g., "15th January 2025"), return as is
+    if (isNaN(Date.parse(dateString)) && /\d+(st|nd|rd|th)/.test(dateString)) {
+      return dateString;
+    }
+
+    // Parse the date string
+    date = new Date(dateString);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return dateString; // Return original if can't parse
+    }
+
+    // Format as "Wednesday, 1st October 2025"
+    const options = {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    };
+
+    let formatted = date.toLocaleDateString('en-IE', options);
+
+    // Add ordinal suffix to day (1st, 2nd, 3rd, 4th, etc.)
+    const day = date.getDate();
+    let suffix = 'th';
+    if (day % 10 === 1 && day !== 11) suffix = 'st';
+    else if (day % 10 === 2 && day !== 12) suffix = 'nd';
+    else if (day % 10 === 3 && day !== 13) suffix = 'rd';
+
+    // Replace the day number with day + suffix
+    formatted = formatted.replace(/\b\d+\b/, day + suffix);
+
+    return formatted;
+  } catch (error) {
+    return dateString; // Return original if any error occurs
+  }
+};
+
 // Initialize Supabase client
 const createSupabaseClient = () => {
   const { createClient } = require('@supabase/supabase-js');
@@ -108,7 +153,8 @@ const updatePaymentRecord = async (supabase, webhookData) => {
       eventType,
       checkoutId: paymentData.id,
       status: paymentData.status,
-      amount: paymentData.amount
+      amount: paymentData.amount,
+      processedAt: formatDisplayDate(new Date())
     });
     
     // Find payment record by checkout_id or transaction_id
@@ -301,18 +347,25 @@ const updatePaymentRequestStatus = async (supabase, bookingId, status) => {
 };
 
 // Send webhook processing notification (optional)
-const sendWebhookNotification = async (eventType, paymentData, result) => {
+const sendWebhookNotification = async (eventType, paymentData, result, bookingInfo = null) => {
   // Optional: Send admin notification for important events
   if (eventType === 'checkout.completed' && result.success) {
     try {
       // Import email utilities
       const { sendEmail } = await import('./send-email.cjs');
       
+      // Format booking date if available
+      let bookingDateFormatted = '';
+      if (bookingInfo?.appointment_date) {
+        bookingDateFormatted = `\nBooking Date: ${formatDisplayDate(bookingInfo.appointment_date)}`;
+      }
+      
       await sendEmail('admin_notification', 'info@khtherapy.ie', {
         subject: 'Payment Received via Webhook',
-        message: `Payment of €${(paymentData.amount / 100).toFixed(2)} received via SumUp webhook.`,
+        message: `Payment of €${(paymentData.amount / 100).toFixed(2)} received via SumUp webhook.${bookingDateFormatted}`,
         payment_id: result.paymentId,
-        transaction_id: paymentData.transaction_id
+        transaction_id: paymentData.transaction_id,
+        booking_date: bookingInfo?.appointment_date ? formatDisplayDate(bookingInfo.appointment_date) : null
       });
       
       console.log('📧 Admin notification sent for successful payment');
@@ -398,9 +451,46 @@ exports.handler = async (event, context) => {
     // Process the webhook event
     const result = await updatePaymentRecord(supabase, webhookData);
     
-    // Send notification for successful payments
+    // Send notification for successful payments with booking info
     if (result.success) {
-      await sendWebhookNotification(webhookData.type, webhookData.data, result);
+      // Fetch booking information for enhanced notifications
+      let bookingInfo = null;
+      if (result.paymentId) {
+        try {
+          const { data: paymentRecord } = await supabase
+            .from('payments')
+            .select(`
+              booking_id,
+              bookings!inner(
+                appointment_date,
+                appointment_time,
+                service_type,
+                customer_id,
+                customers!inner(
+                  first_name,
+                  last_name,
+                  email
+                )
+              )
+            `)
+            .eq('id', result.paymentId)
+            .single();
+            
+          if (paymentRecord?.bookings) {
+            bookingInfo = {
+              appointment_date: paymentRecord.bookings.appointment_date,
+              appointment_time: paymentRecord.bookings.appointment_time,
+              service_type: paymentRecord.bookings.service_type,
+              customer_name: `${paymentRecord.bookings.customers.first_name} ${paymentRecord.bookings.customers.last_name}`,
+              customer_email: paymentRecord.bookings.customers.email
+            };
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not fetch booking info for notification:', error.message);
+        }
+      }
+      
+      await sendWebhookNotification(webhookData.type, webhookData.data, result, bookingInfo);
     }
     
     // Log the result
