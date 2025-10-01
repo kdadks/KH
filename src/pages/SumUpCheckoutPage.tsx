@@ -9,17 +9,17 @@ const SumUpCheckoutPage: React.FC = () => {
   const sumupEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
   const isProductionMode = sumupEnvironment === 'production';
   
-  // Extract checkout parameters from URL
-  const amount = searchParams.get('amount') || '0';
-  const currency = searchParams.get('currency') || 'EUR';
+  // Extract checkout parameters from URL (support both new short format and legacy format)
+  const amount = searchParams.get('amt') || searchParams.get('amount') || '0';
+  const currency = searchParams.get('cur') || searchParams.get('currency') || 'EUR';
   const description = searchParams.get('description') || 'Payment';
-  const checkoutReference = searchParams.get('checkout_reference') || '';
+  const checkoutReference = searchParams.get('ref') || searchParams.get('checkout_reference') || '';
   const merchantCode = searchParams.get('merchant_code') || '';
   const returnUrl = searchParams.get('return_url') || '';
   const cancelUrl = searchParams.get('cancel_url') || '';
-  const checkoutId = searchParams.get('checkout_id') || '';
-  const paymentRequestId = searchParams.get('payment_request_id') || ''; // Extract payment request ID
-  const context = searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
+  const checkoutId = searchParams.get('id') || searchParams.get('checkout_id') || '';
+  const paymentRequestId = searchParams.get('pr_id') || searchParams.get('payment_request_id') || ''; // Extract payment request ID
+  const context = searchParams.get('ctx') || searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
   // Note: testMode and autoSuccess can be added back when needed for additional functionality
   const environment = searchParams.get('env') || 'sandbox';
 
