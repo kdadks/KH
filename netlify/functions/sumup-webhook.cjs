@@ -3,6 +3,7 @@ const crypto = require('crypto');
 /**
  * SumUp Webhook Handler
  * Handles payment events from SumUp and updates the payments table
+ * Automatically detects environment (production vs sandbox) based on deployment domain
  * 
  * Expected webhook events:
  * - checkout.completed (payment successful)
@@ -11,6 +12,33 @@ const crypto = require('crypto');
  * - transaction.successful (transaction completed)
  * - transaction.failed (transaction failed)
  */
+
+// Environment detection for server-side (Netlify functions)
+const getWebhookEnvironment = () => {
+  // Check Netlify context and environment variables
+  const netlifyContext = process.env.CONTEXT;
+  const nodeEnv = process.env.NODE_ENV;
+  const netlifyUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+  
+  // Production detection based on URL and context
+  const isProduction = (
+    netlifyContext === 'production' && 
+    nodeEnv === 'production' &&
+    netlifyUrl && 
+    netlifyUrl.includes('khtherapy.ie')
+  );
+  
+  const environment = isProduction ? 'production' : 'sandbox';
+  
+  console.log('🌐 Webhook environment detection:', {
+    netlifyContext,
+    nodeEnv,
+    netlifyUrl,
+    detectedEnvironment: environment
+  });
+  
+  return environment;
+};
 
 // Date formatting function for consistent display (matches payment cancellation emails)
 const formatDisplayDate = (dateString) => {
@@ -377,12 +405,17 @@ const sendWebhookNotification = async (eventType, paymentData, result, bookingIn
 
 // Main webhook handler
 exports.handler = async (event, context) => {
+  // Detect environment first
+  const webhookEnvironment = getWebhookEnvironment();
+  const environmentLabel = webhookEnvironment === 'production' ? 'LIVE' : 'TEST';
+  
   // Set CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, x-payload-signature',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-Webhook-Environment': webhookEnvironment
   };
   
   // Handle preflight requests
@@ -403,9 +436,11 @@ exports.handler = async (event, context) => {
     };
   }
   
-  console.log('🎯 SumUp webhook received:', {
+  console.log(`🎯 SumUp webhook received [${environmentLabel}]:`, {
+    environment: webhookEnvironment,
     headers: event.headers,
-    bodyLength: event.body?.length || 0
+    bodyLength: event.body?.length || 0,
+    deploymentContext: process.env.CONTEXT
   });
   
   try {
@@ -502,7 +537,8 @@ exports.handler = async (event, context) => {
       headers,
       body: JSON.stringify({
         success: true,
-        message: 'Webhook processed successfully',
+        message: `Webhook processed successfully in ${environmentLabel} mode`,
+        environment: webhookEnvironment,
         eventId: webhookData.id,
         result
       })
