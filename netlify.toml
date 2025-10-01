@@ -8,11 +8,14 @@
   directory = "netlify/functions"
 
 # Redirect rules for React Router (SPA)
-# Note: This should be the last rule to catch all non-function routes
+# Exclude Netlify functions from SPA redirect
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Catch-all rule for React Router (must be last)
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-# Netlify functions are automatically available at /.netlify/functions/
-# No redirect rules needed for function endpoints
