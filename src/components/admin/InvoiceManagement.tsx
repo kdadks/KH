@@ -25,7 +25,7 @@ import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData, Service } from './types';
 import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
-import { downloadInvoicePDFWithPayments, sendInvoiceByEmail } from '../../services/invoiceService';
+import { downloadInvoicePDFWithPayments, sendInvoiceByEmail, generateInvoicePreview } from '../../services/invoiceService';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import { extractBaseServiceName, getServicePrice, fetchServicePricing, determineTimeSlotType } from '../../services/pricingService';
 
@@ -73,6 +73,10 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   const [bookingPayments, setBookingPayments] = useState<any[]>([]);
   const [invoicePayments, setInvoicePayments] = useState<any[]>([]);
   const [previewInvoiceItems, setPreviewInvoiceItems] = useState<InvoiceItem[]>([]);
+  
+  // PDF preview states
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+  const [isPreviewFromForm, setIsPreviewFromForm] = useState(false);
   
   // Invoice type selection
   const [invoiceType, setInvoiceType] = useState<'online' | 'offline'>('online');
@@ -598,6 +602,76 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }
     
     setViewMode('form');
+  };
+
+  // Function to preview invoice PDF before creation
+  const handlePreviewFromForm = async () => {
+    if (!formData.customer_id || !formData.booking_id) return;
+
+    const customer = customers.find(c => c.id === formData.customer_id);
+    if (!customer) {
+      showError('Customer not found');
+      return;
+    }
+
+    try {
+      // Transform form data to invoice data format
+      const totalAmount = formData.items.reduce((sum, item) => sum + item.total_price, 0);
+      const invoiceData = {
+        id: undefined,
+        invoice_number: generateInvoiceNumber(),
+        customer_id: formData.customer_id,
+        invoice_date: formData.invoice_date,
+        due_date: formData.due_date,
+        status: invoiceType === 'offline' ? 'paid' : 'draft',
+        subtotal: totalAmount,
+        vat_amount: 0,
+        total_amount: totalAmount,
+        total: totalAmount,
+        total_paid: invoiceType === 'offline' ? totalAmount : customerDeposits.amount,
+        deposit_paid: customerDeposits.amount,
+        notes: formData.notes,
+        currency: 'EUR'
+      };
+
+      const customerData = {
+        id: customer.id,
+        name: getCustomerDisplayName(customer),
+        email: customer.email,
+        phone: customer.phone,
+        address: [
+          customer.address_line_1,
+          customer.address_line_2,
+          customer.city,
+          customer.county,
+          customer.eircode
+        ].filter(Boolean).join(', ')
+      };
+
+      const transformedItems = formData.items.map((item, index) => ({
+        id: index + 1,
+        invoice_id: 0, // temp
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price
+      }));
+
+      // Generate PDF preview
+      const result = await generateInvoicePreview(invoiceData, customerData, transformedItems);
+      
+      if (result.success && result.data?.blob) {
+        const url = URL.createObjectURL(result.data.blob);
+        setPreviewPdfUrl(url);
+        setIsPreviewFromForm(true);
+        setViewMode('preview');
+      } else {
+        showError(result.error || 'Failed to generate preview');
+      }
+    } catch (error) {
+      console.error('Error generating preview:', error);
+      showError('Failed to generate invoice preview');
+    }
   };
 
   // Function to fetch all payments for a booking (both with and without invoice_id)
@@ -1440,6 +1514,18 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
               Cancel
             </button>
             <button
+              onClick={handlePreviewFromForm}
+              disabled={!formData.booking_id}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                formData.booking_id 
+                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              <Eye size={16} />
+              <span>Preview</span>
+            </button>
+            <button
               onClick={handleSubmitForm}
               disabled={!formData.booking_id}
               className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
@@ -1955,6 +2041,70 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   }
 
   // Invoice Preview View
+  if (viewMode === 'preview' && previewPdfUrl) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => {
+                setViewMode(isPreviewFromForm ? 'form' : 'list');
+                setIsPreviewFromForm(false);
+                if (previewPdfUrl) {
+                  URL.revokeObjectURL(previewPdfUrl);
+                  setPreviewPdfUrl(null);
+                }
+              }}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Invoice Preview</h2>
+              <p className="text-gray-600">Preview of invoice before creation</p>
+            </div>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => {
+                setViewMode(isPreviewFromForm ? 'form' : 'list');
+                setIsPreviewFromForm(false);
+                if (previewPdfUrl) {
+                  URL.revokeObjectURL(previewPdfUrl);
+                  setPreviewPdfUrl(null);
+                }
+              }}
+              className={`px-4 py-2 rounded-lg transition-colors ${isPreviewFromForm ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              {isPreviewFromForm ? 'Back to Form' : 'Back to List'}
+            </button>
+            <button
+              onClick={() => {
+                const link = document.createElement('a');
+                link.href = previewPdfUrl;
+                link.download = `invoice-preview.pdf`;
+                link.click();
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+            >
+              <Download size={16} />
+              <span>Download PDF</span>
+            </button>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <iframe
+            src={previewPdfUrl}
+            width="100%"
+            height="600px"
+            style={{ border: 'none' }}
+            title="Invoice Preview"
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (viewMode === 'preview' && previewingInvoice) {
     const customer = previewingInvoice.customer;
     const items = previewInvoiceItems.length > 0 ? previewInvoiceItems : (previewingInvoice.items || []);
