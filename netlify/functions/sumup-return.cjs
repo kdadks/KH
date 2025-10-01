@@ -107,6 +107,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
       const { data: newPayment, error: createError } = await supabase
         .from('payments')
         .insert({
+          customer_id: 1, // Required field - use default customer for test
           sumup_checkout_reference: checkoutRef,
           amount: data.amount || 50.00,
           currency: data.currency || 'EUR',
@@ -114,7 +115,6 @@ const processWebhookData = async (supabase, data, isTest = false) => {
           payment_method: 'sumup',
           payment_request_id: data.payment_request_id,
           booking_id: mockBookingId, // Use proper UUID format
-          created_at: new Date().toISOString(),
           notes: 'Mock payment for webhook testing'
         })
         .select()

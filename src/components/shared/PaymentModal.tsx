@@ -494,6 +494,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const { data: initialPayment, error: paymentCreateError } = await supabase
         .from('payments')
         .insert({
+          customer_id: paymentRequest.customer_id || 1, // Required field - fallback to test customer
           amount: paymentRequest.amount,
           currency: paymentRequest.currency || 'EUR',
           status: 'pending',
@@ -501,7 +502,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           sumup_checkout_reference: newCheckoutReference,
           payment_request_id: paymentRequest.id,
           booking_id: paymentRequest.booking_id,
-          created_at: new Date().toISOString(),
           notes: `SumUp payment initiated for PR #${paymentRequest.id}`
         })
         .select()
@@ -1043,6 +1043,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     console.log('Environment debug response:', envResponse.status, envText);
                   } catch (error) {
                     console.error('Environment debug failed:', error);
+                  }
+
+                  // Test database schema inspection
+                  console.log('Inspecting payments table schema...');
+                  try {
+                    const schemaUrl = `${window.location.origin}/.netlify/functions/inspect-schema`;
+                    const schemaResponse = await fetch(schemaUrl, { method: 'GET' });
+                    const schemaText = await schemaResponse.text();
+                    console.log('Schema inspection response:', schemaResponse.status, schemaText);
+                  } catch (error) {
+                    console.error('Schema inspection failed:', error);
                   }
                   
                   console.log('=================================');
