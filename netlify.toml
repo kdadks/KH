@@ -8,18 +8,11 @@
   directory = "netlify/functions"
 
 # Redirect rules for React Router (SPA)
+# Note: This should be the last rule to catch all non-function routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Webhook endpoints (don't redirect these)
-[[redirects]]
-  from = "/.netlify/functions/sumup-webhook"
-  to = "/.netlify/functions/sumup-webhook"
-  status = 200
-
-[[redirects]]  
-  from = "/.netlify/functions/payment-status-checker"
-  to = "/.netlify/functions/payment-status-checker" 
-  status = 200
+# Netlify functions are automatically available at /.netlify/functions/
+# No redirect rules needed for function endpoints
