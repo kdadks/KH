@@ -967,7 +967,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
               <button
                 onClick={async () => {
+                  // First test the simple test-webhook endpoint to verify Netlify functions work
+                  const testUrl = `${window.location.origin}/.netlify/functions/test-webhook`;
+                  
+                  console.log('=================================');
+                  console.log('TESTING NETLIFY FUNCTIONS:');
+                  console.log('Test URL:', testUrl);
+                  console.log('=================================');
+                  
+                  try {
+                    const testResponse = await fetch(testUrl, { method: 'GET' });
+                    const testText = await testResponse.text();
+                    console.log('Test webhook response:', testResponse.status, testText);
+                    
+                    if (testResponse.status !== 200) {
+                      console.error('❌ Netlify functions not working properly');
+                      return;
+                    }
+                  } catch (error) {
+                    console.error('❌ Failed to reach test endpoint:', error);
+                    return;
+                  }
+                  
+                  // Now test the sumup-return endpoint
                   const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+                  
+                  console.log('=================================');
+                  console.log('WEBHOOK ENDPOINT DEBUG:');
+                  console.log('Origin:', window.location.origin);
+                  console.log('Full URL:', webhookUrl);
+                  console.log('=================================');
                   
                   logToStorage('Testing webhook endpoint', { url: webhookUrl });
                   
