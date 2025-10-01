@@ -256,7 +256,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
       sumup_event_type: data.type || 'checkout.completed',
       sumup_event_id: data.id,
       sumup_checkout_reference: checkoutRef,
-      status: data.status === 'COMPLETED' ? 'completed' : 'failed'
+      status: data.status === 'paid' || data.status === 'COMPLETED' ? 'paid' : 'failed'
     };
 
     const { error: updateError } = await supabase
