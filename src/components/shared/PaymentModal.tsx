@@ -498,7 +498,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           currency: paymentRequest.currency || 'EUR',
           status: 'pending',
           payment_method: 'sumup',
-          checkout_reference: newCheckoutReference,
+          sumup_checkout_reference: newCheckoutReference,
           payment_request_id: paymentRequest.id,
           booking_id: paymentRequest.booking_id,
           created_at: new Date().toISOString(),
