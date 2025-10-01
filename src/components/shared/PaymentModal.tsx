@@ -1081,8 +1081,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   logToStorage('Testing webhook endpoint', { url: webhookUrl });
                   
                   try {
-                    // Use a real checkout reference format that the webhook can find
-                    const realCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
+                    // Use the actual checkout reference that should already exist in database
+                    const actualCheckoutReference = checkoutReference || `payment-request-${paymentRequest.id}-${Date.now()}`;
+                    
+                    console.log('🔍 Using actual payment data for webhook test:');
+                    console.log('Payment Request:', paymentRequest.id);
+                    console.log('Customer ID:', paymentRequest.customer_id);
+                    console.log('Booking ID:', paymentRequest.booking_id);
+                    console.log('Checkout Reference:', actualCheckoutReference);
                     
                     const testPayload = {
                       id: 'test_event_123',
@@ -1090,18 +1096,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       timestamp: new Date().toISOString(),
                       data: {
                         id: 'test_checkout_456',
-                        checkout_reference: realCheckoutReference,
+                        checkout_reference: actualCheckoutReference,
                         amount: paymentRequest.amount,
                         currency: paymentRequest.currency || 'EUR',
                         status: 'COMPLETED',
                         transaction_id: `test_txn_${Date.now()}`,
-                        payment_request_id: paymentRequest.id
+                        payment_request_id: paymentRequest.id,
+                        customer_id: paymentRequest.customer_id,
+                        booking_id: paymentRequest.booking_id
                       }
                     };
                     
                     console.log('=================================');
                     console.log('WEBHOOK TEST PAYLOAD:');
-                    console.log('Checkout Reference:', realCheckoutReference);
+                    console.log('Checkout Reference:', actualCheckoutReference);
                     console.log('Payment Request ID:', paymentRequest.id);
                     console.log('=================================');
                     
