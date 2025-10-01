@@ -4,6 +4,10 @@ import { CreditCard, CheckCircle } from 'lucide-react';
 import { PaymentEnvironmentIndicator } from '../components/ui/PaymentEnvironmentIndicator';
 
 const SumUpCheckoutPage: React.FC = () => {
+  // IMMEDIATE ALERT: Verify this component is loading
+  console.log('🚨 SumUpCheckoutPage component is loading!');
+  alert('🚨 DEBUG: SumUpCheckoutPage component loaded!');
+  
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const sumupEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
@@ -320,25 +324,13 @@ const SumUpCheckoutPage: React.FC = () => {
             successParams.append('payment_request_id', paymentRequestId);
           }
           
-          window.location.href = `${successUrl}?${successParams.toString()}`;
+          // DEBUGGING: Prevent redirect to capture logs
+          alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED! Would redirect to: ${successUrl}?${successParams.toString()}`);
+          console.log('🚨 SUCCESS REDIRECT PREVENTED - Check console for webhook logs');
         } else {
-          // For email context, redirect to home with success message
-          if (context === 'email') {
-            window.location.href = `/?payment_success=true&amount=${amount}&currency=${currency}`;
-          } else if (context === 'dashboard') {
-            window.location.href = `/my-account?payment_success=true&amount=${amount}&currency=${currency}`;
-          } else {
-            // Default to payment success page
-            navigate('/payment-success', {
-              state: {
-                transaction_id: transactionId,
-                checkout_reference: checkoutReference,
-                amount: amount,
-                currency: currency,
-                payment_request_id: paymentRequestId
-              }
-            });
-          }
+          // DEBUGGING: Prevent redirects to capture logs
+          alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED! Context: ${context}, Amount: ${amount}`);
+          console.log('🚨 SUCCESS REDIRECT PREVENTED - Check console for webhook logs');
         }
       } else {
         // User cancelled or simulation failure - also simulate webhook for failure
@@ -371,45 +363,16 @@ const SumUpCheckoutPage: React.FC = () => {
           }
         }
         
-        const failureUrl = cancelUrl || '/payment-cancelled';
-        
-        if (cancelUrl) {
-          const cancelParams = new URLSearchParams({
-            checkout_reference: checkoutReference,
-            reason: 'user_cancelled'
-          });
-          
-          window.location.href = `${failureUrl}?${cancelParams.toString()}`;
-        } else {
-          navigate('/payment-cancelled', {
-            state: {
-              checkout_reference: checkoutReference,
-              reason: 'user_cancelled'
-            }
-          });
-        }
+        // DEBUGGING: Prevent failure redirects to capture logs
+        alert(`🚨 DEBUG: FAILURE REDIRECT PREVENTED! Checkout: ${checkoutReference}`);
+        console.log('🚨 FAILURE REDIRECT PREVENTED - Check console for webhook logs');
       }
     } catch (error) {
       console.error('Payment processing error:', error);
       
-      // In case of error, redirect to failure page
-      const failureUrl = cancelUrl || '/payment-cancelled';
-      
-      if (cancelUrl) {
-        const cancelParams = new URLSearchParams({
-          checkout_reference: checkoutReference,
-          reason: 'processing_error'
-        });
-        
-        window.location.href = `${failureUrl}?${cancelParams.toString()}`;
-      } else {
-        navigate('/payment-cancelled', {
-          state: {
-            checkout_reference: checkoutReference,
-            reason: 'processing_error'
-          }
-        });
-      }
+      // DEBUGGING: Prevent error redirects to capture logs
+      alert(`🚨 DEBUG: ERROR REDIRECT PREVENTED! Error occurred during payment processing`);
+      console.log('🚨 ERROR REDIRECT PREVENTED - Check console for error details and webhook logs');
     } finally {
       setProcessing(false);
     }
@@ -547,7 +510,11 @@ const SumUpCheckoutPage: React.FC = () => {
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
                     <button
-                      onClick={() => simulatePaymentOutcome('success')}
+                      onClick={() => {
+                        alert('🚨 BUTTON CLICKED: Simulate Success button was clicked!');
+                        console.log('🚨 BUTTON CLICKED: About to call simulatePaymentOutcome');
+                        simulatePaymentOutcome('success');
+                      }}
                       disabled={processing}
                       className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                     >
