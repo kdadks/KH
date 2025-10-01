@@ -7,8 +7,32 @@
 [functions]
   directory = "netlify/functions"
 
+# Scheduled Functions - Payment Status Checking
+# Check payment statuses every 5 minutes
+[[plugins]]
+  package = "@netlify/plugin-scheduled-functions"
+
+# Environment variables for production
+[context.production.environment]
+  SUMUP_WEBHOOK_SECRET = "your-sumup-webhook-secret-here"
+  
+# Environment variables for preview/branch deploys  
+[context.branch-deploy.environment]
+  SUMUP_WEBHOOK_SECRET = "test-webhook-secret"
+
 # Redirect rules for React Router (SPA)
 [[redirects]]
   from = "/*"
   to = "/index.html"
+  status = 200
+
+# Webhook endpoints (don't redirect these)
+[[redirects]]
+  from = "/.netlify/functions/sumup-webhook"
+  to = "/.netlify/functions/sumup-webhook"
+  status = 200
+
+[[redirects]]  
+  from = "/.netlify/functions/payment-status-checker"
+  to = "/.netlify/functions/payment-status-checker" 
   status = 200
