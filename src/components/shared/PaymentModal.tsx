@@ -236,10 +236,54 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   redirectAfterPayment,
   context = 'booking' // Default context
 }) => {
-  // IMMEDIATE DEBUG: Verify PaymentModal is loading
-  console.log('🚨 PaymentModal component initialized!');
+  // Store payment logs in localStorage for post-redirect analysis
+  const logToStorage = (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const logEntry = { timestamp, message, data };
+    
+    console.log(`💾 ${message}`, data || '');
+    
+    const existingLogs = localStorage.getItem('payment_debug_logs');
+    const logs = existingLogs ? JSON.parse(existingLogs) : [];
+    logs.push(logEntry);
+    
+    // Keep only last 50 logs
+    if (logs.length > 50) logs.splice(0, logs.length - 50);
+    
+    localStorage.setItem('payment_debug_logs', JSON.stringify(logs));
+  };
+
+  // Function to view debug logs
+  const viewDebugLogs = () => {
+    const logs = localStorage.getItem('payment_debug_logs');
+    if (logs) {
+      const parsedLogs = JSON.parse(logs);
+      console.log('📋 PAYMENT DEBUG LOGS:', parsedLogs);
+      console.table(parsedLogs.map(log => ({ 
+        time: new Date(log.timestamp).toLocaleTimeString(),
+        message: log.message 
+      })));
+      return parsedLogs;
+    } else {
+      console.log('📋 No payment debug logs found');
+      return [];
+    }
+  };
+
+  // Make debug functions globally available
+  (window as any).viewPaymentLogs = viewDebugLogs;
+  (window as any).clearPaymentLogs = () => {
+    localStorage.removeItem('payment_debug_logs');
+    console.log('🗑️ Payment debug logs cleared');
+  };
+
+  // Log PaymentModal initialization
   if (isOpen) {
-    alert('🚨 DEBUG: PaymentModal is OPEN and active!');
+    logToStorage('PaymentModal opened', { 
+      paymentRequestId: paymentRequest.id, 
+      amount: paymentRequest.amount,
+      context: context 
+    });
   }
   
   const { showSuccess, showError, showInfo } = useToast();
@@ -375,12 +419,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [isOpen, paymentRequest.booking_id]);
 
   const handleStartPayment = async () => {
-    // IMMEDIATE DEBUG: Alert when payment process starts
-    alert('🚨 DEBUG: handleStartPayment called! Starting payment process...');
-    console.log('🚨 PAYMENT PROCESS STARTED');
-    console.log('🚨 Payment Request ID:', paymentRequest.id);
-    console.log('🚨 Amount:', paymentRequest.amount);
-    console.log('🚨 Context:', context);
+    logToStorage('Payment process started', {
+      paymentRequestId: paymentRequest.id,
+      amount: paymentRequest.amount,
+      currency: paymentRequest.currency,
+      context: context
+    });
     
     try {
       setCurrentStep('processing');
@@ -556,11 +600,23 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         reference: newCheckoutReference
       });
 
-      // DEBUGGING: Prevent redirect and show debug info
-      alert(`🚨 DEBUG: SUMUP REDIRECT PREVENTED!\n\nCheckout URL: ${responseCheckoutUrl}\nCheckout ID: ${checkoutResponse.id}\nReference: ${newCheckoutReference}\n\nReturn URL: ${sumupReturnUrl}`);
-      console.log('🚨 SUMUP REDIRECT PREVENTED - Checkout session created successfully');
-      console.log('🚨 Return URL that SumUp will call:', sumupReturnUrl);
-      console.log('🚨 Full checkout response:', checkoutResponse);
+      // Store SumUp checkout details in localStorage before redirect
+      logToStorage('SumUp checkout session created', {
+        checkoutUrl: responseCheckoutUrl,
+        checkoutId: checkoutResponse.id,
+        checkoutReference: newCheckoutReference,
+        returnUrl: sumupReturnUrl,
+        fullResponse: checkoutResponse
+      });
+      
+      // DEBUGGING: Prevent redirect to examine logs
+      logToStorage('SumUp redirect prevented for debugging', { 
+        wouldRedirectTo: responseCheckoutUrl 
+      });
+      
+      // Show non-intrusive notification instead of alert
+      console.log('� SumUp checkout created successfully. Redirect prevented for debugging.');
+      console.log('� Check localStorage payment_debug_logs for full details');
       
       // ORIGINAL REDIRECT - COMMENTED OUT FOR DEBUGGING
       // setTimeout(() => {
@@ -879,10 +935,34 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
 
               {/* DEBUG: Add test webhook button */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <button
+                  onClick={() => {
+                    const logs = viewDebugLogs();
+                    if (logs.length > 0) {
+                      console.log('📋 Check console for detailed payment logs');
+                    }
+                  }}
+                  className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                >
+                  📋 View Logs
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('payment_debug_logs');
+                    console.log('🗑️ Payment debug logs cleared');
+                  }}
+                  className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors font-medium text-sm"
+                >
+                  🗑️ Clear Logs
+                </button>
+              </div>
+
               <button
                 onClick={async () => {
                   const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
-                  console.log('🧪 Testing webhook endpoint:', webhookUrl);
+                  
+                  logToStorage('Testing webhook endpoint', { url: webhookUrl });
                   
                   try {
                     const testPayload = {
@@ -895,9 +975,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         amount: paymentRequest.amount,
                         currency: paymentRequest.currency || 'EUR',
                         status: 'COMPLETED',
-                        transaction_id: `test_txn_${Date.now()}`
+                        transaction_id: `test_txn_${Date.now()}`,
+                        payment_request_id: paymentRequest.id
                       }
                     };
+                    
+                    logToStorage('Sending webhook test payload', testPayload);
                     
                     const response = await fetch(webhookUrl, {
                       method: 'POST',
@@ -906,10 +989,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     });
                     
                     const responseText = await response.text();
-                    alert(`🧪 Webhook Test: ${response.status} - ${responseText}`);
+                    
+                    logToStorage('Webhook test response', {
+                      status: response.status,
+                      statusText: response.statusText,
+                      response: responseText
+                    });
+                    
+                    console.log(`🧪 Webhook Test Result: ${response.status} - ${responseText}`);
+                    console.log('📋 Full details stored in payment logs. Run viewPaymentLogs() to see all logs.');
                     
                   } catch (error) {
-                    alert(`🧪 Webhook Test Failed: ${error}`);
+                    logToStorage('Webhook test failed', { error: String(error) });
+                    console.error(`🧪 Webhook Test Failed: ${error}`);
                   }
                 }}
                 className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium mb-3"
