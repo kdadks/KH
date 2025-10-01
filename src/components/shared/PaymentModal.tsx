@@ -489,6 +489,35 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
 
+      // Create payment record early so webhook can find it later
+      console.log('🏦 Creating initial payment record for webhook lookup...');
+      const { data: initialPayment, error: paymentCreateError } = await supabase
+        .from('payments')
+        .insert({
+          amount: paymentRequest.amount,
+          currency: paymentRequest.currency || 'EUR',
+          status: 'pending',
+          payment_method: 'sumup',
+          checkout_reference: newCheckoutReference,
+          payment_request_id: paymentRequest.id,
+          booking_id: paymentRequest.booking_id,
+          created_at: new Date().toISOString(),
+          notes: `SumUp payment initiated for PR #${paymentRequest.id}`
+        })
+        .select()
+        .single();
+
+      if (paymentCreateError) {
+        console.error('❌ Failed to create initial payment record:', paymentCreateError);
+        throw new Error('Failed to initialize payment tracking. Please try again.');
+      }
+
+      console.log('✅ Initial payment record created:', initialPayment.id);
+      logToStorage('Initial payment record created', { 
+        paymentId: initialPayment.id, 
+        checkoutReference: newCheckoutReference 
+      });
+
       // Set up return URL for SumUp to call (handles both webhook processing and user redirect)
       const sumupReturnUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
       
