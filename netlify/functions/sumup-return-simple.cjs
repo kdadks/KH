@@ -1,9 +1,9 @@
 /**
- * Minimal SumUp Return Handler for routing test
+ * Simplified SumUp Return Handler for testing
  */
 
 exports.handler = async (event, context) => {
-  console.log('🚀 Minimal sumup-return called:', event.httpMethod);
+  console.log('🔥 Simple sumup-return called:', event.httpMethod);
   
   return {
     statusCode: 200,
@@ -12,10 +12,10 @@ exports.handler = async (event, context) => {
       'Access-Control-Allow-Origin': '*'
     },
     body: JSON.stringify({
-      message: 'Minimal sumup-return working - routing fixed!',
+      message: 'Simple sumup-return working',
       method: event.httpMethod,
       timestamp: new Date().toISOString(),
-      route_test: 'success'
+      test: true
     })
   };
 };
