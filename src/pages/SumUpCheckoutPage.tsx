@@ -304,8 +304,72 @@ const SumUpCheckoutPage: React.FC = () => {
             </div>
           )}
 
-          {/* Payment Form - Only show if not already paid */}
-          {(!paymentRequestId || (!loadingStatus && paymentRequestStatus !== 'paid')) && !statusError && (
+          {/* Cancelled Payment State */}
+          {paymentRequestId && !loadingStatus && paymentRequestStatus === 'cancelled' && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-red-700 mb-2">Payment Request Cancelled</h3>
+              <p className="text-gray-600 mb-4">
+                This payment request has been cancelled and can no longer be processed.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                If you need to make a payment, please contact us to generate a new payment request.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => window.location.href = 'mailto:info@khtherapy.ie?subject=Payment Request - Need Assistance'}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Contact Support
+                </button>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Return to Home
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Expired Payment State */}
+          {paymentRequestId && !loadingStatus && paymentRequestStatus === 'expired' && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-orange-700 mb-2">Payment Request Expired</h3>
+              <p className="text-gray-600 mb-4">
+                This payment request has expired and can no longer be processed.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Please contact us to generate a new payment request for {formatAmount(amount)}.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => window.location.href = 'mailto:info@khtherapy.ie?subject=Payment Request Expired - Need New Link'}
+                  className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                >
+                  Contact Support
+                </button>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Return to Home
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Form - Only show if payment request is valid */}
+          {(!paymentRequestId || (!loadingStatus && paymentRequestStatus && ['pending', 'sent'].includes(paymentRequestStatus))) && !statusError && (
             <>
               {!isProductionMode && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
