@@ -93,6 +93,9 @@ const processWebhookData = async (supabase, data, isTest = false) => {
     if (!payment && isTest) {
       console.log('🧪 Creating mock payment for test mode...');
       
+      // Generate a proper UUID for booking_id if needed
+      const mockBookingId = 'test-booking-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      
       const { data: newPayment, error: createError } = await supabase
         .from('payments')
         .insert({
@@ -102,7 +105,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
           status: 'pending',
           payment_method: 'sumup',
           payment_request_id: data.payment_request_id,
-          booking_id: data.payment_request_id, // Simplified for test
+          booking_id: mockBookingId, // Use string instead of integer
           created_at: new Date().toISOString(),
           notes: 'Mock payment for webhook testing'
         })
@@ -121,10 +124,24 @@ const processWebhookData = async (supabase, data, isTest = false) => {
     if (!payment) {
       // For real payments, the payment record should exist (created in PaymentModal)
       console.error('❌ No payment record found for checkout reference:', checkoutRef);
-      console.log('💡 This might indicate:');
-      console.log('   - Payment record was not created during checkout initiation');
-      console.log('   - Checkout reference mismatch between frontend and webhook');
-      console.log('   - Payment record was deleted or corrupted');
+      console.log('💡 Searching all recent payments to debug...');
+      
+      try {
+        const { data: recentPayments, error: debugError } = await supabase
+          .from('payments')
+          .select('id, sumup_checkout_reference, payment_request_id, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (!debugError && recentPayments) {
+          console.log('📊 Recent payments found:', recentPayments);
+          const matching = recentPayments.filter(p => p.sumup_checkout_reference && p.sumup_checkout_reference.includes(checkoutRef.split('-')[2]));
+          console.log('🔍 Potential matches:', matching);
+        }
+      } catch (debugError) {
+        console.error('Debug query failed:', debugError);
+      }
+      
       throw new Error(`Payment record not found for checkout reference: ${checkoutRef}`);
     }
 
