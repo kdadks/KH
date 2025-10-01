@@ -7,6 +7,7 @@ import Button from '../shared/Button';
 import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
+import { cancelPaymentRequest } from '../../utils/paymentCancellation';
 import {
   emailValidation,
   phoneValidation,
@@ -106,7 +107,17 @@ const HeroSection: React.FC = () => {
     });
   };
 
-  const resetForm = () => {
+  const resetForm = async () => {
+    // Cancel any active payment request
+    if (selectedPaymentRequest?.id) {
+      try {
+        await cancelPaymentRequest(selectedPaymentRequest.id, 'User cancelled and started over');
+        console.log('✅ Payment request cancelled during form reset');
+      } catch (error) {
+        console.error('❌ Failed to cancel payment request during form reset:', error);
+      }
+    }
+
     reset();
     setSuccessMsg('');
     setCountdown(20);

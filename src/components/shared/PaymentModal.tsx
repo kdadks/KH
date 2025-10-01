@@ -7,6 +7,7 @@ import { processPaymentRequest, sendPaymentFailedNotification } from '../../util
 import { getActiveSumUpGateway } from '../../utils/paymentManagementUtils';
 import { useToast } from './toastContext';
 import { supabase } from '../../supabaseClient';
+import { handlePaymentModalCancellation } from '../../utils/paymentCancellation';
 
 interface SumUpPaymentFormProps {
   amount: number;
@@ -234,6 +235,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   context = 'booking' // Default context
 }) => {
   const { showSuccess, showError, showInfo } = useToast();
+
+  // Handle modal close with payment cancellation
+  const handleModalClose = async () => {
+    // Only cancel if we're in the middle of a payment process and payment hasn't been completed
+    if (currentStep === 'payment' || currentStep === 'processing' || currentStep === 'confirm') {
+      await handlePaymentModalCancellation(paymentRequest.id, onClose, showInfo);
+    } else {
+      // For success, error, or redirect states, just close normally
+      onClose();
+    }
+  };
   const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error' | 'redirect'>('confirm');
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -683,7 +695,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleModalClose}
             disabled={currentStep === 'processing'}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
           >
@@ -948,7 +960,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
           {currentStep !== 'processing' && currentStep !== 'success' && (
             <button
-              onClick={onClose}
+              onClick={handleModalClose}
               className="text-sm text-gray-600 hover:text-gray-800"
             >
               Cancel
