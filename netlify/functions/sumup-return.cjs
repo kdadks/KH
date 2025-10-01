@@ -1,21 +1,234 @@
 /**
- * Minimal SumUp Return Handler for routing test
+ * SumUp Return URL Handler with Safe Import Loading
  */
 
-exports.handler = async (event, context) => {
-  console.log('🚀 Minimal sumup-return called:', event.httpMethod);
+// Safe Supabase client initialization
+let supabaseClient = null;
+
+const initializeSupabase = async () => {
+  try {
+    if (supabaseClient) return supabaseClient;
+    
+    const { createClient } = require('@supabase/supabase-js');
+    
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ Missing Supabase configuration');
+      throw new Error('Missing Supabase configuration');
+    }
+    
+    supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('✅ Supabase client initialized successfully');
+    return supabaseClient;
+  } catch (error) {
+    console.error('❌ Failed to initialize Supabase:', error);
+    throw error;
+  }
+};
+
+// Environment detection
+const getWebhookEnvironment = () => {
+  const netlifyContext = process.env.CONTEXT;
+  const netlifyUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+  const branchName = process.env.HEAD || process.env.BRANCH;
   
-  return {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
-    },
-    body: JSON.stringify({
-      message: 'Minimal sumup-return working - routing fixed!',
-      method: event.httpMethod,
-      timestamp: new Date().toISOString(),
-      route_test: 'success'
-    })
-  };
+  const isUATOrStaging = (
+    netlifyContext !== 'production' ||
+    (netlifyUrl && (
+      netlifyUrl.includes('netlify.app') ||
+      netlifyUrl.includes('uat') ||
+      netlifyUrl.includes('preview')
+    )) ||
+    (branchName && branchName !== 'main')
+  );
+  
+  return isUATOrStaging ? 'sandbox' : 'production';
+};
+
+// Test mode detection
+const isTestMode = (event) => {
+  const userAgent = event.headers['user-agent'] || '';
+  const isTestPayload = event.body && event.body.includes('test_event');
+  const hasTestQuery = event.queryStringParameters?.test === 'true';
+  
+  return userAgent.includes('Mozilla') || isTestPayload || hasTestQuery;
+};
+
+// Process webhook data
+const processWebhookData = async (supabase, data, isTest = false) => {
+  try {
+    const checkoutRef = data.checkout_reference;
+    if (!checkoutRef) {
+      throw new Error('No checkout_reference provided');
+    }
+
+    console.log(`🔍 Processing ${isTest ? 'TEST' : 'LIVE'} checkout reference:`, checkoutRef);
+
+    // Find matching payment record
+    const { data: payments, error: searchError } = await supabase
+      .from('payments')
+      .select('id, booking_id, amount, status, payment_request_id')
+      .eq('checkout_reference', checkoutRef)
+      .limit(1);
+
+    if (searchError) {
+      console.error('❌ Payment search error:', searchError);
+      throw searchError;
+    }
+
+    let payment = payments?.[0];
+
+    // Auto-create mock payment for test mode
+    if (!payment && isTest) {
+      console.log('🧪 Creating mock payment for test mode...');
+      
+      const { data: newPayment, error: createError } = await supabase
+        .from('payments')
+        .insert({
+          checkout_reference: checkoutRef,
+          amount: data.amount || 50.00,
+          currency: data.currency || 'EUR',
+          status: 'pending',
+          payment_request_id: data.payment_request_id,
+          booking_id: data.payment_request_id, // Simplified for test
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('❌ Mock payment creation failed:', createError);
+        throw createError;
+      }
+
+      payment = newPayment;
+      console.log('✅ Mock payment created:', payment.id);
+    }
+
+    if (!payment) {
+      throw new Error(`Payment not found for checkout reference: ${checkoutRef}`);
+    }
+
+    // Update payment with webhook data
+    const updateData = {
+      webhook_processed_at: new Date().toISOString(),
+      sumup_event_type: data.type || 'checkout.completed',
+      sumup_event_id: data.id,
+      sumup_checkout_reference: checkoutRef,
+      status: data.status === 'COMPLETED' ? 'completed' : 'failed'
+    };
+
+    const { error: updateError } = await supabase
+      .from('payments')
+      .update(updateData)
+      .eq('id', payment.id);
+
+    if (updateError) {
+      console.error('❌ Payment update error:', updateError);
+      throw updateError;
+    }
+
+    console.log('✅ Payment updated successfully:', payment.id);
+    return { success: true, paymentId: payment.id, updated: updateData };
+
+  } catch (error) {
+    console.error('❌ processWebhookData error:', error);
+    throw error;
+  }
+};
+
+exports.handler = async (event, context) => {
+  const webhookEnvironment = getWebhookEnvironment();
+  const environmentLabel = webhookEnvironment === 'production' ? 'LIVE' : 'TEST';
+  
+  console.log(`🎯 SumUp return URL called [${environmentLabel}]:`, {
+    method: event.httpMethod,
+    query: event.queryStringParameters,
+    bodyLength: event.body?.length || 0,
+    userAgent: event.headers['user-agent']?.substring(0, 50)
+  });
+
+  try {
+    // Handle GET requests (simple endpoint test)
+    if (event.httpMethod === 'GET') {
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        body: JSON.stringify({
+          message: 'SumUp return endpoint active',
+          method: 'GET',
+          environment: environmentLabel,
+          timestamp: new Date().toISOString()
+        })
+      };
+    }
+
+    // Handle POST requests (webhook processing)
+    if (event.httpMethod === 'POST') {
+      const testMode = isTestMode(event);
+      console.log(`📦 Processing ${testMode ? 'TEST' : 'LIVE'} webhook payload`);
+
+      let webhookData;
+      try {
+        webhookData = JSON.parse(event.body);
+      } catch (parseError) {
+        console.error('❌ Invalid JSON payload:', parseError);
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Invalid JSON payload' })
+        };
+      }
+
+      // Initialize Supabase
+      const supabase = await initializeSupabase();
+      
+      // Process webhook data
+      const result = await processWebhookData(supabase, webhookData.data || webhookData, testMode);
+      
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        body: JSON.stringify({
+          success: true,
+          message: 'Webhook processed successfully',
+          environment: environmentLabel,
+          testMode: testMode,
+          result: result,
+          timestamp: new Date().toISOString()
+        })
+      };
+    }
+
+    // Unsupported method
+    return {
+      statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+
+  } catch (error) {
+    console.error('❌ Handler error:', error);
+    
+    return {
+      statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({
+        error: 'Internal server error',
+        message: error.message,
+        timestamp: new Date().toISOString()
+      })
+    };
+  }
 };
