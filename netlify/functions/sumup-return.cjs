@@ -93,8 +93,16 @@ const processWebhookData = async (supabase, data, isTest = false) => {
     if (!payment && isTest) {
       console.log('🧪 Creating mock payment for test mode...');
       
-      // Generate a proper UUID for booking_id if needed
-      const mockBookingId = 'test-booking-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      // Generate a proper UUID v4 format for booking_id
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0;
+          const v = c == 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      };
+      
+      const mockBookingId = generateUUID();
       
       const { data: newPayment, error: createError } = await supabase
         .from('payments')
@@ -105,7 +113,7 @@ const processWebhookData = async (supabase, data, isTest = false) => {
           status: 'pending',
           payment_method: 'sumup',
           payment_request_id: data.payment_request_id,
-          booking_id: mockBookingId, // Use string instead of integer
+          booking_id: mockBookingId, // Use proper UUID format
           created_at: new Date().toISOString(),
           notes: 'Mock payment for webhook testing'
         })
