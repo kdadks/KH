@@ -13,7 +13,7 @@ const initializeSupabase = async () => {
     
     // Use VITE_SUPABASE_URL as fallback since it's already available
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
     
     console.log('🔗 Supabase configuration:', {
       url: supabaseUrl ? 'SET' : 'NOT SET',
@@ -131,26 +131,64 @@ const processWebhookData = async (supabase, data, isTest = false) => {
 
     if (!payment) {
       // For real payments, the payment record should exist (created in PaymentModal)
-      console.error('❌ No payment record found for checkout reference:', checkoutRef);
-      console.log('💡 Searching all recent payments to debug...');
+      console.log('❌ No payment record found for checkout reference:', checkoutRef);
+      console.log('💡 Searching by payment_request_id as backup...');
       
-      try {
-        const { data: recentPayments, error: debugError } = await supabase
+      // Try to find by payment_request_id if checkout reference lookup fails
+      if (data.payment_request_id) {
+        const { data: backupPayments, error: backupError } = await supabase
           .from('payments')
-          .select('id, sumup_checkout_reference, payment_request_id, created_at')
+          .select('id, booking_id, amount, status, payment_request_id, sumup_checkout_reference')
+          .eq('payment_request_id', data.payment_request_id)
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(1);
         
-        if (!debugError && recentPayments) {
-          console.log('📊 Recent payments found:', recentPayments);
-          const matching = recentPayments.filter(p => p.sumup_checkout_reference && p.sumup_checkout_reference.includes(checkoutRef.split('-')[2]));
-          console.log('🔍 Potential matches:', matching);
+        if (!backupError && backupPayments && backupPayments.length > 0) {
+          payment = backupPayments[0];
+          console.log('✅ Found payment by payment_request_id:', payment.id);
         }
-      } catch (debugError) {
-        console.error('Debug query failed:', debugError);
       }
       
-      throw new Error(`Payment record not found for checkout reference: ${checkoutRef}`);
+      // If still no payment found, create one for test mode OR fail for real payments
+      if (!payment && isTest) {
+        console.log('🧪 Creating mock payment for test mode...');
+        // Only create mock payment in test mode
+        const generateUUID = () => {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        };
+        
+        const mockBookingId = generateUUID();
+        
+        const { data: newPayment, error: createError } = await supabase
+          .from('payments')
+          .insert({
+            customer_id: data.customer_id || 1, // Use provided customer_id or default
+            sumup_checkout_reference: checkoutRef,
+            amount: data.amount || 50.00,
+            currency: data.currency || 'EUR',
+            status: 'pending',
+            payment_method: 'sumup',
+            payment_request_id: data.payment_request_id,
+            booking_id: data.booking_id || mockBookingId, // Use provided booking_id or generate mock
+            notes: 'Mock payment for webhook testing'
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('❌ Mock payment creation failed:', createError);
+          throw createError;
+        }
+
+        payment = newPayment;
+        console.log('✅ Mock payment created:', payment.id);
+      } else if (!payment) {
+        throw new Error(`Payment record not found for checkout reference: ${checkoutRef}`);
+      }
     }
 
     console.log('✅ Found payment record:', { 
