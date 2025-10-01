@@ -460,15 +460,26 @@ exports.handler = async (event, context) => {
   });
   
   try {
-    // Verify SumUp webhook signature and payload
-    const signature = event.headers['x-payload-signature'];
+    // Check if this is a sandbox simulation request
+    const userAgent = event.headers['user-agent'] || '';
+    const isSandboxSimulation = (
+      webhookEnvironment === 'sandbox' && 
+      userAgent.includes('SumUp-Webhook/Sandbox')
+    );
     
-    if (!verifyWebhookSignature(event.body, signature, null)) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Invalid webhook payload' })
-      };
+    if (isSandboxSimulation) {
+      console.log('🧪 Processing sandbox webhook simulation');
+    } else {
+      // Verify SumUp webhook signature and payload for real webhooks
+      const signature = event.headers['x-payload-signature'];
+      
+      if (!verifyWebhookSignature(event.body, signature, null)) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Invalid webhook payload' })
+        };
+      }
     }
     
     // Parse webhook payload
