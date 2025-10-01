@@ -39,15 +39,32 @@ export const getPaymentEnvironment = (): PaymentEnvironment => {
     href: window.location.href
   });
 
-  // Production domain check
+  // Production domain check - ONLY exact production domains
   const productionDomains = [
     'khtherapy.ie',
     'www.khtherapy.ie'
   ];
 
-  const isProduction = productionDomains.includes(hostname) && protocol === 'https:';
+  // UAT/Staging/Preview domains should always be sandbox
+  const isUATOrStaging = (
+    hostname.includes('netlify.app') ||
+    hostname.includes('staging') ||
+    hostname.includes('uat') ||
+    hostname.includes('preview') ||
+    hostname.includes('dev') ||
+    hostname.includes('test') ||
+    hostname === 'localhost'
+  );
 
-  if (isProduction) {
+  const isExactProductionDomain = productionDomains.includes(hostname) && protocol === 'https:';
+
+  if (isUATOrStaging) {
+    console.log('🧪 UAT/Staging environment detected - Forcing sandbox mode');
+    console.log('📍 Current hostname:', hostname);
+    return 'sandbox';
+  }
+
+  if (isExactProductionDomain) {
     console.log('💰 Production payment environment detected - Using live SumUp integration');
     return 'production';
   } else {
@@ -104,11 +121,12 @@ export const getSumUpEnvironmentConfig = () => {
       appId: import.meta.env.VITE_SUMUP_PRODUCTION_APP_ID || import.meta.env.VITE_SUMUP_APP_ID
     };
   } else {
+    // Sandbox mode: Use temporary keys that trigger mock/simulation behavior
     return {
       environment: 'sandbox' as const,
-      apiKey: import.meta.env.VITE_SUMUP_SANDBOX_API_KEY || import.meta.env.VITE_SUMUP_API_KEY,
-      merchantCode: import.meta.env.VITE_SUMUP_SANDBOX_MERCHANT_CODE || import.meta.env.VITE_SUMUP_MERCHANT_CODE,
-      appId: import.meta.env.VITE_SUMUP_SANDBOX_APP_ID || import.meta.env.VITE_SUMUP_APP_ID
+      apiKey: import.meta.env.VITE_SUMUP_SANDBOX_API_KEY || 'sandbox-test-key-for-workflow-testing',
+      merchantCode: import.meta.env.VITE_SUMUP_SANDBOX_MERCHANT_CODE || 'SANDBOX_TEST',
+      appId: import.meta.env.VITE_SUMUP_SANDBOX_APP_ID || 'sandbox-app-id'
     };
   }
 };
