@@ -111,6 +111,12 @@ const HeroSection: React.FC = () => {
     // Cancel any active payment request - check both state locations
     const paymentRequestToCancel = selectedPaymentRequest || paymentState.paymentRequest;
     
+    console.log('🔍 Analyzing payment request for cancellation:', {
+      selectedPaymentRequest: selectedPaymentRequest,
+      paymentStateRequest: paymentState.paymentRequest,
+      paymentRequestToCancel: paymentRequestToCancel
+    });
+    
     if (paymentRequestToCancel?.id) {
       try {
         await cancelPaymentRequest(paymentRequestToCancel.id, 'User cancelled and started over');
@@ -119,9 +125,11 @@ const HeroSection: React.FC = () => {
         console.error('❌ Failed to cancel payment request during form reset:', error);
       }
     } else {
-      console.log('ℹ️ No active payment request found to cancel:', {
-        selectedPaymentRequest: selectedPaymentRequest?.id,
-        paymentStateRequest: paymentState.paymentRequest?.id
+      console.log('ℹ️ No active payment request ID found to cancel. Checking structure:', {
+        selectedPaymentRequestStructure: selectedPaymentRequest ? Object.keys(selectedPaymentRequest) : null,
+        paymentStateRequestStructure: paymentState.paymentRequest ? Object.keys(paymentState.paymentRequest) : null,
+        selectedPaymentRequestId: selectedPaymentRequest?.id,
+        paymentStateRequestId: paymentState.paymentRequest?.id
       });
     }
 
