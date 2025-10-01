@@ -304,6 +304,7 @@ const SumUpCheckoutPage: React.FC = () => {
       const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
       
       console.log('📡 Sending simulated webhook to:', webhookUrl);
+      console.log('📡 Webhook payload:', JSON.stringify(webhookPayload, null, 2));
       
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -315,10 +316,15 @@ const SumUpCheckoutPage: React.FC = () => {
         body: JSON.stringify(webhookPayload)
       });
 
+      console.log('📡 Webhook response status:', response.status);
+      console.log('📡 Webhook response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (response.ok) {
-        console.log('✅ Webhook simulation successful');
+        const responseText = await response.text();
+        console.log('✅ Webhook simulation successful, response:', responseText);
       } else {
-        console.warn('⚠️ Webhook simulation failed:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.warn('⚠️ Webhook simulation failed:', response.status, response.statusText, errorText);
       }
     } catch (error) {
       console.error('❌ Webhook simulation error:', error);
