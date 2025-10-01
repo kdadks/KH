@@ -108,14 +108,21 @@ const HeroSection: React.FC = () => {
   };
 
   const resetForm = async () => {
-    // Cancel any active payment request
-    if (selectedPaymentRequest?.id) {
+    // Cancel any active payment request - check both state locations
+    const paymentRequestToCancel = selectedPaymentRequest || paymentState.paymentRequest;
+    
+    if (paymentRequestToCancel?.id) {
       try {
-        await cancelPaymentRequest(selectedPaymentRequest.id, 'User cancelled and started over');
-        console.log('✅ Payment request cancelled during form reset');
+        await cancelPaymentRequest(paymentRequestToCancel.id, 'User cancelled and started over');
+        console.log('✅ Payment request cancelled during form reset:', paymentRequestToCancel.id);
       } catch (error) {
         console.error('❌ Failed to cancel payment request during form reset:', error);
       }
+    } else {
+      console.log('ℹ️ No active payment request found to cancel:', {
+        selectedPaymentRequest: selectedPaymentRequest?.id,
+        paymentStateRequest: paymentState.paymentRequest?.id
+      });
     }
 
     reset();
@@ -1291,7 +1298,16 @@ const HeroSection: React.FC = () => {
 
                   <div className="text-center">
                     <button
-                      onClick={resetForm}
+                      onClick={() => {
+                        console.log('🔄 Cancel and start over clicked in HeroSection');
+                        console.log('Current state:', {
+                          selectedPaymentRequest: selectedPaymentRequest?.id,
+                          paymentStateRequest: paymentState.paymentRequest?.id,
+                          showPaymentModal,
+                          paymentCompleted: paymentState.paymentCompleted
+                        });
+                        resetForm();
+                      }}
                       className="text-gray-500 hover:text-gray-700 text-sm underline"
                     >
                       Cancel and start over
