@@ -11,14 +11,20 @@ const initializeSupabase = async () => {
     
     const { createClient } = require('@supabase/supabase-js');
     
-    const supabaseUrl = process.env.SUPABASE_URL;
+    // Use VITE_SUPABASE_URL as fallback since it's already available
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    console.log('🔗 Supabase configuration:', {
+      url: supabaseUrl ? 'SET' : 'NOT SET',
+      serviceKey: supabaseServiceKey ? 'SET' : 'NOT SET',
+      usingViteUrl: !process.env.SUPABASE_URL && !!process.env.VITE_SUPABASE_URL
+    });
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('❌ Missing required Netlify environment variables:');
-      console.error('   - SUPABASE_URL (should be: https://hlmqgghrrmvstbmvwsni.supabase.co)');
-      console.error('   - SUPABASE_SERVICE_ROLE_KEY (service role key from Supabase dashboard)');
-      console.error('📝 Please add these in Netlify Dashboard > Site Settings > Environment Variables');
+      console.error('   - SUPABASE_URL or VITE_SUPABASE_URL:', !!supabaseUrl);
+      console.error('   - SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceKey);
       throw new Error('Missing Supabase configuration - please check Netlify environment variables');
     }
     
