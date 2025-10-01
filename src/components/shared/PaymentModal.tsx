@@ -989,14 +989,43 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     return;
                   }
                   
-                  // Now test the sumup-return endpoint
+                  // Test debug webhook first, then sumup-return
+                  const debugUrl = `${window.location.origin}/.netlify/functions/debug-webhook`;
                   const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+                  
+                  console.log('Testing debug-webhook endpoint first...');
+                  try {
+                    const debugResponse = await fetch(debugUrl, { method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ test: 'debug' })
+                    });
+                    const debugText = await debugResponse.text();
+                    console.log('Debug webhook response:', debugResponse.status, debugText);
+                  } catch (error) {
+                    console.error('Debug webhook failed:', error);
+                  }
                   
                   console.log('=================================');
                   console.log('WEBHOOK ENDPOINT DEBUG:');
                   console.log('Origin:', window.location.origin);
                   console.log('Full URL:', webhookUrl);
                   console.log('=================================');
+                  
+                  // Test GET request first to see if endpoint exists
+                  try {
+                    console.log('Testing GET request to sumup-return...');
+                    const getResponse = await fetch(webhookUrl, { method: 'GET' });
+                    const getText = await getResponse.text();
+                    console.log('GET response:', getResponse.status, getText.substring(0, 200));
+                    
+                    if (getText.includes('<!doctype html>')) {
+                      console.error('❌ sumup-return endpoint returning HTML - routing issue not fixed');
+                      console.log('❌ Deployment may not have propagated yet or configuration issue');
+                      return;
+                    }
+                  } catch (error) {
+                    console.error('❌ GET request to sumup-return failed:', error);
+                  }
                   
                   logToStorage('Testing webhook endpoint', { url: webhookUrl });
                   
