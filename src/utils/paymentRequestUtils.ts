@@ -439,9 +439,11 @@ export async function processPaymentRequest(
       status: 'processing' as const,
       payment_method: paymentData.payment_method || 'card',
       sumup_checkout_id: paymentData.sumup_checkout_id,
+      sumup_checkout_reference: paymentData.sumup_checkout_reference, // Add checkout reference
       sumup_transaction_id: paymentData.sumup_transaction_id,
       sumup_payment_type: paymentData.sumup_payment_type,
       booking_id: paymentRequest.booking_id, // Include booking_id from payment request
+      payment_request_id: paymentRequestId, // Add payment_request_id for webhook lookup
       notes: `Payment for payment request #${paymentRequestId}`
     };
 
