@@ -69,9 +69,10 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Generate simple HTML if browser request
+    // Generate simple HTML if browser request (unless json=1 requested)
+    const query = event.queryStringParameters || {};
     const userAgent = event.headers['user-agent'] || '';
-    const isBrowser = userAgent.includes('Mozilla') && !event.queryStringParameters?.json;
+    const isBrowser = userAgent.includes('Mozilla') && !query.json;
 
     if (isBrowser) {
       const html = `
