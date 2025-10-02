@@ -93,6 +93,24 @@ const verifyWebhookSignature = (payload, signature, secret) => {
   }
 };
 
+// Map SumUp status to valid database status values (shared function)
+const mapSumUpStatus = (sumupStatus) => {
+  const statusLower = (sumupStatus || '').toLowerCase();
+  
+  // Success cases
+  if (statusLower === 'completed' || statusLower === 'success' || statusLower === 'paid') {
+    return 'paid';
+  }
+  
+  // Pending cases  
+  if (statusLower === 'pending' || statusLower === 'processing' || statusLower === 'in_progress') {
+    return 'pending';
+  }
+  
+  // All other cases (failed, cancelled, error, etc.) map to failed
+  return 'failed';
+};
+
 // Process SumUp return URL data
 const processSumUpReturn = async (supabase, data) => {
   try {
@@ -143,23 +161,7 @@ const processSumUpReturn = async (supabase, data) => {
       throw new Error(`No payment found for checkout_reference: ${checkout_reference} or checkout_id: ${checkout_id}`);
     }
 
-    // Map SumUp status to valid database status values
-    const mapSumUpStatus = (sumupStatus) => {
-      const statusLower = (sumupStatus || '').toLowerCase();
-      
-      // Success cases
-      if (statusLower === 'completed' || statusLower === 'success' || statusLower === 'paid') {
-        return 'paid';
-      }
-      
-      // Pending cases  
-      if (statusLower === 'pending' || statusLower === 'processing' || statusLower === 'in_progress') {
-        return 'pending';
-      }
-      
-      // All other cases (failed, cancelled, error, etc.) map to failed
-      return 'failed';
-    };
+    // Use shared status mapping function
 
     const mappedStatus = mapSumUpStatus(status);
     
@@ -231,44 +233,120 @@ const processSumUpWebhook = async (supabase, eventData) => {
     // Map SumUp webhook status to our database values
     const mappedStatus = mapSumUpStatus(payload.status);
     
-    // Find payment by checkout reference
-    const { data: existingPayments, error: searchError } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('sumup_checkout_reference', payload.reference)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    // Find payment by checkout reference - try multiple search strategies
+    let payment = null;
+    let searchAttempts = [];
 
-    if (searchError) {
-      console.error('❌ Payment search error:', searchError);
-      throw searchError;
+    // Strategy 1: Search by exact checkout_reference match
+    if (payload.reference) {
+      const { data: payments1, error: error1 } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('sumup_checkout_reference', payload.reference)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      searchAttempts.push({
+        method: 'checkout_reference',
+        query: payload.reference,
+        found: payments1?.length || 0,
+        error: error1?.message
+      });
+
+      if (!error1 && payments1 && payments1.length > 0) {
+        payment = payments1[0];
+        console.log('✅ Found payment by checkout_reference:', payment.id);
+      }
     }
 
-    let payment = existingPayments && existingPayments.length > 0 ? existingPayments[0] : null;
+    // Strategy 2: Search by checkout_id if not found
+    if (!payment && payload.checkout_id) {
+      const { data: payments2, error: error2 } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('sumup_checkout_id', payload.checkout_id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      searchAttempts.push({
+        method: 'checkout_id', 
+        query: payload.checkout_id,
+        found: payments2?.length || 0,
+        error: error2?.message
+      });
+
+      if (!error2 && payments2 && payments2.length > 0) {
+        payment = payments2[0];
+        console.log('✅ Found payment by checkout_id:', payment.id);
+      }
+    }
+
+    // Strategy 3: For test webhooks, try to find any recent payment
+    if (!payment && eventData.test_webhook_payload) {
+      console.log('🧪 Test webhook - searching for recent payment to update');
+      
+      const { data: payments3, error: error3 } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('gateway', 'sumup')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      searchAttempts.push({
+        method: 'recent_sumup_payment',
+        query: 'gateway=sumup',
+        found: payments3?.length || 0,
+        error: error3?.message
+      });
+
+      if (!error3 && payments3 && payments3.length > 0) {
+        payment = payments3[0];
+        console.log('🧪 Using recent SumUp payment for test:', payment.id);
+      }
+    }
+
+    console.log('🔍 Payment search summary:', searchAttempts);
 
     if (!payment) {
-      console.log('⚠️ No existing payment found for checkout reference:', payload.reference);
-      console.log('💡 This might be a webhook arriving before return URL processing');
+      console.log('⚠️ No payment found after all search strategies');
+      console.log('💡 Webhook data:', { 
+        reference: payload.reference, 
+        checkout_id: payload.checkout_id,
+        test_mode: !!eventData.test_webhook_payload
+      });
       
-      // For webhooks arriving before return URL, we might need to create a minimal record
-      // or simply log for later processing when the return URL is called
       return {
         success: true,
-        action: 'logged_for_later_processing',
+        action: 'no_payment_found',
         checkout_reference: payload.reference,
-        status: mappedStatus
+        status: mappedStatus,
+        searchAttempts: searchAttempts
       };
     }
 
-    // Update existing payment with webhook data
+    // Update existing payment with comprehensive webhook data
     const updateData = {
       status: mappedStatus,
       webhook_processed_at: new Date().toISOString(),
-      sumup_event_type: event_type,
+      sumup_event_type: event_type || 'checkout.status.updated',
       sumup_event_id: eventId,
       sumup_checkout_id: payload.checkout_id,
+      sumup_checkout_reference: payload.reference || payment.sumup_checkout_reference,
+      payment_request_id: payment.payment_request_id, // Preserve existing value
       updated_at: new Date().toISOString()
     };
+
+    console.log('📊 Webhook update data:', {
+      paymentId: payment.id,
+      webhook_columns: {
+        webhook_processed_at: updateData.webhook_processed_at,
+        sumup_event_type: updateData.sumup_event_type,
+        sumup_event_id: updateData.sumup_event_id,
+        sumup_checkout_reference: updateData.sumup_checkout_reference,
+        payment_request_id: updateData.payment_request_id
+      },
+      status: updateData.status
+    });
 
     const { data: updatedPayments, error: updateError } = await supabase
       .from('payments')
@@ -285,7 +363,13 @@ const processSumUpWebhook = async (supabase, eventData) => {
     console.log('✅ Payment updated from webhook:', {
       paymentId: payment.id,
       status: mappedStatus,
-      checkout_reference: payload.reference
+      webhook_columns_updated: {
+        webhook_processed_at: updateData.webhook_processed_at,
+        sumup_event_type: updateData.sumup_event_type,
+        sumup_event_id: updateData.sumup_event_id,
+        sumup_checkout_reference: updateData.sumup_checkout_reference,
+        payment_request_id: updateData.payment_request_id
+      }
     });
 
     return {
@@ -293,7 +377,14 @@ const processSumUpWebhook = async (supabase, eventData) => {
       action: 'payment_updated',
       paymentId: payment.id,
       status: mappedStatus,
-      checkout_reference: payload.reference
+      webhook_data: {
+        webhook_processed_at: updateData.webhook_processed_at,
+        sumup_event_type: updateData.sumup_event_type,
+        sumup_event_id: updateData.sumup_event_id,
+        sumup_checkout_reference: updateData.sumup_checkout_reference,
+        payment_request_id: updateData.payment_request_id
+      },
+      updatedPayment: updatedPayments
     };
 
   } catch (error) {
