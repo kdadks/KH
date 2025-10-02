@@ -111,16 +111,12 @@ const HeroSection: React.FC = () => {
     // Cancel any active payment request - check both state locations
     const paymentRequestToCancel = selectedPaymentRequest || paymentState.paymentRequest;
     
-    console.log('🔍 Analyzing payment request for cancellation:', {
-      selectedPaymentRequest: selectedPaymentRequest,
-      paymentStateRequest: paymentState.paymentRequest,
-      paymentRequestToCancel: paymentRequestToCancel
-    });
+    // Analyzing payment request for cancellation
     
     if (paymentRequestToCancel?.id) {
       try {
         await cancelPaymentRequest(paymentRequestToCancel.id, 'User cancelled and started over');
-        console.log('✅ Payment request cancelled during form reset:', paymentRequestToCancel.id);
+        // Payment request cancelled during form reset
       } catch (error) {
         console.error('❌ Failed to cancel payment request during form reset:', error);
       }
@@ -255,14 +251,14 @@ const HeroSection: React.FC = () => {
       if (matchingSlot) {
         const [timeValue] = matchingSlot.split('|');
         setValue('time', timeValue);
-        console.log('✅ Auto-selected time slot:', timeValue);
+        // Auto-selected time slot
         setAutoSelectTime(null); // Clear the auto-select flag
       } else {
         console.warn('⚠️ Auto-select time not found in available slots:', autoSelectTime);
         
         // Try to extract just the time part from the target
         const targetTimePart = autoSelectTime.split('|')[0];
-        console.log('🔍 Trying to match just time part:', targetTimePart);
+        // Trying alternative time match
         
         const alternativeMatch = timeSlots.find(slot => {
           const [timeValue] = slot.split('|');
@@ -272,7 +268,7 @@ const HeroSection: React.FC = () => {
         if (alternativeMatch) {
           const [timeValue] = alternativeMatch.split('|');
           setValue('time', timeValue);
-          console.log('✅ Auto-selected time slot (alternative match):', timeValue);
+          // Auto-selected time slot (alternative match)
         } else {
           console.error('❌ No matching time slot found at all');
         }

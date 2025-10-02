@@ -241,7 +241,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const timestamp = new Date().toISOString();
     const logEntry = { timestamp, message, data };
     
-    console.log(`💾 ${message}`, data || '');
+        // Debug log: ${message}
     
     const existingLogs = localStorage.getItem('payment_debug_logs');
     const logs = existingLogs ? JSON.parse(existingLogs) : [];
@@ -258,14 +258,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const logs = localStorage.getItem('payment_debug_logs');
     if (logs) {
       const parsedLogs = JSON.parse(logs);
-      console.log('📋 PAYMENT DEBUG LOGS:', parsedLogs);
+      // Debug logs retrieved
       console.table(parsedLogs.map(log => ({ 
         time: new Date(log.timestamp).toLocaleTimeString(),
         message: log.message 
       })));
       return parsedLogs;
     } else {
-      console.log('📋 No payment debug logs found');
+      // No debug logs found
       return [];
     }
   };
@@ -274,7 +274,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   (window as any).viewPaymentLogs = viewDebugLogs;
   (window as any).clearPaymentLogs = () => {
     localStorage.removeItem('payment_debug_logs');
-    console.log('🗑️ Payment debug logs cleared');
+    // Debug logs cleared
   };
 
   // Log PaymentModal initialization
@@ -401,12 +401,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           setIsDevelopmentMode(developmentMode);
           setGatewayEnvironment(currentEnvironment);
           
-          console.log('🌍 Environment Detection:', {
-            currentEnvironment,
-            developmentMode,
-            domain: window.location.hostname,
-            environmentConfig
-          });
+          // Environment detection completed
         } catch (error) {
           console.warn('Failed to detect environment, defaulting to sandbox:', error);
           setIsDevelopmentMode(true);
@@ -420,11 +415,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleStartPayment = async () => {
     // SIMPLE CONSOLE OUTPUT
-    console.log('=================================');
-    console.log('PAYMENT STARTED');
-    console.log('Payment Request ID:', paymentRequest.id);
-    console.log('Amount:', paymentRequest.amount);
-    console.log('=================================');
+    // Payment process initiated
     
     logToStorage('Payment process started', {
       paymentRequestId: paymentRequest.id,
@@ -490,7 +481,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCheckoutReference(newCheckoutReference);
 
       // DUPLICATE FIX: Don't create initial payment - let SumUp webhook/return handler create the only payment record
-      console.log('🏦 Skipping initial payment creation - SumUp webhook will create payment record');
+      // Payment record will be created by webhook
       logToStorage('Payment flow initiated - no initial record created', { 
         checkoutReference: newCheckoutReference,
         reason: 'Preventing duplicate payments - SumUp handler will create single record'
@@ -530,7 +521,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         cancel_url: cancelRedirectUrl.toString() // This is where users go when they cancel
       });
 
-      console.log('SumUp checkout session created:', checkoutResponse);
+      // SumUp checkout session created successfully
 
       setCheckoutSessionId(checkoutResponse.id);
 
