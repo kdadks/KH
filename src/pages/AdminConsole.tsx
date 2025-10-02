@@ -26,6 +26,7 @@ import InvoiceManagement from '../components/admin/InvoiceManagement';
 import PaymentManagement from '../components/admin/PaymentManagement';
 import CustomerManagement from '../components/admin/CustomerManagement';
 import { BookingFormData, Package as PackageType, Customer, Invoice, Service } from '../components/admin/types';
+import { PaymentRequest, Payment, PaymentGateway } from '../utils/paymentManagementUtils';
 import { getBookingsWithCustomers } from '../utils/customerBookingUtils';
 import { useToast } from '../components/shared/toastContext';
 import { 
@@ -70,11 +71,22 @@ const AdminConsole = () => {
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
-  const [allPaymentRequests, setAllPaymentRequests] = useState<any[]>([]);
-  const [allPayments, setAllPayments] = useState<any[]>([]);
-  const [allRecentPayments, setAllRecentPayments] = useState<any[]>([]);
-  const [allPaymentGateways, setAllPaymentGateways] = useState<any[]>([]);
-  const [paymentStatistics, setPaymentStatistics] = useState<any>(null);
+  const [allPaymentRequests, setAllPaymentRequests] = useState<PaymentRequest[]>([]);
+  const [allPayments, setAllPayments] = useState<Payment[]>([]);
+  const [allRecentPayments, setAllRecentPayments] = useState<Payment[]>([]);
+  const [allPaymentGateways, setAllPaymentGateways] = useState<PaymentGateway[]>([]);
+  const [paymentStatistics, setPaymentStatistics] = useState<{
+    totalRequests: number;
+    pendingRequests: number;
+    paidRequests: number;
+    failedRequests: number;
+    totalAmount: number;
+    paidAmount: number;
+    outstandingAmount: number;
+    paymentRate: number;
+    totalPayments: number;
+    recentActivity: PaymentRequest[];
+  } | null>(null);
   const [filterDate, setFilterDate] = useState('');
   const [filterRange, setFilterRange] = useState<{start: string; end: string} | null>(null);
 
@@ -171,7 +183,7 @@ const AdminConsole = () => {
       fetchAllCustomers();
       fetchAllInvoices();
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for refresh events from child components
   useEffect(() => {
@@ -234,7 +246,7 @@ const AdminConsole = () => {
       window.removeEventListener('refreshBookings', handleRefreshBookings);
       window.removeEventListener('refreshDashboard', handleRefreshDashboard);
     };
-  }, [isLoggedIn]);
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only fetch data when first logging in, not on tab changes
   // This prevents losing payment status and reduces unnecessary API calls
@@ -254,7 +266,7 @@ const AdminConsole = () => {
     if (isLoggedIn && allPaymentRequests.length === 0) {
       fetchAllPaymentData();
     }
-  }, [isLoggedIn]); // Only depend on login state, not active tab
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Login handler
   const handleLogin = async (e: React.FormEvent) => {
@@ -302,20 +314,20 @@ const AdminConsole = () => {
         return;
       }
       
-      // Now try the customer join query with force refresh to get latest booking_reference data
-      const { bookings: bookingsWithCustomers, error: customerError } = await getBookingsWithCustomers(true);
+      // Now try the customer join query to get latest booking_reference data
+      const { bookings: bookingsWithCustomers, error: customerError } = await getBookingsWithCustomers();
       
       if (!customerError && bookingsWithCustomers) {
         // Transform the data to include customer details while maintaining backward compatibility
-        const transformedBookings = bookingsWithCustomers.map((booking: any) => {
+        const transformedBookings = bookingsWithCustomers.map((booking) => {
           const transformed = {
             ...booking,
-            // If customer relationship exists, use it, otherwise fall back to direct fields
+            // Create customer fields from customer relationship
             customer_name: booking.customers?.first_name && booking.customers?.last_name 
               ? `${booking.customers.first_name} ${booking.customers.last_name}`
-              : booking.customer_name,
-            customer_email: booking.customers?.email || booking.customer_email,
-            customer_phone: booking.customers?.phone || booking.customer_phone,
+              : 'Unknown Customer',
+            customer_email: booking.customers?.email || '',
+            customer_phone: booking.customers?.phone || '',
             // Keep the customer object for potential future use
             customer_details: booking.customers
           };
@@ -907,7 +919,7 @@ const AdminConsole = () => {
                 ].map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
+                    onClick={() => setActiveTab(tab.id as 'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
                     className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors group"
                   >
                     <div className="flex items-center mb-2">

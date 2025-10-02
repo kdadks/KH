@@ -564,7 +564,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     const maxVisiblePages = 5;
     
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
     
     if (endPage - startPage < maxVisiblePages - 1) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
@@ -664,7 +664,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Receipt className="w-4 h-4 mr-2" />
+              <Euro className="w-4 h-4 mr-2" />
               Invoice Reports & Analytics
             </button>
           </div>
@@ -820,7 +820,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                   {/* Invoice Summary Statistics */}
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <Receipt className="w-5 h-5 mr-2 text-green-600" />
+                      <Euro className="w-5 h-5 mr-2 text-green-600" />
                       Invoice & Revenue Statistics
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -867,7 +867,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                           </div>
                           <div className="ml-4">
                             <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                            <p className="text-2xl font-semibold text-gray-900">{formatCurrency(reportData.totalRevenue)}</p>
+                            <p className="text-2xl font-semibold text-gray-900">€{reportData.totalRevenue.toFixed(2)}</p>
                           </div>
                         </div>
                       </div>

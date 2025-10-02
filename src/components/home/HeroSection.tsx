@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -7,6 +7,7 @@ import Button from '../shared/Button';
 import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
+import { PaymentRequestWithCustomer } from '../../types/paymentTypes';
 import {
   emailValidation,
   phoneValidation,
@@ -30,11 +31,49 @@ interface Service {
   booking_type?: 'book_now' | 'contact_me';
 }
 
+interface BookingRecord {
+  id: number;
+  created_at: string;
+  customer_id: number;
+  service_id: number;
+  booking_date: string;
+  booking_time: string;
+  status: string;
+  notes?: string;
+  payment_status?: string;
+  total_amount?: number;
+  package_name?: string;
+  booking_reference?: string;
+}
+
+interface PaymentRequest {
+  id: number;
+  customer_id: number;
+  booking_id: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  payment_method?: string;
+  created_at: string;
+  updated_at: string;
+  due_date?: string;
+}
+
+interface PaymentCustomer {
+  id?: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface PaymentState {
   showPayment: boolean;
-  paymentRequest: any;
-  booking: any;
-  customer: any;
+  paymentRequest: PaymentRequest | null;
+  booking: BookingRecord | null;
+  customer: PaymentCustomer | null;
   paymentCompleted: boolean;
   paymentOptions?: {
     deposit: { amount: number; percentage: number };
@@ -54,7 +93,7 @@ const HeroSection: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  // Removed unused selectedService state
   const [realTimeErrors, setRealTimeErrors] = useState<{[key: string]: string}>({});
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
   const [loadingNextSlot, setLoadingNextSlot] = useState(false);
@@ -82,11 +121,11 @@ const HeroSection: React.FC = () => {
   });
   const [countdown, setCountdown] = useState<number>(20);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequestWithCustomer | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
   // Helper functions
-  const resetFormAfterSuccess = () => {
+  const resetFormAfterSuccess = useCallback(() => {
     reset();
     setSuccessMsg('');
     setCountdown(20);
@@ -94,7 +133,6 @@ const HeroSection: React.FC = () => {
     setSelectedPaymentRequest(null);
     setPaymentProcessing(false);
     setTimeSlots([]);
-    setSelectedService(null);
     setPaymentState({
       showPayment: false,
       paymentRequest: null,
@@ -104,9 +142,9 @@ const HeroSection: React.FC = () => {
       paymentOptions: undefined,
       selectedPaymentType: undefined
     });
-  };
+  }, [reset]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     reset();
     setSuccessMsg('');
     setCountdown(20);
@@ -114,7 +152,6 @@ const HeroSection: React.FC = () => {
     setSelectedPaymentRequest(null);
     setPaymentProcessing(false);
     setTimeSlots([]);
-    setSelectedService(null);
     setPaymentState({
       showPayment: false,
       paymentRequest: null,
@@ -124,14 +161,14 @@ const HeroSection: React.FC = () => {
       paymentOptions: undefined,
       selectedPaymentType: undefined
     });
-  };
+  }, [reset]);
 
   // Handle countdown reaching zero - just reset form instead of redirecting
   useEffect(() => {
     if (countdown === 0 && paymentState.paymentCompleted) {
       resetFormAfterSuccess();
     }
-  }, [countdown, paymentState.paymentCompleted]);
+  }, [countdown, paymentState.paymentCompleted, resetFormAfterSuccess]);
 
   // Handle countdown timer
   useEffect(() => {
@@ -169,7 +206,7 @@ const HeroSection: React.FC = () => {
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [showPaymentModal, paymentState.paymentCompleted, paymentState.showPayment]);
+  }, [showPaymentModal, paymentState.paymentCompleted, paymentState.showPayment, resetForm, resetFormAfterSuccess]);
 
   // Fetch services from database on component mount
   useEffect(() => {
@@ -186,17 +223,14 @@ const HeroSection: React.FC = () => {
       }
 
       if (service) {
-        setSelectedService(service);
         fetchTimeSlots(service, watchedDate);
       } else {
-        setSelectedService(null);
         setTimeSlots([]);
       }
     } else {
-      setSelectedService(null);
       setTimeSlots([]);
     }
-  }, [watchedService, watchedDate, services]);
+  }, [watchedService, watchedDate, services]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Watch for service changes to fetch next available slot recommendation
   useEffect(() => {
@@ -215,7 +249,7 @@ const HeroSection: React.FC = () => {
     } else {
       setNextAvailableSlot(null);
     }
-  }, [watchedService, services]);
+  }, [watchedService, services]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select time when time slots are loaded (for "Select This Slot" functionality)
   useEffect(() => {
@@ -269,7 +303,7 @@ const HeroSection: React.FC = () => {
         console.error('Error fetching services:', error);
       } else {
         // Transform services to include separate in-hour/out-of-hour options
-        const transformedServices: any[] = [];
+        const transformedServices: Service[] = [];
         (data || []).forEach(service => {
           const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
           const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
@@ -503,7 +537,7 @@ const HeroSection: React.FC = () => {
 
   // Service mapping is no longer needed as we use service names directly
 
-  const sendBookingEmail = async (booking: BookingFormData, bookingRecord: any) => {
+  const sendBookingEmail = async (booking: BookingFormData, bookingRecord: BookingRecord) => {
     setSendingEmail(true);
     try {
       // Import the proper email utility
@@ -698,10 +732,38 @@ const HeroSection: React.FC = () => {
           });
 
           // Show payment interface with deposit/full payment options
+          // Convert utils types to local interface types
+          const localBookingRecord: BookingRecord = {
+            id: parseInt(booking.id) || 0,
+            created_at: booking.created_at || new Date().toISOString(),
+            customer_id: booking.customer_id,
+            service_id: 0, // Default service_id since it's required but not in utils booking
+            booking_date: booking.booking_date || '',
+            booking_time: booking.appointment_time || '',
+            status: booking.status || 'confirmed',
+            notes: booking.notes,
+            payment_status: 'pending',
+            total_amount: booking.service_cost,
+            package_name: booking.package_name,
+            booking_reference: booking.booking_reference
+          };
+          
+          const localPaymentRequest: PaymentRequest = {
+            id: paymentRequest.id,
+            customer_id: paymentRequest.customer_id,
+            booking_id: paymentRequest.booking_id || null,
+            amount: paymentRequest.amount,
+            currency: paymentRequest.currency,
+            status: paymentRequest.status,
+            created_at: paymentRequest.created_at,
+            updated_at: paymentRequest.updated_at,
+            due_date: paymentRequest.payment_due_date || undefined
+          };
+          
           setPaymentState({
             showPayment: true,
-            paymentRequest,
-            booking,
+            paymentRequest: localPaymentRequest,
+            booking: localBookingRecord,
             customer,
             paymentCompleted: false,
             paymentOptions,
@@ -717,7 +779,22 @@ const HeroSection: React.FC = () => {
             setSuccessMsg('Booking submitted successfully! Contact Physiotherapist for more details about rate card for services.');
           }
           // Send email notification for bookings without payment or with 0 amount
-          await sendBookingEmail(data, booking);
+          // Convert utils booking record to local booking record format
+          const localBookingRecord: BookingRecord = {
+            id: parseInt(booking.id) || 0,
+            created_at: booking.created_at || new Date().toISOString(),
+            customer_id: booking.customer_id,
+            service_id: 0, // Default service_id since it's required but not in utils booking
+            booking_date: booking.booking_date || '',
+            booking_time: booking.appointment_time || '',
+            status: booking.status || 'confirmed',
+            notes: booking.notes,
+            payment_status: 'pending',
+            total_amount: booking.service_cost,
+            package_name: booking.package_name,
+            booking_reference: booking.booking_reference
+          };
+          await sendBookingEmail(data, localBookingRecord);
           reset(); // Clear the form after successful booking
         }
       }
@@ -742,9 +819,8 @@ const HeroSection: React.FC = () => {
 
         // Transform the payment request to match PaymentRequestWithCustomer structure
         const paymentRequestWithCustomer = {
-          ...paymentState.paymentRequest,
+          ...paymentState.paymentRequest!,
           amount: selectedAmount, // Use selected payment amount
-          payment_type: paymentType, // Add payment type for tracking
           customer: {
             first_name: customerData.first_name || '',
             last_name: customerData.last_name || '',
@@ -752,7 +828,7 @@ const HeroSection: React.FC = () => {
           },
           service_name: paymentState.booking?.package_name,
           booking_date: paymentState.booking?.booking_date
-        };
+        } as PaymentRequestWithCustomer;
 
         console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
 
