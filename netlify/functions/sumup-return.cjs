@@ -252,6 +252,7 @@ const checkForDuplicates = async (supabase, debugLogger, checkoutReference, chec
   });
 
   return {
+    isDuplicate: hasDuplicates,
     hasDuplicates,
     existingPayments,
     duplicateChecks
@@ -341,6 +342,31 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
       amount
     });
 
+    // 🚨 IMMEDIATE DUPLICATE CHECK - Check if we already processed this payment
+    await debugLogger.info('Starting duplicate check', { checkout_reference, checkout_id, transaction_id });
+    
+    const duplicateResult = await checkForDuplicates(
+      supabase, 
+      debugLogger, 
+      checkout_reference, 
+      checkout_id, 
+      transaction_id
+    );
+
+    if (duplicateResult.isDuplicate) {
+      await debugLogger.critical('DUPLICATE DETECTED - BLOCKING PROCESSING', duplicateResult);
+      console.log('🚨 DUPLICATE DETECTED - Stopping processing to prevent duplicate payment');
+      
+      return {
+        success: false,
+        error: 'Duplicate payment detected',
+        duplicateInfo: duplicateResult,
+        preventedDuplicate: true
+      };
+    }
+
+    await debugLogger.info('No duplicates found, proceeding with processing');
+
     let payment = null;
 
     // Try to find payment by checkout_reference first
@@ -390,58 +416,40 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
           const paymentRequest = paymentRequests[0];
           console.log('✅ Found payment_request, creating payment record:', paymentRequest.id);
           
-          // Check for duplicates before creating payment
-          const duplicateResult = await checkForDuplicates(
-            supabase, 
-            debugLogger, 
-            checkout_reference, 
-            checkout_id, 
-            transaction_id
-          );
+          // Create new payment (duplicates already checked at function start)
+          console.log('✅ Creating new payment (duplicates checked at start)');
+          await debugLogger.info('Creating new payment from payment_request', {
+            paymentRequestId: paymentRequest.id,
+            checkoutReference: checkout_reference,
+            checkoutId: checkout_id
+          });
           
-          if (duplicateResult.hasDuplicates) {
-            console.log('⚠️ Duplicate payment detected, using existing payment');
-            await debugLogger.warn('Duplicate payment detected in return URL', {
-              existingPayments: duplicateResult.existingPayments,
-              duplicateChecks: duplicateResult.duplicateChecks
-            });
-            
-            payment = duplicateResult.existingPayments[0]; // Use first existing payment
-          } else {
-            console.log('✅ No duplicates found, creating new payment');
-            await debugLogger.info('Creating new payment from payment_request', {
-              paymentRequestId: paymentRequest.id,
-              checkoutReference: checkout_reference,
-              checkoutId: checkout_id
-            });
-            
-            const { data: newPayment, error: createError } = await supabase
-            .from('payments')
-            .insert({
-              customer_id: paymentRequest.customer_id,
-              booking_id: paymentRequest.booking_id,
-              payment_request_id: paymentRequest.id,
-              amount: paymentRequest.amount,
-              currency: paymentRequest.currency || 'EUR',
-              status: 'pending', // Will be updated below
-              payment_method: 'sumup',
-              sumup_checkout_id: checkout_id,
-              sumup_checkout_reference: checkout_reference,
-              sumup_transaction_id: transaction_id,
-              notes: `Payment created from return URL for payment_request #${paymentRequest.id}`
-            })
-            .select()
-            .single();
-            
-          if (!createError && newPayment) {
-            payment = newPayment;
-            console.log('✅ Payment created from return URL:', payment.id);
-            await debugLogger.info('Payment created successfully', { paymentId: payment.id });
-          } else {
-            console.error('❌ Failed to create payment from return URL:', createError);
-            await debugLogger.error('Failed to create payment', { error: createError?.message });
-          }
-          }
+          const { data: newPayment, error: createError } = await supabase
+          .from('payments')
+          .insert({
+            customer_id: paymentRequest.customer_id,
+            booking_id: paymentRequest.booking_id,
+            payment_request_id: paymentRequest.id,
+            amount: paymentRequest.amount,
+            currency: paymentRequest.currency || 'EUR',
+            status: 'pending', // Will be updated below
+            payment_method: 'sumup',
+            sumup_checkout_id: checkout_id,
+            sumup_checkout_reference: checkout_reference,
+            sumup_transaction_id: transaction_id,
+            notes: `Payment created from return URL for payment_request #${paymentRequest.id}`
+          })
+          .select()
+          .single();
+          
+        if (!createError && newPayment) {
+          payment = newPayment;
+          console.log('✅ Payment created from return URL:', payment.id);
+          await debugLogger.info('Payment created successfully', { paymentId: payment.id });
+        } else {
+          console.error('❌ Failed to create payment from return URL:', createError);
+          await debugLogger.error('Failed to create payment', { error: createError?.message });
+        }
         }
       }
       
