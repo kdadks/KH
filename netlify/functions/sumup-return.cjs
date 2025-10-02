@@ -1,5 +1,5 @@
 /**
- * SumUp Return URL Handler with Safe Import Loading
+ * SumUp Return URL Handler - Processes GET redirects from SumUp after payment completion
  */
 
 // Safe Supabase client initialization
@@ -65,7 +65,102 @@ const isTestMode = (event) => {
   return userAgent.includes('Mozilla') || isTestPayload || hasTestQuery;
 };
 
-// Process webhook data
+// Process SumUp return URL data
+const processSumUpReturn = async (supabase, data) => {
+  try {
+    const { checkout_reference, checkout_id, transaction_id, status, amount } = data;
+    
+    console.log('🔍 Processing SumUp return:', {
+      checkout_reference,
+      checkout_id,
+      transaction_id,
+      status,
+      amount
+    });
+
+    let payment = null;
+
+    // Try to find payment by checkout_reference first
+    if (checkout_reference) {
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('sumup_checkout_reference', checkout_reference)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && payments && payments.length > 0) {
+        payment = payments[0];
+        console.log('✅ Found payment by checkout_reference:', payment.id);
+      }
+    }
+
+    // If not found by checkout_reference, try by checkout_id
+    if (!payment && checkout_id) {
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('sumup_checkout_id', checkout_id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && payments && payments.length > 0) {
+        payment = payments[0];
+        console.log('✅ Found payment by checkout_id:', payment.id);
+      }
+    }
+
+    if (!payment) {
+      console.log('❌ No payment record found for SumUp return data');
+      throw new Error(`No payment found for checkout_reference: ${checkout_reference} or checkout_id: ${checkout_id}`);
+    }
+
+    // Update payment with SumUp return data
+    const updateData = {
+      sumup_transaction_id: transaction_id,
+      sumup_checkout_id: checkout_id,
+      status: status === 'COMPLETED' || status === 'success' ? 'paid' : 'failed',
+      payment_date: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      // Update webhook columns for consistency
+      webhook_processed_at: new Date().toISOString(),
+      sumup_event_type: 'return_url_processed',
+      sumup_event_id: transaction_id || checkout_id,
+      sumup_checkout_reference: checkout_reference || payment.sumup_checkout_reference
+    };
+
+    const { data: updatedPayments, error: updateError } = await supabase
+      .from('payments')
+      .update(updateData)
+      .eq('id', payment.id)
+      .select();
+
+    if (updateError) {
+      console.error('❌ Payment update error:', updateError);
+      throw updateError;
+    }
+
+    if (!updatedPayments || updatedPayments.length === 0) {
+      throw new Error(`Payment update failed for payment ID: ${payment.id}`);
+    }
+
+    console.log('✅ Payment updated successfully:', payment.id);
+    console.log('📊 Updated payment data:', updateData);
+
+    return { 
+      success: true, 
+      paymentId: payment.id, 
+      status: updateData.status,
+      updated: updateData 
+    };
+
+  } catch (error) {
+    console.error('❌ processSumUpReturn error:', error);
+    throw error;
+  }
+};
+
+// Process webhook data (legacy - for testing)
 const processWebhookData = async (supabase, data, isTest = false) => {
   try {
     const checkoutRef = data.checkout_reference;
@@ -350,24 +445,80 @@ exports.handler = async (event, context) => {
   });
 
   try {
-    // Handle GET requests (simple endpoint test)
+    // Initialize Supabase
+    const supabase = await initializeSupabase();
+    
+    // Handle GET requests from SumUp redirect
     if (event.httpMethod === 'GET') {
+      const queryParams = event.queryStringParameters || {};
+      
+      console.log('📥 SumUp return URL parameters:', queryParams);
+      
+      // Extract SumUp parameters
+      const {
+        checkout_id,
+        transaction_id,
+        status,
+        amount,
+        currency,
+        merchant_code,
+        checkout_reference,
+        timestamp
+      } = queryParams;
+      
+      // If no SumUp parameters, just return endpoint info
+      if (!checkout_id && !transaction_id) {
+        return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          },
+          body: JSON.stringify({
+            message: 'SumUp return endpoint active',
+            method: 'GET',
+            environment: environmentLabel,
+            timestamp: new Date().toISOString()
+          })
+        };
+      }
+      
+      // Process SumUp return parameters
+      console.log('🔍 Processing SumUp return data:', {
+        checkout_id,
+        transaction_id, 
+        status,
+        checkout_reference,
+        amount
+      });
+      
+      // Find and update payment record
+      const result = await processSumUpReturn(supabase, {
+        checkout_id,
+        transaction_id,
+        status,
+        amount: amount ? parseFloat(amount) : null,
+        currency: currency || 'EUR',
+        checkout_reference,
+        merchant_code,
+        timestamp
+      });
+      
+      // Redirect user to success or failure page
+      const redirectUrl = status === 'COMPLETED' || status === 'success' 
+        ? `${process.env.URL || 'https://uat--khtherapy.netlify.app'}/payment-success`
+        : `${process.env.URL || 'https://uat--khtherapy.netlify.app'}/payment-cancelled`;
+      
       return {
-        statusCode: 200,
+        statusCode: 302,
         headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({
-          message: 'SumUp return endpoint active',
-          method: 'GET',
-          environment: environmentLabel,
-          timestamp: new Date().toISOString()
-        })
+          Location: redirectUrl,
+          'Cache-Control': 'no-cache'
+        }
       };
     }
 
-    // Handle POST requests (webhook processing)
+    // Handle POST requests (for testing/webhooks if any)
     if (event.httpMethod === 'POST') {
       const testMode = isTestMode(event);
       console.log(`📦 Processing ${testMode ? 'TEST' : 'LIVE'} webhook payload`);
