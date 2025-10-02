@@ -326,7 +326,7 @@ export const createBookingWithCustomer = async (
         );
 
         if (paymentRequest) {
-          console.log('✅ Payment request created successfully');
+          // Payment request created
         } else {
           console.log('⚠️ No payment request created (service may require quote or be per-session)');
         }
@@ -348,7 +348,7 @@ export const createBookingWithCustomer = async (
           try {
             const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
             if (welcomeResult.success) {
-              console.log('✅ Welcome email sent successfully');
+              // Welcome email sent
               
               // Mark welcome email as sent in database
               try {
@@ -356,7 +356,7 @@ export const createBookingWithCustomer = async (
                   .from('customers')
                   .update({ welcome_email_sent: true })
                   .eq('id', customer.id);
-                console.log('✅ Welcome email status updated in database');
+                // Welcome email status updated
               } catch (updateError) {
                 console.error('❌ Failed to update welcome email status:', updateError);
                 // Don't fail the process, just log the error
@@ -374,7 +374,7 @@ export const createBookingWithCustomer = async (
         }
 
         // Then send booking captured notification
-        console.log('📧 Sending booking captured notification...');
+        // Sending booking captured notification
         try {
           const { sendBookingCapturedNotification } = await import('./emailUtils');
           const capturedResult = await sendBookingCapturedNotification(customerData.email, {
@@ -391,7 +391,7 @@ export const createBookingWithCustomer = async (
           });
 
           if (capturedResult.success) {
-            console.log('✅ Booking captured notification sent successfully');
+            // Booking captured notification sent
           } else {
             console.error('❌ Failed to send booking captured notification:', capturedResult.error);
           }
@@ -400,7 +400,6 @@ export const createBookingWithCustomer = async (
         }
 
         // Send admin notification for new booking (without sending customer confirmation)
-        console.log('📧 Sending admin notification for new booking...');
         try {
           const { sendAdminBookingNotificationOnly } = await import('./emailUtils');
           const adminResult = await sendAdminBookingNotificationOnly(
@@ -418,32 +417,27 @@ export const createBookingWithCustomer = async (
             }
           );
 
-          if (adminResult.adminSuccess) {
-            console.log('✅ Admin booking notification sent successfully');
-          } else {
-            console.error('❌ Failed to send admin booking notification');
+          if (!adminResult.adminSuccess) {
+            console.error('Failed to send admin booking notification');
           }
         } catch (adminEmailError) {
-          console.error('❌ Admin booking notification failed:', adminEmailError);
+          console.error('Admin booking notification failed:', adminEmailError);
         }
 
         // Then send payment request email if payment is required
         if (paymentRequest) {
-          console.log('📧 Sending payment request email...');
           try {
             const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-            if (emailSuccess) {
-              console.log('✅ Payment request email sent successfully');
-            } else {
-              console.error('❌ Failed to send payment request email:', emailError);
+            if (!emailSuccess) {
+              console.error('Failed to send payment request email:', emailError);
             }
           } catch (emailError) {
-            console.error('❌ Payment request email failed:', emailError);
+            console.error('Payment request email failed:', emailError);
           }
         } else {
           // No payment request created (e.g., "Contact for Quote" services)
           // Send booking confirmation without payment
-          console.log('📧 Sending booking confirmation email (no payment required)...');
+          // Sending booking confirmation email (no payment required)
           try {
             const { sendSimpleBookingConfirmation } = await import('./emailUtils');
             const emailResult = await sendSimpleBookingConfirmation(
@@ -463,7 +457,7 @@ export const createBookingWithCustomer = async (
             );
             
             if (emailResult) {
-              console.log('✅ Booking confirmation email sent successfully');
+              // Booking confirmation email sent
             } else {
               console.error('❌ Failed to send booking confirmation email');
             }
