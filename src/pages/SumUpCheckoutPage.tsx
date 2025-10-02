@@ -251,14 +251,15 @@ const SumUpCheckoutPage: React.FC = () => {
           });
           
           try {
-            await simulateWebhookEvent(success ? 'checkout.completed' : 'checkout.failed', {
-              checkout_reference: checkoutReference,
-              transaction_id: transactionId,
-              amount: parseFloat(amount),
-              currency: currency,
-              status: success ? 'COMPLETED' : 'FAILED'
-            });
-            console.log('✅ Webhook simulation completed successfully');
+            // DUPLICATE FIX: Disable simulation - let real SumUp handle payment creation
+            // await simulateWebhookEvent(success ? 'checkout.completed' : 'checkout.failed', {
+            //   checkout_reference: checkoutReference,
+            //   transaction_id: transactionId,
+            //   amount: parseFloat(amount),
+            //   currency: currency,
+            //   status: success ? 'COMPLETED' : 'FAILED'
+            // });
+            console.log('✅ Webhook simulation DISABLED - real SumUp will handle payment creation');
           } catch (webhookError) {
             console.error('❌ Webhook simulation failed:', webhookError);
             // Store error in localStorage so we can check it later
@@ -348,24 +349,23 @@ const SumUpCheckoutPage: React.FC = () => {
           console.log('🚨 SUCCESS REDIRECT PREVENTED - Check console for webhook logs');
         }
       } else {
-        // User cancelled or simulation failure - also simulate webhook for failure
-        const transactionId = `txn_sumup_failed_${Date.now()}`;
+        // User cancelled or simulation failure
+        // Note: Real SumUp will handle payment creation - no simulation needed
         
-        // Simulate webhook event for failure to update payments table
-        // Only simulate in sandbox mode - production will receive real SumUp webhooks
         const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
         if (currentEnvironment === 'sandbox') {
           console.log('🎯 About to simulate webhook for FAILURE scenario');
           
           try {
-            await simulateWebhookEvent('checkout.failed', {
-              checkout_reference: checkoutReference,
-              transaction_id: transactionId,
-              amount: parseFloat(amount),
-              currency: currency,
-              status: 'FAILED'
-            });
-            console.log('✅ Webhook simulation completed successfully for failure');
+            // DUPLICATE FIX: Disable simulation - let real SumUp handle payment creation
+            // await simulateWebhookEvent('checkout.failed', {
+            //   checkout_reference: checkoutReference,
+            //   transaction_id: transactionId,
+            //   amount: parseFloat(amount),
+            //   currency: currency,
+            //   status: 'FAILED'
+            // });
+            console.log('✅ Webhook simulation DISABLED - real SumUp will handle payment creation');
           } catch (webhookError) {
             console.error('❌ Webhook simulation failed:', webhookError);
             const errorMessage = webhookError instanceof Error ? webhookError.message : String(webhookError);
@@ -393,7 +393,8 @@ const SumUpCheckoutPage: React.FC = () => {
     }
   };
 
-  // Simulate webhook event to trigger payments table update
+  // DUPLICATE FIX: Function disabled - real SumUp webhooks will handle payment creation
+  /*
   const simulateWebhookEvent = async (eventType: string, paymentData: {
     checkout_reference: string;
     transaction_id: string;
@@ -476,6 +477,7 @@ const SumUpCheckoutPage: React.FC = () => {
       // Don't let webhook errors break the payment flow
     }
   };
+  */
 
   // Simulate payment outcomes for sandbox testing
   const simulatePaymentOutcome = async (outcome: 'success' | 'failure') => {
