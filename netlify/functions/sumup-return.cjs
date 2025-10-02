@@ -3,7 +3,102 @@
  */
 
 const crypto = require('crypto');
-const DebugLogger = require('./debug-logger');
+
+// Inline Debug Logger to avoid module resolution issues
+class DebugLogger {
+  constructor(supabase, functionName) {
+    this.supabase = supabase;
+    this.functionName = functionName;
+    this.executionId = this.generateExecutionId();
+    this.logs = [];
+  }
+
+  generateExecutionId() {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    return `${this.functionName}_${timestamp}_${random}`;
+  }
+
+  async log(level, message, details = null) {
+    const logEntry = {
+      function_name: this.functionName,
+      execution_id: this.executionId,
+      log_level: level,
+      message: message,
+      details: details ? JSON.stringify(details) : null,
+      created_at: new Date().toISOString()
+    };
+
+    this.logs.push(logEntry);
+    console.log(`[${level}] ${this.functionName}: ${message}`, details || '');
+
+    // Insert critical logs immediately
+    if (level === 'ERROR' || level === 'CRITICAL') {
+      await this.flushToDB();
+    }
+  }
+
+  async info(message, details = null) { return this.log('INFO', message, details); }
+  async warn(message, details = null) { return this.log('WARN', message, details); }
+  async error(message, details = null) { return this.log('ERROR', message, details); }
+  async critical(message, details = null) { return this.log('CRITICAL', message, details); }
+  async debug(message, details = null) { return this.log('DEBUG', message, details); }
+
+  async logRequest(requestData) {
+    return this.log('REQUEST', 'Function called', {
+      method: requestData.method,
+      url: requestData.url,
+      headers: requestData.headers,
+      query: requestData.query,
+      body: requestData.body
+    });
+  }
+
+  async logResponse(responseData) {
+    return this.log('RESPONSE', 'Function response', {
+      status: responseData.status,
+      data: responseData.data
+    });
+  }
+
+  async logDatabaseOperation(operation, table, query, result) {
+    return this.log('DATABASE', `${operation} on ${table}`, {
+      query: query,
+      result: result,
+      recordCount: result?.data?.length || 0,
+      error: result?.error?.message
+    });
+  }
+
+  async flushToDB() {
+    if (this.logs.length === 0) return;
+
+    try {
+      const { error } = await this.supabase
+        .from('debug_logs')
+        .insert(this.logs);
+
+      if (error) {
+        if (error.code === '42P01' || error.message.includes('does not exist')) {
+          console.warn('⚠️ Debug logs table not created yet - logs will be console only');
+        } else {
+          console.error('Failed to insert debug logs:', error);
+        }
+      } else {
+        console.log(`✅ Flushed ${this.logs.length} debug logs to database`);
+      }
+
+      this.logs = [];
+    } catch (err) {
+      console.warn('⚠️ Debug logging to database failed - using console only:', err.message);
+    }
+  }
+
+  async finalize() {
+    await this.flushToDB();
+    return this.executionId;
+  }
+}
 
 // Safe Supabase client initialization
 let supabaseClient = null;
@@ -710,8 +805,28 @@ const processSumUpWebhook = async (supabase, eventData) => {
 };
 
 exports.handler = async (event, context) => {
-  // Initialize debug logger for this execution
-  const debugLogger = new DebugLogger(await initializeSupabase(), 'sumup-return');
+  let debugLogger;
+  
+  try {
+    // Initialize debug logger for this execution
+    const supabase = await initializeSupabase();
+    debugLogger = new DebugLogger(supabase, 'sumup-return');
+  } catch (error) {
+    console.warn('⚠️ Debug logger initialization failed, using console only:', error.message);
+    // Create a fallback debug logger that only uses console
+    debugLogger = {
+      executionId: `fallback_${Date.now()}`,
+      async info(msg, data) { console.log(`[INFO] ${msg}`, data || ''); },
+      async warn(msg, data) { console.warn(`[WARN] ${msg}`, data || ''); },
+      async error(msg, data) { console.error(`[ERROR] ${msg}`, data || ''); },
+      async critical(msg, data) { console.error(`[CRITICAL] ${msg}`, data || ''); },
+      async debug(msg, data) { console.log(`[DEBUG] ${msg}`, data || ''); },
+      async logRequest(data) { console.log('[REQUEST]', data); },
+      async logResponse(data) { console.log('[RESPONSE]', data); },
+      async logDatabaseOperation(op, table, query, result) { console.log(`[DB] ${op} on ${table}`, { query, result }); },
+      async finalize() { return this.executionId; }
+    };
+  }
   
   const webhookEnvironment = getWebhookEnvironment();
   const environmentLabel = webhookEnvironment === 'production' ? 'LIVE' : 'TEST';
