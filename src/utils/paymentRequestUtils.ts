@@ -447,14 +447,69 @@ export async function processPaymentRequest(
       notes: `Payment for payment request #${paymentRequestId}`
     };
 
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .insert([paymentRecord])
-      .select()
-      .single();
+    // WEBHOOK FIX: Route through sumup-return endpoint to ensure webhook columns are populated
+    const sumupEndpoint = `${window.location.origin}/.netlify/functions/sumup-return`;
+    let payment;
+    
+    try {
+      const response = await fetch(sumupEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'PaymentRequestUtils/Processing'
+        },
+        body: JSON.stringify({
+          event_type: 'checkout.completed', // Always completed since we're processing successful payments
+          checkout_id: paymentData.sumup_checkout_id,
+          transaction_id: paymentData.sumup_transaction_id,
+          checkout_reference: paymentData.sumup_checkout_reference,
+          amount: paymentRequest.amount,
+          currency: paymentRequest.currency || 'EUR',
+          status: 'PAID',
+          merchant_code: 'INTERNAL_PROCESSING',
+          payment_type: paymentData.payment_method || 'card',
+          created_at: new Date().toISOString(),
+          payment_request_id: paymentRequestId,
+          booking_id: paymentRequest.booking_id,
+          customer_id: paymentRequest.customer_id
+        })
+      });
 
-    if (paymentError) {
-      throw new Error(`Failed to create payment record: ${paymentError.message}`);
+      if (!response.ok) {
+        throw new Error(`SumUp endpoint returned ${response.status}`);
+      }
+
+      const result = await response.text();
+      console.log('✅ Payment processed through SumUp handler:', result);
+      
+      // Get the created payment record for return
+      const { data: createdPayment, error: fetchError } = await supabase
+        .from('payments')
+        .select()
+        .eq('payment_request_id', paymentRequestId)
+        .eq('sumup_transaction_id', paymentData.sumup_transaction_id)
+        .single();
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch created payment: ${fetchError.message}`);
+      }
+      
+      payment = createdPayment;
+      
+    } catch (webhookError) {
+      console.error('❌ Failed to process through SumUp handler:', webhookError);
+      // Fallback: Create payment directly if webhook handler fails
+      const { data: fallbackPayment, error: paymentError } = await supabase
+        .from('payments')
+        .insert([paymentRecord])
+        .select()
+        .single();
+
+      if (paymentError) {
+        throw new Error(`Failed to create payment record: ${paymentError.message}`);
+      }
+      
+      payment = fallbackPayment;
     }
 
     // Update payment request status to 'paid'
