@@ -526,24 +526,11 @@ export const sendAdminBookingNotificationOnly = async (
     
     const adminSuccess = await sendEmail('admin_notification', adminEmailAddress, adminEmailData, adminSubject);
     
-    if (!adminSuccess) {
-      console.error('❌ Admin notification sendEmail returned false for:', {
-        emailType: 'admin_notification',
-        adminEmailAddress,
-        subject: adminSubject
-      });
-    }
+    // Admin email result processed
     
     return { adminSuccess };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    
-    console.error('❌ Admin booking notification exception:', {
-      error: errorMessage,
-      stack: errorStack,
-      adminEmailAddress: adminEmail || process.env.VITE_ADMIN_EMAIL || 'info@khtherapy.ie'
-    });
+    console.error('Admin booking notification failed:', error instanceof Error ? error.message : error);
     return { adminSuccess: false };
   }
 };

@@ -174,7 +174,7 @@ export const findOrCreateCustomer = async (customerData: {
       // Handle duplicate key constraint violation
       if (createError.code === '23505' || createError.message.includes('duplicate key value violates unique constraint')) {
         const constraintName = createError.message.match(/unique constraint "([^"]+)"/)?.[1];
-        console.log(`🔄 Constraint violation detected: ${constraintName}. Attempting to resolve...`);
+        // Attempting to resolve constraint violation
 
         if (constraintName === 'customers_pkey') {
           console.error('❌ Primary key constraint violation detected - this suggests an ID sequence issue');
@@ -184,7 +184,7 @@ export const findOrCreateCustomer = async (customerData: {
         }
 
         if (constraintName === 'customers_email_key' || constraintName?.includes('email')) {
-          console.log('🔄 Email constraint violation - customer with this email already exists, fetching...');
+          // Email constraint violation - fetching existing customer
 
           // Try to fetch the existing customer again with a small delay to ensure the other transaction has completed
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -214,7 +214,7 @@ export const findOrCreateCustomer = async (customerData: {
               ? decryptSensitiveData(existingAfterConflict.phone)
               : existingAfterConflict.phone;
 
-            console.log('✅ Successfully resolved race condition - found existing customer');
+            // Race condition resolved - existing customer found
             return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
           } else {
             console.error('❌ Customer should exist but was not found after email constraint violation');
@@ -223,7 +223,7 @@ export const findOrCreateCustomer = async (customerData: {
         }
 
         // Generic constraint violation
-        console.log('🔄 Generic constraint violation, attempting to fetch existing customer...');
+        // Constraint violation - fetching existing customer
         await new Promise(resolve => setTimeout(resolve, 200));
 
         const { data: existingAfterConflict, error: refetchError } = await supabase
@@ -245,7 +245,7 @@ export const findOrCreateCustomer = async (customerData: {
             ? decryptSensitiveData(existingAfterConflict.phone)
             : existingAfterConflict.phone;
 
-          console.log('✅ Successfully resolved constraint violation - found existing customer');
+          // Constraint violation resolved
           return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
         }
       }
@@ -316,7 +316,7 @@ export const createBookingWithCustomer = async (
     let paymentRequest = null;
     if (customer.id && !isAdminBooking) {
       try {
-        console.log('💳 Attempting to create payment request...');
+              // Creating payment request for booking
         paymentRequest = await createPaymentRequest(
           customer.id,
           bookingData.package_name,
@@ -344,7 +344,7 @@ export const createBookingWithCustomer = async (
       try {
         // Only send welcome email for new customers who haven't received it yet
         if (isNewCustomer && !customer.welcome_email_sent) {
-          console.log('📧 Sending welcome email to new customer...');
+                // Sending welcome email to customer
           try {
             const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
             if (welcomeResult.success) {
