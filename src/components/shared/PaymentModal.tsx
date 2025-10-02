@@ -970,31 +970,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
               </div>
 
-              {/* DEBUG: Add test webhook button */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <button
-                  onClick={() => {
-                    const logs = viewDebugLogs();
-                    if (logs.length > 0) {
-                      console.log('📋 Check console for detailed payment logs');
-                    }
-                  }}
-                  className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-                >
-                  📋 View Logs
-                </button>
-                <button
-                  onClick={() => {
-                    localStorage.removeItem('payment_debug_logs');
-                    console.log('🗑️ Payment debug logs cleared');
-                  }}
-                  className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors font-medium text-sm"
-                >
-                  🗑️ Clear Logs
-                </button>
-              </div>
-
-              {/* Test webhook functionality removed - SumUp only uses return URLs */}
+              {/* Debug buttons removed for production */}
 
               <button
                 onClick={handleStartPayment}
