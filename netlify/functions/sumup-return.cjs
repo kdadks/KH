@@ -58,6 +58,23 @@ const getWebhookEnvironment = () => {
   return isUATOrStaging ? 'sandbox' : 'production';
 };
 
+// Log processing details to database for debugging
+const logProcessingDetails = async (supabase, type, data, error = null) => {
+  try {
+    await supabase
+      .from('processing_logs')
+      .insert({
+        log_type: type,
+        log_data: data,
+        error_message: error?.message || null,
+        timestamp: new Date().toISOString(),
+        environment: process.env.CONTEXT || 'unknown'
+      });
+  } catch (logError) {
+    console.error('❌ Failed to log to database:', logError);
+  }
+};
+
 // SumUp webhook signature verification using HMAC SHA-256
 const verifyWebhookSignature = (payload, signature, secret) => {
   try {
@@ -217,15 +234,23 @@ const processSumUpWebhook = async (supabase, eventData) => {
   try {
     const { id: eventId, event_type, payload, timestamp } = eventData;
     
-    console.log('🔔 Processing SumUp webhook:', {
-      eventId,
-      event_type,
-      checkout_id: payload.checkout_id,
-      reference: payload.reference,
-      status: payload.status
-    });
+      console.log('🔔 Processing SumUp webhook:', {
+        eventId,
+        event_type,
+        checkout_id: payload.checkout_id,
+        reference: payload.reference,
+        status: payload.status
+      });
 
-    // Validate required fields
+      console.log('🔍 WEBHOOK FULL PAYLOAD DEBUG:', JSON.stringify(eventData, null, 2));
+
+      // Log webhook processing to database
+      await logProcessingDetails(supabase, 'webhook_received', {
+        event_id: eventId,
+        event_type,
+        payload,
+        timestamp: new Date().toISOString()
+      });    // Validate required fields
     if (!payload.checkout_id || !payload.reference || !payload.status) {
       throw new Error('Invalid webhook payload: missing required fields');
     }
@@ -509,12 +534,27 @@ exports.handler = async (event, context) => {
   const webhookEnvironment = getWebhookEnvironment();
   const environmentLabel = webhookEnvironment === 'production' ? 'LIVE' : 'TEST';
   
-  console.log(`🎯 SumUp return URL called [${environmentLabel}]:`, {
+  console.log(`🎯 SumUp ${event.httpMethod} called [${environmentLabel}]:`, {
     method: event.httpMethod,
     query: event.queryStringParameters,
     bodyLength: event.body?.length || 0,
     userAgent: event.headers['user-agent']?.substring(0, 50)
   });
+
+  // ENHANCED DEBUG: Log all SumUp callback data for troubleshooting
+  if (event.httpMethod === 'GET' && event.queryStringParameters) {
+    console.log('🔍 RETURN URL DEBUG - All query params:', JSON.stringify(event.queryStringParameters, null, 2));
+  }
+  
+  if (event.httpMethod === 'POST' && event.body) {
+    console.log('🔍 WEBHOOK DEBUG - Raw body:', event.body);
+    try {
+      const webhookData = JSON.parse(event.body);
+      console.log('🔍 WEBHOOK DEBUG - Parsed payload:', JSON.stringify(webhookData, null, 2));
+    } catch (e) {
+      console.log('🔍 WEBHOOK DEBUG - Body parse error:', e.message);
+    }
+  }
 
   try {
     // Initialize Supabase
@@ -525,6 +565,13 @@ exports.handler = async (event, context) => {
       const queryParams = event.queryStringParameters || {};
       
       console.log('📥 SumUp return URL parameters:', queryParams);
+      
+      // Log return URL processing to database
+      await logProcessingDetails(supabase, 'return_url_received', {
+        query_params: queryParams,
+        user_agent: event.headers['user-agent']?.substring(0, 100),
+        timestamp: new Date().toISOString()
+      });
       
       // Extract SumUp parameters
       const {
@@ -562,6 +609,16 @@ exports.handler = async (event, context) => {
         status,
         checkout_reference,
         amount
+      });
+
+      // Log return URL processing to database
+      await logProcessingDetails(supabase, 'return_url_processing', {
+        checkout_id,
+        transaction_id,
+        status,
+        checkout_reference,
+        amount,
+        currency
       });
       
       // Find and update payment record

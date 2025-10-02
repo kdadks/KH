@@ -175,8 +175,50 @@ const SumUpCheckoutPage: React.FC = () => {
   
   // Test webhook functionality removed - SumUp only uses return URLs
 
+  // Helper function to view SumUp processing logs
+  const viewSumUpLogs = () => {
+    console.log('🔍 SumUp Processing Log Viewer');
+    console.log('=====================================');
+    console.log('');
+    console.log('📍 BEST PLACES TO VIEW LOGS:');
+    console.log('');
+    console.log('1. 🌐 Netlify Function Logs (RECOMMENDED):');
+    console.log('   - Go to https://app.netlify.com');
+    console.log('   - Select KH project');
+    console.log('   - Functions tab > sumup-return > Function log');
+    console.log('   - Shows real-time processing when SumUp calls your endpoints');
+    console.log('');
+    console.log('2. 💻 Real-time CLI monitoring:');
+    console.log('   - Install: npm install -g netlify-cli');
+    console.log('   - Setup: netlify login && netlify link');
+    console.log('   - Monitor: netlify functions:logs --live');
+    console.log('');
+    console.log('3. 🎯 Test function directly:');
+    console.log('   - URL: https://uat--khtherapy.netlify.app/.netlify/functions/sumup-return');
+    console.log('   - Should return JSON with function info');
+    console.log('');
+    console.log('💡 The Netlify function logs show exactly what happens when:');
+    console.log('   - SumUp sends a webhook (POST request)');
+    console.log('   - User is redirected back (GET request)');
+    console.log('   - Whether payments are found/created/updated');
+    console.log('   - Why webhook columns may not be populated');
+    console.log('');
+    
+    return {
+      message: 'Check console above for log viewing instructions',
+      netlifyDashboard: 'https://app.netlify.com',
+      functionUrl: 'https://uat--khtherapy.netlify.app/.netlify/functions/sumup-return'
+    };
+  };
+
   // Make debug functions globally available for testing
-  (window as unknown as { checkWebhookDebugInfo: () => object }).checkWebhookDebugInfo = checkWebhookDebugInfo;
+  (window as unknown as { 
+    checkWebhookDebugInfo: () => object;
+    viewSumUpLogs: () => object;
+  }).checkWebhookDebugInfo = checkWebhookDebugInfo;
+  (window as unknown as { 
+    viewSumUpLogs: () => object;
+  }).viewSumUpLogs = viewSumUpLogs;
 
   const processPayment = async (success: boolean) => {
     setProcessing(true);
@@ -289,8 +331,17 @@ const SumUpCheckoutPage: React.FC = () => {
           }
           
           // DEBUGGING: Prevent redirect to capture logs
-          alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED! Would redirect to: ${successUrl}?${successParams.toString()}`);
+          const redirectUrl = `${successUrl}?${successParams.toString()}`;
+          alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED!\n\nWould redirect to:\n${redirectUrl}\n\nCheck browser console and Netlify function logs for processing details.`);
           console.log('🚨 SUCCESS REDIRECT PREVENTED - Check console for webhook logs');
+          console.log('📊 Payment Processing Details:', {
+            checkoutReference,
+            transactionId,
+            amount,
+            currency,
+            status: 'completed',
+            redirectUrl
+          });
         } else {
           // DEBUGGING: Prevent redirects to capture logs
           alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED! Context: ${context}, Amount: ${amount}`);
