@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, momentLocalizer, View, Views } from 'react-big-calendar';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import '../../styles/calendar.css';
 import moment from 'moment';
 import { 
   Plus, 
@@ -15,6 +16,18 @@ import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
 import { decryptCustomerDataForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
 import { QuickScheduleGenerator } from './availability/QuickScheduleGenerator';
+
+// Configure moment for 24-hour format
+moment.updateLocale('en', {
+  longDateFormat: {
+    LT: 'HH:mm',
+    LTS: 'HH:mm:ss',
+    L: 'DD/MM/YYYY',
+    LL: 'D MMMM YYYY',
+    LLL: 'D MMMM YYYY HH:mm',
+    LLLL: 'dddd, D MMMM YYYY HH:mm'
+  }
+});
 
 const localizer = momentLocalizer(moment);
 
@@ -76,7 +89,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
   const fetchAvailabilitySlots = useCallback(async () => {
     try {
-      console.log('🔍 Fetching availability slots...');
       const { data, error } = await supabase
         .from('availability')
         .select('*')
@@ -89,7 +101,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         return;
       }
 
-      console.log('✅ Availability slots fetched:', data?.length || 0, 'slots');
       setAvailabilitySlots(data || []);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -100,7 +111,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
 
   const fetchBookedSlots = useCallback(async () => {
     try {
-      console.log('🔍 Fetching booked slots...');
       // Use the simple approach that works reliably - fetch bookings and customers separately
       const { data: simpleData, error: simpleError } = await supabase
         .from('bookings')
@@ -114,8 +124,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         showError('Error', `Database error: ${simpleError.message}`);
         return;
       }
-
-      console.log('✅ Bookings fetched:', simpleData?.length || 0, 'bookings');
 
       // For each booking, fetch customer names separately and decrypt them
       const transformedSimpleData = await Promise.all((simpleData || []).map(async (booking: any) => {
@@ -153,16 +161,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       }));
 
       setBookedSlots(transformedSimpleData);
-      console.log('✅ Booked slots set:', transformedSimpleData.length, 'processed bookings');
-      console.log('📋 Booked slots details:', transformedSimpleData.map(slot => ({
-        id: slot.id,
-        customer: slot.customer_name,
-        service: slot.package_name,
-        booking_date: slot.booking_date,
-        status: slot.status,
-        timeslot_start: slot.timeslot_start_time,
-        timeslot_end: slot.timeslot_end_time
-      })));
       
       // Log admin access for GDPR audit trail
       const customerIds = transformedSimpleData
@@ -201,23 +199,19 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   // Listen for booking updates from other parts of the app
   useEffect(() => {
     const handleBookingUpdate = () => {
-      console.log('🔄 Availability view received bookingUpdated event - refreshing data...');
       fetchAvailabilitySlots();
       fetchBookedSlots();
     };
 
     const handleAvailabilityUpdate = () => {
-      console.log('🔄 Availability view received availabilityUpdated event - refreshing data...');
       fetchAvailabilitySlots();
       fetchBookedSlots();
     };
 
-    console.log('🎧 Availability view setting up event listeners...');
     window.addEventListener('bookingUpdated', handleBookingUpdate);
     window.addEventListener('availabilityUpdated', handleAvailabilityUpdate);
 
     return () => {
-      console.log('🎧 Availability view removing event listeners...');
       window.removeEventListener('bookingUpdated', handleBookingUpdate);
       window.removeEventListener('availabilityUpdated', handleAvailabilityUpdate);
     };
@@ -249,19 +243,53 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : t;
   };
 
-  // Helper function to extract date and time from booking_date without timezone conversion
+  // Memoized function to extract date and time from booking_date without timezone conversion
+  const bookingDateTimeCache = new Map<string, { date: string; time: string } | null>();
+  
   const getBookingDateTime = (booking: BookedSlot) => {
-    if (booking.booking_date) {
-      console.log('🔍 Processing booking_date for availability display:', booking.booking_date);
+    // Use cache to avoid repeated parsing
+    const cacheKey = `${booking.id}-${booking.booking_date}-${booking.timeslot_start_time}`;
+    if (bookingDateTimeCache.has(cacheKey)) {
+      return bookingDateTimeCache.get(cacheKey);
+    }
 
+    let result: { date: string; time: string } | null = null;
+    
+    // Priority 1: Use timeslot_start_time if available (this is the actual appointment time)
+    if (booking.timeslot_start_time && booking.booking_date) {
+      // Extract date from booking_date and use timeslot_start_time for time
+      if (booking.booking_date.includes('T')) {
+        const [dateStr] = booking.booking_date.split('T');
+        // Ensure timeslot_start_time is in HH:MM format
+        const timeStr = formatTime(booking.timeslot_start_time);
+        
+        if (dateStr && timeStr) {
+          result = {
+            date: dateStr,
+            time: timeStr
+          };
+        }
+      } else {
+        // booking_date might just be a date string
+        const timeStr = formatTime(booking.timeslot_start_time);
+        if (booking.booking_date && timeStr) {
+          result = {
+            date: booking.booking_date,
+            time: timeStr
+          };
+        }
+      }
+    }
+    
+    // Priority 2: Parse from booking_date if no timeslot_start_time
+    if (!result && booking.booking_date) {
       // Try to parse without timezone conversion first
       if (booking.booking_date.includes('T')) {
         const [dateStr, timeWithZone] = booking.booking_date.split('T');
         const timeStr = timeWithZone.split(':').slice(0, 2).join(':'); // Get HH:MM, ignore seconds and timezone
 
         if (dateStr && timeStr) {
-          console.log('✅ Direct parsing without timezone conversion:', { dateStr, timeStr });
-          return {
+          result = {
             date: dateStr,
             time: timeStr
           };
@@ -269,31 +297,35 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       }
 
       // Fallback to Date object parsing (may cause timezone shift)
-      console.log('⚠️ Falling back to Date object parsing (may cause timezone shift)');
-      const bookingDateTime = new Date(booking.booking_date);
-      if (!isNaN(bookingDateTime.getTime())) {
-        const year = bookingDateTime.getFullYear();
-        const month = String(bookingDateTime.getMonth() + 1).padStart(2, '0');
-        const day = String(bookingDateTime.getDate()).padStart(2, '0');
-        const hours = String(bookingDateTime.getHours()).padStart(2, '0');
-        const minutes = String(bookingDateTime.getMinutes()).padStart(2, '0');
+      if (!result) {
+        const bookingDateTime = new Date(booking.booking_date);
+        if (!isNaN(bookingDateTime.getTime())) {
+          const year = bookingDateTime.getFullYear();
+          const month = String(bookingDateTime.getMonth() + 1).padStart(2, '0');
+          const day = String(bookingDateTime.getDate()).padStart(2, '0');
+          const hours = String(bookingDateTime.getHours()).padStart(2, '0');
+          const minutes = String(bookingDateTime.getMinutes()).padStart(2, '0');
 
-        return {
-          date: `${year}-${month}-${day}`,
-          time: `${hours}:${minutes}`
-        };
+          result = {
+            date: `${year}-${month}-${day}`,
+            time: `${hours}:${minutes}`
+          };
+        }
       }
     }
     
-    // Fallback to appointment_date and appointment_time if they exist
-    if (booking.appointment_date && booking.appointment_time) {
-      return {
+    // Priority 3: Fallback to appointment_date and appointment_time if they exist
+    if (!result && booking.appointment_date && booking.appointment_time) {
+      result = {
         date: booking.appointment_date,
         time: booking.appointment_time
       };
     }
     
-    return null;
+    // Cache the result for future use
+    bookingDateTimeCache.set(cacheKey, result);
+    
+    return result;
   };
 
   // Create available slot events
@@ -306,26 +338,15 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       const bookingDateTime = getBookingDateTime(booking);
       if (!bookingDateTime) return false;
 
-      const isDateMatch = bookingDateTime.date === slot.date;
-      const isTimeInRange = bookingDateTime.time >= getSlotStart(slot) && bookingDateTime.time < slot.end_time;
-
-      console.log('🔍 Checking slot match:', {
-        slotDate: slot.date,
-        slotStart: getSlotStart(slot),
-        slotEnd: slot.end_time,
-        bookingDate: bookingDateTime.date,
-        bookingTime: bookingDateTime.time,
-        bookingId: booking.id,
-        customerName: booking.customer_name,
-        isDateMatch,
-        isTimeInRange,
-        finalMatch: isDateMatch && isTimeInRange
-      });
+      // Normalize all times to HH:MM format for comparison
+      const bookingTime = formatTime(bookingDateTime.time);
+      const slotStartTime = formatTime(getSlotStart(slot));
+      const slotEndTime = formatTime(slot.end_time);
 
       // Check if booking falls within this availability slot
       return bookingDateTime.date === slot.date &&
-        bookingDateTime.time >= getSlotStart(slot) &&
-        bookingDateTime.time < slot.end_time;
+        bookingTime >= slotStartTime &&
+        bookingTime < slotEndTime;
     });
 
     // A slot is considered booked if:
@@ -333,12 +354,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     // 2. The availability slot is marked as unavailable in the database
     const isBooked = !!matchingBooking || slot.is_available === false;
 
-    console.log('🎯 Slot booking status:', {
-      slotId: slot.id,
-      hasMatchingBooking: !!matchingBooking,
-      isAvailableFlag: slot.is_available,
-      finalIsBooked: isBooked
-    });
+    // Slot booking status determined
 
     // Create title with booking details if booked
     let title = `${startFmt} - ${endFmt}`;
@@ -355,17 +371,15 @@ export const Availability: React.FC<AvailabilityProps> = () => {
             return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
           })() : '');
 
-        title = `${bookingDateTime?.time || ''} - ${bookingEndTime} | ${matchingBooking.customer_name} | ${matchingBooking.package_name}`;
+        const formattedStartTime = bookingDateTime ? formatTime(bookingDateTime.time) : '';
+        const formattedEndTime = bookingEndTime ? formatTime(bookingEndTime) : '';
+        title = `${formattedStartTime} ${formattedEndTime} ${matchingBooking.customer_name}`;
 
-        console.log('✅ Slot is booked with details:', {
-          slotId: slot.id,
-          customer: matchingBooking.customer_name,
-          service: matchingBooking.package_name,
-          time: `${bookingDateTime?.time} - ${bookingEndTime}`
-        });
+        // Slot booked with customer details
+
+        // Slot booked with customer details
       } else if (slot.is_available === false) {
         // Slot marked unavailable - try to find ANY booking for this date/time range
-        console.log('🔍 Slot marked unavailable but no exact match found, searching all bookings...');
 
         const anyBookingForSlot = bookedSlots.find(booking => {
           const bookingDateTime = getBookingDateTime(booking);
@@ -374,21 +388,13 @@ export const Availability: React.FC<AvailabilityProps> = () => {
           // Check if booking is on the same date and overlaps with slot time range
           if (bookingDateTime.date !== slot.date) return false;
 
-          const bookingStart = bookingDateTime.time;
-          const slotStart = getSlotStart(slot);
-          const slotEnd = slot.end_time;
+          // Normalize all times to HH:MM format for comparison
+          const bookingStart = formatTime(bookingDateTime.time);
+          const slotStart = formatTime(getSlotStart(slot));
+          const slotEnd = formatTime(slot.end_time);
 
           // Check if booking time overlaps with slot (more flexible matching)
           const isOverlapping = bookingStart >= slotStart && bookingStart < slotEnd;
-
-          console.log('🔍 Checking any booking overlap:', {
-            bookingId: booking.id,
-            bookingDate: bookingDateTime.date,
-            bookingStart,
-            slotStart,
-            slotEnd,
-            isOverlapping
-          });
 
           return isOverlapping;
         });
@@ -404,27 +410,67 @@ export const Availability: React.FC<AvailabilityProps> = () => {
               return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
             })() : '');
 
-          title = `${bookingDateTime?.time || ''} - ${bookingEndTime} | ${anyBookingForSlot.customer_name} | ${anyBookingForSlot.package_name}`;
+          const formattedStartTime = bookingDateTime ? formatTime(bookingDateTime.time) : '';
+          const formattedEndTime = bookingEndTime ? formatTime(bookingEndTime) : '';
+          title = `${formattedStartTime} ${formattedEndTime} ${anyBookingForSlot.customer_name}`;
 
-          console.log('✅ Found booking for unavailable slot:', {
-            slotId: slot.id,
-            customer: anyBookingForSlot.customer_name,
-            service: anyBookingForSlot.package_name
-          });
+          // Found booking for unavailable slot
         } else {
           // Marked as unavailable but no booking details found
           title = `${startFmt} - ${endFmt} (Unavailable)`;
-          console.log('⚠️ Slot marked unavailable but no booking found:', {
-            slotId: slot.id,
-            reason: 'is_available = false, no matching booking'
-          });
+          // Slot marked unavailable but no booking found
         }
+      }
+    }
+
+    // Create hover title with package info if booking exists
+    let hoverTitle = title;
+    if (matchingBooking) {
+      const bookingDateTime = getBookingDateTime(matchingBooking);
+      const formattedStartTime = bookingDateTime ? formatTime(bookingDateTime.time) : '';
+      const bookingEndTime = matchingBooking.timeslot_end_time ||
+        (bookingDateTime ? (() => {
+          const [hours, minutes] = bookingDateTime.time.split(':').map(Number);
+          const endMinutes = minutes + 50;
+          const endHours = hours + Math.floor(endMinutes / 60);
+          const finalMinutes = endMinutes % 60;
+          return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+        })() : '');
+      const formattedEndTime = bookingEndTime ? formatTime(bookingEndTime) : '';
+      hoverTitle = `${formattedStartTime} ${formattedEndTime} | ${matchingBooking.customer_name} | ${matchingBooking.package_name}`;
+    } else if (isBooked && slot.is_available === false) {
+      // Try to find booking for hover title
+      const anyBookingForSlot = bookedSlots.find(booking => {
+        const bookingDateTime = getBookingDateTime(booking);
+        if (!bookingDateTime) return false;
+        if (bookingDateTime.date !== slot.date) return false;
+        const bookingStart = bookingDateTime.time;
+        const slotStart = getSlotStart(slot);
+        const slotEnd = slot.end_time;
+        const isOverlapping = bookingStart >= slotStart && bookingStart < slotEnd;
+        return isOverlapping;
+      });
+      
+      if (anyBookingForSlot) {
+        const bookingDateTime = getBookingDateTime(anyBookingForSlot);
+        const formattedStartTime = bookingDateTime ? formatTime(bookingDateTime.time) : '';
+        const bookingEndTime = anyBookingForSlot.timeslot_end_time ||
+          (bookingDateTime ? (() => {
+            const [hours, minutes] = bookingDateTime.time.split(':').map(Number);
+            const endMinutes = minutes + 50;
+            const endHours = hours + Math.floor(endMinutes / 60);
+            const finalMinutes = endMinutes % 60;
+            return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+          })() : '');
+        const formattedEndTime = bookingEndTime ? formatTime(bookingEndTime) : '';
+        hoverTitle = `${formattedStartTime} ${formattedEndTime} | ${anyBookingForSlot.customer_name} | ${anyBookingForSlot.package_name}`;
       }
     }
 
     return {
       id: `available-${slot.id}`,
       title: title,
+      hoverTitle: hoverTitle,
       start: new Date(`${slot.date}T${getSlotStart(slot)}`),
       end: new Date(`${slot.date}T${slot.end_time}`),
       resource: { ...slot, booking: matchingBooking },
@@ -461,22 +507,30 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       if (!bookingDateTime) return null;
 
       // Use actual booking end time if available, otherwise calculate from timeslot fields
-      const startTime = new Date(`${bookingDateTime.date}T${bookingDateTime.time}:00`);
+      const formattedStartTime = formatTime(bookingDateTime.time);
+      const startTime = new Date(`${bookingDateTime.date}T${formattedStartTime}:00`);
       let endTime: Date;
 
       if (booking.timeslot_end_time) {
         // Use the actual booking end time
-        endTime = new Date(`${bookingDateTime.date}T${booking.timeslot_end_time}:00`);
-        console.log('✅ Using actual booking end time:', booking.timeslot_end_time);
+        const formattedEndTime = formatTime(booking.timeslot_end_time);
+        endTime = new Date(`${bookingDateTime.date}T${formattedEndTime}:00`);
       } else {
         // Fallback: assume 50-minute session (therapy standard)
         endTime = new Date(startTime.getTime() + 50 * 60 * 1000);
-        console.log('⚠️ No end time found, assuming 50 minutes');
       }
+
+      const endTimeFormatted = booking.timeslot_end_time ? 
+        formatTime(booking.timeslot_end_time) : 
+        formatTime(`${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`);
+
+      const displayTitle = `${formatTime(bookingDateTime.time)} ${endTimeFormatted} ${booking.customer_name}`;
+      const hoverTitle = `${formatTime(bookingDateTime.time)} ${endTimeFormatted} | ${booking.customer_name} | ${booking.package_name}`;
 
       return {
         id: `booking-${booking.id}`,
-        title: `${bookingDateTime.time} - ${booking.customer_name}`,
+        title: displayTitle,
+        hoverTitle: hoverTitle,
         start: startTime,
         end: endTime,
         resource: booking,
@@ -894,6 +948,48 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                   date={calendarDate}
                   onView={setCalendarViewType}
                   onNavigate={setCalendarDate}
+                  showMultiDayTimes={false}
+                  formats={{
+                    timeGutterFormat: 'HH:mm',
+                    eventTimeRangeFormat: () => '', // Disable automatic time range display on events
+                    eventTimeRangeStartFormat: () => '', // Disable start time display
+                    eventTimeRangeEndFormat: () => '', // Disable end time display  
+                    agendaTimeFormat: 'HH:mm',
+                    agendaTimeRangeFormat: ({ start, end }, culture, localizer) => 
+                      `${localizer?.format(start, 'HH:mm', culture)} - ${localizer?.format(end, 'HH:mm', culture)}`,
+                    dayFormat: 'dddd DD/MM',
+                    dayHeaderFormat: 'dddd DD/MM',
+                    dayRangeHeaderFormat: ({ start, end }, culture, localizer) =>
+                      `${localizer?.format(start, 'DD/MM/YYYY', culture)} - ${localizer?.format(end, 'DD/MM/YYYY', culture)}`,
+                    selectRangeFormat: ({ start, end }, culture, localizer) =>
+                      `${localizer?.format(start, 'HH:mm', culture)} - ${localizer?.format(end, 'HH:mm', culture)}`
+                  }}
+                  components={{
+                    event: ({ event }) => {
+                      // Determine display based on view type
+                      const isDay = calendarViewType === Views.DAY;
+                      const displayText = isDay ? event.hoverTitle || event.title : event.title;
+                      const tooltipText = event.hoverTitle || event.title;
+                      
+                      return (
+                        <div 
+                          title={tooltipText} 
+                          style={{ 
+                            height: '100%', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            padding: '2px',
+                            fontSize: 'inherit',
+                            fontWeight: 'inherit'
+                          }}
+                        >
+                          {displayText}
+                        </div>
+                      );
+                    }
+                  }}
                   selectable
                   onSelectSlot={(slotInfo) => {
                     const start = slotInfo.start as Date;
@@ -1066,24 +1162,58 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                     <div className="flex-1">
                                       {isBooked ? (
                                         (() => {
-                                          // Try to find booking details - either exact match or any overlapping booking
-                                          let displayBooking = matchingBooking;
+                          // Try to find booking details - use multiple strategies for better matching
+                          let displayBooking = matchingBooking;
 
-                                          if (!displayBooking && slot.is_available === false) {
-                                            // Look for any booking that overlaps with this slot
-                                            displayBooking = bookedSlots.find(booking => {
-                                              const bookingDateTime = getBookingDateTime(booking);
-                                              if (!bookingDateTime || bookingDateTime.date !== slot.date) return false;
+                          if (!displayBooking && slot.is_available === false) {
+                            // Strategy 1: Look for any booking that overlaps with this slot (original logic)
+                            displayBooking = bookedSlots.find(booking => {
+                              const bookingDateTime = getBookingDateTime(booking);
+                              if (!bookingDateTime || bookingDateTime.date !== slot.date) return false;
 
-                                              const bookingStart = bookingDateTime.time;
-                                              const slotStart = getSlotStart(slot);
-                                              const slotEnd = slot.end_time;
+                              const bookingStart = bookingDateTime.time;
+                              const slotStart = getSlotStart(slot);
+                              const slotEnd = slot.end_time;
 
-                                              return bookingStart >= slotStart && bookingStart < slotEnd;
-                                            });
-                                          }
+                              return bookingStart >= slotStart && bookingStart < slotEnd;
+                            });
 
-                                          if (displayBooking) {
+                            // Strategy 2: If no exact overlap, look for any booking on the same date with close times
+                            if (!displayBooking) {
+                              displayBooking = bookedSlots.find(booking => {
+                                const bookingDateTime = getBookingDateTime(booking);
+                                if (!bookingDateTime || bookingDateTime.date !== slot.date) return false;
+
+                                // Convert times to minutes for easier comparison
+                                const timeToMinutes = (time: string) => {
+                                  const [hours, minutes] = time.split(':').map(Number);
+                                  return hours * 60 + minutes;
+                                };
+
+                                const bookingMinutes = timeToMinutes(bookingDateTime.time);
+                                const slotStartMinutes = timeToMinutes(getSlotStart(slot));
+                                const slotEndMinutes = timeToMinutes(slot.end_time);
+
+                                // Check if booking time is within 30 minutes of slot start/end (flexible matching)
+                                const withinRange = Math.abs(bookingMinutes - slotStartMinutes) <= 30 || 
+                                                   Math.abs(bookingMinutes - slotEndMinutes) <= 30 ||
+                                                   (bookingMinutes >= slotStartMinutes && bookingMinutes <= slotEndMinutes);
+
+                                return withinRange;
+                              });
+                            }
+
+                            // Strategy 3: Last resort - find ANY booking on the same date
+                            if (!displayBooking) {
+                              displayBooking = bookedSlots.find(booking => {
+                                const bookingDateTime = getBookingDateTime(booking);
+                                return bookingDateTime && bookingDateTime.date === slot.date;
+                              });
+                            }
+                          }
+
+                          if (displayBooking) {
+                            // Found booking for unavailable slot
                                             return (
                                               <div>
                                                 <p className="text-sm font-medium text-red-700 mb-1">
@@ -1112,6 +1242,8 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                               </div>
                                             );
                                           } else {
+                                            // No booking found for unavailable slot
+                                            
                                             return (
                                               <div>
                                                 <p className="text-sm font-medium text-red-700 mb-1">
