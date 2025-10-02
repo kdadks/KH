@@ -618,25 +618,37 @@ const processSumUpWebhook = async (supabase, eventData) => {
       
       let paymentRequest = null;
       
-      // Search payment_requests by checkout reference or sumup_checkout_id
-      if (payload.reference || payload.checkout_id) {
-        const { data: paymentRequests, error: prError } = await supabase
-          .from('payment_requests')
-          .select('*')
-          .or(`checkout_reference.eq.${payload.reference || 'null'},sumup_checkout_id.eq.${payload.checkout_id || 'null'}`)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        
-        searchAttempts.push({
-          method: 'payment_request_by_checkout_reference_or_sumup_id',
-          query: payload.reference || payload.checkout_id,
-          found: paymentRequests?.length || 0,
-          error: prError?.message
-        });
+      // Parse payment_request_id from checkout reference pattern: payment-request-{id}-{timestamp}
+      if (payload.reference && payload.reference.startsWith('payment-request-')) {
+        const match = payload.reference.match(/^payment-request-(\d+)-/);
+        if (match) {
+          const paymentRequestId = parseInt(match[1]);
+          console.log(`🔍 Parsed payment_request_id from checkout reference: ${paymentRequestId}`);
+          
+          const { data: paymentRequests, error: prError } = await supabase
+            .from('payment_requests')
+            .select('*')
+            .eq('id', paymentRequestId)
+            .limit(1);
+          
+          searchAttempts.push({
+            method: 'payment_request_by_parsed_id',
+            query: `${payload.reference} -> id:${paymentRequestId}`,
+            found: paymentRequests?.length || 0,
+            error: prError?.message
+          });
 
-        if (!prError && paymentRequests && paymentRequests.length > 0) {
-          paymentRequest = paymentRequests[0];
-          console.log('✅ Found payment_request by checkout reference:', paymentRequest.id);
+          if (!prError && paymentRequests && paymentRequests.length > 0) {
+            paymentRequest = paymentRequests[0];
+            console.log('✅ Found payment_request by parsed ID:', paymentRequest.id);
+          }
+        } else {
+          searchAttempts.push({
+            method: 'payment_request_by_parsed_id',
+            query: payload.reference,
+            found: 0,
+            error: 'Could not parse payment_request_id from checkout reference'
+          });
         }
       }
 
