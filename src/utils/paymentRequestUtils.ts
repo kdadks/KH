@@ -461,7 +461,9 @@ export async function processPaymentRequest(
         payload: {
           checkout_id: paymentData.sumup_checkout_id,
           transaction_id: paymentData.sumup_transaction_id,
-          reference: paymentData.sumup_checkout_reference,
+          // FIX: Generate checkout reference based on payment_request ID (matches existing pattern)
+          reference: paymentData.sumup_checkout_reference || 
+                    `payment-request-${paymentRequestId}-${Date.now()}`,
           amount: paymentRequest.amount,
           currency: paymentRequest.currency || 'EUR',
           status: 'PAID',
@@ -476,11 +478,7 @@ export async function processPaymentRequest(
       
       console.log('📤 Request body:', requestBody);
 
-      // TEMPORARY DEBUG: Route to debug endpoint to capture 500 error
-      const debugEndpoint = sumupEndpoint.replace('sumup-return', 'debug-sumup-500');
-      console.log('🚨 DEBUG: Routing to debug endpoint:', debugEndpoint);
-      
-      const response = await fetch(debugEndpoint, {
+      const response = await fetch(sumupEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

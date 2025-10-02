@@ -669,6 +669,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         payment_request_id: paymentRequest.id,
         sumup_checkout_id: fallbackCheckoutId,
         sumup_transaction_id: generatedTransactionId,
+        // NOTE: NOT adding sumup_checkout_reference here to avoid duplicates
+        // The webhook handler will handle payment creation with proper reference
         payment_method: 'card',
         sumup_payment_type: 'card'
       };
