@@ -177,12 +177,12 @@ const processSumUpReturn = async (supabase, data) => {
       console.log('❌ No payment record found for SumUp return data');
       console.log('🔍 Attempting to find payment_request and create payment...');
       
-      // Try to find payment_request by checkout_reference and create payment
-      if (checkout_reference) {
+      // Try to find payment_request by checkout_reference or sumup_checkout_id and create payment
+      if (checkout_reference || checkout_id) {
         const { data: paymentRequests, error: prError } = await supabase
           .from('payment_requests')
           .select('*')
-          .eq('checkout_reference', checkout_reference)
+          .or(`checkout_reference.eq.${checkout_reference || 'null'},sumup_checkout_id.eq.${checkout_id || 'null'}`)
           .order('created_at', { ascending: false })
           .limit(1);
         
@@ -382,18 +382,18 @@ const processSumUpWebhook = async (supabase, eventData) => {
       
       let paymentRequest = null;
       
-      // Search payment_requests by checkout reference
-      if (payload.reference) {
+      // Search payment_requests by checkout reference or sumup_checkout_id
+      if (payload.reference || payload.checkout_id) {
         const { data: paymentRequests, error: prError } = await supabase
           .from('payment_requests')
           .select('*')
-          .eq('checkout_reference', payload.reference)
+          .or(`checkout_reference.eq.${payload.reference || 'null'},sumup_checkout_id.eq.${payload.checkout_id || 'null'}`)
           .order('created_at', { ascending: false })
           .limit(1);
         
         searchAttempts.push({
-          method: 'payment_request_by_checkout_reference',
-          query: payload.reference,
+          method: 'payment_request_by_checkout_reference_or_sumup_id',
+          query: payload.reference || payload.checkout_id,
           found: paymentRequests?.length || 0,
           error: prError?.message
         });
