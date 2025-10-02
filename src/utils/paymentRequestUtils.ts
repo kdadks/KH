@@ -455,19 +455,23 @@ export async function processPaymentRequest(
       console.log('🔄 Attempting to route payment through SumUp handler:', sumupEndpoint);
       
       const requestBody = {
-        event_type: 'checkout.completed', // Always completed since we're processing successful payments
-        checkout_id: paymentData.sumup_checkout_id,
-        transaction_id: paymentData.sumup_transaction_id,
-        checkout_reference: paymentData.sumup_checkout_reference,
-        amount: paymentRequest.amount,
-        currency: paymentRequest.currency || 'EUR',
-        status: 'PAID',
-        merchant_code: 'INTERNAL_PROCESSING',
-        payment_type: paymentData.payment_method || 'card',
-        created_at: new Date().toISOString(),
-        payment_request_id: paymentRequestId,
-        booking_id: paymentRequest.booking_id,
-        customer_id: paymentRequest.customer_id
+        id: `internal_event_${Date.now()}`,
+        event_type: 'checkout.completed',
+        timestamp: new Date().toISOString(),
+        payload: {
+          checkout_id: paymentData.sumup_checkout_id,
+          transaction_id: paymentData.sumup_transaction_id,
+          reference: paymentData.sumup_checkout_reference,
+          amount: paymentRequest.amount,
+          currency: paymentRequest.currency || 'EUR',
+          status: 'PAID',
+          merchant_code: 'INTERNAL_PROCESSING',
+          payment_type: paymentData.payment_method || 'card',
+          created_at: new Date().toISOString(),
+          payment_request_id: paymentRequestId,
+          booking_id: paymentRequest.booking_id,
+          customer_id: paymentRequest.customer_id
+        }
       };
       
       console.log('📤 Request body:', requestBody);
