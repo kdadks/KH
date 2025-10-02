@@ -5,12 +5,29 @@
  * URL: https://your-site/.netlify/functions/debug-viewer
  */
 
-const { createClient } = require('@supabase/supabase-js');
+// Safe Supabase client initialization
+let supabaseClient = null;
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const initializeSupabase = async () => {
+  if (supabaseClient) return supabaseClient;
+  
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error(`Missing Supabase credentials - URL: ${!!supabaseUrl}, Key: ${!!supabaseKey}`);
+    }
+    
+    supabaseClient = createClient(supabaseUrl, supabaseKey);
+    return supabaseClient;
+  } catch (error) {
+    console.error('❌ Supabase initialization failed:', error);
+    throw error;
+  }
+};
 
 exports.handler = async (event, context) => {
   const corsHeaders = {
@@ -29,6 +46,8 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    // Initialize Supabase client
+    const supabase = await initializeSupabase();
     const query = event.queryStringParameters || {};
     const limit = parseInt(query.limit) || 50;
     const functionName = query.function || 'sumup-return';
@@ -37,80 +56,101 @@ exports.handler = async (event, context) => {
 
     console.log('🔍 Debug viewer request:', { limit, functionName, executionId, level });
 
-    // Build query for debug logs
-    let logsQuery = supabase
-      .from('debug_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    let debugLogs = [];
+    let logsError = null;
 
-    if (functionName) {
-      logsQuery = logsQuery.eq('function_name', functionName);
+    try {
+      // Build query for debug logs
+      let logsQuery = supabase
+        .from('debug_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (functionName) {
+        logsQuery = logsQuery.eq('function_name', functionName);
+      }
+
+      if (executionId) {
+        logsQuery = logsQuery.eq('execution_id', executionId);
+      }
+
+      if (level) {
+        logsQuery = logsQuery.eq('log_level', level);
+      }
+
+      const result = await logsQuery;
+      debugLogs = result.data || [];
+      logsError = result.error;
+
+      if (logsError && (logsError.code === '42P01' || logsError.message.includes('does not exist'))) {
+        console.log('⚠️ Debug logs table not created yet');
+        debugLogs = [];
+        logsError = null; // Don't treat this as a fatal error
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not fetch debug logs:', error.message);
+      debugLogs = [];
     }
 
-    if (executionId) {
-      logsQuery = logsQuery.eq('execution_id', executionId);
+    // Get recent payments for context (with error handling)
+    let recentPayments = [];
+    try {
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          customer_id,
+          amount,
+          currency,
+          status,
+          payment_method,
+          sumup_checkout_id,
+          sumup_checkout_reference,
+          webhook_processed_at,
+          sumup_event_type,
+          sumup_event_id,
+          created_at,
+          updated_at
+        `)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (!paymentsError) {
+        recentPayments = paymentsData || [];
+      } else {
+        console.warn('Warning: Could not fetch payments:', paymentsError.message);
+      }
+    } catch (error) {
+      console.warn('Warning: Exception fetching payments:', error.message);
     }
 
-    if (level) {
-      logsQuery = logsQuery.eq('log_level', level);
+    // Get recent payment requests for context (with error handling)
+    let paymentRequests = [];
+    try {
+      const { data: prData, error: prError } = await supabase
+        .from('payment_requests')
+        .select(`
+          id,
+          customer_id,
+          amount,
+          currency,
+          status,
+          checkout_reference,
+          sumup_checkout_id,
+          created_at
+        `)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (!prError) {
+        paymentRequests = prData || [];
+      } else {
+        console.warn('Warning: Could not fetch payment requests:', prError.message);
+      }
+    } catch (error) {
+      console.warn('Warning: Exception fetching payment requests:', error.message);
     }
-
-    const { data: debugLogs, error: logsError } = await logsQuery;
-
-    if (logsError) {
-      throw new Error(`Failed to fetch logs: ${logsError.message}`);
-    }
-
-    // Get recent payments for context
-    const { data: recentPayments, error: paymentsError } = await supabase
-      .from('payments')
-      .select(`
-        id,
-        customer_id,
-        amount,
-        currency,
-        status,
-        payment_method,
-        sumup_checkout_id,
-        sumup_checkout_reference,
-        webhook_processed_at,
-        sumup_event_type,
-        sumup_event_id,
-        created_at,
-        updated_at
-      `)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (paymentsError) {
-      console.warn('Warning: Could not fetch payments:', paymentsError.message);
-    }
-
-    // Get recent payment requests for context
-    const { data: paymentRequests, error: prError } = await supabase
-      .from('payment_requests')
-      .select(`
-        id,
-        customer_id,
-        amount,
-        currency,
-        status,
-        checkout_reference,
-        sumup_checkout_id,
-        created_at
-      `)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (prError) {
-      console.warn('Warning: Could not fetch payment requests:', prError.message);
-    }
-
-    // Count duplicates
-    const { data: duplicates, error: dupError } = await supabase
-      .rpc('count_duplicate_payments')
-      .single();
 
     const response = {
       success: true,
@@ -119,7 +159,7 @@ exports.handler = async (event, context) => {
         totalLogs: debugLogs?.length || 0,
         recentPayments: recentPayments?.length || 0,
         recentPaymentRequests: paymentRequests?.length || 0,
-        duplicateInfo: dupError ? 'Could not check duplicates' : duplicates
+        note: 'Debug viewer working - add debug_logs table for enhanced logging'
       },
       debugLogs: debugLogs || [],
       recentPayments: recentPayments || [],
