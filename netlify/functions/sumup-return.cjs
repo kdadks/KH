@@ -922,6 +922,18 @@ exports.handler = async (event, context) => {
       
       console.log('📥 SumUp return URL parameters:', queryParams);
       
+      // 🚨 CRITICAL DEBUG: Log ALL parameters we receive from SumUp
+      await debugLogger.info('SumUp GET request received', {
+        allQueryParams: queryParams,
+        paramCount: Object.keys(queryParams).length,
+        hasCheckoutId: !!queryParams.checkout_id,
+        hasTransactionId: !!queryParams.transaction_id,
+        hasCheckoutReference: !!queryParams.checkout_reference,
+        hasStatus: !!queryParams.status,
+        userAgent: event.headers['user-agent'],
+        referer: event.headers.referer
+      });
+      
       // Log return URL processing to database
       await logProcessingDetails(supabase, 'return_url_received', {
         query_params: queryParams,
@@ -941,8 +953,18 @@ exports.handler = async (event, context) => {
         timestamp
       } = queryParams;
       
-      // If no SumUp parameters, just return endpoint info
+      // If no SumUp parameters, log what we DID receive and return endpoint info
       if (!checkout_id && !transaction_id) {
+        console.log('⚠️ NO SUMUP PARAMETERS - Raw query params received:', JSON.stringify(queryParams, null, 2));
+        
+        // Log this case to debug what SumUp is actually sending
+        await debugLogger.critical('NO SUMUP PARAMETERS - SumUp called endpoint without expected parameters', {
+          receivedParams: queryParams,
+          expectedParams: ['checkout_id', 'transaction_id', 'checkout_reference', 'status'],
+          allHeaders: event.headers,
+          userAgent: event.headers['user-agent']
+        });
+        
         return {
           statusCode: 200,
           headers: {
@@ -950,10 +972,12 @@ exports.handler = async (event, context) => {
             'Access-Control-Allow-Origin': '*'
           },
           body: JSON.stringify({
-            message: 'SumUp return endpoint active',
+            message: 'SumUp return endpoint active - NO PARAMETERS RECEIVED',
             method: 'GET',
             environment: environmentLabel,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            receivedParams: queryParams,
+            debugNote: 'This call had no SumUp parameters - check SumUp dashboard configuration'
           })
         };
       }
