@@ -805,22 +805,24 @@ export async function sendPaymentRequestNotification(
       const gatewayConfig = await getActiveSumUpGateway();
       
       if (!gatewayConfig || !gatewayConfig.merchant_id) {
-        console.error('Payment gateway not configured for email payment links');
-        return { success: false, error: 'Payment gateway not configured' };
+        console.error('Payment gateway not configured for email payment links - using fallback payment URL');
+        // Don't return here - continue with fallback URL and send email
+        directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
+      } else {
+        const checkoutResponse = await createSumUpCheckoutSession({
+          checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
+          amount: paymentRequest.amount,
+          currency: 'EUR',
+          merchant_code: gatewayConfig.merchant_id,
+          description: paymentRequest.service_name || 'Payment Request'
+        });
+        
+        // Create direct checkout URL with email context for proper redirect behavior
+        directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
       }
       
-      const checkoutResponse = await createSumUpCheckoutSession({
-        checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
-        amount: paymentRequest.amount,
-        currency: 'EUR',
-        merchant_code: gatewayConfig.merchant_id,
-        description: paymentRequest.service_name || 'Payment Request'
-      });
-      
-      // Create direct checkout URL with email context for proper redirect behavior
-      directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
-      
     } catch (realApiError) {
+      console.error('SumUp checkout creation failed, using fallback URL:', realApiError);
       // Fallback to the existing payment page URL
       directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
     }
