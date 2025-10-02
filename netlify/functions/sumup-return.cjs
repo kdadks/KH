@@ -331,7 +331,7 @@ const mapSumUpStatus = (sumupStatus) => {
 };
 
 // Process SumUp return URL data
-const processSumUpReturn = async (supabase, data) => {
+const processSumUpReturn = async (supabase, data, debugLogger) => {
   try {
     const { checkout_reference, checkout_id, transaction_id, status, amount } = data;
     
@@ -945,7 +945,7 @@ exports.handler = async (event, context) => {
         checkout_reference,
         merchant_code,
         timestamp
-      });
+      }, debugLogger);
       
       // Redirect user to success or failure page based on processed status
       const redirectUrl = result.status === 'paid'
