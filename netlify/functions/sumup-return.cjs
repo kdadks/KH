@@ -3,6 +3,7 @@
  */
 
 const crypto = require('crypto');
+const DebugLogger = require('./debug-logger');
 
 // Safe Supabase client initialization
 let supabaseClient = null;
@@ -56,6 +57,112 @@ const getWebhookEnvironment = () => {
   );
   
   return isUATOrStaging ? 'sandbox' : 'production';
+};
+
+// Comprehensive duplicate prevention checker
+const checkForDuplicates = async (supabase, debugLogger, checkoutReference, checkoutId, transactionId) => {
+  await debugLogger.info('Starting duplicate check', {
+    checkoutReference,
+    checkoutId,
+    transactionId
+  });
+
+  const duplicateChecks = [];
+
+  // Check by checkout_reference
+  if (checkoutReference) {
+    const { data: refPayments, error } = await supabase
+      .from('payments')
+      .select('id, created_at, status, sumup_checkout_reference')
+      .eq('sumup_checkout_reference', checkoutReference)
+      .order('created_at', { ascending: false });
+
+    duplicateChecks.push({
+      method: 'checkout_reference',
+      query: checkoutReference,
+      found: refPayments?.length || 0,
+      records: refPayments,
+      error: error?.message
+    });
+
+    await debugLogger.logDatabaseOperation(
+      'SELECT', 
+      'payments', 
+      `sumup_checkout_reference = ${checkoutReference}`,
+      { data: refPayments, error }
+    );
+  }
+
+  // Check by checkout_id
+  if (checkoutId) {
+    const { data: idPayments, error } = await supabase
+      .from('payments')
+      .select('id, created_at, status, sumup_checkout_id')
+      .eq('sumup_checkout_id', checkoutId)
+      .order('created_at', { ascending: false });
+
+    duplicateChecks.push({
+      method: 'checkout_id',
+      query: checkoutId,
+      found: idPayments?.length || 0,
+      records: idPayments,
+      error: error?.message
+    });
+
+    await debugLogger.logDatabaseOperation(
+      'SELECT', 
+      'payments', 
+      `sumup_checkout_id = ${checkoutId}`,
+      { data: idPayments, error }
+    );
+  }
+
+  // Check by transaction_id if available
+  if (transactionId) {
+    const { data: txnPayments, error } = await supabase
+      .from('payments')
+      .select('id, created_at, status, transaction_id')
+      .eq('transaction_id', transactionId)
+      .order('created_at', { ascending: false });
+
+    duplicateChecks.push({
+      method: 'transaction_id',
+      query: transactionId,
+      found: txnPayments?.length || 0,
+      records: txnPayments,
+      error: error?.message
+    });
+
+    await debugLogger.logDatabaseOperation(
+      'SELECT', 
+      'payments', 
+      `transaction_id = ${transactionId}`,
+      { data: txnPayments, error }
+    );
+  }
+
+  // Analyze results
+  const existingPayments = duplicateChecks
+    .filter(check => check.found > 0)
+    .flatMap(check => check.records)
+    .filter((payment, index, self) => 
+      index === self.findIndex(p => p.id === payment.id)
+    ); // Remove duplicates by ID
+
+  const hasDuplicates = existingPayments.length > 0;
+
+  await debugLogger.info('Duplicate check completed', {
+    hasDuplicates,
+    existingPaymentCount: existingPayments.length,
+    checks: duplicateChecks,
+    existingPaymentIds: existingPayments.map(p => p.id)
+  });
+
+  return {
+    hasDuplicates,
+    existingPayments,
+    duplicateChecks
+  };
 };
 
 // Log processing details to database for debugging
@@ -190,7 +297,32 @@ const processSumUpReturn = async (supabase, data) => {
           const paymentRequest = paymentRequests[0];
           console.log('✅ Found payment_request, creating payment record:', paymentRequest.id);
           
-          const { data: newPayment, error: createError } = await supabase
+          // Check for duplicates before creating payment
+          const duplicateResult = await checkForDuplicates(
+            supabase, 
+            debugLogger, 
+            checkout_reference, 
+            checkout_id, 
+            transaction_id
+          );
+          
+          if (duplicateResult.hasDuplicates) {
+            console.log('⚠️ Duplicate payment detected, using existing payment');
+            await debugLogger.warn('Duplicate payment detected in return URL', {
+              existingPayments: duplicateResult.existingPayments,
+              duplicateChecks: duplicateResult.duplicateChecks
+            });
+            
+            payment = duplicateResult.existingPayments[0]; // Use first existing payment
+          } else {
+            console.log('✅ No duplicates found, creating new payment');
+            await debugLogger.info('Creating new payment from payment_request', {
+              paymentRequestId: paymentRequest.id,
+              checkoutReference: checkout_reference,
+              checkoutId: checkout_id
+            });
+            
+            const { data: newPayment, error: createError } = await supabase
             .from('payments')
             .insert({
               customer_id: paymentRequest.customer_id,
@@ -211,8 +343,11 @@ const processSumUpReturn = async (supabase, data) => {
           if (!createError && newPayment) {
             payment = newPayment;
             console.log('✅ Payment created from return URL:', payment.id);
+            await debugLogger.info('Payment created successfully', { paymentId: payment.id });
           } else {
             console.error('❌ Failed to create payment from return URL:', createError);
+            await debugLogger.error('Failed to create payment', { error: createError?.message });
+          }
           }
         }
       }
@@ -575,14 +710,34 @@ const processSumUpWebhook = async (supabase, eventData) => {
 };
 
 exports.handler = async (event, context) => {
+  // Initialize debug logger for this execution
+  const debugLogger = new DebugLogger(await initializeSupabase(), 'sumup-return');
+  
   const webhookEnvironment = getWebhookEnvironment();
   const environmentLabel = webhookEnvironment === 'production' ? 'LIVE' : 'TEST';
+  
+  await debugLogger.logRequest({
+    method: event.httpMethod,
+    url: event.path || event.rawPath,
+    headers: event.headers,
+    query: event.queryStringParameters,
+    body: event.body
+  });
+  
+  await debugLogger.info(`SumUp ${event.httpMethod} called [${environmentLabel}]`, {
+    method: event.httpMethod,
+    query: event.queryStringParameters,
+    bodyLength: event.body?.length || 0,
+    userAgent: event.headers['user-agent']?.substring(0, 50),
+    executionId: debugLogger.executionId
+  });
   
   console.log(`🎯 SumUp ${event.httpMethod} called [${environmentLabel}]:`, {
     method: event.httpMethod,
     query: event.queryStringParameters,
     bodyLength: event.body?.length || 0,
-    userAgent: event.headers['user-agent']?.substring(0, 50)
+    userAgent: event.headers['user-agent']?.substring(0, 50),
+    executionId: debugLogger.executionId
   });
 
   // ENHANCED DEBUG: Log all SumUp callback data for troubleshooting
