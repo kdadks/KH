@@ -391,41 +391,70 @@ exports.handler = async (event, context) => {
 
     // Handle POST requests from SumUp webhooks
     if (event.httpMethod === 'POST') {
-      const webhookSecret = process.env.SUMUP_WEBHOOK_SECRET;
+      // Use environment-specific webhook secrets
+      const isProduction = environmentLabel === 'LIVE';
+      const webhookSecret = isProduction 
+        ? process.env.SUMUP_WEBHOOK_SECRET_PROD 
+        : (process.env.SUMUP_WEBHOOK_SECRET_UAT || process.env.SUMUP_WEBHOOK_SECRET);
       
-      if (!webhookSecret) {
-        console.error('❌ SUMUP_WEBHOOK_SECRET environment variable not set');
+      console.log('🔐 Webhook environment check:', {
+        environment: environmentLabel,
+        isProduction,
+        hasSecret: !!webhookSecret,
+        secretSource: isProduction ? 'PROD' : 'UAT/STAGING'
+      });
+      
+      // Allow test mode for UAT/staging without signature verification
+      const isTestMode = !isProduction && (!webhookSecret || 
+        event.headers['x-test-webhook'] === 'true' ||
+        event.body?.includes('test_webhook_payload'));
+      
+      if (!webhookSecret && !isTestMode) {
+        console.error(`❌ Missing webhook secret for ${environmentLabel} environment`);
         return {
           statusCode: 500,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             error: 'Webhook secret not configured',
-            message: 'SUMUP_WEBHOOK_SECRET environment variable is required'
+            message: `${isProduction ? 'SUMUP_WEBHOOK_SECRET_PROD' : 'SUMUP_WEBHOOK_SECRET_UAT'} environment variable is required`,
+            environment: environmentLabel
           })
         };
       }
 
-      // Verify webhook signature
+      // Verify webhook signature (skip for test mode)
       const signature = event.headers['x-payload-signature'];
       const rawBody = event.body;
       
-      if (!signature) {
-        console.error('❌ Missing x-payload-signature header');
-        return {
-          statusCode: 401,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Missing webhook signature' })
-        };
-      }
+      if (isTestMode) {
+        console.log('🧪 Test mode enabled - skipping signature verification');
+      } else {
+        if (!signature) {
+          console.error('❌ Missing x-payload-signature header');
+          return {
+            statusCode: 401,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              error: 'Missing webhook signature',
+              environment: environmentLabel,
+              testMode: false
+            })
+          };
+        }
 
-      // Verify signature before processing
-      if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
-        console.error('❌ Invalid webhook signature');
-        return {
-          statusCode: 401,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Invalid webhook signature' })
-        };
+        // Verify signature before processing
+        if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+          console.error('❌ Invalid webhook signature');
+          return {
+            statusCode: 401,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              error: 'Invalid webhook signature',
+              environment: environmentLabel,
+              testMode: false
+            })
+          };
+        }
       }
 
       // Parse webhook payload
@@ -441,7 +470,11 @@ exports.handler = async (event, context) => {
         };
       }
 
-      console.log('✅ Webhook signature verified, processing event:', webhookData.event_type);
+      if (isTestMode) {
+        console.log('🧪 Processing webhook in test mode:', webhookData.event_type || 'unknown');
+      } else {
+        console.log('✅ Webhook signature verified, processing event:', webhookData.event_type);
+      }
 
       // Process the webhook event
       const result = await processSumUpWebhook(supabase, webhookData);
@@ -457,6 +490,7 @@ exports.handler = async (event, context) => {
           success: true,
           message: 'Webhook processed successfully',
           environment: environmentLabel,
+          testMode: isTestMode,
           event_type: webhookData.event_type,
           result: result,
           timestamp: new Date().toISOString()
