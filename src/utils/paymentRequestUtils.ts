@@ -494,12 +494,13 @@ export async function processPaymentRequest(
       const result = await response.text();
       console.log('✅ Payment processed through SumUp handler:', result);
       
-      // Get the created payment record for return
+      // Get the created payment record for return (most recent for this payment_request_id)
       const { data: createdPayment, error: fetchError } = await supabase
         .from('payments')
         .select()
         .eq('payment_request_id', paymentRequestId)
-        .eq('sumup_transaction_id', paymentData.sumup_transaction_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
 
       if (fetchError) {
