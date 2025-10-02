@@ -4,9 +4,7 @@ import { CreditCard, CheckCircle } from 'lucide-react';
 import { PaymentEnvironmentIndicator } from '../components/ui/PaymentEnvironmentIndicator';
 
 const SumUpCheckoutPage: React.FC = () => {
-  // IMMEDIATE ALERT: Verify this component is loading
-  console.log('🚨 SumUpCheckoutPage component is loading!');
-  alert('🚨 DEBUG: SumUpCheckoutPage component loaded!');
+  // SumUp checkout page initialization
   
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -47,9 +45,7 @@ const SumUpCheckoutPage: React.FC = () => {
     const isReturnFromSumup = searchParams.get('checkout-id') && searchParams.get('success');
     
     if (isReturnFromSumup) {
-      console.log('=== POST-REDIRECT DEBUG INFO ===');
-      console.log('Returned from SumUp with checkout-id:', searchParams.get('checkout-id'));
-      console.log('Success:', searchParams.get('success'));
+      // Processing return from SumUp
       
       // Check webhook simulation results
       const lastWebhookSuccess = localStorage.getItem('last_webhook_success');
