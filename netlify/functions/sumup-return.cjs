@@ -168,16 +168,67 @@ const processWebhookData = async (supabase, data, isTest = false) => {
 
         payment = newPayment;
         console.log('✅ Test payment created with valid references:', payment.id);
+        console.log('📊 Created payment data:', JSON.stringify(payment, null, 2));
       } else if (!isTest) {
         // For real webhooks, payment should already exist
         const errorMsg = `Payment record not found for checkout reference: ${checkoutRef}`;
         console.error('❌', errorMsg);
         throw new Error(errorMsg);
       } else {
-        // Test mode but no payment request data - fallback error
-        const errorMsg = `Test mode: No payment_request data found for ID: ${paymentRequestId}`;
-        console.error('❌', errorMsg);
-        throw new Error(errorMsg);
+        // Test mode fallback - create minimal test payment without payment_request dependency
+        console.log('🧪 Creating minimal test payment (no payment_request dependency)...');
+        
+        const generateUUID = () => {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        };
+        
+        // For test mode, try to find an existing booking or create without booking_id
+        let testBookingId = data.booking_id;
+        
+        if (!testBookingId) {
+          // Try to find any existing booking to use as reference
+          const { data: existingBookings } = await supabase
+            .from('bookings')
+            .select('id')
+            .limit(1);
+            
+          if (existingBookings && existingBookings.length > 0) {
+            testBookingId = existingBookings[0].id;
+            console.log('📎 Using existing booking for test:', testBookingId);
+          } else {
+            console.log('⚠️ No existing bookings found, creating payment without booking_id');
+            testBookingId = null;
+          }
+        }
+
+        const { data: newPayment, error: createError } = await supabase
+          .from('payments')
+          .insert({
+            customer_id: data.customer_id || 1, // Use provided or default
+            booking_id: testBookingId, // Use existing or null
+            sumup_checkout_reference: checkoutRef,
+            amount: data.amount || 25.00,
+            currency: data.currency || 'EUR',
+            status: 'pending',
+            payment_method: 'sumup',
+            payment_request_id: data.payment_request_id, // Can be null
+            notes: `Test webhook payment - ${new Date().toISOString()}`
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('❌ Minimal test payment creation failed:', createError);
+          throw createError;
+        }
+
+        payment = newPayment;
+        console.log('✅ Minimal test payment created:', payment.id);
+        console.log('📊 Created payment data:', JSON.stringify(payment, null, 2));
       }
     }
 
@@ -259,17 +310,26 @@ const processWebhookData = async (supabase, data, isTest = false) => {
       status: data.status === 'paid' || data.status === 'COMPLETED' ? 'paid' : 'failed'
     };
 
-    const { error: updateError } = await supabase
+    const { data: updatedPayments, error: updateError, count } = await supabase
       .from('payments')
       .update(updateData)
-      .eq('id', payment.id);
+      .eq('id', payment.id)
+      .select();
 
     if (updateError) {
       console.error('❌ Payment update error:', updateError);
       throw updateError;
     }
 
+    if (!updatedPayments || updatedPayments.length === 0) {
+      console.error('❌ Payment update failed: No rows affected for payment ID:', payment.id);
+      throw new Error(`Payment update failed: Payment ID ${payment.id} not found or not updated`);
+    }
+
     console.log('✅ Payment updated successfully:', payment.id);
+    console.log('📊 Updated data:', updateData);
+    console.log('🔍 Verification: Updated payment:', updatedPayments[0]);
+    
     return { success: true, paymentId: payment.id, updated: updateData };
 
   } catch (error) {
