@@ -80,6 +80,7 @@ exports.handler = async (event, context) => {
 <html>
 <head>
     <title>SumUp Debug Status</title>
+    <meta charset="UTF-8">
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
         .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -96,8 +97,8 @@ exports.handler = async (event, context) => {
     </script>
 </head>
 <body>
-    <h1>🔍 SumUp Debug Status</h1>
-    <button class="refresh" onclick="refresh()">🔄 Refresh</button>
+    <h1>[DEBUG] SumUp Debug Status</h1>
+    <button class="refresh" onclick="refresh()">[REFRESH] Refresh</button>
     <p><small>Auto-refreshes every 30 seconds | ${response.timestamp}</small></p>
     
     <div class="card">
@@ -151,7 +152,7 @@ exports.handler = async (event, context) => {
       
       return {
         statusCode: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html' },
+        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
         body: html
       };
     }
