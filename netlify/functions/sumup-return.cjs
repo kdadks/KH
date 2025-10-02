@@ -115,11 +115,33 @@ const processSumUpReturn = async (supabase, data) => {
       throw new Error(`No payment found for checkout_reference: ${checkout_reference} or checkout_id: ${checkout_id}`);
     }
 
+    // Map SumUp status to valid database status values
+    const mapSumUpStatus = (sumupStatus) => {
+      const statusLower = (sumupStatus || '').toLowerCase();
+      
+      // Success cases
+      if (statusLower === 'completed' || statusLower === 'success' || statusLower === 'paid') {
+        return 'paid';
+      }
+      
+      // Pending cases  
+      if (statusLower === 'pending' || statusLower === 'processing' || statusLower === 'in_progress') {
+        return 'pending';
+      }
+      
+      // All other cases (failed, cancelled, error, etc.) map to failed
+      return 'failed';
+    };
+
+    const mappedStatus = mapSumUpStatus(status);
+    
+    console.log(`📊 Status mapping: SumUp "${status}" → Database "${mappedStatus}"`);
+
     // Update payment with SumUp return data
     const updateData = {
       sumup_transaction_id: transaction_id,
       sumup_checkout_id: checkout_id,
-      status: status === 'COMPLETED' || status === 'success' ? 'paid' : 'failed',
+      status: mappedStatus,
       payment_date: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       // Update webhook columns for consistency
@@ -504,10 +526,12 @@ exports.handler = async (event, context) => {
         timestamp
       });
       
-      // Redirect user to success or failure page
-      const redirectUrl = status === 'COMPLETED' || status === 'success' 
+      // Redirect user to success or failure page based on processed status
+      const redirectUrl = result.status === 'paid'
         ? `${process.env.URL || 'https://uat--khtherapy.netlify.app'}/payment-success`
         : `${process.env.URL || 'https://uat--khtherapy.netlify.app'}/payment-cancelled`;
+      
+      console.log(`🔗 Redirecting to: ${redirectUrl} (status: ${result.status})`);
       
       return {
         statusCode: 302,
