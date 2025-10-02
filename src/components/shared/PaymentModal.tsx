@@ -489,33 +489,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
 
-      // Create payment record early so webhook can find it later
-      console.log('🏦 Creating initial payment record for webhook lookup...');
-      const { data: initialPayment, error: paymentCreateError } = await supabase
-        .from('payments')
-        .insert({
-          customer_id: paymentRequest.customer_id || 1, // Required field - fallback to test customer
-          amount: paymentRequest.amount,
-          currency: paymentRequest.currency || 'EUR',
-          status: 'pending',
-          payment_method: 'sumup',
-          sumup_checkout_reference: newCheckoutReference,
-          payment_request_id: paymentRequest.id,
-          booking_id: paymentRequest.booking_id,
-          notes: `SumUp payment initiated for PR #${paymentRequest.id}`
-        })
-        .select()
-        .single();
-
-      if (paymentCreateError) {
-        console.error('❌ Failed to create initial payment record:', paymentCreateError);
-        throw new Error('Failed to initialize payment tracking. Please try again.');
-      }
-
-      console.log('✅ Initial payment record created:', initialPayment.id);
-      logToStorage('Initial payment record created', { 
-        paymentId: initialPayment.id, 
-        checkoutReference: newCheckoutReference 
+      // DUPLICATE FIX: Don't create initial payment - let SumUp webhook/return handler create the only payment record
+      console.log('🏦 Skipping initial payment creation - SumUp webhook will create payment record');
+      logToStorage('Payment flow initiated - no initial record created', { 
+        checkoutReference: newCheckoutReference,
+        reason: 'Preventing duplicate payments - SumUp handler will create single record'
       });
 
       // Set up return URL for SumUp to call (handles both webhook processing and user redirect)
