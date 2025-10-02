@@ -691,6 +691,7 @@ const processSumUpWebhook = async (supabase, eventData) => {
             payment_method: 'sumup',
             sumup_checkout_id: payload.checkout_id,
             sumup_checkout_reference: payload.reference,
+            sumup_transaction_id: payload.transaction_id, // FIX: Include transaction_id from payload
             webhook_processed_at: new Date().toISOString(),
             sumup_event_type: event_type || 'checkout.status.updated',
             sumup_event_id: eventId,
