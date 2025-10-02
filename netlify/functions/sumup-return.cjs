@@ -809,6 +809,42 @@ exports.handler = async (event, context) => {
     // Initialize debug logger for this execution
     const supabase = await initializeSupabase();
     debugLogger = new DebugLogger(supabase, 'sumup-return');
+    
+    // 🚨 EMERGENCY DUPLICATE CHECK - Check for recent duplicates FIRST
+    if (event.httpMethod === 'GET' && event.queryStringParameters?.checkout_id) {
+      const checkoutId = event.queryStringParameters.checkout_id;
+      
+      // Check if we already processed this checkout_id in the last 5 minutes
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: recentPayments } = await supabase
+        .from('payments')
+        .select('id, status, created_at, sumup_checkout_reference')
+        .or(`sumup_checkout_reference.eq.${checkoutId},notes.ilike.%${checkoutId}%`)
+        .gte('created_at', fiveMinutesAgo)
+        .order('created_at', { ascending: false });
+
+      if (recentPayments && recentPayments.length > 0) {
+        await debugLogger.critical('EMERGENCY DUPLICATE DETECTED', {
+          checkoutId,
+          recentPayments: recentPayments.length,
+          existingPayments: recentPayments
+        });
+        
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          body: `<!DOCTYPE html>
+<html><head><title>Payment Already Processed</title></head>
+<body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+  <h1 style="color: #28a745;">✅ Payment Already Processed</h1>
+  <p>This payment has already been processed successfully.</p>
+  <p><strong>Checkout ID:</strong> ${checkoutId}</p>
+  <p>You can safely close this window.</p>
+  <script>setTimeout(() => window.close(), 3000);</script>
+</body></html>`
+        };
+      }
+    }
   } catch (error) {
     console.warn('⚠️ Debug logger initialization failed, using console only:', error.message);
     // Create a fallback debug logger that only uses console
