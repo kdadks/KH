@@ -200,6 +200,9 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Booking confirmation loading state
   const [confirmingBookings, setConfirmingBookings] = useState<Set<string>>(new Set());
   
+  // Booking cancellation loading state
+  const [cancellingBookings, setCancellingBookings] = useState<Set<string>>(new Set());
+  
   const recordsPerPage = 10;
 
   // React to external filter changes (e.g., from Dashboard stat tiles)
@@ -1946,6 +1949,11 @@ export const Bookings: React.FC<BookingsProps> = ({
   const handleCancelBooking = async () => {
     if (!bookingToCancel) return;
 
+    const bookingId = bookingToCancel.id?.toString() || '';
+    
+    // Add booking to cancelling set to prevent multiple clicks
+    setCancellingBookings(prev => new Set([...prev, bookingId]));
+
     try {
       // First, find the matching availability slot if the booking was confirmed
       let matchingSlot = null;
@@ -2008,6 +2016,13 @@ export const Bookings: React.FC<BookingsProps> = ({
     } catch (error) {
       console.error('Error cancelling booking:', error);
       showError('Error', 'Failed to cancel booking. Please try again.');
+    } finally {
+      // Remove booking from cancelling set
+      setCancellingBookings(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bookingId);
+        return newSet;
+      });
     }
   };
 
@@ -3625,15 +3640,32 @@ export const Bookings: React.FC<BookingsProps> = ({
                   setShowCancelConfirmModal(false);
                   setBookingToCancel(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                disabled={cancellingBookings.has(bookingToCancel.id?.toString() || '')}
+                className={`px-4 py-2 text-sm font-medium border border-gray-300 rounded-md transition-colors ${
+                  cancellingBookings.has(bookingToCancel.id?.toString() || '')
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               >
                 Keep Booking
               </button>
               <button
                 onClick={handleCancelBooking}
-                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700"
+                disabled={cancellingBookings.has(bookingToCancel.id?.toString() || '')}
+                className={`px-4 py-2 text-sm font-medium border border-transparent rounded-md transition-colors flex items-center ${
+                  cancellingBookings.has(bookingToCancel.id?.toString() || '')
+                    ? 'bg-orange-400 text-orange-200 cursor-not-allowed'
+                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                }`}
               >
-                Cancel Booking
+                {cancellingBookings.has(bookingToCancel.id?.toString() || '') ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Cancelling...
+                  </>
+                ) : (
+                  'Cancel Booking'
+                )}
               </button>
             </div>
           </div>

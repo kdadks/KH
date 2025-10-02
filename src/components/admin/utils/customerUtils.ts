@@ -1,14 +1,19 @@
 import { Customer } from '../types';
+import { decryptCustomerPII } from '../../../utils/gdprUtils';
 
 /**
  * Utility function to get the full display name for a customer
  * Ensures consistent concatenation of first name and last name
+ * Automatically handles decryption of encrypted customer data
  */
 export const getCustomerDisplayName = (customer: Customer | null | undefined): string => {
   if (!customer) return '';
   
-  const firstName = customer.first_name?.trim() || '';
-  const lastName = customer.last_name?.trim() || '';
+  // Decrypt customer data first to handle encrypted names
+  const decryptedCustomer = decryptCustomerPII(customer);
+  
+  const firstName = decryptedCustomer.first_name?.trim() || '';
+  const lastName = decryptedCustomer.last_name?.trim() || '';
   
   if (!firstName && !lastName) return '';
   if (!firstName) return lastName;
