@@ -159,6 +159,61 @@
   background-color: #f8fafc;
 }
 
+/* Event display optimization for all views */
+.rbc-event {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.7rem !important;
+  line-height: 1.2;
+  padding: 2px 4px;
+}
+
+/* Hide any automatic time displays on events */
+.rbc-event-label,
+.rbc-time-slot .rbc-event .rbc-event-label,
+.rbc-addons-dnd .rbc-event .rbc-event-label,
+.rbc-event .rbc-time {
+  display: none !important;
+}
+
+.rbc-event-content {
+  width: 100%;
+}
+
+/* Ensure our custom event content takes full space */
+.rbc-event > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* Month view - very compact */
+.rbc-month-view .rbc-event {
+  font-size: 0.65rem !important;
+  padding: 1px 3px;
+  min-height: 1.2rem;
+}
+
+/* Week and Day views - slightly more space */
+.rbc-time-view .rbc-event {
+  font-size: 0.7rem !important;
+  padding: 3px 5px;
+  min-height: 1.5rem;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: center;
+}
+
+/* Day view specific - more space for full format */
+.rbc-day-view .rbc-event {
+  font-size: 0.75rem !important;
+  padding: 4px 6px;
+  min-height: 2rem;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: center;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .rbc-toolbar {
@@ -172,7 +227,11 @@
   }
   
   .rbc-event {
-    font-size: 0.7rem;
+    font-size: 0.6rem !important;
     padding: 0.125rem 0.25rem;
+  }
+  
+  .rbc-time-view .rbc-event {
+    font-size: 0.65rem !important;
   }
 }
