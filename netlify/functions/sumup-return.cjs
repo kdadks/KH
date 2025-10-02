@@ -175,7 +175,51 @@ const processSumUpReturn = async (supabase, data) => {
 
     if (!payment) {
       console.log('❌ No payment record found for SumUp return data');
-      throw new Error(`No payment found for checkout_reference: ${checkout_reference} or checkout_id: ${checkout_id}`);
+      console.log('🔍 Attempting to find payment_request and create payment...');
+      
+      // Try to find payment_request by checkout_reference and create payment
+      if (checkout_reference) {
+        const { data: paymentRequests, error: prError } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .eq('checkout_reference', checkout_reference)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (!prError && paymentRequests && paymentRequests.length > 0) {
+          const paymentRequest = paymentRequests[0];
+          console.log('✅ Found payment_request, creating payment record:', paymentRequest.id);
+          
+          const { data: newPayment, error: createError } = await supabase
+            .from('payments')
+            .insert({
+              customer_id: paymentRequest.customer_id,
+              booking_id: paymentRequest.booking_id,
+              payment_request_id: paymentRequest.id,
+              amount: paymentRequest.amount,
+              currency: paymentRequest.currency || 'EUR',
+              status: 'pending', // Will be updated below
+              payment_method: 'sumup',
+              sumup_checkout_id: checkout_id,
+              sumup_checkout_reference: checkout_reference,
+              sumup_transaction_id: transaction_id,
+              notes: `Payment created from return URL for payment_request #${paymentRequest.id}`
+            })
+            .select()
+            .single();
+            
+          if (!createError && newPayment) {
+            payment = newPayment;
+            console.log('✅ Payment created from return URL:', payment.id);
+          } else {
+            console.error('❌ Failed to create payment from return URL:', createError);
+          }
+        }
+      }
+      
+      if (!payment) {
+        throw new Error(`No payment found and couldn't create from payment_request for checkout_reference: ${checkout_reference} or checkout_id: ${checkout_id}`);
+      }
     }
 
     // Use shared status mapping function
@@ -343,12 +387,12 @@ const processSumUpWebhook = async (supabase, eventData) => {
         const { data: paymentRequests, error: prError } = await supabase
           .from('payment_requests')
           .select('*')
-          .eq('sumup_checkout_id', payload.reference)
+          .eq('checkout_reference', payload.reference)
           .order('created_at', { ascending: false })
           .limit(1);
         
         searchAttempts.push({
-          method: 'payment_request_by_checkout',
+          method: 'payment_request_by_checkout_reference',
           query: payload.reference,
           found: paymentRequests?.length || 0,
           error: prError?.message
