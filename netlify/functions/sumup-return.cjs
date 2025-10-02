@@ -288,13 +288,13 @@ const processSumUpWebhook = async (supabase, eventData) => {
       const { data: payments3, error: error3 } = await supabase
         .from('payments')
         .select('*')
-        .eq('gateway', 'sumup')
+        .eq('payment_method', 'sumup')
         .order('created_at', { ascending: false })
         .limit(1);
 
       searchAttempts.push({
         method: 'recent_sumup_payment',
-        query: 'gateway=sumup',
+        query: 'payment_method=sumup',
         found: payments3?.length || 0,
         error: error3?.message
       });
@@ -371,16 +371,13 @@ const processSumUpWebhook = async (supabase, eventData) => {
             amount: paymentRequest.amount,
             currency: paymentRequest.currency || 'EUR',
             status: mappedStatus,
-            gateway: 'sumup',
             payment_method: 'sumup',
             sumup_checkout_id: payload.checkout_id,
             sumup_checkout_reference: payload.reference,
             webhook_processed_at: new Date().toISOString(),
             sumup_event_type: event_type || 'checkout.status.updated',
             sumup_event_id: eventId,
-            notes: `Payment created from webhook for payment_request #${paymentRequest.id}`,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            notes: `Payment created from webhook for payment_request #${paymentRequest.id}`
           })
           .select()
           .single();
