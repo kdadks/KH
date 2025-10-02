@@ -3,6 +3,7 @@ import { hashPassword } from './passwordUtils';
 import { createPaymentRequest, sendPaymentRequestNotification } from './paymentRequestUtils';
 import { sendWelcomeEmail } from './emailUtils';
 import { encryptSensitiveData, decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { PaymentRequest } from '../types/paymentTypes';
 
 export interface Customer {
   id?: number;
@@ -41,6 +42,16 @@ export interface BookingData {
   notes?: string;
   status?: string;
   service_cost?: number;
+}
+
+export interface BookingRecord extends BookingData {
+  id: string; // UUID from database
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface BookingWithCustomer extends BookingRecord {
+  customers?: Customer;
 }
 
 /**
@@ -279,7 +290,7 @@ export const createBookingWithCustomer = async (
   },
   bookingData: Omit<BookingData, 'customer_id'>,
   isAdminBooking: boolean = false
-): Promise<{ booking: any | null; customer: Customer | null; paymentRequest?: any; error: string | null }> => {
+): Promise<{ booking: BookingRecord | null; customer: Customer | null; paymentRequest?: PaymentRequest; error: string | null }> => {
   try {
     // Step 1: Find or create customer
     const { customer, error: customerError, isNewCustomer } = await findOrCreateCustomer(customerData);
@@ -480,7 +491,7 @@ export const createBookingWithCustomer = async (
     return { 
       booking, 
       customer, 
-      paymentRequest: paymentRequest,
+      paymentRequest: paymentRequest || undefined,
       error: null 
     };
 
@@ -493,7 +504,7 @@ export const createBookingWithCustomer = async (
 /**
  * Get bookings with customer details joined
  */
-export const getBookingsWithCustomers = async (forceRefresh: boolean = false): Promise<{ bookings: any[] | null; error: string | null }> => {
+export const getBookingsWithCustomers = async (): Promise<{ bookings: BookingWithCustomer[] | null; error: string | null }> => {
   try {
     const query = supabase
       .from('bookings')

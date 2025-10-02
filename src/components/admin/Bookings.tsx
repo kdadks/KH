@@ -1606,6 +1606,7 @@ export const Bookings: React.FC<BookingsProps> = ({
 
 
   // Payment request functions
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const checkBookingPaymentStatus = async (booking: BookingFormData, retryCount = 0) => {
     if (!booking.customer_id) return { paymentRequest: null, payment: null };
 
@@ -1825,6 +1826,7 @@ export const Bookings: React.FC<BookingsProps> = ({
     };
 
     loadPaymentStatus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     // Only reload payment status when page/filter changes, not when booking status changes
     currentPage,
@@ -2580,11 +2582,19 @@ export const Bookings: React.FC<BookingsProps> = ({
         return;
       }
 
-      if (booking && customer) {
+      if (booking && customer && customer.id) {
         // Add the new booking to the list
         const newBookingForList: BookingFormData = {
           ...booking,
-          customer_details: customer,
+          customer_details: {
+            id: customer.id,
+            first_name: customer.first_name,
+            last_name: customer.last_name,
+            email: customer.email,
+            phone: customer.phone,
+            created_at: customer.created_at,
+            updated_at: customer.updated_at
+          },
           customer_name: `${customer.first_name} ${customer.last_name}`,
           customer_email: customer.email,
           customer_phone: customer.phone || ''
