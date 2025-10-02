@@ -83,7 +83,7 @@ class DebugLogger {
           console.error('Failed to insert debug logs:', error);
         }
       } else {
-        console.log(`✅ Flushed ${this.logs.length} debug logs to database`);
+        // Debug logs flushed to database
       }
 
       this.logs = [];
@@ -111,11 +111,7 @@ const initializeSupabase = async () => {
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
     
-    console.log('🔗 Supabase configuration:', {
-      url: supabaseUrl ? 'SET' : 'NOT SET',
-      serviceKey: supabaseServiceKey ? 'SET' : 'NOT SET',
-      usingViteUrl: !process.env.SUPABASE_URL && !!process.env.VITE_SUPABASE_URL
-    });
+    // Supabase configuration validated
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('❌ Missing required Netlify environment variables:');
@@ -125,7 +121,7 @@ const initializeSupabase = async () => {
     }
     
     supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-    console.log('✅ Supabase client initialized successfully');
+    // Supabase client initialized
     return supabaseClient;
   } catch (error) {
     console.error('❌ Failed to initialize Supabase:', error);
@@ -302,7 +298,7 @@ const verifyWebhookSignature = (payload, signature, secret) => {
     }
     
     const isValid = crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
-    console.log('🔐 Webhook signature verification:', isValid ? 'VALID' : 'INVALID');
+    // Webhook signature verified
     
     return isValid;
   } catch (error) {
@@ -334,13 +330,7 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
   try {
     const { checkout_reference, checkout_id, transaction_id, status, amount } = data;
     
-    console.log('🔍 Processing SumUp return:', {
-      checkout_reference,
-      checkout_id,
-      transaction_id,
-      status,
-      amount
-    });
+    // Processing SumUp return data
 
     // 🚨 IMMEDIATE DUPLICATE CHECK - Check if we already processed this payment
     await debugLogger.info('Starting duplicate check', { checkout_reference, checkout_id, transaction_id });
@@ -355,7 +345,7 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
 
     if (duplicateResult.isDuplicate) {
       await debugLogger.critical('DUPLICATE DETECTED - BLOCKING PROCESSING', duplicateResult);
-      console.log('🚨 DUPLICATE DETECTED - Stopping processing to prevent duplicate payment');
+      // Duplicate payment detected
       
       return {
         success: false,
@@ -380,7 +370,7 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
 
       if (!error && payments && payments.length > 0) {
         payment = payments[0];
-        console.log('✅ Found payment by checkout_reference:', payment.id);
+        // Payment found by checkout_reference
       }
     }
 
@@ -395,13 +385,12 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
 
       if (!error && payments && payments.length > 0) {
         payment = payments[0];
-        console.log('✅ Found payment by checkout_id:', payment.id);
+        // Payment found by checkout_id
       }
     }
 
     if (!payment) {
-      console.log('❌ No payment record found for SumUp return data');
-      console.log('🔍 Attempting to find payment_request and create payment...');
+      // No existing payment found, attempting to create from payment_request
       
       // Try to find payment_request by checkout_reference or sumup_checkout_id and create payment
       if (checkout_reference || checkout_id) {
@@ -444,7 +433,6 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
           
         if (!createError && newPayment) {
           payment = newPayment;
-          console.log('✅ Payment created from return URL:', payment.id);
           await debugLogger.info('Payment created successfully', { paymentId: payment.id });
         } else {
           console.error('❌ Failed to create payment from return URL:', createError);
@@ -462,7 +450,7 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
 
     const mappedStatus = mapSumUpStatus(status);
     
-    console.log(`📊 Status mapping: SumUp "${status}" → Database "${mappedStatus}"`);
+    // Status mapped to database format
 
     // Update payment with SumUp return data
     const updateData = {
@@ -493,8 +481,7 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
       throw new Error(`Payment update failed for payment ID: ${payment.id}`);
     }
 
-    console.log('✅ Payment updated successfully:', payment.id);
-    console.log('📊 Updated payment data:', updateData);
+    // Payment updated successfully
 
     return { 
       success: true, 
@@ -514,15 +501,7 @@ const processSumUpWebhook = async (supabase, eventData) => {
   try {
     const { id: eventId, event_type, payload, timestamp } = eventData;
     
-      console.log('🔔 Processing SumUp webhook:', {
-        eventId,
-        event_type,
-        checkout_id: payload.checkout_id,
-        reference: payload.reference,
-        status: payload.status
-      });
-
-      console.log('🔍 WEBHOOK FULL PAYLOAD DEBUG:', JSON.stringify(eventData, null, 2));
+      // Processing SumUp webhook event
 
       // Log webhook processing to database
       await logProcessingDetails(supabase, 'webhook_received', {
@@ -560,7 +539,7 @@ const processSumUpWebhook = async (supabase, eventData) => {
 
       if (!error1 && payments1 && payments1.length > 0) {
         payment = payments1[0];
-        console.log('✅ Found payment by checkout_reference:', payment.id);
+        // Payment found by checkout_reference
       }
     }
 
@@ -582,7 +561,7 @@ const processSumUpWebhook = async (supabase, eventData) => {
 
       if (!error2 && payments2 && payments2.length > 0) {
         payment = payments2[0];
-        console.log('✅ Found payment by checkout_id:', payment.id);
+        // Payment found by checkout_id
       }
     }
 

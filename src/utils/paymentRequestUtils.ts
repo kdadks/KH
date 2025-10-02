@@ -25,7 +25,7 @@ import {
  */
 async function getServicePriceFromDatabase(serviceName: string): Promise<number | null> {
   try {
-    console.log('🔍 getServicePriceFromDatabase called with:', serviceName);
+    // Service price lookup
 
     // First check if this service should skip payment request creation
     const skipPatterns = [
@@ -39,22 +39,20 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
     // Check if service matches any skip pattern
     for (const pattern of skipPatterns) {
       if (pattern.test(serviceName)) {
-        console.log('⏭️ Database lookup skipped - service requires quote or is per-session:', serviceName);
+        // Database lookup skipped for quote services
         return null;
       }
     }
     
     // Extract base service name (e.g., "Ultimate Health")
     const baseServiceName = extractBaseServiceName(serviceName);
-    console.log('📝 Base service name:', baseServiceName);
+    // Extract base service name and time slot type
     
     // Determine if it's in-hour or out-of-hour
     const timeSlotType = determineTimeSlotType(serviceName);
-    console.log('⏰ Time slot type:', timeSlotType);
     
     // Fetch pricing from database
     const servicePricing = await fetchServicePricing(baseServiceName);
-    console.log('💾 Service pricing from database:', servicePricing);
     
     if (!servicePricing) {
       console.warn(`Service pricing not found for: ${baseServiceName}`);
@@ -64,11 +62,7 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
     // Get the appropriate price based on time slot type
     const price = getServicePrice(servicePricing, timeSlotType);
     
-    console.log(`Pricing for ${serviceName}:`, {
-      baseServiceName,
-      timeSlotType,
-      price
-    });
+    // Pricing determined for service
     
     return price;
   } catch (error) {
@@ -83,7 +77,7 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
  * @returns The extracted price or null if not found or not a fixed booking amount
  */
 function extractPriceFromServiceName(serviceName: string): number | null {
-  console.log('🔍 extractPriceFromServiceName called with:', serviceName);
+  // Extract price from service name
 
   // Skip payment request creation for services with these patterns:
   // - "Contact for Quote" - indicates pricing needs to be discussed
@@ -101,7 +95,7 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   // Check if service matches any skip pattern
   for (const pattern of skipPatterns) {
     if (pattern.test(serviceName)) {
-      console.log('⏭️ Skipping payment request creation for pattern match:', pattern);
+      // Skipping payment request for quote service
       return null;
     }
   }
@@ -114,11 +108,10 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   
   if (priceMatch) {
     const price = parseInt(priceMatch[1]);
-    console.log('✅ Extracted price:', price);
     return price;
   }
   
-  console.log('❌ No price found in service name');
+  // No price found in service name
   return null;
 }
 
@@ -135,15 +128,7 @@ export async function createPaymentRequest(
   customAmount?: number // New parameter for custom amounts (used for invoice payments)
 ): Promise<PaymentRequest | null> {
   try {
-    console.log('🔄 createPaymentRequest called with:', {
-      customerId,
-      serviceName,
-      bookingDate,
-      invoiceId,
-      bookingId,
-      isInvoicePaymentRequest,
-      customAmount
-    });
+    // Creating payment request
 
     let finalAmount: number;
 
@@ -452,7 +437,7 @@ export async function processPaymentRequest(
     let payment;
     
     try {
-      console.log('🔄 Attempting to route payment through SumUp handler:', sumupEndpoint);
+      // Routing payment through SumUp handler
       
       const requestBody = {
         id: `internal_event_${Date.now()}`,
@@ -476,7 +461,7 @@ export async function processPaymentRequest(
         }
       };
       
-      console.log('📤 Request body:', requestBody);
+      // Sending webhook payload
 
       const response = await fetch(sumupEndpoint, {
         method: 'POST',
@@ -491,8 +476,8 @@ export async function processPaymentRequest(
         throw new Error(`SumUp endpoint returned ${response.status}`);
       }
 
-      const result = await response.text();
-      console.log('✅ Payment processed through SumUp handler:', result);
+      await response.text();
+      // Payment processed successfully
       
       // Get the created payment record for return (most recent for this payment_request_id)
       const { data: createdPayment, error: fetchError } = await supabase
@@ -540,12 +525,7 @@ export async function processPaymentRequest(
 
     // Update associated booking status based on payment type (deposit vs full payment)
     if (paymentRequest.customer_id) {
-      console.log('🔄 Determining booking status update for payment request:', {
-        paymentRequestId: paymentRequestId,
-        customerId: paymentRequest.customer_id,
-        bookingId: paymentRequest.booking_id,
-        paidAmount: paymentRequest.amount
-      });
+      // Determining booking status update
 
       // Determine if this was a full payment or deposit by comparing against service cost
       let serviceCost = 0;
