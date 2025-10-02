@@ -32,10 +32,8 @@ class DebugLogger {
     this.logs.push(logEntry);
     console.log(`[${level}] ${this.functionName}: ${message}`, details || '');
 
-    // Insert critical logs immediately
-    if (level === 'ERROR' || level === 'CRITICAL') {
-      await this.flushToDB();
-    }
+    // Flush logs immediately to ensure they're captured (for debugging)
+    await this.flushToDB();
   }
 
   async info(message, details = null) { return this.log('INFO', message, details); }
@@ -1081,6 +1079,13 @@ exports.handler = async (event, context) => {
 
   } catch (error) {
     console.error('❌ Handler error:', error);
+    
+    // Try to flush any remaining debug logs
+    try {
+      await debugLogger.finalize();
+    } catch (logError) {
+      console.warn('Failed to finalize debug logs:', logError.message);
+    }
     
     return {
       statusCode: 500,
