@@ -173,46 +173,10 @@ const SumUpCheckoutPage: React.FC = () => {
     };
   };
   
-  // Test webhook endpoint connectivity
-  const testWebhookEndpoint = async () => {
-    const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
-    console.log('🧪 Testing webhook endpoint connectivity:', webhookUrl);
-    
-    try {
-      const testPayload = {
-        id: 'test_event_123',
-        type: 'test.connection',
-        timestamp: new Date().toISOString(),
-        data: {
-          test: true,
-          checkout_reference: 'test_checkout_ref',
-          amount: 10.00,
-          currency: 'EUR',
-          status: 'TESTING'
-        }
-      };
-      
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(testPayload)
-      });
-      
-      const responseText = await response.text();
-      console.log('🧪 Test webhook response:', response.status, responseText);
-      alert(`Webhook Test Result: ${response.status} - ${responseText.substring(0, 100)}`);
-      
-    } catch (error) {
-      console.error('🧪 Webhook endpoint test failed:', error);
-      alert(`Webhook Test Failed: ${error}`);
-    }
-  };
+  // Test webhook functionality removed - SumUp only uses return URLs
 
   // Make debug functions globally available for testing
-  (window as unknown as { checkWebhookDebugInfo: () => object; testWebhookEndpoint: () => void }).checkWebhookDebugInfo = checkWebhookDebugInfo;
-  (window as unknown as { testWebhookEndpoint: () => void }).testWebhookEndpoint = testWebhookEndpoint;
+  (window as unknown as { checkWebhookDebugInfo: () => object }).checkWebhookDebugInfo = checkWebhookDebugInfo;
 
   const processPayment = async (success: boolean) => {
     setProcessing(true);
@@ -542,12 +506,7 @@ const SumUpCheckoutPage: React.FC = () => {
                     >
                       🐛 Check Debug
                     </button>
-                    <button
-                      onClick={testWebhookEndpoint}
-                      className="px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                      🔌 Test Endpoint
-                    </button>
+                    {/* Test endpoint button removed - SumUp only uses return URLs */}
                   </div>
                 </div>
               </div>
