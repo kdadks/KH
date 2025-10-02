@@ -295,9 +295,69 @@ const updatePaymentRecord = async (supabase, webhookData) => {
       return { success: true, action: 'updated', paymentId: updatedPayment.id };
       
     } else {
+      // 🚨 DUPLICATE CHECK: Check if payment already exists before creating
+      console.log('🔍 Checking for duplicate payments before creating new record...');
+      
+      const duplicateQueries = [];
+      
+      // Check by checkout_id
+      if (paymentData.id) {
+        duplicateQueries.push(
+          supabase.from('payments').select('id, status, created_at').eq('sumup_checkout_id', paymentData.id)
+        );
+      }
+      
+      // Check by transaction_id  
+      if (paymentData.transaction_id) {
+        duplicateQueries.push(
+          supabase.from('payments').select('id, status, created_at').eq('sumup_transaction_id', paymentData.transaction_id)
+        );
+      }
+      
+      // Check by checkout_reference
+      if (paymentData.checkout_reference) {
+        duplicateQueries.push(
+          supabase.from('payments').select('id, status, created_at').eq('sumup_checkout_reference', paymentData.checkout_reference)
+        );
+      }
+      
+      // Execute all duplicate checks
+      const duplicateResults = await Promise.all(duplicateQueries);
+      const existingPayments = duplicateResults
+        .filter(result => !result.error && result.data && result.data.length > 0)
+        .flatMap(result => result.data);
+      
+      if (existingPayments.length > 0) {
+        console.log('🚨 DUPLICATE PAYMENT DETECTED IN WEBHOOK - BLOCKING CREATION');
+        console.log('Existing payments found:', existingPayments.map(p => p.id));
+        
+        // Update the existing payment instead of creating a duplicate
+        const existingPayment = existingPayments[0];
+        const { data: updatedPayment, error: updateError } = await supabase
+          .from('payments')
+          .update({
+            status: newStatus,
+            sumup_event_type: eventType,
+            sumup_event_id: eventId,
+            webhook_processed_at: new Date().toISOString(),
+            notes: `Updated by webhook ${eventType} - duplicate creation prevented`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingPayment.id)
+          .select()
+          .single();
+          
+        if (updateError) {
+          throw new Error(`Error updating existing payment: ${updateError.message}`);
+        }
+        
+        console.log('✅ Updated existing payment instead of creating duplicate:', existingPayment.id);
+        return { success: true, action: 'updated_existing', paymentId: existingPayment.id, preventedDuplicate: true };
+      }
+      
       // Create new payment record if we have enough data
       if (paymentData.amount && paymentData.currency) {
-        console.log('➕ Creating new payment record from webhook');
+        console.log('➕ Creating new payment record from webhook (no duplicates found)');
         
         const newPaymentData = {
           amount: paymentData.amount / 100, // Convert from cents
