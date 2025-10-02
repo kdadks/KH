@@ -206,6 +206,34 @@ exports.handler = async (event, context) => {
         </div>` : ''}
 
         <div class="card">
+            <h2>Duplicate Payment Analysis</h2>
+            ${(() => {
+                const duplicateGroups = {};
+                response.payments.forEach(payment => {
+                    const key = payment.amount + '_' + new Date(payment.created_at).toDateString();
+                    if (!duplicateGroups[key]) duplicateGroups[key] = [];
+                    duplicateGroups[key].push(payment);
+                });
+                const duplicates = Object.values(duplicateGroups).filter(group => group.length > 1);
+                
+                if (duplicates.length > 0) {
+                    return `<div class="status error">
+                        <strong>DUPLICATE PAYMENTS DETECTED!</strong><br>
+                        Found ${duplicates.length} sets of duplicate payments. This is the core issue you reported.
+                    </div>
+                    ${duplicates.map(group => `
+                        <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                            <strong>Duplicate Set: EUR ${group[0].amount} on ${new Date(group[0].created_at).toDateString()}</strong><br>
+                            ${group.map(p => `ID ${p.id}: ${p.status} (${p.sumup_checkout_reference ? 'has checkout ref' : 'no checkout ref'})`).join('<br>')}
+                        </div>
+                    `).join('')}`;
+                } else {
+                    return '<div class="status success">No duplicate payments detected in recent records.</div>';
+                }
+            })()}
+        </div>
+
+        <div class="card">
             <h2>Recent Payments (Last 10)</h2>
             ${response.payments.length > 0 ? `
             <table>
@@ -223,7 +251,7 @@ exports.handler = async (event, context) => {
                     ${response.payments.map(payment => `
                     <tr>
                         <td>${payment.id}</td>
-                        <td>${payment.currency || 'EUR'} ${payment.amount}</td>
+                        <td>EUR ${payment.amount}</td>
                         <td><span style="padding: 4px 8px; border-radius: 4px; font-size: 0.8em; background: ${payment.status === 'paid' ? '#d4edda' : '#fff3cd'};">${payment.status || 'unknown'}</span></td>
                         <td>${payment.sumup_checkout_reference || '-'}</td>
                         <td>${payment.webhook_processed_at ? 'YES' : 'NO'}</td>
