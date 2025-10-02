@@ -1045,9 +1045,14 @@ exports.handler = async (event, context) => {
       });
       
       // Allow test mode for UAT/staging without signature verification
+      // Also allow internal calls from PaymentRequestUtils
+      const isInternalCall = event.headers['user-agent']?.includes('PaymentRequestUtils') ||
+        event.body?.includes('INTERNAL_PROCESSING');
+      
       const isTestMode = !isProduction && (!webhookSecret || 
         event.headers['x-test-webhook'] === 'true' ||
-        event.body?.includes('test_webhook_payload'));
+        event.body?.includes('test_webhook_payload') ||
+        isInternalCall);
       
       if (!webhookSecret && !isTestMode) {
         console.error(`❌ Missing webhook secret for ${environmentLabel} environment`);
