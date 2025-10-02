@@ -118,7 +118,8 @@ export const createSumUpCheckoutSession = async (
         id: `${currentEnvironment}-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         status: 'PENDING',
         date: new Date().toISOString(),
-        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${effectiveConfig.merchant_id}&checkout_id=${currentEnvironment}-mock-${Date.now()}&env=${currentEnvironment}&test_mode=true&auto_success=true${checkoutData.return_url ? `&return_url=${encodeURIComponent(checkoutData.return_url)}` : ''}${checkoutData.cancel_url ? `&cancel_url=${encodeURIComponent(checkoutData.cancel_url)}` : ''}`,
+        // Create short URL for testing (similar to production SumUp URLs)
+        checkout_url: `/sumup-checkout?ref=${checkoutData.checkout_reference}&id=${currentEnvironment}-mock-${Date.now()}&test=1`,
         transactions: []
       };
 
