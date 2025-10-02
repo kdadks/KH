@@ -307,9 +307,123 @@ const processSumUpWebhook = async (supabase, eventData) => {
 
     console.log('🔍 Payment search summary:', searchAttempts);
 
+    // Strategy 4: If no payment found, search payment_requests table and create payment
     if (!payment) {
-      console.log('⚠️ No payment found after all search strategies');
-      console.log('💡 Webhook data:', { 
+      console.log('🔍 No payment found - searching payment_requests table...');
+      
+      let paymentRequest = null;
+      
+      // Search payment_requests by checkout reference
+      if (payload.reference) {
+        const { data: paymentRequests, error: prError } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .eq('sumup_checkout_id', payload.reference)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        searchAttempts.push({
+          method: 'payment_request_by_checkout',
+          query: payload.reference,
+          found: paymentRequests?.length || 0,
+          error: prError?.message
+        });
+
+        if (!prError && paymentRequests && paymentRequests.length > 0) {
+          paymentRequest = paymentRequests[0];
+          console.log('✅ Found payment_request by checkout reference:', paymentRequest.id);
+        }
+      }
+
+      // If still not found and this is a test, use most recent payment_request
+      if (!paymentRequest && eventData.test_webhook_payload) {
+        console.log('🧪 Test mode - using recent payment_request');
+        
+        const { data: recentPR, error: recentError } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        searchAttempts.push({
+          method: 'recent_payment_request',
+          query: 'recent',
+          found: recentPR?.length || 0,
+          error: recentError?.message
+        });
+
+        if (!recentError && recentPR && recentPR.length > 0) {
+          paymentRequest = recentPR[0];
+          console.log('🧪 Using recent payment_request for test:', paymentRequest.id);
+        }
+      }
+
+      // Create payment record from payment_request if found
+      if (paymentRequest) {
+        console.log('� Creating payment record from payment_request:', paymentRequest.id);
+        
+        const { data: newPayment, error: createError } = await supabase
+          .from('payments')
+          .insert({
+            customer_id: paymentRequest.customer_id,
+            booking_id: paymentRequest.booking_id,
+            payment_request_id: paymentRequest.id,
+            amount: paymentRequest.amount,
+            currency: paymentRequest.currency || 'EUR',
+            status: mappedStatus,
+            gateway: 'sumup',
+            payment_method: 'sumup',
+            sumup_checkout_id: payload.checkout_id,
+            sumup_checkout_reference: payload.reference,
+            webhook_processed_at: new Date().toISOString(),
+            sumup_event_type: event_type || 'checkout.status.updated',
+            sumup_event_id: eventId,
+            notes: `Payment created from webhook for payment_request #${paymentRequest.id}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('❌ Failed to create payment from payment_request:', createError);
+          return {
+            success: false,
+            error: 'Failed to create payment record',
+            details: createError.message,
+            searchAttempts: searchAttempts
+          };
+        }
+
+        payment = newPayment;
+        console.log('✅ Created payment from payment_request:', {
+          paymentId: payment.id,
+          paymentRequestId: paymentRequest.id,
+          customer_id: payment.customer_id,
+          booking_id: payment.booking_id
+        });
+
+        // Return early since payment is already created with webhook data
+        return {
+          success: true,
+          action: 'payment_created_from_request',
+          paymentId: payment.id,
+          paymentRequestId: paymentRequest.id,
+          status: mappedStatus,
+          webhook_data: {
+            webhook_processed_at: payment.webhook_processed_at,
+            sumup_event_type: payment.sumup_event_type,
+            sumup_event_id: payment.sumup_event_id,
+            sumup_checkout_reference: payment.sumup_checkout_reference,
+            payment_request_id: payment.payment_request_id
+          },
+          searchAttempts: searchAttempts
+        };
+      }
+
+      // Still no payment or payment_request found
+      console.log('⚠️ No payment or payment_request found after all strategies');
+      console.log('�💡 Webhook data:', { 
         reference: payload.reference, 
         checkout_id: payload.checkout_id,
         test_mode: !!eventData.test_webhook_payload
@@ -317,9 +431,10 @@ const processSumUpWebhook = async (supabase, eventData) => {
       
       return {
         success: true,
-        action: 'no_payment_found',
+        action: 'no_records_found',
         checkout_reference: payload.reference,
         status: mappedStatus,
+        message: 'No payment or payment_request found to update',
         searchAttempts: searchAttempts
       };
     }
