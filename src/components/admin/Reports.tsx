@@ -36,9 +36,11 @@ interface ReportData {
   
   // Invoice-related data
   totalInvoices: number;
+  totalInvoicesAmount: number;
   draftInvoices: number;
   sentInvoices: number;
   paidInvoices: number;
+  paidInvoicesAmount: number;
   overdueInvoices: number;
   totalRevenue: number;
   unpaidRevenue: number;
@@ -231,9 +233,11 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     // Invoice statistics
     const invoicesForStats = filteredInvoices || allInvoices;
     const totalInvoices = invoicesForStats.length;
+    const totalInvoicesAmount = invoicesForStats.reduce((sum, inv) => sum + inv.total_amount, 0);
     const draftInvoices = invoicesForStats.filter(inv => inv.status === 'draft').length;
     const sentInvoices = invoicesForStats.filter(inv => inv.status === 'sent').length;
     const paidInvoices = invoicesForStats.filter(inv => inv.status === 'paid').length;
+    const paidInvoicesAmount = invoicesForStats.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + inv.total_amount, 0);
     const overdueInvoices = invoicesForStats.filter(inv => inv.status === 'overdue').length;
     const totalRevenue = invoicesForStats.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + inv.total_amount, 0);
     const unpaidRevenue = invoicesForStats.filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled').reduce((sum, inv) => sum + inv.total_amount, 0);
@@ -265,9 +269,11 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       monthlyTrend,
       filteredBookings,
       totalInvoices,
+      totalInvoicesAmount,
       draftInvoices,
       sentInvoices,
       paidInvoices,
+      paidInvoicesAmount,
       overdueInvoices,
       totalRevenue,
       unpaidRevenue,
@@ -335,10 +341,10 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       ['Pending Bookings', reportData.pendingBookings],
       [''],
       ['INVOICE STATISTICS', ''],
-      ['Total Invoices', reportData.totalInvoices],
+      ['Total Invoices', `€${reportData.totalInvoicesAmount.toFixed(2)}`],
       ['Draft Invoices', reportData.draftInvoices],
       ['Sent Invoices', reportData.sentInvoices],
-      ['Paid Invoices', reportData.paidInvoices],
+      ['Paid Invoices', `€${reportData.paidInvoicesAmount.toFixed(2)}`],
       ['Overdue Invoices', reportData.overdueInvoices],
       ['Total Revenue (Paid)', `€${reportData.totalRevenue.toFixed(2)}`],
       ['Unpaid Revenue', `€${reportData.unpaidRevenue.toFixed(2)}`],
@@ -459,10 +465,10 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       
       const invoiceSummaryData = [
         ['Metric', 'Value'],
-        ['Total Invoices', reportData.totalInvoices.toString()],
+        ['Total Invoices', `€${reportData.totalInvoicesAmount.toFixed(2)}`],
         ['Draft Invoices', reportData.draftInvoices.toString()],
         ['Sent Invoices', reportData.sentInvoices.toString()],
-        ['Paid Invoices', reportData.paidInvoices.toString()],
+        ['Paid Invoices', `€${reportData.paidInvoicesAmount.toFixed(2)}`],
         ['Overdue Invoices', reportData.overdueInvoices.toString()],
         ['Total Revenue', formatCurrency(reportData.totalRevenue)],
         ['Unpaid Revenue', formatCurrency(reportData.unpaidRevenue)]
@@ -821,11 +827,11 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center">
                           <div className="flex-shrink-0">
-                            <Receipt className="h-8 w-8 text-blue-600" />
+                            <Euro className="h-8 w-8 text-blue-600" />
                           </div>
                           <div className="ml-4">
                             <p className="text-sm font-medium text-gray-600">Total Invoices</p>
-                            <p className="text-2xl font-semibold text-gray-900">{reportData.totalInvoices}</p>
+                            <p className="text-2xl font-semibold text-gray-900">€{reportData.totalInvoicesAmount.toFixed(2)}</p>
                           </div>
                         </div>
                       </div>
@@ -837,7 +843,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                           </div>
                           <div className="ml-4">
                             <p className="text-sm font-medium text-gray-600">Paid Invoices</p>
-                            <p className="text-2xl font-semibold text-gray-900">{reportData.paidInvoices}</p>
+                            <p className="text-2xl font-semibold text-gray-900">€{reportData.paidInvoicesAmount.toFixed(2)}</p>
                           </div>
                         </div>
                       </div>
