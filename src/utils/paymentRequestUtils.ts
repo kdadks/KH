@@ -476,7 +476,11 @@ export async function processPaymentRequest(
       
       console.log('📤 Request body:', requestBody);
 
-      const response = await fetch(sumupEndpoint, {
+      // TEMPORARY DEBUG: Route to debug endpoint to capture 500 error
+      const debugEndpoint = sumupEndpoint.replace('sumup-return', 'debug-sumup-500');
+      console.log('🚨 DEBUG: Routing to debug endpoint:', debugEndpoint);
+      
+      const response = await fetch(debugEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
