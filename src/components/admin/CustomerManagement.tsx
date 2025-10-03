@@ -26,13 +26,14 @@ interface CustomerManagementProps {
   selectedCustomerId?: number;
   customers?: Customer[];
   setCustomers?: React.Dispatch<React.SetStateAction<Customer[]>>;
-  onRefresh?: () => void;
+  onRefresh?: (silent?: boolean) => void;
 }
 
 const CustomerManagement: React.FC<CustomerManagementProps> = ({ 
   onCustomerSelect,
   selectedCustomerId,
-  customers: propCustomers
+  customers: propCustomers,
+  onRefresh
 }) => {
   const [customers, setCustomers] = useState<Customer[]>(propCustomers || []);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
@@ -268,7 +269,13 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       }
 
       resetForm();
-      fetchCustomers();
+      
+      // If using prop customers, call parent refresh; otherwise fetch directly
+      if (propCustomers && onRefresh) {
+        onRefresh(true); // Silent refresh to preserve creation/update success message
+      } else {
+        fetchCustomers();
+      }
     } catch (err: any) {
       if (err.code === '23505') {
         // Check if it's a primary key violation (ID sequence issue) or other constraint
@@ -350,7 +357,13 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
 
       setDeleteConfirmationOpen(false);
       setCustomerToDelete(null);
-      fetchCustomers();
+      
+      // If using prop customers, call parent refresh; otherwise fetch directly
+      if (propCustomers && onRefresh) {
+        onRefresh(true); // Silent refresh to preserve deletion success message
+      } else {
+        fetchCustomers();
+      }
     } catch (err) {
       setError('Failed to delete customer');
       console.error('Error deleting customer:', err);
