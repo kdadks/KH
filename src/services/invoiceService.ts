@@ -271,7 +271,7 @@ export class InvoiceService {
           decryptedCustomer.city,
           decryptedCustomer.county,
           decryptedCustomer.eircode
-        ].filter(Boolean).join(', ') || ''
+        ].filter(Boolean).join('\n') // Use newlines for better address formatting
       };
 
       // Transform items data (same structure as download function)
@@ -786,7 +786,7 @@ export async function downloadInvoicePDFWithPayments(
         decryptedCustomer.city,
         decryptedCustomer.county,
         decryptedCustomer.eircode
-      ].filter(Boolean).join(', ') || ''
+      ].filter(Boolean).join('\n') || ''
     };
 
     // Transform items or create default

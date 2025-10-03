@@ -312,21 +312,45 @@ export class PDFInvoiceGenerator {
     this.doc.setTextColor(this.COLORS.dark);
     
     let currentY = y + 8;
+    
+    // Customer name
     this.doc.text(customer.name, x, currentY);
     currentY += 6;
     
-    if (customer.email) {
-      this.doc.text(customer.email, x, currentY);
-      currentY += 5;
+    // Email and phone side by side: email | phone
+    if (customer.email || customer.phone) {
+      let contactLine = '';
+      if (customer.email && customer.phone) {
+        contactLine = `${customer.email} | ${customer.phone}`;
+      } else if (customer.email) {
+        contactLine = customer.email;
+      } else if (customer.phone) {
+        contactLine = customer.phone;
+      }
+      
+      if (contactLine) {
+        // Check if the combined text is too long (approximate width check)
+        const maxWidth = this.LAYOUT.columnWidths.col2;
+        const textWidth = this.doc.getTextWidth(contactLine);
+        
+        if (textWidth > maxWidth && customer.email && customer.phone) {
+          // If too long, split into two lines
+          this.doc.text(customer.email, x, currentY);
+          currentY += 4;
+          this.doc.text(customer.phone, x, currentY);
+          currentY += 5;
+        } else {
+          // Fits on one line
+          this.doc.text(contactLine, x, currentY);
+          currentY += 5;
+        }
+      }
     }
     
-    if (customer.phone) {
-      this.doc.text(customer.phone, x, currentY);
-      currentY += 5;
-    }
-    
-    if (customer.address) {
-      customer.address.forEach(line => {
+    // Address limited to maximum 2 lines
+    if (customer.address && customer.address.length > 0) {
+      const addressLines = customer.address.slice(0, 2); // Limit to 2 lines max
+      addressLines.forEach(line => {
         this.doc.text(line, x, currentY);
         currentY += 5;
       });
