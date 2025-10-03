@@ -400,7 +400,7 @@ const AdminConsole = () => {
   };
 
   // Manual refresh function to replace auto-refresh
-  const handleManualRefresh = async (dataType?: string) => {
+  const handleManualRefresh = async (dataType?: string, silent?: boolean) => {
     try {
       setIsLoading(true);
       
@@ -420,7 +420,10 @@ const AdminConsole = () => {
         await fetchAllPaymentData();
       }
       
-      showSuccess('Refresh Complete', 'Data has been refreshed successfully.');
+      // Only show success message if not in silent mode
+      if (!silent) {
+        showSuccess('Refresh Complete', 'Data has been refreshed successfully.');
+      }
     } catch (error) {
       console.error('Manual refresh error:', error);
       showError('Refresh Error', 'Failed to refresh data. Please try again.');
@@ -872,7 +875,7 @@ const AdminConsole = () => {
           <CustomerManagement 
             customers={allCustomers}
             setCustomers={setAllCustomers}
-            onRefresh={() => handleManualRefresh('customers')}
+            onRefresh={(silent) => handleManualRefresh('customers', silent)}
           />
         )}
         {activeTab === 'invoices' && (
