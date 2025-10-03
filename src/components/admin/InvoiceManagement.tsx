@@ -183,6 +183,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         supabase
           .from('customers')
           .select('*')
+          .eq('is_active', true)
           .order('last_name', { ascending: true })
           .limit(500), // Reduced limit
         

@@ -66,87 +66,71 @@ export const findOrCreateCustomer = async (customerData: {
   phone?: string;
 }): Promise<{ customer: Customer | null; error: string | null; isNewCustomer?: boolean }> => {
   try {
-    // First, try to find existing customer by email
-    const { data: existingCustomer, error: findError } = await supabase
+    // First, try to find existing customer by email AND name combination
+    // This allows multiple customers with same email but different names
+    const { data: existingCustomers, error: findError } = await supabase
       .from('customers')
       .select('*')
       .eq('email', customerData.email.toLowerCase().trim())
-      .eq('is_active', true)
-      .single();
+      .eq('is_active', true);
 
-    if (findError && findError.code !== 'PGRST116') {
-      // PGRST116 means no rows found, which is fine
-      console.error('Error finding customer:', findError);
+    if (findError) {
+      console.error('Error finding customers:', findError);
       return { customer: null, error: findError.message };
     }
 
-    if (existingCustomer) {
-      // Customer exists, update their information if needed
-      const updateData: Partial<Customer> = {};
-      let needsUpdate = false;
+    // Look for exact match by name among customers with the same email
+    let existingCustomer = null;
+    if (existingCustomers && existingCustomers.length > 0) {
+      existingCustomer = existingCustomers.find(customer => {
+        const decryptedFirstName = isDataEncrypted(customer.first_name) 
+          ? decryptSensitiveData(customer.first_name) 
+          : customer.first_name;
+        const decryptedLastName = isDataEncrypted(customer.last_name) 
+          ? decryptSensitiveData(customer.last_name) 
+          : customer.last_name;
+        
+        return decryptedFirstName.toLowerCase().trim() === customerData.firstName.toLowerCase().trim() &&
+               decryptedLastName.toLowerCase().trim() === customerData.lastName.toLowerCase().trim();
+      });
+    }
 
-      // Decrypt existing data for comparison
-      const decryptedFirstName = isDataEncrypted(existingCustomer.first_name) 
-        ? decryptSensitiveData(existingCustomer.first_name) 
-        : existingCustomer.first_name;
-      const decryptedLastName = isDataEncrypted(existingCustomer.last_name) 
-        ? decryptSensitiveData(existingCustomer.last_name) 
-        : existingCustomer.last_name;
+
+
+    if (existingCustomer) {
+      // Found existing customer with exact name match, just update phone if needed
       const decryptedPhone = existingCustomer.phone && isDataEncrypted(existingCustomer.phone) 
         ? decryptSensitiveData(existingCustomer.phone) 
         : existingCustomer.phone;
 
-      if (decryptedFirstName !== customerData.firstName.trim()) {
-        updateData.first_name = encryptSensitiveData(customerData.firstName.trim());
-        needsUpdate = true;
-      }
-      if (decryptedLastName !== customerData.lastName.trim()) {
-        updateData.last_name = encryptSensitiveData(customerData.lastName.trim());
-        needsUpdate = true;
-      }
+      // Only update phone if it's different and provided
       if (customerData.phone && decryptedPhone !== customerData.phone.trim()) {
-        updateData.phone = encryptSensitiveData(customerData.phone.trim());
-        needsUpdate = true;
-      }
-
-      if (needsUpdate) {
         const { data: updatedCustomer, error: updateError } = await supabase
           .from('customers')
-          .update(updateData)
+          .update({ phone: encryptSensitiveData(customerData.phone.trim()) })
           .eq('id', existingCustomer.id)
           .select()
           .single();
 
         if (updateError) {
-          console.error('Error updating customer:', updateError);
-          // Return decrypted version of existing customer
-          const decryptedExistingCustomer = { ...existingCustomer };
-          decryptedExistingCustomer.first_name = decryptedFirstName;
-          decryptedExistingCustomer.last_name = decryptedLastName;
-          decryptedExistingCustomer.phone = decryptedPhone;
-          return { customer: decryptedExistingCustomer, error: null };
+          console.error('Error updating customer phone:', updateError);
+        } else {
+          existingCustomer = updatedCustomer;
         }
-
-        // Return decrypted version of updated customer
-        const decryptedUpdatedCustomer = { ...updatedCustomer };
-        decryptedUpdatedCustomer.first_name = isDataEncrypted(updatedCustomer.first_name) 
-          ? decryptSensitiveData(updatedCustomer.first_name) 
-          : updatedCustomer.first_name;
-        decryptedUpdatedCustomer.last_name = isDataEncrypted(updatedCustomer.last_name) 
-          ? decryptSensitiveData(updatedCustomer.last_name) 
-          : updatedCustomer.last_name;
-        decryptedUpdatedCustomer.phone = updatedCustomer.phone && isDataEncrypted(updatedCustomer.phone) 
-          ? decryptSensitiveData(updatedCustomer.phone) 
-          : updatedCustomer.phone;
-
-        return { customer: decryptedUpdatedCustomer, error: null, isNewCustomer: false };
       }
 
       // Return decrypted version of existing customer
       const decryptedExistingCustomer = { ...existingCustomer };
-      decryptedExistingCustomer.first_name = decryptedFirstName;
-      decryptedExistingCustomer.last_name = decryptedLastName;
-      decryptedExistingCustomer.phone = decryptedPhone;
+      decryptedExistingCustomer.first_name = isDataEncrypted(existingCustomer.first_name) 
+        ? decryptSensitiveData(existingCustomer.first_name) 
+        : existingCustomer.first_name;
+      decryptedExistingCustomer.last_name = isDataEncrypted(existingCustomer.last_name) 
+        ? decryptSensitiveData(existingCustomer.last_name) 
+        : existingCustomer.last_name;
+      decryptedExistingCustomer.phone = existingCustomer.phone && isDataEncrypted(existingCustomer.phone) 
+        ? decryptSensitiveData(existingCustomer.phone) 
+        : existingCustomer.phone;
+      
       return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
     }
 
@@ -194,71 +178,9 @@ export const findOrCreateCustomer = async (customerData: {
           return { customer: null, error: 'Database ID sequence error. Please try again or contact support.', isNewCustomer: false };
         }
 
-        if (constraintName === 'customers_email_key' || constraintName?.includes('email')) {
-          console.log('🔄 Email constraint violation - customer with this email already exists, fetching...');
+        // Note: Email constraint no longer exists - multiple customers can have same email with different names
 
-          // Try to fetch the existing customer again with a small delay to ensure the other transaction has completed
-          await new Promise(resolve => setTimeout(resolve, 200));
-
-          const { data: existingAfterConflict, error: refetchError } = await supabase
-            .from('customers')
-            .select('*')
-            .eq('email', customerData.email.toLowerCase().trim())
-            .eq('is_active', true)
-            .maybeSingle();
-
-          if (refetchError) {
-            console.error('Error refetching customer after conflict:', refetchError);
-            return { customer: null, error: 'Failed to resolve customer creation conflict', isNewCustomer: false };
-          }
-
-          if (existingAfterConflict) {
-            // Return decrypted version of the existing customer found after conflict
-            const decryptedExistingCustomer = { ...existingAfterConflict };
-            decryptedExistingCustomer.first_name = isDataEncrypted(existingAfterConflict.first_name)
-              ? decryptSensitiveData(existingAfterConflict.first_name)
-              : existingAfterConflict.first_name;
-            decryptedExistingCustomer.last_name = isDataEncrypted(existingAfterConflict.last_name)
-              ? decryptSensitiveData(existingAfterConflict.last_name)
-              : existingAfterConflict.last_name;
-            decryptedExistingCustomer.phone = existingAfterConflict.phone && isDataEncrypted(existingAfterConflict.phone)
-              ? decryptSensitiveData(existingAfterConflict.phone)
-              : existingAfterConflict.phone;
-
-            console.log('✅ Successfully resolved race condition - found existing customer');
-            return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
-          } else {
-            console.error('❌ Customer should exist but was not found after email constraint violation');
-            return { customer: null, error: 'Customer creation conflict could not be resolved', isNewCustomer: false };
-          }
-        }
-
-        // Generic constraint violation
-        console.log('🔄 Generic constraint violation, attempting to fetch existing customer...');
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        const { data: existingAfterConflict, error: refetchError } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('email', customerData.email.toLowerCase().trim())
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (!refetchError && existingAfterConflict) {
-          const decryptedExistingCustomer = { ...existingAfterConflict };
-          decryptedExistingCustomer.first_name = isDataEncrypted(existingAfterConflict.first_name)
-            ? decryptSensitiveData(existingAfterConflict.first_name)
-            : existingAfterConflict.first_name;
-          decryptedExistingCustomer.last_name = isDataEncrypted(existingAfterConflict.last_name)
-            ? decryptSensitiveData(existingAfterConflict.last_name)
-            : existingAfterConflict.last_name;
-          decryptedExistingCustomer.phone = existingAfterConflict.phone && isDataEncrypted(existingAfterConflict.phone)
-            ? decryptSensitiveData(existingAfterConflict.phone)
-            : existingAfterConflict.phone;
-
-          console.log('✅ Successfully resolved constraint violation - found existing customer');
-          return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
-        }
+        // Other constraint violations (should be rare now that email uniqueness is removed)
       }
 
       return { customer: null, error: createError.message, isNewCustomer: false };

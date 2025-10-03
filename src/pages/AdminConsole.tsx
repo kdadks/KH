@@ -442,6 +442,7 @@ const AdminConsole = () => {
       const { data, error } = await supabase
         .from('customers')
         .select('*')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(500); // Limit for performance
       

@@ -271,7 +271,12 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
       fetchCustomers();
     } catch (err: any) {
       if (err.code === '23505') {
-        setError('A customer with this email already exists');
+        // Check if it's a primary key violation (ID sequence issue) or other constraint
+        if (err.message.includes('customers_pkey')) {
+          setError('Database ID sequence error. Please try again or contact support.');
+        } else {
+          setError('Failed to save customer due to constraint violation');
+        }
       } else {
         setError('Failed to save customer');
       }
