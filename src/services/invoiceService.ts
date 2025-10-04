@@ -260,22 +260,10 @@ export class InvoiceService {
       // Decrypt customer data for PDF generation
       const decryptedCustomer = decryptCustomerPII(customer);
 
-      // Debug: Check decrypted customer data
-      console.log('Original customer data:', {
-        id: customer.id,
-        email: customer.email,
-        name: customer.name
-      });
-      
-      console.log('Decrypted customer data:', {
-        id: decryptedCustomer.id,
-        email: decryptedCustomer.email,
-        first_name: decryptedCustomer.first_name,
-        last_name: decryptedCustomer.last_name
-      });
-
-      // Build customer name with better fallback logic
+      // Build customer name with comprehensive fallback logic
       let customerName = '';
+      
+      // First try: decrypted first_name + last_name
       if (decryptedCustomer.first_name && decryptedCustomer.last_name) {
         customerName = `${decryptedCustomer.first_name.trim()} ${decryptedCustomer.last_name.trim()}`.trim();
       } else if (decryptedCustomer.first_name) {
@@ -284,12 +272,22 @@ export class InvoiceService {
         customerName = decryptedCustomer.last_name.trim();
       }
       
+      // Second try: original customer name field (could be encrypted or plain)
+      if (!customerName && customer.name) {
+        customerName = customer.name.trim();
+      }
+      
+      // Third try: decrypted name field if it exists
+      if (!customerName && decryptedCustomer.name) {
+        customerName = decryptedCustomer.name.trim();
+      }
+      
       // Final fallback to email if no name available
       if (!customerName) {
         customerName = decryptedCustomer.email || 'Customer';
       }
 
-      console.log('Final customer name for PDF:', customerName);
+
 
       const customerData = {
         id: decryptedCustomer.id,
@@ -806,16 +804,10 @@ export async function downloadInvoicePDFWithPayments(
     // Decrypt customer data for PDF generation
     const decryptedCustomer = decryptCustomerPII(customer);
 
-    // Debug: Check decrypted customer data for downloadInvoicePDFWithPayments
-    console.log('PDF Download - Decrypted customer data:', {
-      id: decryptedCustomer.id,
-      email: decryptedCustomer.email,
-      first_name: decryptedCustomer.first_name,
-      last_name: decryptedCustomer.last_name
-    });
-
-    // Build customer name with better fallback logic
+    // Build customer name with comprehensive fallback logic
     let customerName = '';
+    
+    // First try: decrypted first_name + last_name
     if (decryptedCustomer.first_name && decryptedCustomer.last_name) {
       customerName = `${decryptedCustomer.first_name.trim()} ${decryptedCustomer.last_name.trim()}`.trim();
     } else if (decryptedCustomer.first_name) {
@@ -824,12 +816,17 @@ export async function downloadInvoicePDFWithPayments(
       customerName = decryptedCustomer.last_name.trim();
     }
     
+    // Second try: decrypted name field if it exists
+    if (!customerName && decryptedCustomer.name) {
+      customerName = decryptedCustomer.name.trim();
+    }
+    
     // Final fallback to email if no name available
     if (!customerName) {
       customerName = decryptedCustomer.email || 'Customer';
     }
 
-    console.log('PDF Download - Final customer name:', customerName);
+
 
     const customerData = {
       id: decryptedCustomer.id,
