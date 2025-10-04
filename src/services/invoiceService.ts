@@ -21,11 +21,37 @@ import { supabase } from '../supabaseClient';
 import { decryptCustomerPII } from '../utils/gdprUtils';
 
 // Service response types
-export interface InvoiceServiceResponse<T = any> {
+export interface InvoiceServiceResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
   message?: string;
+}
+
+// Payment interface for filtering
+export interface PaymentRecord {
+  id: string | number;
+  invoice_id?: string | number;
+  booking_id?: string | number;
+  amount: number;
+  currency?: string;
+  status?: string;
+  payment_method?: string;
+  payment_date?: string;
+  created_at: string;
+  updated_at?: string;
+  notes?: string;
+  sumup_checkout_id?: string;
+  sumup_payment_type?: string;
+}
+
+// Invoice item interface
+export interface InvoiceItemData {
+  id: string | number;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
 }
 
 export interface EmailInvoiceOptions {
@@ -204,7 +230,7 @@ export class InvoiceService {
       }
 
       // Filter payments for this invoice by booking_id or invoice_id
-      const invoicePayments = paymentsData?.filter((payment: any) => {
+      const invoicePayments = paymentsData?.filter((payment: PaymentRecord) => {
         // Match by booking_id (for deposits) if invoice has booking_id
         if (bookingId && payment.booking_id === bookingId) {
           return true;
@@ -220,7 +246,7 @@ export class InvoiceService {
       let depositAmount = 0;
       let otherPaymentsAmount = 0;
       
-      invoicePayments.forEach((payment: any) => {
+      invoicePayments.forEach((payment: PaymentRecord) => {
         if (payment.status === 'paid') {
           // Deposits are payments that have booking_id but no invoice_id
           const isDeposit = payment.booking_id && !payment.invoice_id;
@@ -694,7 +720,7 @@ export async function downloadInvoicePDFWithPayments(
     }
 
     // Filter payments for this invoice by booking_id or invoice_id
-    const invoicePayments = paymentsData?.filter((payment: any) => {
+    const invoicePayments = paymentsData?.filter((payment: PaymentRecord) => {
       // Match by booking_id (for deposits) if invoice has booking_id
       if (invoice.booking_id && payment.booking_id === invoice.booking_id) {
         return true;
@@ -711,7 +737,7 @@ export async function downloadInvoicePDFWithPayments(
     let onlineInvoicePayments = 0;
     let offlineInvoicePayments = 0;
     
-    invoicePayments.forEach((payment: any) => {
+    invoicePayments.forEach((payment: PaymentRecord) => {
       // Use same status filter as enhanced preview: both 'paid' and 'completed'
       if (payment.status === 'paid' || payment.status === 'completed') {
         // Deposits are payments that have booking_id but no invoice_id
@@ -855,8 +881,8 @@ export async function downloadInvoicePDFWithPayments(
       }];
     }
 
-    const transformedItems = itemsData.map((item: any) => ({
-      id: item.id,
+    const transformedItems = itemsData.map((item: InvoiceItemData) => ({
+      id: typeof item.id === 'string' ? parseInt(item.id) : item.id,
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unit_price,

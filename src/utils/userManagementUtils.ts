@@ -8,6 +8,7 @@ import {
   PaymentHistoryItem
 } from '../types/userManagement';
 import { getCustomerPayments } from './paymentRequestUtils';
+import { PaymentRecord } from '../services/invoiceService';
 import { decryptCustomerPII, encryptSensitiveData, isDataEncrypted } from './gdprUtils';
 
 /**
@@ -136,7 +137,7 @@ export const linkCustomerToAuthUser = async (customerId: number, authUserId: str
 export const updateUserProfile = async (customerId: number, profileData: UserProfileUpdateData): Promise<{ success: boolean; error?: string }> => {
   try {
     // Prepare the update data
-    const updateData: any = {
+    const updateData: Record<string, string | null | undefined> = {
       first_name: profileData.first_name,
       last_name: profileData.last_name,
       phone: profileData.phone,
@@ -289,7 +290,7 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
         return false;
       }) || [];
       
-      const mappedPayments = invoicePayments.map((p: any) => ({
+      const mappedPayments = invoicePayments.map((p: PaymentRecord) => ({
         id: p.id,
         amount: p.amount,
         status: p.status,
@@ -319,12 +320,14 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
 /**
  * Get user payment history with real data
  */
-export const getUserPaymentHistory = async (_customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
+export const getUserPaymentHistory = async (customerId: string): Promise<{ payments: PaymentHistoryItem[]; error?: string }> => {
   try {
     // Get payment history from invoice items or a payments table if you have one
     // For now, we'll return empty array since payment tracking might be implemented later
     // You could implement this based on your payment system
+    // TODO: Use customerId to fetch actual payment history
     const payments: PaymentHistoryItem[] = [];
+    console.log('Getting payment history for customer:', customerId);
 
     return { payments };
   } catch (error) {

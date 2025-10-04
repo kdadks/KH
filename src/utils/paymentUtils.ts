@@ -34,7 +34,7 @@ export const initializeSumUp = (): Promise<boolean> => {
   return new Promise((resolve, reject) => {
     // In development mode with demo config, always resolve successfully
     if (import.meta.env.DEV && SUMUP_MERCHANT_CODE === 'DEMO-MERCHANT-001') {
-      console.log('Using demo SumUp configuration for development');
+      // Using demo SumUp configuration for development
       resolve(true);
       return;
     }
@@ -52,7 +52,7 @@ export const initializeSumUp = (): Promise<boolean> => {
       : 'https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js'; // Same for sandbox
     
     script.onload = () => {
-      console.log('SumUp SDK loaded successfully');
+      // SumUp SDK loaded successfully
       resolve(true);
     };
     
@@ -79,7 +79,7 @@ export const createSumUpCheckoutUrl = async (
                          SUMUP_MERCHANT_CODE && SUMUP_MERCHANT_CODE !== 'DEMO-MERCHANT-001';
 
     if (!hasRealConfig) {
-      console.warn('Using demo SumUp configuration. Set VITE_SUMUP_APP_ID and VITE_SUMUP_MERCHANT_CODE for real testing.');
+      // Using demo SumUp configuration
       
       // Return a demo URL that simulates payment success
       return `data:text/html,<html><body style="font-family: Arial, sans-serif; padding: 20px; text-align: center;"><h1>Demo Payment Page</h1><p><strong>Amount:</strong> €${amount}</p><p><strong>Description:</strong> ${description}</p><p><strong>Reference:</strong> ${checkoutReference}</p><br><button onclick="alert('Demo payment completed!'); window.close();" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Complete Demo Payment</button></body></html>`;
@@ -97,13 +97,7 @@ export const createSumUpCheckoutUrl = async (
       cancel_url: `${window.location.origin}/payment-cancelled`
     };
 
-    console.log('Creating SumUp checkout with real configuration:', {
-      merchant_code: SUMUP_MERCHANT_CODE,
-      app_id: SUMUP_APP_ID,
-      environment: SUMUP_ENVIRONMENT,
-      amount: checkoutData.amount,
-      currency: checkoutData.currency
-    });
+    // Creating SumUp checkout with real configuration
 
     // In production, this would make an API call to SumUp to create checkout session
     // For now, we'll create the URL that would be returned by SumUp's API
@@ -119,7 +113,7 @@ export const createSumUpCheckoutUrl = async (
       `return_url=${encodeURIComponent(checkoutData.return_url)}&` +
       `cancel_url=${encodeURIComponent(checkoutData.cancel_url)}`;
 
-    console.log('Generated SumUp checkout URL:', sumUpCheckoutUrl);
+    // Generated SumUp checkout URL
     return sumUpCheckoutUrl;
   } catch (error) {
     console.error('Error creating SumUp checkout URL:', error);
@@ -170,7 +164,7 @@ export const processSumUpPayment = async (
   try {
     // This would integrate with SumUp's actual API
     // For demonstration, we'll simulate the payment process
-    console.log('Processing SumUp payment:', paymentIntent);
+    // Processing SumUp payment
 
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -205,7 +199,7 @@ export const processSumUpPayment = async (
 export const getPaymentStatus = async (transactionId: string): Promise<SumUpPaymentResponse> => {
   try {
     // This would query SumUp's API for payment status
-    console.log('Checking payment status for transaction:', transactionId);
+    // Checking payment status for transaction
     
     // Mock response
     return {
@@ -225,7 +219,9 @@ export const getPaymentStatus = async (transactionId: string): Promise<SumUpPaym
 // Refund payment
 export const refundPayment = async (transactionId: string, amount?: number): Promise<SumUpPaymentResponse> => {
   try {
-    console.log('Processing refund for transaction:', transactionId, 'Amount:', amount);
+    // Processing refund for transaction
+    const refundAmount = amount || 'full';
+    console.log(`Processing refund for transaction: ${transactionId} with amount: ${refundAmount}`);
     
     // This would call SumUp's refund API
     // Mock response
