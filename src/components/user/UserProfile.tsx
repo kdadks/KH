@@ -324,11 +324,21 @@ const UserProfile: React.FC = () => {
                   <input
                     type="text"
                     value={profileData.eircode || ''}
-                    onChange={(e) => setProfileData({ ...profileData, eircode: e.target.value.toUpperCase() })}
+                    onChange={(e) => {
+                      // Format and validate eircode - allow letters, numbers, and spaces
+                      const value = e.target.value.toUpperCase().replace(/[^A-Z0-9\s]/g, '');
+                      // Limit to 15 characters to match database constraint
+                      if (value.length <= 15) {
+                        setProfileData({ ...profileData, eircode: value });
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="A12 B3C4"
-                    maxLength={8}
+                    placeholder="A12 B3C4 or A12B3C4"
+                    maxLength={15}
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Irish postal code (up to 15 characters)
+                  </p>
                 </div>
               </div>
 
