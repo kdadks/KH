@@ -25,7 +25,7 @@ import {
  */
 async function getServicePriceFromDatabase(serviceName: string): Promise<number | null> {
   try {
-    console.log('🔍 getServicePriceFromDatabase called with:', serviceName);
+    // Get service price from database
 
     // First check if this service should skip payment request creation
     const skipPatterns = [
@@ -39,22 +39,22 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
     // Check if service matches any skip pattern
     for (const pattern of skipPatterns) {
       if (pattern.test(serviceName)) {
-        console.log('⏭️ Database lookup skipped - service requires quote or is per-session:', serviceName);
+        // Database lookup skipped - service requires quote or is per-session
         return null;
       }
     }
     
     // Extract base service name (e.g., "Ultimate Health")
     const baseServiceName = extractBaseServiceName(serviceName);
-    console.log('📝 Base service name:', baseServiceName);
+    // Base service name derived
     
     // Determine if it's in-hour or out-of-hour
     const timeSlotType = determineTimeSlotType(serviceName);
-    console.log('⏰ Time slot type:', timeSlotType);
+    // Time slot type identified
     
     // Fetch pricing from database
     const servicePricing = await fetchServicePricing(baseServiceName);
-    console.log('💾 Service pricing from database:', servicePricing);
+    // Service pricing retrieved from database
     
     if (!servicePricing) {
       console.warn(`Service pricing not found for: ${baseServiceName}`);
@@ -703,7 +703,7 @@ export async function sendPaymentRequestNotification(
     // Handle URL generation - check if we're in browser context
     try {
       baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khtherapy.ie';
-    } catch (error) {
+    } catch {
       baseUrl = 'https://khtherapy.ie'; // Fallback for server-side rendering
     }
     
@@ -729,7 +729,7 @@ export async function sendPaymentRequestNotification(
       // Create direct checkout URL with email context for proper redirect behavior
       directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
       
-    } catch (realApiError) {
+    } catch {
       // Fallback to the existing payment page URL
       directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
     }
@@ -823,10 +823,25 @@ export async function sendPaymentConfirmation(
   }
 }
 
+// Booking with payment data interface
+interface BookingWithPaymentData {
+  id: number;
+  booking_date: string;
+  service: string;
+  status: string;
+  total_amount: number;
+  customers?: {
+    first_name?: string;
+    last_name?: string;
+    email: string;
+  };
+  [key: string]: unknown;
+}
+
 /**
  * Get all bookings with payment information for admin dashboard
  */
-export async function getBookingsWithPayments(): Promise<any[]> {
+export async function getBookingsWithPayments(): Promise<BookingWithPaymentData[]> {
   try {
     const { data: bookings, error } = await supabase
       .from('bookings')

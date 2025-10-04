@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -25,7 +25,7 @@ import { supabase } from '../../supabaseClient';
 import { Invoice, Customer, InvoiceItem, InvoiceFormData, BookingFormData, Service } from './types';
 import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
-import { downloadInvoicePDFWithPayments, sendInvoiceByEmail, generateInvoicePreview } from '../../services/invoiceService';
+import { downloadInvoicePDFWithPayments, sendInvoiceByEmail, generateInvoicePreview, PaymentRecord } from '../../services/invoiceService';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import { extractBaseServiceName, getServicePrice, fetchServicePricing, determineTimeSlotType } from '../../services/pricingService';
 
@@ -70,8 +70,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     notes: ''
   });
   const [selectedBooking, setSelectedBooking] = useState<BookingFormData | null>(null);
-  const [bookingPayments, setBookingPayments] = useState<any[]>([]);
-  const [invoicePayments, setInvoicePayments] = useState<any[]>([]);
+  const [bookingPayments, setBookingPayments] = useState<PaymentRecord[]>([]);
+  const [invoicePayments, setInvoicePayments] = useState<PaymentRecord[]>([]);
   const [previewInvoiceItems, setPreviewInvoiceItems] = useState<InvoiceItem[]>([]);
   
   // PDF preview states
@@ -103,10 +103,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Fetch data if not provided
       fetchData();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propInvoices, propCustomers, propServices]);
 
   useEffect(() => {
     filterInvoices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices, searchTerm, statusFilter]);
 
   // Check payment status for invoices when they are loaded
@@ -154,9 +156,10 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     };
 
     checkAllPaymentStatuses();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     // Don't fetch if data is provided from parent
     if (propInvoices && propCustomers && propServices) return;
     
@@ -227,7 +230,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [propInvoices, propCustomers, propServices, showError]);
 
   const fetchCustomerBookings = async (customerId: number) => {
     try {
@@ -254,7 +257,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       }
       
       setAvailableBookings(unpaidBookings);
-      console.log(`📋 Found ${allBookings.length} total bookings, ${unpaidBookings.length} available for invoicing`);
+      // Found bookings available for invoicing
     } catch (err) {
       console.error('Error fetching customer bookings:', err);
       setCustomerBookings([]);
@@ -263,7 +266,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   };
 
   const handleCustomerChange = async (customerId: number) => {
-    console.log('🎯 Customer selected:', customerId);
+    // Customer selected for invoice management
     
     try {
       setFormData(prev => ({ ...prev, customer_id: customerId, booking_id: '' }));
@@ -277,9 +280,9 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       }));
       
       if (customerId > 0) {
-        console.log('� Fetching bookings for customer...');
+        // Fetching bookings for customer
         await fetchCustomerBookings(customerId);
-        console.log('✅ Customer bookings loaded, please select a specific booking/service');
+        // Customer bookings loaded, please select a specific booking/service
       } else {
         setCustomerBookings([]);
         setAvailableBookings([]);
@@ -315,7 +318,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       }
 
       setBookingPayments(payments || []);
-      console.log(`💳 Found ${payments?.length || 0} payments for booking ${bookingId}:`, payments);
+      // Found payments for booking
     } catch (error) {
       console.error('Error fetching booking payments:', error);
       setBookingPayments([]);
@@ -364,7 +367,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Check if total paid equals or exceeds service price
       const isFullyPaid = totalPaid >= servicePrice;
       
-      console.log(`💰 Booking ${booking.id} payment check: Service price: €${servicePrice}, Total paid: €${totalPaid}, Fully paid: ${isFullyPaid}`);
+      // Booking payment status calculated
       
       return isFullyPaid;
     } catch (error) {
@@ -374,7 +377,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   };
 
   const handleBookingChange = async (bookingId: string) => {
-    console.log('📋 Booking selected:', bookingId);
+    // Booking selected for invoice generation
     setFormData(prev => ({ ...prev, booking_id: bookingId }));
     
     // Fetch payments for this booking
@@ -393,15 +396,15 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     
     // Auto-populate invoice item with selected booking's service details
     if (booking) {
-      console.log('🎯 Processing selected booking:', booking);
+      // Processing selected booking
       const serviceName = booking.package_name || booking.service;
-      console.log('🎨 Service name from booking:', serviceName);
+      // Service name from booking
       
       if (serviceName) {
         try {
           // Clean service name by removing price info in parentheses
           const cleanServiceName = serviceName.replace(/\s*\([^)]*\)$/, '').trim();
-          console.log('🧹 Cleaned service name:', cleanServiceName);
+          // Cleaned service name by removing price info
           
           // Try to find matching service by exact name or cleaned name
           let matchingService = services.find(s => s.name === serviceName);
@@ -533,7 +536,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }
   };
 
-  const filterInvoices = () => {
+  const filterInvoices = useCallback(() => {
     let filtered = invoices;
 
     if (searchTerm) {
@@ -549,7 +552,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }
 
     setFilteredInvoices(filtered);
-  };
+  }, [invoices, searchTerm, statusFilter]);
 
   const generateInvoiceNumber = () => {
     const year = new Date().getFullYear();
@@ -678,8 +681,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   // Function to fetch all payments for a booking (both with and without invoice_id)
   const fetchAllBookingPayments = async (bookingId: string) => {
     try {
-      console.log(`🔍 Fetching payments for booking: ${bookingId}`);
-      
       // First, let's fetch ALL payments for this booking regardless of status
       const { data: allPayments, error: allError } = await supabase
         .from('payments')
@@ -703,11 +704,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         return [];
       }
 
-      console.log(`� Found ${allPayments?.length || 0} total payments (all statuses) for booking ${bookingId}:`, allPayments);
-
       // Now filter for paid payments (status can be 'paid' or 'completed')
       const paidPayments = (allPayments || []).filter(p => p.status === 'paid' || p.status === 'completed');
-      console.log(`✅ Found ${paidPayments.length} paid payments:`, paidPayments);
 
       return paidPayments;
     } catch (error) {
@@ -719,8 +717,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   // Function to fetch invoice items and calculate offline payments
   const fetchInvoicePaymentData = async (invoice: Invoice) => {
     try {
-      console.log(`🧾 Fetching payment data for invoice: ${invoice.id}`);
-      
       // Fetch all online payments for this booking
       const onlinePayments = invoice.booking_id ? await fetchAllBookingPayments(invoice.booking_id) : [];
       
@@ -746,16 +742,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       
       // Calculate offline payment amount
       const offlineAmount = invoiceTotal - totalOnlinePayments;
-      
-      console.log(`💰 Invoice Payment Breakdown:`, {
-        invoiceId: invoice.id,
-        invoiceTotal,
-        totalOnlinePayments,
-        offlineAmount,
-        onlinePayments,
-        actualItems
-      });
-      
       // Create offline payment object if there's an offline amount
       const offlinePayment = offlineAmount > 0 ? {
         id: `offline-${invoice.id}`,
@@ -953,7 +939,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }));
   };
 
-  const updateInvoiceItem = (index: number, field: keyof InvoiceItem, value: any) => {
+  const updateInvoiceItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       items: prev.items.map((item, i) => {
@@ -1102,8 +1088,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       let pdfOptions = {};
       
       if (invoice.status === 'paid') {
-        console.log('📧 Preparing email with enhanced payment calculation for paid invoice');
-        
         // Fetch enhanced payment data using the same logic as preview
         const { onlinePayments, offlinePayment, actualItems } = await fetchInvoicePaymentData(invoice);
         
@@ -1125,14 +1109,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         const depositAmount = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
         const onlineAmount = invoiceOnlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
         const offlineAmount = invoiceOfflinePayments.reduce((sum, payment) => sum + payment.amount, 0);
-        
-        console.log('📊 Enhanced Email Payment Data:', {
-          depositAmount,
-          onlineAmount,
-          offlineAmount,
-          totalPaid,
-          allPayments
-        });
         
         // Create enhanced options with payment breakdown
         pdfOptions = {

@@ -300,6 +300,12 @@ export const integrateAdminConfirmationEmailWorkflow = async (
     }
 
     // Process admin confirmation email workflow
+    console.log('🔄 Calling processBookingEmailWorkflow with:', {
+      trigger: 'admin_confirmed',
+      customerEmail: bookingEmailData.customer_email,
+      adminEmail
+    });
+    
     const result = await processBookingEmailWorkflow(
       'admin_confirmed',
       bookingEmailData,
@@ -308,10 +314,19 @@ export const integrateAdminConfirmationEmailWorkflow = async (
     );
 
     console.log('✅ Admin confirmation email workflow completed. Success:', result.success);
+    if (!result.success) {
+      console.error('❌ Workflow errors:', result.errors);
+    }
     return result;
 
   } catch (error) {
     console.error('❌ Admin confirmation email workflow integration failed:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      bookingId,
+      adminEmail
+    });
     return {
       success: false,
       results: {},

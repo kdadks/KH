@@ -1565,7 +1565,8 @@ export const Bookings: React.FC<BookingsProps> = ({
           showSuccess('Booking Confirmed', 'Booking confirmed and confirmation emails sent to customer and admin!');
         } else {
           console.error('❌ Failed to send booking confirmation emails:', result.errors);
-          showSuccess('Booking Confirmed', 'Booking confirmed! (Email sending failed - please contact customer manually)');
+          const errorDetails = result.errors?.length > 0 ? result.errors.join('; ') : 'Unknown email error';
+          showError('Email Failed', `Booking confirmed but email sending failed: ${errorDetails}. Please contact customer manually.`);
         }
 
         // Trigger availability view refresh to show the booking as confirmed
@@ -1576,7 +1577,8 @@ export const Bookings: React.FC<BookingsProps> = ({
         }, 500);
       } catch (emailError) {
         console.error('❌ Error sending booking confirmation emails:', emailError);
-        showSuccess('Booking Confirmed', 'The booking has been confirmed successfully. (Email sending failed - please contact customer manually)');
+        const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error';
+        showError('Email Failed', `Booking confirmed but email system failed: ${errorMessage}. Please contact customer manually.`);
 
         // Trigger availability view refresh even if email failed
         // Add a small delay to ensure database transaction is committed

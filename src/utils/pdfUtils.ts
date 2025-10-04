@@ -171,12 +171,12 @@ export const addIAPTLogo = async (doc: jsPDF, y: number = 250) => {
     
     // Add the text if it fits within bounds
     if (textY < textBoundary) {
-      doc.text(thankYouText, textX, textY);    } else {
-      console.warn('⚠️ Thank you text would exceed page bounds, skipping');
+      doc.text(thankYouText, textX, textY);
     }
+    // Note: Thank you text is skipped if it would exceed page bounds
     
-  } catch (error) {
-    console.warn('❌ Could not load IAPT Logo.png, using text fallback:', error);
+  } catch {
+    // Could not load IAPT Logo.png, using text fallback
     
     // Only show fallback if logo didn't load
     if (!logoLoaded) {      doc.setFontSize(8);
