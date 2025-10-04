@@ -313,8 +313,9 @@ export class PDFInvoiceGenerator {
     
     let currentY = y + 8;
     
-    // Customer name
-    this.doc.text(customer.name, x, currentY);
+    // Customer name with proper label
+    const patientNameLabel = `Patient Name: ${customer.name}`;
+    this.doc.text(patientNameLabel, x, currentY);
     currentY += 6;
     
     // Email and phone side by side: email | phone
@@ -650,13 +651,17 @@ export class PDFInvoiceGenerator {
   }
 
   /**
-   * Format currency values
+   * Format currency values with proper spacing
    */
   private formatCurrency(amount: number, currency: string = 'EUR'): string {
-    return new Intl.NumberFormat('en-IE', {
+    const formatted = new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: currency
     }).format(amount);
+    
+    // Add space between currency symbol and amount for better readability
+    // Convert "€65.00" to "€ 65.00"
+    return formatted.replace(/^€/, '€ ');
   }
 
   /**
