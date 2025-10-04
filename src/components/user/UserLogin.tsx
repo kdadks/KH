@@ -36,15 +36,11 @@ const UserLogin: React.FC = () => {
     setError('');
     
     try {
-      console.log('UserLogin: Attempting login for:', email);
       const result = await login(email, password);
-      console.log('UserLogin: Login result:', result);
       
       if (!result.success && result.error) {
-        console.log('UserLogin: Setting error:', result.error);
         setError(result.error);
       } else if (!result.success) {
-        console.log('UserLogin: Login failed but no error message');
         setError('Login failed. Please check your credentials.');
       }
     } catch (err) {

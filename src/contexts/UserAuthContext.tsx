@@ -63,8 +63,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
           const isAdminContext = window.location.pathname.startsWith('/admin');
           if (!isAdminContext) {
             await loadUserProfile(session.user.id);
-          } else {
-            console.log('Skipping customer profile load for admin context during initialization');
           }
         }
       } catch (error) {
@@ -108,16 +106,11 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       
       if (error) {
         // Don't log this as an error - admin users won't have customer records
-        console.log('No customer profile found for auth user:', authUserId, '- this is normal for admin users');
         return;
       }
 
       if (customer) {
         setUser(customer);
-        console.log('Customer profile loaded for user:', authUserId);
-      } else {
-        // If no customer record found, user might be an admin or need to complete profile
-        console.log('No customer record found for auth user:', authUserId, '- user may be admin or need profile setup');
       }
     } catch (error) {
       console.error('Exception in loadUserProfile:', error);
@@ -210,7 +203,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     const startTime = Date.now();
     
     try {
-      console.log('UserAuthContext: Login attempt for:', email);
       // Don't set global loading state - let the UserLogin component handle its own loading state
 
       // Add timeout to prevent hanging in production
@@ -219,7 +211,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       );
 
       const loginPromise = (async () => {
-        console.log('UserAuthContext: Looking up customer by email...');
         // Optimized customer query using utility function
         const { customer, error: customerError } = await withTimeout(
           getCustomerByEmail(email.toLowerCase()),
@@ -228,24 +219,17 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         );
 
         if (customerError || !customer) {
-          console.log('UserAuthContext: Customer not found or error:', customerError);
           return { success: false, error: 'Invalid credentials' };
         }
-
-        console.log('UserAuthContext: Customer found:', customer.email);
 
         // Verify password using bcrypt
         let isValidPassword = false;
         
-        console.log('UserAuthContext: Checking password validity...');
-        
         // Check if password is already hashed
         if (customer.password && isPasswordHashed(customer.password)) {
-          console.log('UserAuthContext: Password is hashed, verifying...');
           // Verify against hashed password
           isValidPassword = await verifyPassword(password, customer.password);
         } else if (customer.password) {
-          console.log('UserAuthContext: Password is plain text, comparing...');
           // Handle legacy plain text passwords (for backwards compatibility during transition)
           // Check if plain text password matches
           isValidPassword = customer.password === password;
@@ -260,7 +244,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
                   .from('customers')
                   .update({ password: hashedPassword })
                   .eq('id', customer.id);
-                console.log('Migrated plain text password to hashed for user:', customer.email);
               } catch (err) {
                 console.warn('Failed to migrate password:', err);
               }
@@ -268,15 +251,9 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
           }
         }
 
-      console.log('UserAuthContext: Password valid:', isValidPassword);
-
       if (!isValidPassword) {
-        console.log('UserAuthContext: Invalid password, returning error');
         return { success: false, error: 'Invalid credentials' };
       }
-
-      // Customer authentication successful
-      console.log('Customer authenticated:', customer.email);
       
       // Check if password equals email (default password) and set must_change_password flag
       // For plain text comparison, check against the original password

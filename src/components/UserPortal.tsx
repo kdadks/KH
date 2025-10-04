@@ -30,12 +30,6 @@ const UserPortal: React.FC = () => {
 
   // Load dashboard data when user logs in
   useEffect(() => {
-    console.log('UserPortal: User state changed:', { 
-      hasUser: !!user, 
-      userId: user?.id, 
-      mustChangePassword: user?.must_change_password 
-    });
-    
     if (user?.id) {
       loadDashboardData();
     }
