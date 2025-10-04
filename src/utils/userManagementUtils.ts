@@ -53,10 +53,10 @@ export const getCustomerByAuthId = async (authUserId: string): Promise<{ custome
  */
 export const getCustomerByEmail = async (email: string): Promise<{ customer: UserCustomer | null; error?: string }> => {
   try {
-    // Optimized query with only essential fields for login
+    // Query with all customer fields including address data for complete user profile
     const { data, error } = await supabase
       .from('customers')
-      .select('id, email, password, first_name, last_name, phone, is_active, must_change_password, last_login, auth_user_id')
+      .select('*')
       .eq('email', email.toLowerCase())
       .eq('is_active', true)
       .single();
