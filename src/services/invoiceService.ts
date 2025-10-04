@@ -260,9 +260,40 @@ export class InvoiceService {
       // Decrypt customer data for PDF generation
       const decryptedCustomer = decryptCustomerPII(customer);
 
+      // Debug: Check decrypted customer data
+      console.log('Original customer data:', {
+        id: customer.id,
+        email: customer.email,
+        name: customer.name
+      });
+      
+      console.log('Decrypted customer data:', {
+        id: decryptedCustomer.id,
+        email: decryptedCustomer.email,
+        first_name: decryptedCustomer.first_name,
+        last_name: decryptedCustomer.last_name
+      });
+
+      // Build customer name with better fallback logic
+      let customerName = '';
+      if (decryptedCustomer.first_name && decryptedCustomer.last_name) {
+        customerName = `${decryptedCustomer.first_name.trim()} ${decryptedCustomer.last_name.trim()}`.trim();
+      } else if (decryptedCustomer.first_name) {
+        customerName = decryptedCustomer.first_name.trim();
+      } else if (decryptedCustomer.last_name) {
+        customerName = decryptedCustomer.last_name.trim();
+      }
+      
+      // Final fallback to email if no name available
+      if (!customerName) {
+        customerName = decryptedCustomer.email || 'Customer';
+      }
+
+      console.log('Final customer name for PDF:', customerName);
+
       const customerData = {
         id: decryptedCustomer.id,
-        name: `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() || decryptedCustomer.email || 'Customer',
+        name: customerName,
         email: decryptedCustomer.email,
         phone: decryptedCustomer.phone,
         address: [
@@ -775,9 +806,34 @@ export async function downloadInvoicePDFWithPayments(
     // Decrypt customer data for PDF generation
     const decryptedCustomer = decryptCustomerPII(customer);
 
+    // Debug: Check decrypted customer data for downloadInvoicePDFWithPayments
+    console.log('PDF Download - Decrypted customer data:', {
+      id: decryptedCustomer.id,
+      email: decryptedCustomer.email,
+      first_name: decryptedCustomer.first_name,
+      last_name: decryptedCustomer.last_name
+    });
+
+    // Build customer name with better fallback logic
+    let customerName = '';
+    if (decryptedCustomer.first_name && decryptedCustomer.last_name) {
+      customerName = `${decryptedCustomer.first_name.trim()} ${decryptedCustomer.last_name.trim()}`.trim();
+    } else if (decryptedCustomer.first_name) {
+      customerName = decryptedCustomer.first_name.trim();
+    } else if (decryptedCustomer.last_name) {
+      customerName = decryptedCustomer.last_name.trim();
+    }
+    
+    // Final fallback to email if no name available
+    if (!customerName) {
+      customerName = decryptedCustomer.email || 'Customer';
+    }
+
+    console.log('PDF Download - Final customer name:', customerName);
+
     const customerData = {
       id: decryptedCustomer.id,
-      name: `${decryptedCustomer.first_name || ''} ${decryptedCustomer.last_name || ''}`.trim() || decryptedCustomer.email || 'Customer',
+      name: customerName,
       email: decryptedCustomer.email,
       phone: decryptedCustomer.phone,
       address: [
