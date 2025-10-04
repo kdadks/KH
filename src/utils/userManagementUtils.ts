@@ -451,13 +451,16 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
 };
 
 /**
- * Format currency as Euro
+ * Format currency as Euro with proper spacing
  */
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-IE', {
+  const formatted = new Intl.NumberFormat('en-IE', {
     style: 'currency',
     currency: 'EUR'
   }).format(amount);
+  
+  // Add space between currency symbol and amount for consistency
+  return formatted.replace(/^€/, '€ ');
 };
 
 /**

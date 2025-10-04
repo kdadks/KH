@@ -1470,10 +1470,13 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IE', {
+    const formatted = new Intl.NumberFormat('en-IE', {
       style: 'currency',
       currency: 'EUR'
     }).format(amount);
+    
+    // Add space between currency symbol and amount for consistency with PDF
+    return formatted.replace(/^€/, '€ ');
   };
 
   const formatDate = (dateString: string) => {
