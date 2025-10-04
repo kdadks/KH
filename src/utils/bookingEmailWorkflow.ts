@@ -188,16 +188,6 @@ export const sendBookingConfirmationWithCalendar = async (
   adminEmail?: string
 ): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
   try {
-    console.log('📧 Sending Booking Confirmation with Calendar to:', bookingData.customer_email);
-    console.log('📧 Admin email:', adminEmail || 'info@khtherapy.ie');
-    console.log('📧 Booking data:', {
-      customer_name: bookingData.customer_name,
-      service_name: bookingData.service_name,
-      appointment_date: bookingData.appointment_date,
-      appointment_time: bookingData.appointment_time,
-      booking_reference: bookingData.booking_reference
-    });
-    
     const result = await sendAdminBookingConfirmationEmail(
       bookingData.customer_email,
       {
@@ -214,16 +204,8 @@ export const sendBookingConfirmationWithCalendar = async (
       adminEmail || 'info@khtherapy.ie'
     );
 
-    console.log('📧 Email sending result:', result);
     return result;
   } catch (error) {
-    console.error('❌ Error sending booking confirmation with calendar:', error);
-    console.error('❌ Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      customerEmail: bookingData.customer_email,
-      adminEmail: adminEmail || 'info@khtherapy.ie'
-    });
     return { customerSuccess: false, adminSuccess: false };
   }
 };
@@ -523,8 +505,6 @@ export const processBookingEmailWorkflow = async (
   const results: any = {};
   const errors: string[] = [];
   let overallSuccess = true;
-
-  console.log('🔄 Processing booking email workflow:', trigger, 'for booking:', bookingData.booking_reference);
 
   try {
     switch (trigger) {

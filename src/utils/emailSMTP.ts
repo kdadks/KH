@@ -105,10 +105,7 @@ const sendEmail = async (
   customSubject?: string
 ): Promise<boolean> => {
   try {
-    console.log(`📧 Attempting to send ${emailType} email to:`, recipientEmail);
-    
     const baseUrl = getBaseUrl();
-    console.log(`🌐 Using base URL:`, baseUrl);
     
     // Decrypt customer name for proper display
     let displayCustomerName = data.customer_name;
@@ -122,52 +119,37 @@ const sendEmail = async (
     
     // Generate proper email subject
     const emailSubject = customSubject || generateEmailSubject(emailType, displayCustomerName);
-    console.log(`📝 Email subject:`, emailSubject);
     
-    const requestBody = {
-      emailType,
-      recipientEmail,
-      data: { ...data, customer_name: displayCustomerName }, // Use decrypted name
-      subject: emailSubject
-    };
-    console.log(`📨 Request payload:`, JSON.stringify(requestBody, null, 2));
-    
-    console.log(`🚀 Making request to Netlify function...`);
     const response = await fetch(`${baseUrl}/.netlify/functions/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        emailType,
+        recipientEmail,
+        data: { ...data, customer_name: displayCustomerName }, // Use decrypted name
+        subject: emailSubject
+      }),
     });
-    
-    console.log(`📡 Response status:`, response.status, response.statusText);
     
     // Check if response has content before parsing JSON
     const responseText = await response.text();
-    console.log(`📄 Response body:`, responseText);
     
     try {
-      let responseData;
       if (responseText) {
-        responseData = JSON.parse(responseText);
-        console.log(`📊 Parsed response data:`, responseData);
+        JSON.parse(responseText);
       }
-      
       if (!response.ok) {
-        console.error(`❌ Email request failed with status ${response.status}:`, responseData || responseText);
         return false;
       }
       
-      console.log(`✅ Email sent successfully to ${recipientEmail}`);
       return true;
     } catch (parseError) {
-      console.error(`❌ Failed to parse response JSON:`, parseError, 'Response text:', responseText);
       return false;
     }
 
   } catch (error) {
-    console.error(`❌ Email sending error for ${emailType} to ${recipientEmail}:`, error);
     return false;
   }
 };
