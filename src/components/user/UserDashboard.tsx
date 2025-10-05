@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserDashboardData, UserPortalTab } from '../../types/userManagement';
 import { 
   AlertCircle, 
@@ -31,14 +31,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
   const [dismissedNotifications, setDismissedNotifications] = useState<number[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
-  // Load payment requests when component mounts
-  useEffect(() => {
-    if (data?.customer?.id) {
-      loadPaymentRequests();
-    }
-  }, [data?.customer?.id]);
-
-  const loadPaymentRequests = async () => {
+  const loadPaymentRequests = useCallback(async () => {
     if (!data?.customer?.id) return;
     
     try {
@@ -50,7 +43,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
     } finally {
       setLoadingPaymentRequests(false);
     }
-  };
+  }, [data?.customer?.id]);
+
+  // Load payment requests when component mounts
+  useEffect(() => {
+    if (data?.customer?.id) {
+      loadPaymentRequests();
+    }
+  }, [data?.customer?.id, loadPaymentRequests]);
 
   const dismissNotification = (requestId: number) => {
     setDismissedNotifications(prev => [...prev, requestId]);
@@ -75,7 +75,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
     );
   }
 
-  const { customer, stats, recentInvoices, overdueInvoices, recentPayments, upcomingBookings } = data;
+  const { customer, stats, recentInvoices, recentPayments, upcomingBookings } = data;
 
   return (
     <div className="p-6">
@@ -141,23 +141,23 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
         </div>
       </div>
 
-      {/* Overdue Invoices Alert */}
-      {overdueInvoices.length > 0 && (
+      {/* Overdue Items Alert */}
+      {stats.overdueCount > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <div className="flex items-start">
             <AlertCircle className="w-5 h-5 text-red-500 mr-3 mt-0.5" />
             <div className="flex-1">
               <h3 className="text-sm font-medium text-red-800">
-                You have {overdueInvoices.length} overdue invoice{overdueInvoices.length > 1 ? 's' : ''}
+                You have {stats.overdueCount} overdue payment{stats.overdueCount > 1 ? 's' : ''}
               </h3>
               <p className="text-sm text-red-700 mt-1">
-                Please pay your outstanding invoices to avoid service interruption.
+                Please pay your outstanding amounts to avoid service interruption.
               </p>
               <button
                 onClick={() => onTabChange('invoices')}
                 className="text-sm text-red-700 underline hover:text-red-800 mt-2"
               >
-                View overdue invoices →
+                View outstanding payments →
               </button>
             </div>
           </div>
