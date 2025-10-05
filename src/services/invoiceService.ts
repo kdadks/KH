@@ -874,7 +874,7 @@ export async function downloadInvoicePDFWithPayments(
       itemsData = [{
         id: 1,
         invoice_id: invoice.id,
-        description: `Service - Invoice ${invoice.invoice_number}`,
+        description: `Physiotherapy Services`,
         quantity: 1,
         unit_price: invoice.subtotal,
         total_price: invoice.subtotal
