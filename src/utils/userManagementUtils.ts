@@ -403,13 +403,26 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
     const payments = await getCustomerPayments(parseInt(customerId));
     const recentPayments = payments.slice(0, 3); // Show last 3 payments
 
-    // Calculate stats from real data - only count unpaid invoices as outstanding
-    const totalOutstanding = invoices?.reduce((sum, inv) => 
+    // Get payment requests for this customer
+    const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
+    const paymentRequests = await getCustomerPaymentRequests(parseInt(customerId));
+
+    // Calculate stats from real data - include both invoices and payment requests
+    const outstandingInvoices = invoices?.reduce((sum, inv) => 
       inv.status === 'sent' ? sum + (inv.total_amount || 0) : sum, 0) || 0;
+    const outstandingPaymentRequests = paymentRequests?.reduce((sum, req) => 
+      (req.status === 'pending' || req.status === 'sent') ? sum + (req.amount || 0) : sum, 0) || 0;
+    const totalOutstanding = outstandingInvoices + outstandingPaymentRequests;
     
-    const overdueCount = invoices?.filter(inv => 
+    const overdueInvoices = invoices?.filter(inv => 
       inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
     ).length || 0;
+    const overduePaymentRequests = paymentRequests?.filter(req => 
+      (req.status === 'pending' || req.status === 'sent') &&
+      req.payment_due_date && 
+      new Date(req.payment_due_date) < new Date()
+    ).length || 0;
+    const overdueCount = overdueInvoices + overduePaymentRequests;
 
     // Calculate total paid from actual payment records
     const totalPaid = payments.reduce((sum, payment) => 
