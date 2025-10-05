@@ -227,10 +227,13 @@ export const changeUserPassword = async (
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
-    // First, get all invoices for this customer
+    // Get all invoices for this customer with their items
     const { data: invoicesData, error: invoicesError } = await supabase
       .from('invoices')
-      .select('*')
+      .select(`
+        *,
+        items:invoice_items(*)
+      `)
       .eq('customer_id', parseInt(customerId))
       .in('status', ['sent', 'paid']) // Include both sent and paid invoices
       .order('invoice_date', { ascending: false }); // Most recent first

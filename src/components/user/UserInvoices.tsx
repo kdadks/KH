@@ -113,12 +113,12 @@ const UserInvoices: React.FC = () => {
       // Transform items if available, or create a default item
       let itemsData = invoice.items || [];
       
-      // If no items exist, create a default item based on the invoice total
+      // If no items exist, create a default item with a more meaningful description
       if (!itemsData || itemsData.length === 0) {
         itemsData = [{
           id: 1,
           invoice_id: invoice.id,
-          description: `Service - Invoice ${invoice.invoice_number}`,
+          description: `Physiotherapy Services`,
           quantity: 1,
           unit_price: invoice.subtotal,
           total_price: invoice.subtotal
