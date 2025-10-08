@@ -47,6 +47,8 @@ interface ExistingInvoiceItem {
 const COMPANY_INFO = {
   name: 'KH Therapy',
   address: [
+    'Kelly Hodgins',
+    'Business Number: 0838009404',
     'Neilstown Village Court',
     'Neilstown Rd',
     'Clondalkin, D22E8P2'
