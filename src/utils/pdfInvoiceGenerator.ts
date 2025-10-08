@@ -285,16 +285,25 @@ export class PDFInvoiceGenerator {
       currentY += 5;
     }
     
-    company.address.forEach(line => {
-      this.doc.text(line, x, currentY);
-      currentY += 5;
+    company.address.forEach((line) => {
+      // Make "Kelly Hodgins" bold (first line in address array)
+      if (line === 'Kelly Hodgins') {
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setTextColor(this.COLORS.dark);
+        this.doc.text(line, x, currentY);
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setTextColor(this.COLORS.secondary);
+      } else {
+        this.doc.text(line, x, currentY);
+      }
+      currentY += 4; // Reduced spacing to fit better
     });
     
-    currentY += 3;
+    currentY += 2; // Reduced spacing before contact info
     this.doc.text(`Phone: ${company.contact.phone}`, x, currentY);
-    currentY += 5;
+    currentY += 4; // Reduced spacing
     this.doc.text(`Email: ${company.contact.email}`, x, currentY);
-    currentY += 5;
+    currentY += 4; // Reduced spacing
     this.doc.text(`Web: ${company.contact.website}`, x, currentY);
   }
 
@@ -407,7 +416,7 @@ export class PDFInvoiceGenerator {
     ]);
 
     autoTable(this.doc, {
-      startY: 130,
+      startY: 140, // Increased from 130 to give more space for company details
       head: [['Description', 'Qty', 'Unit Price', 'Total']],
       body: tableData,
       theme: 'grid',
