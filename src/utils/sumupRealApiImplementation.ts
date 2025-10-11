@@ -10,6 +10,7 @@ import {
   getSumUpEnvironmentConfig, 
   getEnvironmentConfig
 } from './environmentDetection';
+import logger from './logger';
 
 export interface SumUpCreateCheckoutRequest {
   checkout_reference: string;
@@ -103,7 +104,7 @@ export const createSumUpCheckoutSession = async (
     const environmentConfig = getEnvironmentConfig();
     const sumupEnvConfig = getSumUpEnvironmentConfig();
     
-    console.log(`💳 Creating SumUp checkout in ${environmentConfig.displayName} mode`);
+    logger.devOnly(() => console.log(`💳 Creating SumUp checkout in ${environmentConfig.displayName} mode`));
     
     // Get SumUp configuration from database (this will be overridden by domain detection)
     const gatewayConfig = await getActiveSumUpGateway();
@@ -125,11 +126,13 @@ export const createSumUpCheckoutSession = async (
       
       // Log customer information if provided
       if (checkoutData.customer) {
-        console.log('📧 Customer information included in checkout (internal tracking only):', {
-          name: checkoutData.customer.name,
-          email: checkoutData.customer.email
+        logger.devOnly(() => {
+          console.log('📧 Customer information included in checkout (internal tracking only):', {
+            name: checkoutData.customer?.name,
+            email: checkoutData.customer?.email
+          });
+          console.log('ℹ️ Note: SumUp checkout UI does not display customer details to users');
         });
-        console.log('ℹ️ Note: SumUp checkout UI does not display customer details to users');
       }
       
       const mockResponse: SumUpCreateCheckoutResponse = {
@@ -151,7 +154,7 @@ export const createSumUpCheckoutSession = async (
     }
 
     // Real SumUp API (production or sandbox)
-    console.log(`🚀 Using real SumUp API in ${currentEnvironment} mode`);
+    logger.devOnly(() => console.log(`🚀 Using real SumUp API in ${currentEnvironment} mode`));
     
     // Prepare the API payload
     const apiPayload = {
@@ -175,11 +178,13 @@ export const createSumUpCheckoutSession = async (
 
     // Log customer data being sent (for internal SumUp tracking only - not displayed in checkout UI)
     if (checkoutData.customer) {
-      console.log('📧 Customer data sent to SumUp for transaction records:', {
-        customer_email: apiPayload.customer_email,
-        customer_name: apiPayload.customer_name
+      logger.devOnly(() => {
+        console.log('📧 Customer data sent to SumUp for transaction records:', {
+          customer_email: apiPayload.customer_email,
+          customer_name: apiPayload.customer_name
+        });
+        console.log('ℹ️ Note: Customer details are stored by SumUp but not displayed in their checkout UI');
       });
-      console.log('ℹ️ Note: Customer details are stored by SumUp but not displayed in their checkout UI');
     }
     
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
@@ -261,7 +266,7 @@ export const processSumUpPayment = async (
     }
 
     // Real SumUp API (production or sandbox)
-    console.log(`🚀 Processing payment via SumUp API in ${currentEnvironment} mode`);
+    logger.devOnly(() => console.log(`🚀 Processing payment via SumUp API in ${currentEnvironment} mode`));
     
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts/${checkoutId}`, {
       method: 'PUT',
@@ -337,7 +342,7 @@ export const getSumUpCheckoutStatus = async (checkoutId: string): Promise<SumUpC
     }
 
     // Real SumUp API (production or sandbox)
-    console.log(`🔍 Checking SumUp checkout status in ${currentEnvironment} mode`);
+    logger.devOnly(() => console.log(`🔍 Checking SumUp checkout status in ${currentEnvironment} mode`));
     
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts/${checkoutId}`, {
       headers: {

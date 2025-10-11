@@ -160,12 +160,12 @@ const HeroSection: React.FC = () => {
         console.error('❌ Failed to cancel payment request during form reset:', error);
       }
     } else {
-      console.log('ℹ️ No active payment request ID found to cancel. Checking structure:', {
+      logger.devOnly(() => console.log('ℹ️ No active payment request ID found to cancel. Checking structure:', {
         selectedPaymentRequestStructure: selectedPaymentRequest ? Object.keys(selectedPaymentRequest) : null,
         paymentStateRequestStructure: paymentState.paymentRequest ? Object.keys(paymentState.paymentRequest) : null,
         selectedPaymentRequestId: selectedPaymentRequest?.id,
         paymentStateRequestId: paymentState.paymentRequest?.id
-      });
+      }));
     }
 
     reset();
@@ -408,7 +408,7 @@ const HeroSection: React.FC = () => {
       }
 
       if (!serviceId || isNaN(serviceId)) {
-        console.log('Invalid serviceId for next slot calculation');
+        logger.devOnly(() => console.log('Invalid serviceId for next slot calculation'));
         setNextAvailableSlot(null);
         return;
       }
@@ -502,7 +502,7 @@ const HeroSection: React.FC = () => {
       }
 
       if (!serviceId || isNaN(serviceId)) {
-        console.log('Invalid serviceId, returning');
+        logger.devOnly(() => console.log('Invalid serviceId, returning'));
         setTimeSlots([]);
         return;
       }
@@ -583,7 +583,7 @@ const HeroSection: React.FC = () => {
       const emailSent = await sendSimpleBookingConfirmation(booking.email, bookingConfirmationData);
       
       if (emailSent) {
-        console.log('✅ Booking confirmation email sent successfully');
+        logger.devOnly(() => console.log('✅ Booking confirmation email sent successfully'));
       } else {
         console.warn('⚠️ Failed to send booking confirmation email');
       }
@@ -715,7 +715,7 @@ const HeroSection: React.FC = () => {
               actualServiceCost = getServicePrice(servicePricing, timeSlotType);
               logger.debug('Service cost calculated from database:', actualServiceCost);
             } else {
-              console.log('⚠️ Service pricing not found in database, using payment request amount');
+              logger.devOnly(() => console.log('⚠️ Service pricing not found in database, using payment request amount'));
             }
           } catch (pricingError) {
             console.error('Error calculating service cost:', pricingError);
@@ -779,7 +779,7 @@ const HeroSection: React.FC = () => {
         } else {
           // No payment request created OR payment request with 0 amount
           if (paymentRequest && paymentRequest.amount === 0) {
-            console.log('⚠️ HeroSection - Payment request created with 0 amount - treating as no payment needed');
+            logger.devOnly(() => console.log('⚠️ HeroSection - Payment request created with 0 amount - treating as no payment needed'));
             setSuccessMsg('Booking submitted successfully! Payment request created for record keeping.');
           } else {
             console.warn('⚠️ HeroSection - No payment request was created for this booking');
@@ -837,7 +837,7 @@ const HeroSection: React.FC = () => {
           booking_date: paymentState.booking?.booking_date
         } as PaymentRequestWithCustomer;
 
-        console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer });
+        logger.devOnly(() => console.log('Opening PaymentModal with:', { paymentType, amount: selectedAmount, paymentRequestWithCustomer }));
 
         setSelectedPaymentRequest(paymentRequestWithCustomer);
         setShowPaymentModal(true);
@@ -1139,7 +1139,7 @@ const HeroSection: React.FC = () => {
                                 // Fallback - try direct setValue with delay
                                 setTimeout(() => {
                                   setValue('time', nextAvailableSlot.time);
-                                  console.log('✅ Hero time slot set (error fallback):', nextAvailableSlot.time);
+                                  logger.devOnly(() => console.log('✅ Hero time slot set (error fallback):', nextAvailableSlot.time));
                                 }, 200);
                               }
                             } else {
@@ -1147,7 +1147,7 @@ const HeroSection: React.FC = () => {
                               // Fallback - wait for useEffect to trigger, then set time
                               setTimeout(() => {
                                 setValue('time', nextAvailableSlot.time);
-                                console.log('✅ Hero time slot set (service fallback):', nextAvailableSlot.time);
+                                logger.devOnly(() => console.log('✅ Hero time slot set (service fallback):', nextAvailableSlot.time));
                               }, 300);
                             }
                           }}
@@ -1364,12 +1364,14 @@ const HeroSection: React.FC = () => {
                   <div className="text-center">
                     <button
                       onClick={() => {
-                        console.log('🔄 Cancel and start over clicked in HeroSection');
-                        console.log('Current state:', {
-                          selectedPaymentRequest: selectedPaymentRequest?.id,
-                          paymentStateRequest: paymentState.paymentRequest?.id,
-                          showPaymentModal,
-                          paymentCompleted: paymentState.paymentCompleted
+                        logger.devOnly(() => {
+                          console.log('🔄 Cancel and start over clicked in HeroSection');
+                          console.log('Current state:', {
+                            selectedPaymentRequest: selectedPaymentRequest?.id,
+                            paymentStateRequest: paymentState.paymentRequest?.id,
+                            showPaymentModal,
+                            paymentCompleted: paymentState.paymentCompleted
+                          });
                         });
                         resetForm();
                       }}

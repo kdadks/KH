@@ -94,12 +94,12 @@ const SumUpPaymentForm: React.FC<SumUpPaymentFormProps> = ({
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      console.log('Payment processed:', {
+      logger.devOnly(() => console.log('Payment processed:', {
         amount,
         currency,
         description,
         cardLast4: cardNumber.slice(-4)
-      });
+      }));
       
       onPaymentComplete();
     } catch (error) {
@@ -321,7 +321,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleModalClose = async () => {
     // Prevent multiple cancellation attempts
     if (isCancelling) {
-      console.log('🚫 Cancellation already in progress, ignoring duplicate click');
+      logger.devOnly(() => console.log('🚫 Cancellation already in progress, ignoring duplicate click'));
       return;
     }
 
@@ -329,7 +329,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (currentStep === 'payment' || currentStep === 'processing' || currentStep === 'confirm') {
       setIsCancelling(true);
       try {
-        console.log('🚫 Starting payment cancellation process...');
+        logger.devOnly(() => console.log('🚫 Starting payment cancellation process...'));
         await handlePaymentModalCancellation(paymentRequest.id, onClose, showInfo);
       } catch (error) {
         console.error('Error during cancellation:', error);
@@ -408,7 +408,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   // SumUp Modal Handlers
   const handleSumUpSuccess = useCallback((data: { transaction_id?: string; amount?: string; checkout_reference?: string }) => {
-    console.log('SumUp payment successful:', data);
+    logger.devOnly(() => console.log('SumUp payment successful:', data));
     setShowSumUpModal(false);
     setCurrentStep('success');
     
@@ -439,7 +439,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [onPaymentFailed]);
 
   const handleSumUpCancel = useCallback(() => {
-    console.log('SumUp payment cancelled by user');
+    logger.devOnly(() => console.log('SumUp payment cancelled by user'));
     setShowSumUpModal(false);
     setCurrentStep('confirm');
     
@@ -549,11 +549,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setIsDevelopmentMode(developmentMode);
       setGatewayEnvironment(currentEnvironment);
       
-      console.log('💳 Payment Environment:', {
+      logger.devOnly(() => console.log('💳 Payment Environment:', {
         environment: currentEnvironment,
         developmentMode,
         config: environmentConfig
-      });
+      }));
 
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
@@ -579,7 +579,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       cancelRedirectUrl.searchParams.set('checkout_reference', newCheckoutReference);
       cancelRedirectUrl.searchParams.set('context', context);
 
-      console.log('Creating SumUp checkout session...', {
+      logger.devOnly(() => console.log('Creating SumUp checkout session...', {
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
         merchant_code: environmentConfig.merchantCode,
@@ -587,7 +587,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         return_url: sumupReturnUrl,
         success_redirect: successRedirectUrl.toString(),
         cancel_redirect: cancelRedirectUrl.toString()
-      });
+      }));
 
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: newCheckoutReference,
@@ -617,7 +617,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           const derivedUrl = extractCheckoutUrl(latestPayload);
           if (derivedUrl) {
             if (attempt > 0) {
-              console.info('Resolved SumUp checkout URL after retry.', { attempts: attempt + 1 });
+              logger.devOnly(() => console.info('Resolved SumUp checkout URL after retry.', { attempts: attempt + 1 }));
             }
             return derivedUrl;
           }
@@ -666,11 +666,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         setCheckoutUrl(fallbackCheckoutUrl);
         setCurrentStep('payment');
 
-        console.log('Sandbox checkout session ready:', {
+        logger.devOnly(() => console.log('Sandbox checkout session ready:', {
           checkoutUrl: fallbackCheckoutUrl,
           amount: paymentRequest.amount,
           currency: paymentRequest.currency
-        });
+        }));
         return;
       }
 
@@ -684,11 +684,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCurrentStep('modal');
       setShowSumUpModal(true);
 
-      console.log('Opening SumUp checkout in modal', {
+      logger.devOnly(() => console.log('Opening SumUp checkout in modal', {
         checkoutUrl: responseCheckoutUrl,
         checkoutId: checkoutResponse.id,
         reference: newCheckoutReference
-      });
+      }));
 
       // Store SumUp checkout details in localStorage
       logToStorage('SumUp checkout session created - opening in modal', {
@@ -705,7 +705,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const paymentEnv = getPaymentEnvironment();
       const isProduction = paymentEnv === 'production';
       
-      console.log('🚀 PaymentModal Environment Check:', { paymentEnv, isProduction, hostname: window.location.hostname });
+      logger.devOnly(() => console.log('🚀 PaymentModal Environment Check:', { paymentEnv, isProduction, hostname: window.location.hostname }));
       
       if (isProduction) {
         // Production: Redirect to SumUp checkout
@@ -713,7 +713,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         // setTimeout(() => {
         //   window.location.href = responseCheckoutUrl;
         // }, 350);
-        console.log('✅ SumUp checkout will open in modal only (redirect disabled)');
+        logger.devOnly(() => console.log('✅ SumUp checkout will open in modal only (redirect disabled)'));
       } else {
         // Development/Sandbox: Prevent redirect for debugging
         logToStorage('SumUp redirect prevented for debugging (sandbox mode)', { 
@@ -721,9 +721,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           environment: paymentEnv
         });
         
-        console.log('� SumUp checkout created successfully. Redirect prevented for debugging (sandbox mode).');
-        console.log('� Check localStorage payment_debug_logs for full details');
-        console.log('� Redirect URL:', responseCheckoutUrl);
+        logger.devOnly(() => {
+          console.log('� SumUp checkout created successfully. Redirect prevented for debugging (sandbox mode).');
+          console.log('� Check localStorage payment_debug_logs for full details');
+          console.log('� Redirect URL:', responseCheckoutUrl);
+        });
       }
       
     } catch (error) {
@@ -764,7 +766,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         sumup_payment_type: 'card'
       };
 
-      console.log('Processing payment request:', paymentData);
+      logger.devOnly(() => console.log('Processing payment request:', paymentData));
 
       // Update payment request amount in database if it differs (for full payments)
       const { data: currentPaymentRequest } = await supabase
@@ -774,7 +776,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         .single();
 
       if (currentPaymentRequest && currentPaymentRequest.amount !== paymentRequest.amount) {
-        console.log(`🔄 Updating payment request amount from €${currentPaymentRequest.amount} to €${paymentRequest.amount}`);
+        logger.devOnly(() => console.log(`🔄 Updating payment request amount from €${currentPaymentRequest.amount} to €${paymentRequest.amount}`));
 
         const { error: updateError } = await supabase
           .from('payment_requests')
@@ -788,7 +790,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           console.error('❌ Failed to update payment request amount:', updateError);
           throw new Error('Failed to update payment amount');
         } else {
-          console.log('✅ Payment request amount updated successfully');
+          logger.devOnly(() => console.log('✅ Payment request amount updated successfully'));
         }
       }
 
@@ -864,11 +866,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const handlePaymentFailure = async (reason: string) => {
     try {
-      console.log('📧 Sending payment failed notification for payment request:', paymentRequest.id, 'Reason:', reason);
+      logger.devOnly(() => console.log('📧 Sending payment failed notification for payment request:', paymentRequest.id, 'Reason:', reason));
       const emailResult = await sendPaymentFailedNotification(paymentRequest.id);
       
       if (emailResult.success) {
-        console.log('✅ Payment failed notification sent successfully');
+        logger.devOnly(() => console.log('✅ Payment failed notification sent successfully'));
         showInfo('Notification Sent', 'We have sent you an email with instructions to retry your payment.');
       } else {
         console.error('❌ Failed to send payment failed notification:', emailResult.error);
