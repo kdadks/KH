@@ -4,6 +4,7 @@ import { X, CreditCard, Shield, CheckCircle, AlertCircle, Calendar, Clock } from
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
 import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
 import type { SumUpCreateCheckoutResponse } from '../../utils/sumupRealApiImplementation';
+import SumUpModal from './SumUpModal';
 
 // Extended interfaces for better type safety
 interface ExtendedCheckoutResponse extends SumUpCreateCheckoutResponse {
@@ -342,7 +343,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       onClose();
     }
   };
-  const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error' | 'redirect'>('confirm');
+  const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error' | 'modal'>('confirm');
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [bookingDetails, setBookingDetails] = useState<{
@@ -357,6 +358,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [checkoutReference, setCheckoutReference] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [showSumUpModal, setShowSumUpModal] = useState<boolean>(false);
 
   const getRedirectUrl = (isSuccess: boolean = true): string | null => {
     // If redirectAfterPayment is explicitly set, use it
@@ -404,6 +406,55 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   }, [paymentRequest.booking_id]);
 
+  // SumUp Modal Handlers
+  const handleSumUpSuccess = useCallback((data: { transaction_id?: string; amount?: string; checkout_reference?: string }) => {
+    console.log('SumUp payment successful:', data);
+    setShowSumUpModal(false);
+    setCurrentStep('success');
+    
+    // Process the successful payment
+    if (data.transaction_id) {
+      logger.info('Payment completed successfully via SumUp modal', {
+        transaction_id: data.transaction_id,
+        amount: data.amount,
+        checkout_reference: data.checkout_reference
+      });
+    }
+    
+    // Call success handler if provided
+    onPaymentComplete?.();
+  }, [onPaymentComplete]);
+
+  const handleSumUpFailure = useCallback((error: { error?: string; code?: string; message?: string }) => {
+    console.error('SumUp payment failed:', error);
+    setShowSumUpModal(false);
+    setErrorMessage(error.error || 'Payment failed. Please try again.');
+    setCurrentStep('error');
+    
+    // Log the error
+    logger.error('Payment failed in SumUp modal', error);
+    
+    // Call failure handler if provided
+    onPaymentFailed?.(error.error || 'Payment failed');
+  }, [onPaymentFailed]);
+
+  const handleSumUpCancel = useCallback(() => {
+    console.log('SumUp payment cancelled by user');
+    setShowSumUpModal(false);
+    setCurrentStep('confirm');
+    
+    // Log the cancellation
+    logger.info('Payment cancelled by user in SumUp modal');
+  }, []);
+
+  const handleSumUpModalClose = useCallback(() => {
+    setShowSumUpModal(false);
+    // Return to confirm step if modal is closed without completion
+    if (currentStep === 'modal') {
+      setCurrentStep('confirm');
+    }
+  }, [currentStep]);
+
   // Reset modal state when opened
   useEffect(() => {
     if (isOpen) {
@@ -414,6 +465,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCheckoutReference(null);
       setCheckoutSessionId(null);
       setIsCancelling(false);
+      setShowSumUpModal(false);
       logger.debug('PaymentModal opening with booking_id:', paymentRequest.booking_id);
       fetchBookingDetails();
       
@@ -623,16 +675,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       setCheckoutUrl(responseCheckoutUrl);
-      setCurrentStep('redirect');
+      // Open SumUp checkout in modal instead of redirecting
+      setCurrentStep('modal');
+      setShowSumUpModal(true);
 
-      console.log('Redirecting to SumUp hosted checkout', {
+      console.log('Opening SumUp checkout in modal', {
         checkoutUrl: responseCheckoutUrl,
         checkoutId: checkoutResponse.id,
         reference: newCheckoutReference
       });
 
-      // Store SumUp checkout details in localStorage before redirect
-      logToStorage('SumUp checkout session created', {
+      // Store SumUp checkout details in localStorage
+      logToStorage('SumUp checkout session created - opening in modal', {
         checkoutUrl: responseCheckoutUrl,
         checkoutId: checkoutResponse.id,
         checkoutReference: newCheckoutReference,
@@ -1077,30 +1131,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           )}
 
-          {currentStep === 'redirect' && (
+          {currentStep === 'modal' && (
             <div className="text-center space-y-6">
               <div className="flex justify-center">
                 <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
               </div>
               <div>
                 <h4 className="text-lg font-medium text-gray-900 mb-2">
-                  Redirecting to SumUp
+                  Opening SumUp Checkout
                 </h4>
                 <p className="text-gray-600">
-                  We're opening SumUp's secure payment page for you in a new tab. Complete the payment there and you'll return here automatically.
-                </p>
-              </div>
-              <div className="text-sm text-gray-500">
-                <p>
-                  If the page doesn't open,{' '}
-                  <button
-                    type="button"
-                    className="text-blue-600 underline"
-                    onClick={() => checkoutUrl && window.open(checkoutUrl, '_blank', 'noopener')}
-                  >
-                    click here to launch SumUp checkout
-                  </button>
-                  .
+                  SumUp's secure payment window is loading. Complete your payment in the modal that opens.
                 </p>
               </div>
             </div>
@@ -1171,6 +1212,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* SumUp Modal */}
+      {showSumUpModal && checkoutUrl && (
+        <SumUpModal
+          isOpen={showSumUpModal}
+          onClose={handleSumUpModalClose}
+          checkoutUrl={checkoutUrl}
+          paymentAmount={paymentRequest.amount}
+          currency={paymentRequest.currency || 'EUR'}
+          onSuccess={handleSumUpSuccess}
+          onFailure={handleSumUpFailure}
+          onCancel={handleSumUpCancel}
+        />
+      )}
     </div>
   );
 };

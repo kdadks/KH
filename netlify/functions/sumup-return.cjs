@@ -1006,18 +1006,114 @@ exports.handler = async (event, context) => {
       }, debugLogger);
       
       // Redirect user to success or failure page based on processed status
+      // Determine correct base URL based on environment
+      const getBaseUrl = () => {
+        // Check if this is production environment
+        const isProduction = (
+          process.env.CONTEXT === 'production' ||
+          process.env.URL === 'https://khtherapy.ie' ||
+          (event.headers.host && event.headers.host.includes('khtherapy.ie'))
+        );
+        
+        if (isProduction) {
+          return 'https://khtherapy.ie';
+        }
+        
+        // Fallback to environment URL or UAT
+        return process.env.URL || 'https://uat--khtherapy.netlify.app';
+      };
+      
+      const baseUrl = getBaseUrl();
       const redirectUrl = result.status === 'paid'
-        ? `${process.env.URL || 'https://uat--khtherapy.netlify.app'}/payment-success`
-        : `${process.env.URL || 'https://uat--khtherapy.netlify.app'}/payment-cancelled`;
+        ? `${baseUrl}/payment-success`
+        : `${baseUrl}/payment-cancelled`;
       
       console.log(`🔗 Redirecting to: ${redirectUrl} (status: ${result.status})`);
       
-      return {
-        statusCode: 302,
-        headers: {
-          Location: redirectUrl,
-          'Cache-Control': 'no-cache'
+      // Use HTML redirect with error handling for better reliability
+      const redirectPage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment ${result.status === 'paid' ? 'Success' : 'Cancelled'}</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            background: #f5f5f5; 
         }
+        .container { 
+            text-align: center; 
+            background: white; 
+            padding: 2rem; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+        .success { color: #28a745; }
+        .cancelled { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="${result.status === 'paid' ? 'success' : 'cancelled'}">
+            ${result.status === 'paid' ? '✅ Payment Successful!' : '❌ Payment Cancelled'}
+        </h1>
+        <p>Redirecting you back to the website...</p>
+        <p><small>If you're not redirected automatically, <a href="${redirectUrl}" id="fallback-link">click here</a></small></p>
+    </div>
+    
+    <script>
+        // Multiple redirect strategies for better reliability
+        let redirected = false;
+        
+        // Strategy 1: Immediate redirect
+        function doRedirect() {
+            if (redirected) return;
+            redirected = true;
+            window.location.href = '${redirectUrl}';
+        }
+        
+        // Strategy 2: Delayed redirect (main)
+        setTimeout(doRedirect, 1000);
+        
+        // Strategy 3: Fallback redirect
+        setTimeout(() => {
+            if (!redirected) {
+                console.warn('Primary redirect failed, trying fallback');
+                window.location.replace('${redirectUrl}');
+            }
+        }, 3000);
+        
+        // Strategy 4: Manual fallback
+        document.getElementById('fallback-link').onclick = function(e) {
+            e.preventDefault();
+            doRedirect();
+        };
+        
+        // Strategy 5: Handle visibility change (tab focus)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && !redirected) {
+                setTimeout(doRedirect, 500);
+            }
+        });
+    </script>
+</body>
+</html>`;
+
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: redirectPage
       };
     }
 
