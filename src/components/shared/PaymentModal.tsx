@@ -960,17 +960,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           {currentStep === 'confirm' && (
             <div className="text-center space-y-6">
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-6">
-                <div className="text-4xl font-bold text-primary-600 mb-2">
-                  {formatCurrency(paymentRequest.amount, paymentRequest.currency)}
-                </div>
-                <p className="text-gray-600">
-                  Payment for {paymentRequest.service_name || 'Service'}
-                </p>
-                {paymentRequest.payment_due_date && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    Due: {new Date(paymentRequest.payment_due_date).toLocaleDateString()}
+                <div className="text-center mb-4">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-2">KH Therapy</h4>
+                  <p className="text-gray-600">
+                    Payment for {paymentRequest.service_name || 'Service'}
                   </p>
-                )}
+                </div>
+                
+                {/* Customer Details */}
+                <div className="bg-white rounded-lg p-4 mb-4 text-left">
+                  <h5 className="font-medium text-gray-800 mb-2">Customer Details</h5>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <div>
+                      <span className="font-medium">Name:</span> {paymentRequest.customer ? `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}` : 'Customer'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Email:</span> {paymentRequest.customer?.email || 'Not provided'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary-600 mb-2">
+                    Total: {formatCurrency(paymentRequest.amount, paymentRequest.currency)}
+                  </div>
+                  {paymentRequest.payment_due_date && (
+                    <p className="text-sm text-gray-500">
+                      Due: {new Date(paymentRequest.payment_due_date).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-center space-x-3 text-sm text-gray-600">

@@ -617,36 +617,7 @@ const HeroSection: React.FC = () => {
         setSendingEmail(false);
         return;
       }
-      // Check for existing pending/confirmed bookings to prevent duplicates
-      // First get customer by email, then check their bookings
-      const { data: existingCustomer, error: customerError } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('email', data.email.toLowerCase().trim())
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (customerError) {
-        console.error('Error checking customer:', customerError);
-      } else if (existingCustomer) {
-        // Check for existing bookings for this customer
-        const { data: existingBookings, error: checkError } = await supabase
-          .from('bookings')
-          .select('id, status, created_at')
-          .eq('customer_id', existingCustomer.id)
-          .eq('package_name', data.service)
-          .in('status', ['pending', 'confirmed', 'paid'])
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
-
-        if (checkError) {
-          console.error('Error checking existing bookings:', checkError);
-        } else if (existingBookings && existingBookings.length > 0) {
-          const recentBooking = existingBookings[0];
-          setSuccessMsg(`You already have a ${recentBooking.status} booking for this service. Please contact us if you need to make changes.`);
-          setSendingEmail(false);
-          return;
-        }
-      }
+      // Note: Removed duplicate booking check as business now allows multiple customers with same email
 
       // Prepare customer data
       const customerData = {
