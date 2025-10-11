@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getCustomerPayments } from '../../utils/paymentRequestUtils';
 import { PaymentWithCustomer, PAYMENT_STATUS_INFO } from '../../types/paymentTypes';
+import { UserCustomer } from '../../types/userManagement';
 import { useToast } from '../shared/toastContext';
 import PaymentRequests from './PaymentRequests';
 import { 
@@ -14,10 +15,25 @@ import {
   XCircle,
   Clock,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Users,
+  User
 } from 'lucide-react';
 
-const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange }) => {
+interface UserPaymentsProps {
+  onDataChange?: () => void;
+  // Multi-patient support
+  allPatients?: UserCustomer[];
+  activePatient?: UserCustomer | null;
+  isMultiPatient?: boolean;
+}
+
+const UserPayments: React.FC<UserPaymentsProps> = ({ 
+  onDataChange,
+  allPatients = [],
+  activePatient,
+  isMultiPatient = false
+}) => {
   const { user } = useUserAuth();
   const { showError } = useToast();
   const [searchParams] = useSearchParams();
@@ -27,6 +43,9 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeSubTab, setActiveSubTab] = useState<'requests' | 'history'>('requests');
+  
+  // Multi-patient filtering
+  const [patientFilter, setPatientFilter] = useState<'all' | number>('all');
 
   // Get active payment request ID from URL params
   const activeRequestId = searchParams.get('request');
@@ -56,8 +75,26 @@ const UserPayments: React.FC<{ onDataChange?: () => void }> = ({ onDataChange })
 
     setLoading(true);
     try {
-      const data = await getCustomerPayments(user.id);
-      setPayments(data);
+      if (isMultiPatient && allPatients.length > 0) {
+        // Load payments for all patients
+        let allPaymentsData: PaymentWithCustomer[] = [];
+        
+        for (const patient of allPatients) {
+          const patientPayments = await getCustomerPayments(patient.id);
+          // Add patient info to each payment for filtering
+          const paymentsWithPatient = patientPayments.map(payment => ({
+            ...payment,
+            patient_name: `${patient.first_name} ${patient.last_name}`,
+            patient_id: patient.id
+          }));
+          allPaymentsData = [...allPaymentsData, ...paymentsWithPatient];
+        }
+        setPayments(allPaymentsData);
+      } else {
+        // Single patient mode
+        const data = await getCustomerPayments(user.id);
+        setPayments(data);
+      }
     } catch (error) {
       console.error('Error loading payments:', error);
       showError('Error', 'Failed to load payment history');

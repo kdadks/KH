@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getUserBookings } from '../../utils/userManagementUtils';
-import { UserBooking } from '../../types/userManagement';
+import { UserBooking, UserCustomer } from '../../types/userManagement';
 import { useToast } from '../shared/toastContext';
 import { 
   Calendar, 
@@ -13,12 +13,25 @@ import {
   AlertCircle,
   XCircle,
   RefreshCw,
-  Plus
+  Plus,
+  Users,
+  User
 } from 'lucide-react';
 import BookingModal from './BookingModal';
 import RescheduleModal from './RescheduleModal';
 
-const UserBookings: React.FC = () => {
+interface UserBookingsProps {
+  // Multi-patient support
+  allPatients?: UserCustomer[];
+  activePatient?: UserCustomer | null;
+  isMultiPatient?: boolean;
+}
+
+const UserBookings: React.FC<UserBookingsProps> = ({
+  allPatients = [],
+  activePatient,
+  isMultiPatient = false
+}) => {
   const { user } = useUserAuth();
   const { showError } = useToast();
   
@@ -29,18 +42,43 @@ const UserBookings: React.FC = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [bookingToReschedule, setBookingToReschedule] = useState<UserBooking | null>(null);
+  
+  // Multi-patient filtering
+  const [patientFilter, setPatientFilter] = useState<'all' | number>('all');
 
   const loadBookings = useCallback(async () => {
     if (!user?.id) return;
 
     setLoading(true);
     try {
-      const { bookings: data, error } = await getUserBookings(user.id.toString());
-      
-      if (error) {
-        showError('Error', `Failed to load bookings: ${error}`);
+      if (isMultiPatient && allPatients.length > 0) {
+        // Load bookings for all patients
+        let allBookingsData: UserBooking[] = [];
+        
+        for (const patient of allPatients) {
+          const { bookings: patientBookings, error } = await getUserBookings(patient.id.toString());
+          if (error) {
+            console.error(`Failed to load bookings for patient ${patient.id}:`, error);
+          } else if (patientBookings) {
+            // Add patient info to each booking for filtering
+            const bookingsWithPatient = patientBookings.map(booking => ({
+              ...booking,
+              patient_name: `${patient.first_name} ${patient.last_name}`,
+              patient_id: patient.id
+            }));
+            allBookingsData = [...allBookingsData, ...bookingsWithPatient];
+          }
+        }
+        setBookings(allBookingsData);
       } else {
-        setBookings(data);
+        // Single patient mode
+        const { bookings: data, error } = await getUserBookings(user.id.toString());
+        
+        if (error) {
+          showError('Error', `Failed to load bookings: ${error}`);
+        } else {
+          setBookings(data || []);
+        }
       }
     } catch (error) {
       console.error('Error loading bookings:', error);
@@ -48,7 +86,7 @@ const UserBookings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, showError]);
+  }, [user?.id, isMultiPatient, allPatients, showError]);
 
   useEffect(() => {
     if (user?.id) {
@@ -71,15 +109,18 @@ const UserBookings: React.FC = () => {
     // The email workflow is already handled within the RescheduleModal
   };
 
-  // Filter bookings based on search and status
+  // Filter bookings based on search, status, and patient
   const filteredBookings = bookings.filter(booking => {
     const matchesSearch = 
       booking.package_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (booking.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
+      (booking.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      ((booking as any).patient_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
     
     const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
     
-    return matchesSearch && matchesStatus;
+    const matchesPatient = patientFilter === 'all' || (booking as any).patient_id === patientFilter;
+    
+    return matchesSearch && matchesStatus && matchesPatient;
   });
 
   // Separate bookings by status for better organization
@@ -158,6 +199,27 @@ const UserBookings: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {/* Patient Filter for Multi-Patient Accounts */}
+        {isMultiPatient && (
+          <div className="sm:w-48">
+            <div className="relative">
+              <Users className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <select
+                value={patientFilter}
+                onChange={(e) => setPatientFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+              >
+                <option value="all">All Patients</option>
+                {allPatients.map(patient => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.first_name} {patient.last_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Booking Stats */}

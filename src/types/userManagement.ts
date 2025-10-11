@@ -398,3 +398,43 @@ export const PAYMENT_REQUEST_STATUSES = {
   COMPLETED: 'completed',
   CANCELLED: 'cancelled'
 } as const;
+
+// Multi-Patient Support Types
+export interface MultiPatientAccount {
+  email: string;
+  patients: UserCustomer[];
+  activePatient?: UserCustomer | null;
+  isMultiPatient: boolean;
+}
+
+export interface MultiPatientAuthContext extends Omit<UserAuthContext, 'user'> {
+  // Replace single user with multi-patient support
+  user: UserCustomer | null; // Currently selected patient (backwards compatibility)
+  allPatients: UserCustomer[]; // All patients under this email
+  activePatient: UserCustomer | null; // Currently selected patient
+  isMultiPatient: boolean; // Whether this account has multiple patients
+  switchPatient: (patientId: number) => void; // Switch between patients
+  refreshPatients: () => Promise<void>; // Reload all patients data
+}
+
+export interface PatientSummary {
+  patient: UserCustomer;
+  stats: {
+    totalBookings: number;
+    upcomingBookings: number;
+    pendingPayments: number;
+    totalSpent: number;
+    lastVisit?: string;
+  };
+}
+
+export interface ConsolidatedDashboardData {
+  patients: PatientSummary[];
+  totalStats: {
+    totalPatients: number;
+    totalBookings: number;
+    totalSpent: number;
+    pendingPayments: number;
+    upcomingAppointments: number;
+  };
+}

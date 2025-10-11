@@ -14,7 +14,8 @@ import {
   linkCustomerToAuthUser, 
   updateUserProfile, 
   getCustomerByEmail,
-  getCustomerById
+  getCustomerById,
+  getAllPatientsByEmail
 } from '../utils/userManagementUtils';
 import { hashPassword, verifyPassword, isPasswordHashed } from '../utils/passwordUtils';
 import { 
@@ -42,6 +43,11 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
   const [user, setUser] = useState<UserCustomer | null>(null);
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  
+  // Multi-patient support state
+  const [allPatients, setAllPatients] = useState<UserCustomer[]>([]);
+  const [activePatient, setActivePatient] = useState<UserCustomer | null>(null);
+  const [isMultiPatient, setIsMultiPatient] = useState(false);
 
   // Initialize authentication state
   useEffect(() => {
@@ -211,41 +217,46 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       );
 
       const loginPromise = (async () => {
-        // Optimized customer query using utility function
-        const { customer, error: customerError } = await withTimeout(
-          getCustomerByEmail(email.toLowerCase()),
+        // Load all patients/customers associated with this email for multi-patient support
+        const { patients, error: patientsError } = await withTimeout(
+          getAllPatientsByEmail(email.toLowerCase()),
           8000,
-          'Customer lookup timed out'
+          'Patients lookup timed out'
         );
 
-        if (customerError || !customer) {
+        if (patientsError || !patients || patients.length === 0) {
           return { success: false, error: 'Invalid credentials' };
         }
 
-        // Verify password using bcrypt
+        // Use the first patient for password verification (all patients share same email/password)
+        const primaryPatient = patients[0];
+
+        // Verify password using bcrypt (using primary patient's credentials)
         let isValidPassword = false;
         
         // Check if password is already hashed
-        if (customer.password && isPasswordHashed(customer.password)) {
+        if (primaryPatient.password && isPasswordHashed(primaryPatient.password)) {
           // Verify against hashed password
-          isValidPassword = await verifyPassword(password, customer.password);
-        } else if (customer.password) {
+          isValidPassword = await verifyPassword(password, primaryPatient.password);
+        } else if (primaryPatient.password) {
           // Handle legacy plain text passwords (for backwards compatibility during transition)
           // Check if plain text password matches
-          isValidPassword = customer.password === password;
+          isValidPassword = primaryPatient.password === password;
           
-          // If valid, hash the password and update it in the database (do this async, don't wait)
+          // If valid, hash the password and update it for ALL patients sharing this email (do this async, don't wait)
           if (isValidPassword) {
             // Don't await this - let it happen in background to improve login speed
             (async () => {
               try {
                 const hashedPassword = await hashPassword(password);
+                // Update password for all patients with this email
                 await supabase
                   .from('customers')
                   .update({ password: hashedPassword })
-                  .eq('id', customer.id);
+                  .eq('email', email.toLowerCase())
+                  .eq('is_active', true);
               } catch (err) {
-                console.warn('Failed to migrate password:', err);
+                console.warn('Failed to migrate password for all patients:', err);
               }
             })();
           }
@@ -259,33 +270,40 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       // For plain text comparison, check against the original password
       // For hashed passwords, we need to verify against the email
       let needsPasswordChange = false;
-      if (customer.password && isPasswordHashed(customer.password)) {
+      if (primaryPatient.password && isPasswordHashed(primaryPatient.password)) {
         // For hashed passwords, check if the plain password was the email
-        needsPasswordChange = password === customer.email;
-      } else if (customer.password) {
+        needsPasswordChange = password === primaryPatient.email;
+      } else if (primaryPatient.password) {
         // For plain text passwords (legacy), direct comparison
-        needsPasswordChange = customer.password === customer.email;
+        needsPasswordChange = primaryPatient.password === primaryPatient.email;
       }
       
-      if (needsPasswordChange && customer.must_change_password !== true) {
-        // Don't await this - update flag in background
+      if (needsPasswordChange) {
+        // Update flag for ALL patients with this email - don't await this
         (async () => {
           try {
             await supabase
               .from('customers')
               .update({ must_change_password: true })
-              .eq('id', customer.id);
-            customer.must_change_password = true; // Update local data
+              .eq('email', email.toLowerCase())
+              .eq('is_active', true);
+            // Update local data for all patients
+            patients.forEach(patient => {
+              patient.must_change_password = true;
+            });
           } catch (err) {
-            console.warn('Failed to update password change flag:', err);
+            console.warn('Failed to update password change flag for all patients:', err);
           }
         })();
       }
       
-      // Set the authenticated user data immediately
-      setUser(customer);
+      // Set up multi-patient authentication data
+      setAllPatients(patients);
+      setIsMultiPatient(patients.length > 1);
+      setActivePatient(primaryPatient);
+      setUser(primaryPatient); // Set primary patient as current user for backwards compatibility
       
-      // Update last login time in background - don't wait for it
+      // Update last login time for the primary patient in background - don't wait for it
       (async () => {
         try {
           await supabase
@@ -294,7 +312,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
               last_login: new Date().toISOString(),
               first_login: false 
             })
-            .eq('id', customer.id);
+            .eq('id', primaryPatient.id);
         } catch (err) {
           console.warn('Failed to update last login:', err);
         }
@@ -305,7 +323,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
       // Race between login and timeout
       const result = await Promise.race([loginPromise, timeoutPromise]);
-      console.log('UserAuthContext: Final login result:', result);
       return result;
 
     } catch (error) {
@@ -313,7 +330,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       return { success: false, error: 'Unexpected error occurred during login' };
     } finally {
       // No need to clear loading state since we're not setting it
-      console.log('UserAuthContext: Login attempt completed');
       logPerformance('User Login', startTime);
     }
   }, []);
@@ -357,8 +373,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
   // Change password
   const changePassword = useCallback(async (passwordData: UserPasswordChangeData): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('changePassword called with user:', user?.id, 'must_change_password:', user?.must_change_password);
-      
       if (!user?.id) {
         return { success: false, error: 'Not authenticated' };
       }
@@ -366,7 +380,6 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       // Hash the new password before storing it
       const hashedPassword = await hashPassword(passwordData.newPassword);
       
-      console.log('Updating password in database for user:', user.id);
       const { error: updateError } = await supabase
         .from('customers')
         .update({ 
@@ -380,12 +393,9 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         return { success: false, error: updateError.message };
       }
 
-      console.log('Database update successful, updating local user state...');
       // Update local user state
       const updatedUser = { ...user, must_change_password: false };
-      console.log('About to set user state to:', updatedUser);
       setUser(updatedUser);
-      console.log('setUser called - React should re-render now');
 
       return { success: true };
     } catch (error) {
@@ -477,7 +487,61 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     }
   };
 
-  const contextValue: UserAuthContext = useMemo(() => ({
+  // Multi-patient support functions
+  const switchPatient = useCallback((patientId: number) => {
+    const patient = allPatients.find(p => p.id === patientId);
+    if (patient) {
+      setActivePatient(patient);
+      
+      // Update user for backwards compatibility, but preserve the original user's 
+      // password change status to avoid triggering password change on patient switch
+      if (user) {
+        const originalPasswordStatus = user.must_change_password;
+        const updatedUser = { 
+          ...patient, 
+          must_change_password: originalPasswordStatus 
+        };
+        setUser(updatedUser);
+      } else {
+        setUser(patient);
+      }
+    }
+  }, [allPatients, user]);
+
+  const refreshPatients = useCallback(async () => {
+    if (!user?.email) return;
+    
+    try {
+      const { patients, error } = await getAllPatientsByEmail(user.email);
+      if (!error && patients) {
+        setAllPatients(patients);
+        setIsMultiPatient(patients.length > 1);
+        
+        // Update active patient if it still exists
+        if (activePatient) {
+          const updatedActivePatient = patients.find(p => p.id === activePatient.id);
+          if (updatedActivePatient) {
+            setActivePatient(updatedActivePatient);
+            setUser(updatedActivePatient);
+          } else {
+            // Active patient no longer exists, switch to first patient
+            setActivePatient(patients[0]);
+            setUser(patients[0]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh patients:', error);
+    }
+  }, [user?.email, activePatient]);
+
+  const contextValue: UserAuthContext & { 
+    allPatients: UserCustomer[];
+    activePatient: UserCustomer | null;
+    isMultiPatient: boolean;
+    switchPatient: (patientId: number) => void;
+    refreshPatients: () => Promise<void>;
+  } = useMemo(() => ({
     user,
     authUser,
     loading,
@@ -491,8 +555,14 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     resetPassword,
     validateResetToken,
     refreshUser,
-    recordConsent
-  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser, recordConsent]);
+    recordConsent,
+    // Multi-patient support
+    allPatients,
+    activePatient,
+    isMultiPatient,
+    switchPatient,
+    refreshPatients
+  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser, recordConsent, allPatients, activePatient, isMultiPatient, switchPatient, refreshPatients]);
 
   return (
     <AuthContext.Provider value={contextValue}>
