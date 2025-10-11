@@ -112,8 +112,11 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     try {
       const popupUrl = popupRef.current.location.href;
       
-      // Check for success URL patterns
-      if (popupUrl.includes('/payment-success') || popupUrl.includes('success=true')) {
+      // Check for success URL patterns (including your domain)
+      console.log('Popup URL detected:', popupUrl);
+      if (popupUrl.includes('/payment-success') || 
+          popupUrl.includes('success=true') || 
+          (popupUrl.includes('khtherapy.ie') && popupUrl.includes('success'))) {
         const urlParams = new URLSearchParams(popupUrl.split('?')[1] || '');
         const successData: PaymentSuccessData = {
           transaction_id: urlParams.get('transaction_id') || undefined,
@@ -122,6 +125,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
           checkout_reference: urlParams.get('checkout_reference') || undefined
         };
         
+        console.log('Payment success detected:', successData);
         setSuccessData(successData);
         setModalState('success');
         popupRef.current.close();
@@ -174,52 +178,35 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     messageListenerRef.current = messageListener;
     window.addEventListener('message', messageListener);
 
-    // Try iframe first, fallback to popup
-    const initTimer = setTimeout(() => {
-      // Check if iframe loaded successfully
-      const iframe = iframeRef.current;
-      if (iframe) {
-        try {
-          // Try to access iframe content (will fail for cross-origin)
-          iframe.contentWindow?.document;
-          setModalState('iframe');
-        } catch {
-          // Cross-origin restriction, iframe is working
-          setModalState('iframe');
-        }
-      } else {
-        // Fallback to popup
-        const popup = window.open(
-          checkoutUrl,
-          'sumup-checkout',
-          'width=600,height=700,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,status=no'
-        );
+    // SumUp doesn't allow iframe embedding, so open directly in popup
+    const popup = window.open(
+      checkoutUrl,
+      'sumup-checkout',
+      'width=800,height=700,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,status=no'
+    );
 
-        if (popup) {
-          popupRef.current = popup;
-          setModalState('popup');
-          
-          // Start polling popup URL
-          const pollInterval = setInterval(() => {
-            if (!popup || popup.closed) {
-              clearInterval(pollInterval);
-              if (modalState === 'popup') {
-                setModalState('cancelled');
-                onCancel?.();
-              }
-            }
-          }, 1000);
-          
-          pollIntervalRef.current = pollInterval;
-        } else {
-          setErrorMessage('Popup blocked. Please allow popups for this site and try again.');
-          setModalState('error');
+    if (popup) {
+      popupRef.current = popup;
+      setModalState('popup');
+      
+      // Start polling popup URL
+      const pollInterval = setInterval(() => {
+        if (!popup || popup.closed) {
+          clearInterval(pollInterval);
+          if (modalState === 'popup') {
+            setModalState('cancelled');
+            onCancel?.();
+          }
         }
-      }
-    }, 2000);
+      }, 1000);
+      
+      pollIntervalRef.current = pollInterval;
+    } else {
+      setErrorMessage('Popup blocked. Please allow popups for this site and try again.');
+      setModalState('error');
+    }
 
     return () => {
-      clearTimeout(initTimer);
       if (messageListenerRef.current) {
         window.removeEventListener('message', messageListenerRef.current);
       }
