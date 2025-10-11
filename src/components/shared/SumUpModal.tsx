@@ -217,8 +217,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
         popupRef.current.close();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, checkoutUrl]);
+  }, [isOpen, onClose]);
 
   const openPopup = () => {
     const popup = window.open(

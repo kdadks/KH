@@ -253,7 +253,7 @@ const HeroSection: React.FC = () => {
     } else {
       setTimeSlots([]);
     }
-  }, [watchedService, watchedDate, services]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [watchedService, watchedDate, services]);
 
   // Watch for service changes to fetch next available slot recommendation
   useEffect(() => {
@@ -272,7 +272,7 @@ const HeroSection: React.FC = () => {
     } else {
       setNextAvailableSlot(null);
     }
-  }, [watchedService, services]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [watchedService, services]);
 
   // Auto-select time when time slots are loaded (for "Select This Slot" functionality)
   useEffect(() => {
