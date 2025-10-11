@@ -1,24 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CreditCard, CheckCircle } from 'lucide-react';
+import { PaymentEnvironmentIndicator } from '../components/ui/PaymentEnvironmentIndicator';
 
 const SumUpCheckoutPage: React.FC = () => {
+  // SumUp checkout page initialization
+  
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const sumupEnvironment = import.meta.env.VITE_SUMUP_ENVIRONMENT || 'sandbox';
   const isProductionMode = sumupEnvironment === 'production';
   
-  // Extract checkout parameters from URL
-  const amount = searchParams.get('amount') || '0';
-  const currency = searchParams.get('currency') || 'EUR';
+  // Extract checkout parameters from URL (support both new short format and legacy format)
+  const amount = searchParams.get('amt') || searchParams.get('amount') || '0';
+  const currency = searchParams.get('cur') || searchParams.get('currency') || 'EUR';
   const description = searchParams.get('description') || 'Payment';
-  const checkoutReference = searchParams.get('checkout_reference') || '';
+  const checkoutReference = searchParams.get('ref') || searchParams.get('checkout_reference') || '';
   const merchantCode = searchParams.get('merchant_code') || '';
   const returnUrl = searchParams.get('return_url') || '';
   const cancelUrl = searchParams.get('cancel_url') || '';
-  const checkoutId = searchParams.get('checkout_id') || '';
-  const paymentRequestId = searchParams.get('payment_request_id') || ''; // Extract payment request ID
-  const context = searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
+  const checkoutId = searchParams.get('id') || searchParams.get('checkout_id') || '';
+  const paymentRequestId = searchParams.get('pr_id') || searchParams.get('payment_request_id') || ''; // Extract payment request ID
+  const context = searchParams.get('ctx') || searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
+  // Note: testMode and autoSuccess can be added back when needed for additional functionality
+  const environment = searchParams.get('env') || 'sandbox';
 
   // Card form state
   const [cardNumber, setCardNumber] = useState('');
@@ -31,6 +36,45 @@ const SumUpCheckoutPage: React.FC = () => {
   const [paymentRequestStatus, setPaymentRequestStatus] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  
+  // Sandbox test simulation
+  const [showTestSimulation, setShowTestSimulation] = useState(false);
+  
+  // Check if returning from SumUp and log debug info
+  useEffect(() => {
+    const isReturnFromSumup = searchParams.get('checkout-id') && searchParams.get('success');
+    
+    if (isReturnFromSumup) {
+      // Processing return from SumUp
+      
+      // Check webhook simulation results
+      const lastWebhookSuccess = localStorage.getItem('last_webhook_success');
+      const lastWebhookFailure = localStorage.getItem('last_webhook_failure');
+      const webhookErrors = localStorage.getItem('webhook_simulation_errors');
+      
+      if (lastWebhookSuccess) {
+        console.log('✅ Last webhook success:', JSON.parse(lastWebhookSuccess));
+      }
+      if (lastWebhookFailure) {
+        console.log('❌ Last webhook failure:', JSON.parse(lastWebhookFailure));
+      }
+      if (webhookErrors) {
+        console.log('🚫 Webhook simulation errors:', JSON.parse(webhookErrors));
+      }
+      
+      // Show alert with debug info for immediate visibility
+      if (lastWebhookSuccess || lastWebhookFailure || webhookErrors) {
+        const debugInfo = [];
+        if (lastWebhookSuccess) debugInfo.push('✅ Webhook success recorded');
+        if (lastWebhookFailure) debugInfo.push('❌ Webhook failure recorded');
+        if (webhookErrors) debugInfo.push('🚫 Webhook errors recorded');
+        
+        console.log('Debug info available:', debugInfo.join(', '));
+      } else {
+        console.log('⚠️ No webhook debug info found in localStorage');
+      }
+    }
+  }, [searchParams]);
 
   // Format amount for display
   const formatAmount = (amountEuros: string) => {
@@ -61,13 +105,7 @@ const SumUpCheckoutPage: React.FC = () => {
   };
 
   // Check payment request status on component mount to prevent double payments
-  useEffect(() => {
-    if (paymentRequestId) {
-      checkPaymentRequestStatus();
-    }
-  }, [paymentRequestId]);
-
-  const checkPaymentRequestStatus = async () => {
+  const checkPaymentRequestStatus = useCallback(async () => {
     setLoadingStatus(true);
     setStatusError(null);
     
@@ -99,7 +137,84 @@ const SumUpCheckoutPage: React.FC = () => {
     } finally {
       setLoadingStatus(false);
     }
+  }, [paymentRequestId]);
+
+  // Check payment request status when component mounts and paymentRequestId changes
+  useEffect(() => {
+    if (paymentRequestId) {
+      checkPaymentRequestStatus();
+    }
+  }, [paymentRequestId, checkPaymentRequestStatus]);
+
+  // Manual debug function to check webhook status
+  const checkWebhookDebugInfo = () => {
+    console.log('=== MANUAL WEBHOOK DEBUG CHECK ===');
+    
+    const lastSuccess = localStorage.getItem('last_webhook_success');
+    const lastFailure = localStorage.getItem('last_webhook_failure');
+    const errors = localStorage.getItem('webhook_simulation_errors');
+    
+    console.log('Last webhook success:', lastSuccess ? JSON.parse(lastSuccess) : 'None');
+    console.log('Last webhook failure:', lastFailure ? JSON.parse(lastFailure) : 'None');
+    console.log('Webhook errors:', errors ? JSON.parse(errors) : 'None');
+    
+    // Also check if we can access the debug info
+    console.log('Current checkout reference:', checkoutReference);
+    console.log('Current payment request ID:', paymentRequestId);
+    
+    return {
+      success: lastSuccess ? JSON.parse(lastSuccess) : null,
+      failure: lastFailure ? JSON.parse(lastFailure) : null,
+      errors: errors ? JSON.parse(errors) : null
+    };
   };
+  
+  // Test webhook functionality removed - SumUp only uses return URLs
+
+  // Helper function to view SumUp processing logs
+  const viewSumUpLogs = () => {
+    console.log('🔍 SumUp Processing Log Viewer');
+    console.log('=====================================');
+    console.log('');
+    console.log('📍 BEST PLACES TO VIEW LOGS:');
+    console.log('');
+    console.log('1. 🌐 Netlify Function Logs (RECOMMENDED):');
+    console.log('   - Go to https://app.netlify.com');
+    console.log('   - Select KH project');
+    console.log('   - Functions tab > sumup-return > Function log');
+    console.log('   - Shows real-time processing when SumUp calls your endpoints');
+    console.log('');
+    console.log('2. 💻 Real-time CLI monitoring:');
+    console.log('   - Install: npm install -g netlify-cli');
+    console.log('   - Setup: netlify login && netlify link');
+    console.log('   - Monitor: netlify functions:logs --live');
+    console.log('');
+    console.log('3. 🎯 Test function directly:');
+    console.log('   - URL: https://uat--khtherapy.netlify.app/.netlify/functions/sumup-return');
+    console.log('   - Should return JSON with function info');
+    console.log('');
+    console.log('💡 The Netlify function logs show exactly what happens when:');
+    console.log('   - SumUp sends a webhook (POST request)');
+    console.log('   - User is redirected back (GET request)');
+    console.log('   - Whether payments are found/created/updated');
+    console.log('   - Why webhook columns may not be populated');
+    console.log('');
+    
+    return {
+      message: 'Check console above for log viewing instructions',
+      netlifyDashboard: 'https://app.netlify.com',
+      functionUrl: 'https://uat--khtherapy.netlify.app/.netlify/functions/sumup-return'
+    };
+  };
+
+  // Make debug functions globally available for testing
+  (window as unknown as { 
+    checkWebhookDebugInfo: () => object;
+    viewSumUpLogs: () => object;
+  }).checkWebhookDebugInfo = checkWebhookDebugInfo;
+  (window as unknown as { 
+    viewSumUpLogs: () => object;
+  }).viewSumUpLogs = viewSumUpLogs;
 
   const processPayment = async (success: boolean) => {
     setProcessing(true);
@@ -110,6 +225,48 @@ const SumUpCheckoutPage: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         const transactionId = `txn_sumup_${Date.now()}`;
+        
+        // Simulate webhook event in sandbox/UAT environment to update payments table
+        // Only simulate in sandbox mode - production will receive real SumUp webhooks
+        const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
+        
+        // IMMEDIATE DEBUG: Alert to show environment detection
+        alert(`🚨 DEBUG: Environment detected as ${currentEnvironment}, hostname: ${window.location.hostname}`);
+        console.log('🚨 ENVIRONMENT CHECK - Current hostname:', window.location.hostname);
+        console.log('🚨 ENVIRONMENT CHECK - Detected environment:', currentEnvironment);
+        
+        if (currentEnvironment === 'sandbox') {
+          alert(`🚨 DEBUG: Entering SANDBOX webhook simulation path!`);
+          console.log('🎯 About to simulate webhook for SUCCESS scenario');
+          console.log('📋 Webhook data:', {
+            checkout_reference: checkoutReference,
+            transaction_id: transactionId,
+            amount: parseFloat(amount),
+            currency: currency,
+            status: success ? 'COMPLETED' : 'FAILED'
+          });
+          
+          try {
+            // DUPLICATE FIX: Disable simulation - let real SumUp handle payment creation
+            // await simulateWebhookEvent(success ? 'checkout.completed' : 'checkout.failed', {
+            //   checkout_reference: checkoutReference,
+            //   transaction_id: transactionId,
+            //   amount: parseFloat(amount),
+            //   currency: currency,
+            //   status: success ? 'COMPLETED' : 'FAILED'
+            // });
+            console.log('✅ Webhook simulation DISABLED - real SumUp will handle payment creation');
+          } catch (webhookError) {
+            console.error('❌ Webhook simulation failed:', webhookError);
+            // Store error in localStorage so we can check it later
+            const errorMessage = webhookError instanceof Error ? webhookError.message : String(webhookError);
+            localStorage.setItem('last_webhook_error', JSON.stringify({
+              error: errorMessage,
+              timestamp: new Date().toISOString(),
+              checkoutReference
+            }));
+          }
+        }
         
         // If this is for a payment request, process the payment and send confirmation
         if (paymentRequestId) {
@@ -122,7 +279,8 @@ const SumUpCheckoutPage: React.FC = () => {
               parseInt(paymentRequestId),
               {
                 payment_request_id: parseInt(paymentRequestId),
-                sumup_checkout_id: checkoutId || checkoutReference,
+                sumup_checkout_id: checkoutId,
+                sumup_checkout_reference: checkoutReference,
                 sumup_transaction_id: transactionId,
                 payment_method: 'sumup',
                 sumup_payment_type: 'card'
@@ -169,70 +327,165 @@ const SumUpCheckoutPage: React.FC = () => {
             successParams.append('payment_request_id', paymentRequestId);
           }
           
-          window.location.href = `${successUrl}?${successParams.toString()}`;
+          // DEBUGGING: Prevent redirect to capture logs
+          const redirectUrl = `${successUrl}?${successParams.toString()}`;
+          alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED!\n\nWould redirect to:\n${redirectUrl}\n\nCheck browser console and Netlify function logs for processing details.`);
+          console.log('🚨 SUCCESS REDIRECT PREVENTED - Check console for webhook logs');
+          console.log('📊 Payment Processing Details:', {
+            checkoutReference,
+            transactionId,
+            amount,
+            currency,
+            status: 'completed',
+            redirectUrl
+          });
         } else {
-          // For email context, redirect to home with success message
-          if (context === 'email') {
-            window.location.href = `/?payment_success=true&amount=${amount}&currency=${currency}`;
-          } else if (context === 'dashboard') {
-            window.location.href = `/my-account?payment_success=true&amount=${amount}&currency=${currency}`;
-          } else {
-            // Default to payment success page
-            navigate('/payment-success', {
-              state: {
-                transaction_id: transactionId,
-                checkout_reference: checkoutReference,
-                amount: amount,
-                currency: currency,
-                payment_request_id: paymentRequestId
-              }
-            });
-          }
+          // DEBUGGING: Prevent redirects to capture logs
+          alert(`🚨 DEBUG: SUCCESS REDIRECT PREVENTED! Context: ${context}, Amount: ${amount}`);
+          console.log('🚨 SUCCESS REDIRECT PREVENTED - Check console for webhook logs');
         }
       } else {
         // User cancelled or simulation failure
-        const failureUrl = cancelUrl || '/payment-cancelled';
+        // Note: Real SumUp will handle payment creation - no simulation needed
         
-        if (cancelUrl) {
-          const cancelParams = new URLSearchParams({
-            checkout_reference: checkoutReference,
-            reason: 'user_cancelled'
-          });
+        const currentEnvironment = window.location.hostname === 'khtherapy.ie' ? 'production' : 'sandbox';
+        if (currentEnvironment === 'sandbox') {
+          console.log('🎯 About to simulate webhook for FAILURE scenario');
           
-          window.location.href = `${failureUrl}?${cancelParams.toString()}`;
-        } else {
-          navigate('/payment-cancelled', {
-            state: {
-              checkout_reference: checkoutReference,
-              reason: 'user_cancelled'
-            }
-          });
+          try {
+            // DUPLICATE FIX: Disable simulation - let real SumUp handle payment creation
+            // await simulateWebhookEvent('checkout.failed', {
+            //   checkout_reference: checkoutReference,
+            //   transaction_id: transactionId,
+            //   amount: parseFloat(amount),
+            //   currency: currency,
+            //   status: 'FAILED'
+            // });
+            console.log('✅ Webhook simulation DISABLED - real SumUp will handle payment creation');
+          } catch (webhookError) {
+            console.error('❌ Webhook simulation failed:', webhookError);
+            const errorMessage = webhookError instanceof Error ? webhookError.message : String(webhookError);
+            localStorage.setItem('last_webhook_error', JSON.stringify({
+              error: errorMessage,
+              timestamp: new Date().toISOString(),
+              checkoutReference,
+              scenario: 'failure'
+            }));
+          }
         }
+        
+        // DEBUGGING: Prevent failure redirects to capture logs
+        alert(`🚨 DEBUG: FAILURE REDIRECT PREVENTED! Checkout: ${checkoutReference}`);
+        console.log('🚨 FAILURE REDIRECT PREVENTED - Check console for webhook logs');
       }
     } catch (error) {
       console.error('Payment processing error:', error);
       
-      // In case of error, redirect to failure page
-      const failureUrl = cancelUrl || '/payment-cancelled';
-      
-      if (cancelUrl) {
-        const cancelParams = new URLSearchParams({
-          checkout_reference: checkoutReference,
-          reason: 'processing_error'
-        });
-        
-        window.location.href = `${failureUrl}?${cancelParams.toString()}`;
-      } else {
-        navigate('/payment-cancelled', {
-          state: {
-            checkout_reference: checkoutReference,
-            reason: 'processing_error'
-          }
-        });
-      }
+      // DEBUGGING: Prevent error redirects to capture logs
+      alert(`🚨 DEBUG: ERROR REDIRECT PREVENTED! Error occurred during payment processing`);
+      console.log('🚨 ERROR REDIRECT PREVENTED - Check console for error details and webhook logs');
     } finally {
       setProcessing(false);
     }
+  };
+
+  // DUPLICATE FIX: Function disabled - real SumUp webhooks will handle payment creation
+  /*
+  const simulateWebhookEvent = async (eventType: string, paymentData: {
+    checkout_reference: string;
+    transaction_id: string;
+    amount: number;
+    currency: string;
+    status: string;
+  }) => {
+    // IMMEDIATE DEBUG: Alert to verify function is being called
+    alert(`🚨 DEBUG: simulateWebhookEvent called! Event: ${eventType}, Checkout: ${paymentData.checkout_reference}`);
+    console.log('🚨 WEBHOOK FUNCTION ENTRY POINT - Function is being called!');
+    console.log('🚨 Event Type:', eventType);
+    console.log('🚨 Payment Data:', paymentData);
+    
+    try {
+      console.log('🔗 Simulating webhook event:', { eventType, paymentData });
+      
+      // Create mock webhook payload matching SumUp's expected format
+      const webhookPayload = {
+        id: `evt_sandbox_${Date.now()}`,
+        type: eventType,
+        timestamp: new Date().toISOString(),
+        data: {
+          id: checkoutId || `checkout_${Date.now()}`,
+          checkout_reference: paymentData.checkout_reference,
+          amount: paymentData.amount,
+          currency: paymentData.currency,
+          status: paymentData.status,
+          transaction_id: paymentData.transaction_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          merchant_code: 'SANDBOX_TEST'
+        }
+      };
+
+      // Call the SumUp return handler (which processes webhooks and handles redirects)
+      const webhookUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+      
+      console.log('📡 Sending simulated webhook to:', webhookUrl);
+      console.log('📡 Webhook payload:', JSON.stringify(webhookPayload, null, 2));
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Sumup-Webhook-Signature': 'sandbox-signature', // Mock signature for sandbox
+          'User-Agent': 'SumUp-Webhook/Sandbox'
+        },
+        body: JSON.stringify(webhookPayload)
+      });
+
+      console.log('📡 Webhook response status:', response.status);
+      console.log('📡 Webhook response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (response.ok) {
+        const responseText = await response.text();
+        console.log('✅ Webhook simulation successful, response:', responseText);
+        
+        // Store success info in localStorage for debugging
+        localStorage.setItem('last_webhook_success', JSON.stringify({
+          status: response.status,
+          response: responseText,
+          timestamp: new Date().toISOString(),
+          checkoutReference: paymentData.checkout_reference
+        }));
+      } else {
+        const errorText = await response.text();
+        console.warn('⚠️ Webhook simulation failed:', response.status, response.statusText, errorText);
+        
+        // Store failure info in localStorage for debugging
+        localStorage.setItem('last_webhook_failure', JSON.stringify({
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          timestamp: new Date().toISOString(),
+          checkoutReference: paymentData.checkout_reference
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Webhook simulation error:', error);
+      // Don't let webhook errors break the payment flow
+    }
+  };
+  */
+
+  // Simulate payment outcomes for sandbox testing
+  const simulatePaymentOutcome = async (outcome: 'success' | 'failure') => {
+    // IMMEDIATE DEBUG: Alert to verify this function is being called
+    alert(`🚨 DEBUG: simulatePaymentOutcome called with outcome: ${outcome}`);
+    console.log('🚨 SIMULATE PAYMENT OUTCOME ENTRY POINT');
+    console.log(`🧪 Simulating ${outcome} payment outcome for checkout ${checkoutId}`);
+    console.log('🧪 Current checkout reference:', checkoutReference);
+    console.log('🧪 Current payment request ID:', paymentRequestId);
+    
+    // Call the existing processPayment function with the outcome
+    await processPayment(outcome === 'success');
   };
 
   // Auto-focus first input on mount
@@ -249,9 +502,65 @@ const SumUpCheckoutPage: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-6">
           {/* SumUp Header */}
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-blue-700 mb-1">SumUp</h2>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <h2 className="text-2xl font-bold text-blue-700">SumUp</h2>
+              <PaymentEnvironmentIndicator />
+            </div>
             <p className="text-gray-600 text-sm">Secure Payment</p>
           </div>
+
+          {/* Test Mode Simulation (Sandbox Only) */}
+          {environment === 'sandbox' && checkoutId.includes('mock') && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex items-start">
+                <div className="text-yellow-600 mr-3">🧪</div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-yellow-800 mb-2">
+                    Sandbox Test Mode - Payment Workflow Testing
+                  </h3>
+                  <p className="text-xs text-yellow-700 mb-4">
+                    Simulate different payment scenarios to test the complete workflow including database updates and webhook processing.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                    <button
+                      onClick={() => {
+                        alert('🚨 BUTTON CLICKED: Simulate Success button was clicked!');
+                        console.log('🚨 BUTTON CLICKED: About to call simulatePaymentOutcome');
+                        simulatePaymentOutcome('success');
+                      }}
+                      disabled={processing}
+                      className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      ✅ Simulate Success
+                    </button>
+                    <button
+                      onClick={() => simulatePaymentOutcome('failure')}
+                      disabled={processing}
+                      className="px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      ❌ Simulate Failure
+                    </button>
+                    <button
+                      onClick={() => setShowTestSimulation(!showTestSimulation)}
+                      className="px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      💳 Manual Entry
+                    </button>
+                    <button
+                      onClick={() => {
+                        const info = checkWebhookDebugInfo();
+                        alert(`Debug Info:\n✅ Success: ${info.success ? 'Yes' : 'No'}\n❌ Failure: ${info.failure ? 'Yes' : 'No'}\n🚫 Errors: ${info.errors ? 'Yes' : 'No'}\n\nCheck console for full details.`);
+                      }}
+                      className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      🐛 Check Debug
+                    </button>
+                    {/* Test endpoint button removed - SumUp only uses return URLs */}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Loading Status Check */}
           {paymentRequestId && loadingStatus && (
@@ -304,8 +613,72 @@ const SumUpCheckoutPage: React.FC = () => {
             </div>
           )}
 
-          {/* Payment Form - Only show if not already paid */}
-          {(!paymentRequestId || (!loadingStatus && paymentRequestStatus !== 'paid')) && !statusError && (
+          {/* Cancelled Payment State */}
+          {paymentRequestId && !loadingStatus && paymentRequestStatus === 'cancelled' && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-red-700 mb-2">Payment Request Cancelled</h3>
+              <p className="text-gray-600 mb-4">
+                This payment request has been cancelled and can no longer be processed.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                If you need to make a payment, please contact us to generate a new payment request.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => window.location.href = 'mailto:info@khtherapy.ie?subject=Payment Request - Need Assistance'}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Contact Support
+                </button>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Return to Home
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Expired Payment State */}
+          {paymentRequestId && !loadingStatus && paymentRequestStatus === 'expired' && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-orange-700 mb-2">Payment Request Expired</h3>
+              <p className="text-gray-600 mb-4">
+                This payment request has expired and can no longer be processed.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Please contact us to generate a new payment request for {formatAmount(amount)}.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => window.location.href = 'mailto:info@khtherapy.ie?subject=Payment Request Expired - Need New Link'}
+                  className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                >
+                  Contact Support
+                </button>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Return to Home
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Form - Only show if payment request is valid */}
+          {(!paymentRequestId || (!loadingStatus && paymentRequestStatus && ['pending', 'sent'].includes(paymentRequestStatus))) && !statusError && (
             <>
               {!isProductionMode && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">

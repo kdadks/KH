@@ -4,9 +4,12 @@ import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paym
 import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
 import type { SumUpCreateCheckoutResponse } from '../../utils/sumupRealApiImplementation';
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
-import { getActiveSumUpGateway } from '../../utils/paymentManagementUtils';
+import { PaymentEnvironmentIndicator } from '../ui/PaymentEnvironmentIndicator';
+// Gateway management now handled by domain-based environment detection
+import { getPaymentEnvironment, getSumUpEnvironmentConfig } from '../../utils/environmentDetection';
 import { useToast } from './toastContext';
 import { supabase } from '../../supabaseClient';
+import { handlePaymentModalCancellation } from '../../utils/paymentCancellation';
 
 interface SumUpPaymentFormProps {
   amount: number;
@@ -233,7 +236,84 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   redirectAfterPayment,
   context = 'booking' // Default context
 }) => {
+  // Store payment logs in localStorage for post-redirect analysis
+  const logToStorage = (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const logEntry = { timestamp, message, data };
+    
+        // Debug log: ${message}
+    
+    const existingLogs = localStorage.getItem('payment_debug_logs');
+    const logs = existingLogs ? JSON.parse(existingLogs) : [];
+    logs.push(logEntry);
+    
+    // Keep only last 50 logs
+    if (logs.length > 50) logs.splice(0, logs.length - 50);
+    
+    localStorage.setItem('payment_debug_logs', JSON.stringify(logs));
+  };
+
+  // Function to view debug logs
+  const viewDebugLogs = () => {
+    const logs = localStorage.getItem('payment_debug_logs');
+    if (logs) {
+      const parsedLogs = JSON.parse(logs);
+      // Debug logs retrieved
+      console.table(parsedLogs.map(log => ({ 
+        time: new Date(log.timestamp).toLocaleTimeString(),
+        message: log.message 
+      })));
+      return parsedLogs;
+    } else {
+      // No debug logs found
+      return [];
+    }
+  };
+
+  // Make debug functions globally available
+  (window as any).viewPaymentLogs = viewDebugLogs;
+  (window as any).clearPaymentLogs = () => {
+    localStorage.removeItem('payment_debug_logs');
+    // Debug logs cleared
+  };
+
+  // Log PaymentModal initialization
+  if (isOpen) {
+    logToStorage('PaymentModal opened', { 
+      paymentRequestId: paymentRequest.id, 
+      amount: paymentRequest.amount,
+      context: context 
+    });
+  }
+  
   const { showSuccess, showError, showInfo } = useToast();
+
+  // Handle modal close with payment cancellation
+  const handleModalClose = async () => {
+    // Prevent multiple cancellation attempts
+    if (isCancelling) {
+      console.log('🚫 Cancellation already in progress, ignoring duplicate click');
+      return;
+    }
+
+    // Only cancel if we're in the middle of a payment process and payment hasn't been completed
+    if (currentStep === 'payment' || currentStep === 'processing' || currentStep === 'confirm') {
+      setIsCancelling(true);
+      try {
+        console.log('🚫 Starting payment cancellation process...');
+        await handlePaymentModalCancellation(paymentRequest.id, onClose, showInfo);
+      } catch (error) {
+        console.error('Error during cancellation:', error);
+        // Still close the modal even if cancellation fails
+        onClose();
+      } finally {
+        setIsCancelling(false);
+      }
+    } else {
+      // For success, error, or redirect states, just close normally
+      onClose();
+    }
+  };
   const [currentStep, setCurrentStep] = useState<'confirm' | 'processing' | 'payment' | 'success' | 'error' | 'redirect'>('confirm');
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -248,6 +328,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [gatewayEnvironment, setGatewayEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [checkoutReference, setCheckoutReference] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   const getRedirectUrl = (isSuccess: boolean = true): string | null => {
     // If redirectAfterPayment is explicitly set, use it
@@ -304,22 +385,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setIsDevelopmentMode(false);
       setCheckoutReference(null);
       setCheckoutSessionId(null);
+      setIsCancelling(false);
       console.log('PaymentModal opening with booking_id:', paymentRequest.booking_id);
       fetchBookingDetails();
       
       // Pre-fetch gateway config to show correct environment immediately
       const loadGatewayConfig = async () => {
         try {
-          const gatewayConfig = await getActiveSumUpGateway();
-          if (gatewayConfig) {
-            const developmentMode = gatewayConfig.api_key === 'development-mode';
-            setIsDevelopmentMode(developmentMode);
-            setGatewayEnvironment(gatewayConfig.environment);
-          } else {
-            setGatewayEnvironment('sandbox');
-          }
+          // Use domain-based environment detection instead of database config
+          const currentEnvironment = getPaymentEnvironment();
+          const environmentConfig = getSumUpEnvironmentConfig();
+          
+          // Set development mode based on environment (sandbox = development mode)
+          const developmentMode = currentEnvironment === 'sandbox';
+          setIsDevelopmentMode(developmentMode);
+          setGatewayEnvironment(currentEnvironment);
+          
+          // Environment detection completed
         } catch (error) {
-          console.warn('Failed to pre-fetch gateway config:', error);
+          console.warn('Failed to detect environment, defaulting to sandbox:', error);
+          setIsDevelopmentMode(true);
           setGatewayEnvironment('sandbox');
         }
       };
@@ -329,52 +414,114 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [isOpen, paymentRequest.booking_id]);
 
   const handleStartPayment = async () => {
+    // SIMPLE CONSOLE OUTPUT
+    // Payment process initiated
+    
+    logToStorage('Payment process started', {
+      paymentRequestId: paymentRequest.id,
+      amount: paymentRequest.amount,
+      currency: paymentRequest.currency,
+      context: context
+    });
+    
     try {
       setCurrentStep('processing');
       
-      // Get SumUp configuration from database
-      const gatewayConfig = await getActiveSumUpGateway();
-      
-      if (!gatewayConfig || !gatewayConfig.merchant_id) {
-        throw new Error('Payment gateway not configured. Please contact support.');
+      // Validate payment request status before proceeding
+      const { data: currentPaymentRequest, error: fetchError } = await supabase
+        .from('payment_requests')
+        .select('id, status, amount, service_name')
+        .eq('id', paymentRequest.id)
+        .single();
+
+      if (fetchError || !currentPaymentRequest) {
+        throw new Error('Payment request not found. Please refresh the page and try again.');
       }
-      const developmentMode = gatewayConfig.api_key === 'development-mode';
+
+      if (currentPaymentRequest.status === 'cancelled') {
+        setCurrentStep('error');
+        setErrorMessage('This payment request has been cancelled and can no longer be processed. Please contact us if you need assistance.');
+        return;
+      }
+
+      if (currentPaymentRequest.status === 'paid') {
+        setCurrentStep('error');
+        setErrorMessage('This payment has already been processed. If you believe this is an error, please contact us.');
+        return;
+      }
+
+      if (currentPaymentRequest.status === 'expired') {
+        setCurrentStep('error');
+        setErrorMessage('This payment request has expired. Please contact us to generate a new payment link.');
+        return;
+      }
+
+      if (currentPaymentRequest.status !== 'pending' && currentPaymentRequest.status !== 'sent') {
+        setCurrentStep('error');
+        setErrorMessage('This payment request is not available for processing. Please contact us for assistance.');
+        return;
+      }
+      
+      // Use domain-based environment detection for payment processing
+      const currentEnvironment = getPaymentEnvironment();
+      const environmentConfig = getSumUpEnvironmentConfig();
+      
+      // Set development mode based on environment (sandbox = development mode)
+      const developmentMode = currentEnvironment === 'sandbox';
       setIsDevelopmentMode(developmentMode);
-      setGatewayEnvironment(gatewayConfig.environment);
+      setGatewayEnvironment(currentEnvironment);
+      
+      console.log('💳 Payment Environment:', {
+        environment: currentEnvironment,
+        developmentMode,
+        config: environmentConfig
+      });
 
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
 
-      const returnUrl = new URL(`${window.location.origin}/payment-success`);
-      returnUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
-      returnUrl.searchParams.set('checkout_reference', newCheckoutReference);
-      returnUrl.searchParams.set('context', context);
+      // DUPLICATE FIX: Don't create initial payment - let SumUp webhook/return handler create the only payment record
+      // Payment record will be created by webhook
+      logToStorage('Payment flow initiated - no initial record created', { 
+        checkoutReference: newCheckoutReference,
+        reason: 'Preventing duplicate payments - SumUp handler will create single record'
+      });
 
-      const cancelUrl = new URL(`${window.location.origin}/payment-cancelled`);
-      cancelUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
-      cancelUrl.searchParams.set('checkout_reference', newCheckoutReference);
-      cancelUrl.searchParams.set('context', context);
+      // Set up return URL for SumUp to call (handles both webhook processing and user redirect)
+      const sumupReturnUrl = `${window.location.origin}/.netlify/functions/sumup-return`;
+      
+      // Set up user redirect URLs (these will be handled by our payment success/cancel pages)
+      const successRedirectUrl = new URL(`${window.location.origin}/payment-success`);
+      successRedirectUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
+      successRedirectUrl.searchParams.set('checkout_reference', newCheckoutReference);
+      successRedirectUrl.searchParams.set('context', context);
+
+      const cancelRedirectUrl = new URL(`${window.location.origin}/payment-cancelled`);
+      cancelRedirectUrl.searchParams.set('payment_request_id', paymentRequest.id.toString());
+      cancelRedirectUrl.searchParams.set('checkout_reference', newCheckoutReference);
+      cancelRedirectUrl.searchParams.set('context', context);
 
       console.log('Creating SumUp checkout session...', {
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
-        merchant_code: gatewayConfig.merchant_id,
-        environment: gatewayConfig.environment,
-        return_url: returnUrl.toString(),
-        cancel_url: cancelUrl.toString()
+        merchant_code: environmentConfig.merchantCode,
+        environment: currentEnvironment,
+        return_url: sumupReturnUrl,
+        success_redirect: successRedirectUrl.toString(),
+        cancel_redirect: cancelRedirectUrl.toString()
       });
 
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: newCheckoutReference,
         amount: paymentRequest.amount,
         currency: paymentRequest.currency || 'EUR',
-        merchant_code: gatewayConfig.merchant_id,
+        merchant_code: environmentConfig.merchantCode,
         description: `Payment for ${paymentRequest.service_name || 'Service'}`,
-        return_url: returnUrl.toString(),
-        cancel_url: cancelUrl.toString()
+        return_url: sumupReturnUrl, // SumUp calls this for both webhook and user redirect
+        cancel_url: cancelRedirectUrl.toString() // This is where users go when they cancel
       });
 
-      console.log('SumUp checkout session created:', checkoutResponse);
+      // SumUp checkout session created successfully
 
       setCheckoutSessionId(checkoutResponse.id);
 
@@ -419,7 +566,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             paymentRequestId: paymentRequest.id,
             checkoutId: checkoutResponse.id,
             merchantCode: checkoutResponse.merchant_code,
-            environment: gatewayConfig.environment,
+            environment: currentEnvironment,
             createdAt: new Date().toISOString()
           })
         );
@@ -428,10 +575,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       const responseCheckoutUrl = await resolveCheckoutUrl(checkoutResponse);
-      const shouldStayInApp = developmentMode || gatewayConfig.environment !== 'production';
+      const shouldStayInApp = developmentMode || currentEnvironment !== 'production';
 
       if (shouldStayInApp) {
-        const fallbackCheckoutUrl = responseCheckoutUrl || `/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=${paymentRequest.currency || 'EUR'}&description=${encodeURIComponent(`Payment for ${paymentRequest.service_name || 'Service'}`)}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&return_url=${encodeURIComponent(returnUrl.toString())}&cancel_url=${encodeURIComponent(cancelUrl.toString())}`;
+        // Create a shorter, cleaner checkout URL for sandbox mode
+        const fallbackCheckoutUrl = responseCheckoutUrl || `/sumup-checkout?ref=${checkoutResponse.checkout_reference}&amt=${paymentRequest.amount}&cur=${paymentRequest.currency || 'EUR'}&id=${checkoutResponse.id}&env=${currentEnvironment}&pr_id=${paymentRequest.id}&ctx=booking`;
         setCheckoutUrl(fallbackCheckoutUrl);
         setCurrentStep('payment');
 
@@ -457,9 +605,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         reference: newCheckoutReference
       });
 
-      setTimeout(() => {
-        window.location.href = responseCheckoutUrl;
-      }, 350);
+      // Store SumUp checkout details in localStorage before redirect
+      logToStorage('SumUp checkout session created', {
+        checkoutUrl: responseCheckoutUrl,
+        checkoutId: checkoutResponse.id,
+        checkoutReference: newCheckoutReference,
+        returnUrl: sumupReturnUrl,
+        fullResponse: checkoutResponse
+      });
+      
+      // DEBUGGING: Prevent redirect to examine logs
+      logToStorage('SumUp redirect prevented for debugging', { 
+        wouldRedirectTo: responseCheckoutUrl 
+      });
+      
+      // Show non-intrusive notification instead of alert
+      console.log('� SumUp checkout created successfully. Redirect prevented for debugging.');
+      console.log('� Check localStorage payment_debug_logs for full details');
+      
+      // ORIGINAL REDIRECT - COMMENTED OUT FOR DEBUGGING
+      // setTimeout(() => {
+      //   window.location.href = responseCheckoutUrl;
+      // }, 350);
       
     } catch (error) {
       console.error('Failed to create payment checkout:', error);
@@ -493,6 +660,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         payment_request_id: paymentRequest.id,
         sumup_checkout_id: fallbackCheckoutId,
         sumup_transaction_id: generatedTransactionId,
+        // NOTE: NOT adding sumup_checkout_reference here to avoid duplicates
+        // The webhook handler will handle payment creation with proper reference
         payment_method: 'card',
         sumup_payment_type: 'card'
       };
@@ -674,8 +843,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <div className="flex items-center">
             <CreditCard className="w-6 h-6 text-blue-600 mr-3" />
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-3">
                 Secure Payment
+                <PaymentEnvironmentIndicator />
               </h3>
               <p className="text-sm text-gray-600">
                 {paymentRequest.service_name || 'Service Payment'}
@@ -683,9 +853,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
-            disabled={currentStep === 'processing'}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            onClick={handleModalClose}
+            disabled={currentStep === 'processing' || isCancelling}
+            className="text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-6 h-6" />
           </button>
@@ -771,6 +941,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
               </div>
 
+              {/* Debug buttons removed for production */}
+
               <button
                 onClick={handleStartPayment}
                 className="w-full bg-[#71db77] text-white py-3 px-6 rounded-lg hover:bg-[#5fcf68] transition-colors font-medium text-lg"
@@ -781,17 +953,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           )}
 
           {/* Processing Step */}
-          {currentStep === 'processing' && (
+          {(currentStep === 'processing' || isCancelling) && (
             <div className="text-center space-y-6">
               <div className="flex justify-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+                <div className={`animate-spin rounded-full h-16 w-16 border-b-4 ${isCancelling ? 'border-red-600' : 'border-blue-600'}`}></div>
               </div>
               <div>
                 <h4 className="text-lg font-medium text-gray-900 mb-2">
-                  Preparing Your Payment
+                  {isCancelling ? 'Cancelling Payment' : 'Preparing Your Payment'}
                 </h4>
                 <p className="text-gray-600">
-                  Please wait while we set up your secure payment session...
+                  {isCancelling 
+                    ? 'Please wait while we cancel your payment request and send confirmation...' 
+                    : 'Please wait while we set up your secure payment session...'
+                  }
                 </p>
               </div>
             </div>
@@ -948,10 +1123,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
           {currentStep !== 'processing' && currentStep !== 'success' && (
             <button
-              onClick={onClose}
-              className="text-sm text-gray-600 hover:text-gray-800"
+              onClick={handleModalClose}
+              disabled={isCancelling}
+              className="text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:text-gray-400"
             >
-              Cancel
+              {isCancelling ? 'Cancelling...' : 'Cancel'}
             </button>
           )}
         </div>

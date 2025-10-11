@@ -532,6 +532,68 @@ const getEmailTemplate = (type, data) => {
         </html>
       `;
 
+    case 'payment_request_cancelled':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #dc2626; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.netlify.app/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.netlify.app/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Request Cancelled</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${data.customer_name},</h2>
+              <p>This email is to notify you that your payment request has been <strong style="color: #dc2626;">cancelled</strong>.</p>
+              
+              <div class="details" style="background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <h3 style="color: #dc2626; margin-top: 0;">🚫 Cancelled Payment Details</h3>
+                <p><strong>Original Amount:</strong> €${data.amount}</p>
+                <p><strong>Service:</strong> ${data.service_name}</p>
+                ${data.booking_date ? `<p><strong>Booking Date:</strong> ${data.booking_date}</p>` : ''}
+                <p><strong>Cancellation Reason:</strong> ${data.cancellation_reason || 'Payment request cancelled by user'}</p>
+                <p><strong>Cancelled On:</strong> ${formatDisplayDate(new Date())}</p>
+              </div>
+              
+              <div class="highlight" style="background-color: #dbeafe; border: 1px solid #bfdbfe; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <p><strong>💳 Important: No Payment Required</strong></p>
+                <p>This payment request is no longer active. <strong>Please do not attempt to make any payments</strong> for this cancelled request. If you previously received a "Pay Now" link, it will no longer work.</p>
+              </div>
+              
+              ${data.booking_id ? `
+                <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                  <p><strong>📅 About Your Booking</strong></p>
+                  <p>This cancellation only affects the payment request. Your booking may still be active. If you need to:</p>
+                  <ul style="margin: 15px 0; padding-left: 25px; line-height: 1.8;">
+                    <li><strong>Make a new payment:</strong> A new payment request will be created if needed</li>
+                    <li><strong>Reschedule your appointment:</strong> Please contact us to arrange</li>
+                    <li><strong>Cancel your booking:</strong> Please let us know as soon as possible</li>
+                  </ul>
+                </div>
+              ` : ''}
+              
+              <p>If you believe this cancellation was made in error or if you need to make a payment, please contact us immediately. We're here to help resolve any issues.</p>
+              
+              <div style="text-align: center; margin: 25px 0;">
+                <p style="font-size: 16px; color: #374151;"><strong>Need assistance?</strong></p>
+                <p style="color: #059669; font-weight: 600;">📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              </div>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p><strong>Address:</strong> Neilstown Village Court, Neilstown Rd, Clondalkin, D22E8P2</p>
+              <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
     case 'invoice_notification':
       return `
         <!DOCTYPE html>

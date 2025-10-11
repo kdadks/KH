@@ -3,8 +3,13 @@
 
 const SUMUP_API_BASE = 'https://api.sumup.com';
 
-// Import function to get gateway configuration from database
+// Import environment detection and gateway configuration
 import { getActiveSumUpGateway } from './paymentManagementUtils';
+import { 
+  getPaymentEnvironment, 
+  getSumUpEnvironmentConfig, 
+  getEnvironmentConfig
+} from './environmentDetection';
 
 export interface SumUpCreateCheckoutRequest {
   checkout_reference: string;
@@ -79,27 +84,42 @@ export const createSumUpCheckoutSession = async (
   checkoutData: SumUpCreateCheckoutRequest
 ): Promise<SumUpCreateCheckoutResponse> => {
   try {
-    // Get SumUp configuration from database
+    // Detect current environment based on domain
+    const currentEnvironment = getPaymentEnvironment();
+    const environmentConfig = getEnvironmentConfig();
+    const sumupEnvConfig = getSumUpEnvironmentConfig();
+    
+    console.log(`💳 Creating SumUp checkout in ${environmentConfig.displayName} mode`);
+    
+    // Get SumUp configuration from database (this will be overridden by domain detection)
     const gatewayConfig = await getActiveSumUpGateway();
     
-    if (!gatewayConfig || !gatewayConfig.api_key) {
-      throw new Error('SumUp gateway configuration not found. Please configure payment gateway in admin panel.');
+    // Use environment-specific configuration
+    const effectiveConfig = {
+      api_key: sumupEnvConfig.apiKey || gatewayConfig?.api_key || 'development-mode',
+      merchant_id: sumupEnvConfig.merchantCode || gatewayConfig?.merchant_id || 'SANDBOX',
+      environment: currentEnvironment
+    };
+    
+    if (!effectiveConfig.api_key || effectiveConfig.api_key === 'your-api-key-here') {
+      throw new Error(`SumUp ${currentEnvironment} configuration not found. Please configure ${currentEnvironment.toUpperCase()} API credentials.`);
     }
 
-    // Development mode - return mock response
-    if (gatewayConfig.api_key === 'development-mode') {
-      console.warn('🚧 Development Mode: Creating mock SumUp checkout session');
+    // Sandbox mode - return mock response for testing complete workflow
+    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
+      console.warn(`🧪 ${environmentConfig.displayName}: Creating mock SumUp checkout session with full workflow testing`);
       
       const mockResponse: SumUpCreateCheckoutResponse = {
         checkout_reference: checkoutData.checkout_reference,
         amount: checkoutData.amount,
         currency: checkoutData.currency,
-        merchant_code: gatewayConfig.merchant_id,
+        merchant_code: effectiveConfig.merchant_id,
         description: checkoutData.description,
-        id: `dev-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `${currentEnvironment}-mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         status: 'PENDING',
         date: new Date().toISOString(),
-        checkout_url: `/sumup-checkout?checkout_reference=${checkoutData.checkout_reference}&amount=${checkoutData.amount}&currency=${checkoutData.currency}&description=${encodeURIComponent(checkoutData.description)}&merchant_code=${gatewayConfig.merchant_id}&checkout_id=dev-mock-${Date.now()}${checkoutData.return_url ? `&return_url=${encodeURIComponent(checkoutData.return_url)}` : ''}${checkoutData.cancel_url ? `&cancel_url=${encodeURIComponent(checkoutData.cancel_url)}` : ''}`,
+        // Create short URL for testing (similar to production SumUp URLs)
+        checkout_url: `/sumup-checkout?ref=${checkoutData.checkout_reference}&id=${currentEnvironment}-mock-${Date.now()}&test=1`,
         transactions: []
       };
 
@@ -107,18 +127,21 @@ export const createSumUpCheckoutSession = async (
       await new Promise(resolve => setTimeout(resolve, 500));      return mockResponse;
     }
 
-    // Production mode - use real SumUp API
+    // Real SumUp API (production or sandbox)
+    console.log(`🚀 Using real SumUp API in ${currentEnvironment} mode`);
+    
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${gatewayConfig.api_key}`,
+        'Authorization': `Bearer ${effectiveConfig.api_key}`,
         'Content-Type': 'application/json',
+        'X-Environment': currentEnvironment, // Custom header for tracking
       },
       body: JSON.stringify({
         checkout_reference: checkoutData.checkout_reference,
         amount: checkoutData.amount,
         currency: checkoutData.currency,
-        merchant_code: gatewayConfig.merchant_id,
+        merchant_code: effectiveConfig.merchant_id,
         description: checkoutData.description,
         hosted_checkout: {
           enabled: true
@@ -155,25 +178,37 @@ export const processSumUpPayment = async (
   paymentData: SumUpProcessPaymentRequest
 ): Promise<SumUpProcessPaymentResponse> => {
   try {
-    // Get SumUp configuration from database
+    // Detect current environment based on domain
+    const currentEnvironment = getPaymentEnvironment();
+    const environmentConfig = getEnvironmentConfig();
+    const sumupEnvConfig = getSumUpEnvironmentConfig();
+    
+    // Get SumUp configuration from database (this will be overridden by domain detection)
     const gatewayConfig = await getActiveSumUpGateway();
     
-    if (!gatewayConfig || !gatewayConfig.api_key) {
-      throw new Error('SumUp gateway configuration not found. Please configure payment gateway in admin panel.');
+    // Use environment-specific configuration
+    const effectiveConfig = {
+      api_key: sumupEnvConfig.apiKey || gatewayConfig?.api_key || 'development-mode',
+      merchant_id: sumupEnvConfig.merchantCode || gatewayConfig?.merchant_id || 'SANDBOX',
+      environment: currentEnvironment
+    };
+    
+    if (!effectiveConfig.api_key || effectiveConfig.api_key === 'your-api-key-here') {
+      throw new Error(`SumUp ${currentEnvironment} configuration not found. Please configure ${currentEnvironment.toUpperCase()} API credentials.`);
     }
 
-    // Development mode - return mock response
-    if (gatewayConfig.api_key === 'development-mode') {
-      console.warn('🚧 Development Mode: Processing mock SumUp payment');
+    // Sandbox mode - return mock response for testing complete workflow
+    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
+      console.warn(`🧪 ${environmentConfig.displayName}: Processing mock SumUp payment with database updates`);
       
       const mockResponse: SumUpProcessPaymentResponse = {
         id: checkoutId,
-        checkout_reference: `dev-payment-${Date.now()}`,
+        checkout_reference: `${currentEnvironment}-payment-${Date.now()}`,
         amount: 0, // Will be updated based on checkout
         currency: 'EUR',
         status: 'PAID',
         date: new Date().toISOString(),
-        merchant_code: gatewayConfig.merchant_id,
+        merchant_code: effectiveConfig.merchant_id,
         description: 'Development mode payment',
         transaction_id: `dev-txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         transaction_code: `DEV${Date.now()}`,
@@ -184,11 +219,13 @@ export const processSumUpPayment = async (
       await new Promise(resolve => setTimeout(resolve, 1000));      return mockResponse;
     }
 
-    // Production mode - use real SumUp API
+    // Real SumUp API (production or sandbox)
+    console.log(`🚀 Processing payment via SumUp API in ${currentEnvironment} mode`);
+    
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts/${checkoutId}`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${gatewayConfig.api_key}`,
+        'Authorization': `Bearer ${effectiveConfig.api_key}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(paymentData)
@@ -218,23 +255,35 @@ export const processSumUpPayment = async (
  */
 export const getSumUpCheckoutStatus = async (checkoutId: string): Promise<SumUpCreateCheckoutResponse> => {
   try {
-    // Get SumUp configuration from database
+    // Detect current environment based on domain
+    const currentEnvironment = getPaymentEnvironment();
+    const environmentConfig = getEnvironmentConfig();
+    const sumupEnvConfig = getSumUpEnvironmentConfig();
+    
+    // Get SumUp configuration from database (this will be overridden by domain detection)
     const gatewayConfig = await getActiveSumUpGateway();
     
-    if (!gatewayConfig || !gatewayConfig.api_key) {
-      throw new Error('SumUp gateway configuration not found. Please configure payment gateway in admin panel.');
+    // Use environment-specific configuration
+    const effectiveConfig = {
+      api_key: sumupEnvConfig.apiKey || gatewayConfig?.api_key || 'development-mode',
+      merchant_id: sumupEnvConfig.merchantCode || gatewayConfig?.merchant_id || 'SANDBOX',
+      environment: currentEnvironment
+    };
+    
+    if (!effectiveConfig.api_key || effectiveConfig.api_key === 'your-api-key-here') {
+      throw new Error(`SumUp ${currentEnvironment} configuration not found. Please configure ${currentEnvironment.toUpperCase()} API credentials.`);
     }
 
-    // Development mode - return mock response
-    if (gatewayConfig.api_key === 'development-mode') {
-      console.warn('🚧 Development Mode: Getting mock SumUp checkout status');
+    // Sandbox mode - return mock response for testing complete workflow
+    if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
+      console.warn(`🧪 ${environmentConfig.displayName}: Getting mock SumUp checkout status with workflow testing`);
       
       const mockResponse: SumUpCreateCheckoutResponse = {
-        checkout_reference: `dev-status-${Date.now()}`,
+        checkout_reference: `${currentEnvironment}-status-${Date.now()}`,
         amount: 0,
         currency: 'EUR',
-        merchant_code: gatewayConfig.merchant_id,
-        description: 'Development mode checkout status',
+        merchant_code: effectiveConfig.merchant_id,
+        description: `${environmentConfig.displayName} checkout status`,
         id: checkoutId,
         status: 'PENDING',
         date: new Date().toISOString(),
@@ -242,13 +291,17 @@ export const getSumUpCheckoutStatus = async (checkoutId: string): Promise<SumUpC
       };
 
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));      return mockResponse;
+      await new Promise(resolve => setTimeout(resolve, 300));
+      return mockResponse;
     }
 
-    // Production mode - use real SumUp API
+    // Real SumUp API (production or sandbox)
+    console.log(`🔍 Checking SumUp checkout status in ${currentEnvironment} mode`);
+    
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts/${checkoutId}`, {
       headers: {
-        'Authorization': `Bearer ${gatewayConfig.api_key}`,
+        'Authorization': `Bearer ${effectiveConfig.api_key}`,
+        'X-Environment': currentEnvironment,
       }
     });
 

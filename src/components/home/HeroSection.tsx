@@ -7,7 +7,7 @@ import Button from '../shared/Button';
 import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
-import { PaymentRequestWithCustomer } from '../../types/paymentTypes';
+import { cancelPaymentRequest } from '../../utils/paymentCancellation';
 import {
   emailValidation,
   phoneValidation,
@@ -144,7 +144,28 @@ const HeroSection: React.FC = () => {
     });
   }, [reset]);
 
-  const resetForm = useCallback(() => {
+  const resetForm = async () => {
+    // Cancel any active payment request - check both state locations
+    const paymentRequestToCancel = selectedPaymentRequest || paymentState.paymentRequest;
+    
+    // Analyzing payment request for cancellation
+    
+    if (paymentRequestToCancel?.id) {
+      try {
+        await cancelPaymentRequest(paymentRequestToCancel.id, 'User cancelled and started over');
+        // Payment request cancelled during form reset
+      } catch (error) {
+        console.error('❌ Failed to cancel payment request during form reset:', error);
+      }
+    } else {
+      console.log('ℹ️ No active payment request ID found to cancel. Checking structure:', {
+        selectedPaymentRequestStructure: selectedPaymentRequest ? Object.keys(selectedPaymentRequest) : null,
+        paymentStateRequestStructure: paymentState.paymentRequest ? Object.keys(paymentState.paymentRequest) : null,
+        selectedPaymentRequestId: selectedPaymentRequest?.id,
+        paymentStateRequestId: paymentState.paymentRequest?.id
+      });
+    }
+
     reset();
     setSuccessMsg('');
     setCountdown(20);
@@ -263,14 +284,14 @@ const HeroSection: React.FC = () => {
       if (matchingSlot) {
         const [timeValue] = matchingSlot.split('|');
         setValue('time', timeValue);
-        console.log('✅ Auto-selected time slot:', timeValue);
+        // Auto-selected time slot
         setAutoSelectTime(null); // Clear the auto-select flag
       } else {
         console.warn('⚠️ Auto-select time not found in available slots:', autoSelectTime);
         
         // Try to extract just the time part from the target
         const targetTimePart = autoSelectTime.split('|')[0];
-        console.log('🔍 Trying to match just time part:', targetTimePart);
+        // Trying alternative time match
         
         const alternativeMatch = timeSlots.find(slot => {
           const [timeValue] = slot.split('|');
@@ -280,7 +301,7 @@ const HeroSection: React.FC = () => {
         if (alternativeMatch) {
           const [timeValue] = alternativeMatch.split('|');
           setValue('time', timeValue);
-          console.log('✅ Auto-selected time slot (alternative match):', timeValue);
+          // Auto-selected time slot (alternative match)
         } else {
           console.error('❌ No matching time slot found at all');
         }
@@ -1356,7 +1377,16 @@ const HeroSection: React.FC = () => {
 
                   <div className="text-center">
                     <button
-                      onClick={resetForm}
+                      onClick={() => {
+                        console.log('🔄 Cancel and start over clicked in HeroSection');
+                        console.log('Current state:', {
+                          selectedPaymentRequest: selectedPaymentRequest?.id,
+                          paymentStateRequest: paymentState.paymentRequest?.id,
+                          showPaymentModal,
+                          paymentCompleted: paymentState.paymentCompleted
+                        });
+                        resetForm();
+                      }}
                       className="text-gray-500 hover:text-gray-700 text-sm underline"
                     >
                       Cancel and start over
