@@ -47,6 +47,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
   const popupRef = useRef<Window | null>(null);
   const messageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isPaymentCompletedRef = useRef<boolean>(false); // Track if payment was completed or cancelled
 
   // Format currency amount
   const formatAmount = (amount: number, curr: string) => {
@@ -77,6 +78,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     
     switch (message.type) {
       case 'success':
+        isPaymentCompletedRef.current = true; // Mark as completed
         if (message.data) {
           setSuccessData(message.data as PaymentSuccessData);
           onSuccess?.(message.data as PaymentSuccessData);
@@ -84,6 +86,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
         setModalState('success');
         break;
       case 'failure': {
+        isPaymentCompletedRef.current = true; // Mark as completed (failed)
         const errorData = message.data as PaymentErrorData;
         setErrorMessage(errorData?.error || 'Payment failed');
         setModalState('error');
@@ -93,6 +96,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
         break;
       }
       case 'cancel':
+        isPaymentCompletedRef.current = true; // Mark as completed (cancelled)
         setModalState('cancelled');
         onCancel?.();
         break;
@@ -165,6 +169,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     setModalState('loading');
     setErrorMessage('');
     setSuccessData(null);
+    isPaymentCompletedRef.current = false; // Reset completion flag
 
     // Security check
     if (!isSumUpUrl(checkoutUrl)) {
@@ -193,7 +198,9 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
       const pollInterval = setInterval(() => {
         if (!popup || popup.closed) {
           clearInterval(pollInterval);
-          if (modalState === 'popup') {
+          // Only trigger cancel if payment wasn't completed through other means
+          if (!isPaymentCompletedRef.current) {
+            console.log('🔄 SumUp popup closed without completion - triggering cancel');
             setModalState('cancelled');
             onCancel?.();
           }
@@ -238,7 +245,9 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
         if (popup.closed) {
           clearInterval(checkClosed);
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-          if (modalState === 'popup') {
+          // Only trigger cancel if payment wasn't completed through other means
+          if (!isPaymentCompletedRef.current) {
+            console.log('🔄 SumUp popup closed without completion - triggering cancel');
             setModalState('cancelled');
             onCancel?.();
           }

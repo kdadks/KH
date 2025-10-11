@@ -152,6 +152,36 @@ export const createSumUpCheckoutSession = async (
     // Real SumUp API (production or sandbox)
     console.log(`🚀 Using real SumUp API in ${currentEnvironment} mode`);
     
+    // Prepare the API payload
+    const apiPayload = {
+      checkout_reference: checkoutData.checkout_reference,
+      amount: checkoutData.amount,
+      currency: checkoutData.currency,
+      merchant_code: effectiveConfig.merchant_id,
+      description: checkoutData.description,
+      hosted_checkout: {
+        enabled: true
+      },
+      ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
+      ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {}),
+      // Add customer information at root level for SumUp
+      ...(checkoutData.customer?.email ? { customer_email: checkoutData.customer.email } : {}),
+      ...(checkoutData.customer?.name ? { customer_name: checkoutData.customer.name } : {}),
+      ...(checkoutData.pay_to_email ? { pay_to_email: checkoutData.pay_to_email } : {}),
+      // Also include nested customer object for compatibility
+      ...(checkoutData.customer ? { customer: checkoutData.customer } : {})
+    };
+
+    // Log customer data being sent for debugging
+    if (checkoutData.customer) {
+      console.log('📧 Sending customer data to SumUp API:', {
+        customer_email: apiPayload.customer_email,
+        customer_name: apiPayload.customer_name,
+        customer: apiPayload.customer,
+        pay_to_email: apiPayload.pay_to_email
+      });
+    }
+    
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
       method: 'POST',
       headers: {
@@ -159,20 +189,7 @@ export const createSumUpCheckoutSession = async (
         'Content-Type': 'application/json',
         'X-Environment': currentEnvironment, // Custom header for tracking
       },
-      body: JSON.stringify({
-        checkout_reference: checkoutData.checkout_reference,
-        amount: checkoutData.amount,
-        currency: checkoutData.currency,
-        merchant_code: effectiveConfig.merchant_id,
-        description: checkoutData.description,
-        hosted_checkout: {
-          enabled: true
-        },
-        ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
-        ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {}),
-        ...(checkoutData.customer ? { customer: checkoutData.customer } : {}),
-        ...(checkoutData.pay_to_email ? { pay_to_email: checkoutData.pay_to_email } : {})
-      })
+      body: JSON.stringify(apiPayload)
     });
 
     if (!response.ok) {
