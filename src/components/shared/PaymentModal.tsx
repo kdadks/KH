@@ -596,7 +596,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         merchant_code: environmentConfig.merchantCode,
         description: `Payment for ${paymentRequest.service_name || 'Service'}`,
         return_url: sumupReturnUrl, // SumUp calls this for both webhook and user redirect
-        cancel_url: cancelRedirectUrl.toString() // This is where users go when they cancel
+        cancel_url: cancelRedirectUrl.toString(), // This is where users go when they cancel
+        customer: {
+          email: paymentRequest.customer.email,
+          name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`.trim(),
+        },
+        pay_to_email: paymentRequest.customer.email // Alternative email field for SumUp
       });
 
       // SumUp checkout session created successfully
@@ -704,9 +709,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       
       if (isProduction) {
         // Production: Redirect to SumUp checkout
-        setTimeout(() => {
-          window.location.href = responseCheckoutUrl;
-        }, 350);
+        // Removed: Modal handles the checkout now, no page redirect needed
+        // setTimeout(() => {
+        //   window.location.href = responseCheckoutUrl;
+        // }, 350);
+        console.log('✅ SumUp checkout will open in modal only (redirect disabled)');
       } else {
         // Development/Sandbox: Prevent redirect for debugging
         logToStorage('SumUp redirect prevented for debugging (sandbox mode)', { 

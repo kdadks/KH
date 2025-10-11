@@ -794,7 +794,12 @@ export async function sendPaymentRequestNotification(
           amount: paymentRequest.amount,
           currency: 'EUR',
           merchant_code: gatewayConfig.merchant_id,
-          description: paymentRequest.service_name || 'Payment Request'
+          description: paymentRequest.service_name || 'Payment Request',
+          customer: {
+            email: paymentRequest.customer.email,
+            name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`.trim(),
+          },
+          pay_to_email: paymentRequest.customer.email
         });
         
         // Create direct checkout URL with email context for proper redirect behavior

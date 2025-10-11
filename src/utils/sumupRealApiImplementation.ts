@@ -19,6 +19,20 @@ export interface SumUpCreateCheckoutRequest {
   description: string;
   return_url?: string;
   cancel_url?: string;
+  customer?: {
+    customer_id?: string;
+    email?: string;
+    name?: string;
+    phone?: string;
+    address?: {
+      line_1?: string;
+      line_2?: string;
+      city?: string;
+      postal_code?: string;
+      country?: string;
+    };
+  };
+  pay_to_email?: string; // Alternative email field
 }
 
 export interface SumUpCreateCheckoutResponse {
@@ -109,6 +123,14 @@ export const createSumUpCheckoutSession = async (
     if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
       console.warn(`🧪 ${environmentConfig.displayName}: Creating mock SumUp checkout session with full workflow testing`);
       
+      // Log customer information if provided
+      if (checkoutData.customer) {
+        console.log('📧 Customer information included in checkout:', {
+          name: checkoutData.customer.name,
+          email: checkoutData.customer.email
+        });
+      }
+      
       const mockResponse: SumUpCreateCheckoutResponse = {
         checkout_reference: checkoutData.checkout_reference,
         amount: checkoutData.amount,
@@ -147,7 +169,9 @@ export const createSumUpCheckoutSession = async (
           enabled: true
         },
         ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
-        ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {})
+        ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {}),
+        ...(checkoutData.customer ? { customer: checkoutData.customer } : {}),
+        ...(checkoutData.pay_to_email ? { pay_to_email: checkoutData.pay_to_email } : {})
       })
     });
 
