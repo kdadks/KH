@@ -169,7 +169,7 @@ export const findOrCreateCustomer = async (customerData: {
       // Handle duplicate key constraint violation
       if (createError.code === '23505' || createError.message.includes('duplicate key value violates unique constraint')) {
         const constraintName = createError.message.match(/unique constraint "([^"]+)"/)?.[1];
-        console.log(`🔄 Constraint violation detected: ${constraintName}. Attempting to resolve...`);
+        // Attempting to resolve constraint violation
 
         if (constraintName === 'customers_pkey') {
           console.error('❌ Primary key constraint violation detected - this suggests an ID sequence issue');
@@ -178,9 +178,71 @@ export const findOrCreateCustomer = async (customerData: {
           return { customer: null, error: 'Database ID sequence error. Please try again or contact support.', isNewCustomer: false };
         }
 
-        // Note: Email constraint no longer exists - multiple customers can have same email with different names
+        if (constraintName === 'customers_email_key' || constraintName?.includes('email')) {
+          // Email constraint violation - fetching existing customer
 
-        // Other constraint violations (should be rare now that email uniqueness is removed)
+          // Try to fetch the existing customer again with a small delay to ensure the other transaction has completed
+          await new Promise(resolve => setTimeout(resolve, 200));
+
+          const { data: existingAfterConflict, error: refetchError } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('email', customerData.email.toLowerCase().trim())
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (refetchError) {
+            console.error('Error refetching customer after conflict:', refetchError);
+            return { customer: null, error: 'Failed to resolve customer creation conflict', isNewCustomer: false };
+          }
+
+          if (existingAfterConflict) {
+            // Return decrypted version of the existing customer found after conflict
+            const decryptedExistingCustomer = { ...existingAfterConflict };
+            decryptedExistingCustomer.first_name = isDataEncrypted(existingAfterConflict.first_name)
+              ? decryptSensitiveData(existingAfterConflict.first_name)
+              : existingAfterConflict.first_name;
+            decryptedExistingCustomer.last_name = isDataEncrypted(existingAfterConflict.last_name)
+              ? decryptSensitiveData(existingAfterConflict.last_name)
+              : existingAfterConflict.last_name;
+            decryptedExistingCustomer.phone = existingAfterConflict.phone && isDataEncrypted(existingAfterConflict.phone)
+              ? decryptSensitiveData(existingAfterConflict.phone)
+              : existingAfterConflict.phone;
+
+            // Race condition resolved - existing customer found
+            return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
+          } else {
+            console.error('❌ Customer should exist but was not found after email constraint violation');
+            return { customer: null, error: 'Customer creation conflict could not be resolved', isNewCustomer: false };
+          }
+        }
+
+        // Generic constraint violation
+        // Constraint violation - fetching existing customer
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const { data: existingAfterConflict, error: refetchError } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('email', customerData.email.toLowerCase().trim())
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!refetchError && existingAfterConflict) {
+          const decryptedExistingCustomer = { ...existingAfterConflict };
+          decryptedExistingCustomer.first_name = isDataEncrypted(existingAfterConflict.first_name)
+            ? decryptSensitiveData(existingAfterConflict.first_name)
+            : existingAfterConflict.first_name;
+          decryptedExistingCustomer.last_name = isDataEncrypted(existingAfterConflict.last_name)
+            ? decryptSensitiveData(existingAfterConflict.last_name)
+            : existingAfterConflict.last_name;
+          decryptedExistingCustomer.phone = existingAfterConflict.phone && isDataEncrypted(existingAfterConflict.phone)
+            ? decryptSensitiveData(existingAfterConflict.phone)
+            : existingAfterConflict.phone;
+
+          // Constraint violation resolved
+          return { customer: decryptedExistingCustomer, error: null, isNewCustomer: false };
+        }
       }
 
       return { customer: null, error: createError.message, isNewCustomer: false };
@@ -249,7 +311,7 @@ export const createBookingWithCustomer = async (
     let paymentRequest = null;
     if (customer.id && !isAdminBooking) {
       try {
-        console.log('💳 Attempting to create payment request...');
+              // Creating payment request for booking
         paymentRequest = await createPaymentRequest(
           customer.id,
           bookingData.package_name,
@@ -259,7 +321,7 @@ export const createBookingWithCustomer = async (
         );
 
         if (paymentRequest) {
-          console.log('✅ Payment request created successfully');
+          // Payment request created
         } else {
           console.log('⚠️ No payment request created (service may require quote or be per-session)');
         }
@@ -277,11 +339,11 @@ export const createBookingWithCustomer = async (
       try {
         // Only send welcome email for new customers who haven't received it yet
         if (isNewCustomer && !customer.welcome_email_sent) {
-          console.log('📧 Sending welcome email to new customer...');
+                // Sending welcome email to customer
           try {
             const welcomeResult = await sendWelcomeEmail(`${customerData.firstName} ${customerData.lastName}`, customerData.email);
             if (welcomeResult.success) {
-              console.log('✅ Welcome email sent successfully');
+              // Welcome email sent
               
               // Mark welcome email as sent in database
               try {
@@ -289,7 +351,7 @@ export const createBookingWithCustomer = async (
                   .from('customers')
                   .update({ welcome_email_sent: true })
                   .eq('id', customer.id);
-                console.log('✅ Welcome email status updated in database');
+                // Welcome email status updated
               } catch (updateError) {
                 console.error('❌ Failed to update welcome email status:', updateError);
                 // Don't fail the process, just log the error
@@ -307,7 +369,7 @@ export const createBookingWithCustomer = async (
         }
 
         // Then send booking captured notification
-        console.log('📧 Sending booking captured notification...');
+        // Sending booking captured notification
         try {
           const { sendBookingCapturedNotification } = await import('./emailUtils');
           const capturedResult = await sendBookingCapturedNotification(customerData.email, {
@@ -324,7 +386,7 @@ export const createBookingWithCustomer = async (
           });
 
           if (capturedResult.success) {
-            console.log('✅ Booking captured notification sent successfully');
+            // Booking captured notification sent
           } else {
             console.error('❌ Failed to send booking captured notification:', capturedResult.error);
           }
@@ -333,7 +395,6 @@ export const createBookingWithCustomer = async (
         }
 
         // Send admin notification for new booking (without sending customer confirmation)
-        console.log('📧 Sending admin notification for new booking...');
         try {
           const { sendAdminBookingNotificationOnly } = await import('./emailUtils');
           const adminResult = await sendAdminBookingNotificationOnly(
@@ -351,32 +412,27 @@ export const createBookingWithCustomer = async (
             }
           );
 
-          if (adminResult.adminSuccess) {
-            console.log('✅ Admin booking notification sent successfully');
-          } else {
-            console.error('❌ Failed to send admin booking notification');
+          if (!adminResult.adminSuccess) {
+            console.error('Failed to send admin booking notification');
           }
         } catch (adminEmailError) {
-          console.error('❌ Admin booking notification failed:', adminEmailError);
+          console.error('Admin booking notification failed:', adminEmailError);
         }
 
         // Then send payment request email if payment is required
         if (paymentRequest) {
-          console.log('📧 Sending payment request email...');
           try {
             const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-            if (emailSuccess) {
-              console.log('✅ Payment request email sent successfully');
-            } else {
-              console.error('❌ Failed to send payment request email:', emailError);
+            if (!emailSuccess) {
+              console.error('Failed to send payment request email:', emailError);
             }
           } catch (emailError) {
-            console.error('❌ Payment request email failed:', emailError);
+            console.error('Payment request email failed:', emailError);
           }
         } else {
           // No payment request created (e.g., "Contact for Quote" services)
           // Send booking confirmation without payment
-          console.log('📧 Sending booking confirmation email (no payment required)...');
+          // Sending booking confirmation email (no payment required)
           try {
             const { sendSimpleBookingConfirmation } = await import('./emailUtils');
             const emailResult = await sendSimpleBookingConfirmation(
@@ -396,7 +452,7 @@ export const createBookingWithCustomer = async (
             );
             
             if (emailResult) {
-              console.log('✅ Booking confirmation email sent successfully');
+              // Booking confirmation email sent
             } else {
               console.error('❌ Failed to send booking confirmation email');
             }

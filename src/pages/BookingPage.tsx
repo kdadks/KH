@@ -95,12 +95,12 @@ const BookingPage: React.FC = () => {
 
   // Handle escape key to close modals
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = async (event: KeyboardEvent) => {
       if (event.key === 'Escape' && (paymentState.showPayment || paymentState.paymentCompleted)) {
         if (paymentState.paymentCompleted) {
-          redirectToHome();
+          await redirectToHome();
         } else {
-          resetForm();
+          await resetForm();
         }
       }
     };
@@ -922,12 +922,24 @@ const BookingPage: React.FC = () => {
     }, 1000);
   };
 
-  const redirectToHome = () => {
-    resetForm();
+  const redirectToHome = async () => {
+    await resetForm();
     navigate('/');
   };
 
-  const resetForm = () => {
+  const resetForm = async () => {
+    // Silently cancel any active payment request (no email - user may have already received one from modal close)
+    if (paymentState.paymentRequest?.id) {
+      try {
+        // Use silent cancel to avoid duplicate cancellation emails
+        const { silentCancelPaymentRequest } = await import('../utils/paymentCancellation');
+        await silentCancelPaymentRequest(paymentState.paymentRequest.id, 'Form reset by user');
+        console.log('🔇 Payment request silently cancelled during form reset');
+      } catch (error) {
+        console.error('Error silently cancelling payment request:', error);
+      }
+    }
+
     reset();
     setSuccessMsg('');
     setCountdown(20);

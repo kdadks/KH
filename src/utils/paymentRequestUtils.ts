@@ -25,7 +25,7 @@ import {
  */
 async function getServicePriceFromDatabase(serviceName: string): Promise<number | null> {
   try {
-    // Get service price from database
+    // Service price lookup
 
     // First check if this service should skip payment request creation
     const skipPatterns = [
@@ -39,22 +39,20 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
     // Check if service matches any skip pattern
     for (const pattern of skipPatterns) {
       if (pattern.test(serviceName)) {
-        // Database lookup skipped - service requires quote or is per-session
+        // Database lookup skipped for quote services
         return null;
       }
     }
     
     // Extract base service name (e.g., "Ultimate Health")
     const baseServiceName = extractBaseServiceName(serviceName);
-    // Base service name derived
+    // Extract base service name and time slot type
     
     // Determine if it's in-hour or out-of-hour
     const timeSlotType = determineTimeSlotType(serviceName);
-    // Time slot type identified
     
     // Fetch pricing from database
     const servicePricing = await fetchServicePricing(baseServiceName);
-    // Service pricing retrieved from database
     
     if (!servicePricing) {
       console.warn(`Service pricing not found for: ${baseServiceName}`);
@@ -64,11 +62,7 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
     // Get the appropriate price based on time slot type
     const price = getServicePrice(servicePricing, timeSlotType);
     
-    console.log(`Pricing for ${serviceName}:`, {
-      baseServiceName,
-      timeSlotType,
-      price
-    });
+    // Pricing determined for service
     
     return price;
   } catch (error) {
@@ -83,7 +77,7 @@ async function getServicePriceFromDatabase(serviceName: string): Promise<number 
  * @returns The extracted price or null if not found or not a fixed booking amount
  */
 function extractPriceFromServiceName(serviceName: string): number | null {
-  console.log('🔍 extractPriceFromServiceName called with:', serviceName);
+  // Extract price from service name
 
   // Skip payment request creation for services with these patterns:
   // - "Contact for Quote" - indicates pricing needs to be discussed
@@ -101,7 +95,7 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   // Check if service matches any skip pattern
   for (const pattern of skipPatterns) {
     if (pattern.test(serviceName)) {
-      console.log('⏭️ Skipping payment request creation for pattern match:', pattern);
+      // Skipping payment request for quote service
       return null;
     }
   }
@@ -114,11 +108,10 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   
   if (priceMatch) {
     const price = parseInt(priceMatch[1]);
-    console.log('✅ Extracted price:', price);
     return price;
   }
   
-  console.log('❌ No price found in service name');
+  // No price found in service name
   return null;
 }
 
@@ -135,15 +128,7 @@ export async function createPaymentRequest(
   customAmount?: number // New parameter for custom amounts (used for invoice payments)
 ): Promise<PaymentRequest | null> {
   try {
-    console.log('🔄 createPaymentRequest called with:', {
-      customerId,
-      serviceName,
-      bookingDate,
-      invoiceId,
-      bookingId,
-      isInvoicePaymentRequest,
-      customAmount
-    });
+    // Creating payment request
 
     let finalAmount: number;
 
@@ -409,6 +394,27 @@ export async function processPaymentRequest(
       throw new Error('Payment request not found');
     }
 
+    // Check if payment request is in a valid state for processing
+    if (paymentRequest.status === 'cancelled') {
+      console.error('❌ Attempted to process cancelled payment request:', paymentRequestId);
+      throw new Error('This payment request has been cancelled and can no longer be processed. Please contact us if you need assistance.');
+    }
+
+    if (paymentRequest.status === 'paid') {
+      console.error('❌ Attempted to process already paid payment request:', paymentRequestId);
+      throw new Error('This payment has already been processed. If you believe this is an error, please contact us.');
+    }
+
+    if (paymentRequest.status === 'expired') {
+      console.error('❌ Attempted to process expired payment request:', paymentRequestId);
+      throw new Error('This payment request has expired. Please contact us to generate a new payment link.');
+    }
+
+    if (paymentRequest.status !== 'pending' && paymentRequest.status !== 'sent') {
+      console.error('❌ Attempted to process payment request with invalid status:', paymentRequest.status);
+      throw new Error('This payment request is not available for processing. Please contact us for assistance.');
+    }
+
     // Create payment record
     const paymentRecord = {
       customer_id: paymentRequest.customer_id,
@@ -418,20 +424,90 @@ export async function processPaymentRequest(
       status: 'processing' as const,
       payment_method: paymentData.payment_method || 'card',
       sumup_checkout_id: paymentData.sumup_checkout_id,
+      sumup_checkout_reference: paymentData.sumup_checkout_reference, // Add checkout reference
       sumup_transaction_id: paymentData.sumup_transaction_id,
       sumup_payment_type: paymentData.sumup_payment_type,
       booking_id: paymentRequest.booking_id, // Include booking_id from payment request
+      payment_request_id: paymentRequestId, // Add payment_request_id for webhook lookup
       notes: `Payment for payment request #${paymentRequestId}`
     };
 
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .insert([paymentRecord])
-      .select()
-      .single();
+    // WEBHOOK FIX: Route through sumup-return endpoint to ensure webhook columns are populated
+    const sumupEndpoint = `${window.location.origin}/.netlify/functions/sumup-return`;
+    let payment;
+    
+    try {
+      // Routing payment through SumUp handler
+      
+      const requestBody = {
+        id: `internal_event_${Date.now()}`,
+        event_type: 'checkout.completed',
+        timestamp: new Date().toISOString(),
+        payload: {
+          checkout_id: paymentData.sumup_checkout_id,
+          transaction_id: paymentData.sumup_transaction_id,
+          // FIX: Generate checkout reference based on payment_request ID (matches existing pattern)
+          reference: paymentData.sumup_checkout_reference || 
+                    `payment-request-${paymentRequestId}-${Date.now()}`,
+          amount: paymentRequest.amount,
+          currency: paymentRequest.currency || 'EUR',
+          status: 'PAID',
+          merchant_code: 'INTERNAL_PROCESSING',
+          payment_type: paymentData.payment_method || 'card',
+          created_at: new Date().toISOString(),
+          payment_request_id: paymentRequestId,
+          booking_id: paymentRequest.booking_id,
+          customer_id: paymentRequest.customer_id
+        }
+      };
+      
+      // Sending webhook payload
 
-    if (paymentError) {
-      throw new Error(`Failed to create payment record: ${paymentError.message}`);
+      const response = await fetch(sumupEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'PaymentRequestUtils/Processing'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error(`SumUp endpoint returned ${response.status}`);
+      }
+
+      await response.text();
+      // Payment processed successfully
+      
+      // Get the created payment record for return (most recent for this payment_request_id)
+      const { data: createdPayment, error: fetchError } = await supabase
+        .from('payments')
+        .select()
+        .eq('payment_request_id', paymentRequestId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch created payment: ${fetchError.message}`);
+      }
+      
+      payment = createdPayment;
+      
+    } catch (webhookError) {
+      console.error('❌ Failed to process through SumUp handler:', webhookError);
+      // Fallback: Create payment directly if webhook handler fails
+      const { data: fallbackPayment, error: paymentError } = await supabase
+        .from('payments')
+        .insert([paymentRecord])
+        .select()
+        .single();
+
+      if (paymentError) {
+        throw new Error(`Failed to create payment record: ${paymentError.message}`);
+      }
+      
+      payment = fallbackPayment;
     }
 
     // Update payment request status to 'paid'
@@ -449,12 +525,7 @@ export async function processPaymentRequest(
 
     // Update associated booking status based on payment type (deposit vs full payment)
     if (paymentRequest.customer_id) {
-      console.log('🔄 Determining booking status update for payment request:', {
-        paymentRequestId: paymentRequestId,
-        customerId: paymentRequest.customer_id,
-        bookingId: paymentRequest.booking_id,
-        paidAmount: paymentRequest.amount
-      });
+      // Determining booking status update
 
       // Determine if this was a full payment or deposit by comparing against service cost
       let serviceCost = 0;
@@ -714,22 +785,24 @@ export async function sendPaymentRequestNotification(
       const gatewayConfig = await getActiveSumUpGateway();
       
       if (!gatewayConfig || !gatewayConfig.merchant_id) {
-        console.error('Payment gateway not configured for email payment links');
-        return { success: false, error: 'Payment gateway not configured' };
+        console.error('Payment gateway not configured for email payment links - using fallback payment URL');
+        // Don't return here - continue with fallback URL and send email
+        directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
+      } else {
+        const checkoutResponse = await createSumUpCheckoutSession({
+          checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
+          amount: paymentRequest.amount,
+          currency: 'EUR',
+          merchant_code: gatewayConfig.merchant_id,
+          description: paymentRequest.service_name || 'Payment Request'
+        });
+        
+        // Create direct checkout URL with email context for proper redirect behavior
+        directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
       }
       
-      const checkoutResponse = await createSumUpCheckoutSession({
-        checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
-        amount: paymentRequest.amount,
-        currency: 'EUR',
-        merchant_code: gatewayConfig.merchant_id,
-        description: paymentRequest.service_name || 'Payment Request'
-      });
-      
-      // Create direct checkout URL with email context for proper redirect behavior
-      directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
-      
-    } catch {
+    } catch (realApiError) {
+      console.error('SumUp checkout creation failed, using fallback URL:', realApiError);
       // Fallback to the existing payment page URL
       directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
     }

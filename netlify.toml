@@ -8,6 +8,7 @@
   directory = "netlify/functions"
 
 # Redirect rules for React Router (SPA)
+# Catch-all rule for React Router - functions are handled automatically by Netlify
 [[redirects]]
   from = "/*"
   to = "/index.html"

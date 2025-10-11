@@ -3,6 +3,7 @@ import { useToast } from './shared/toastContext';
 import { createBookingWithCustomer } from '../utils/customerBookingUtils';
 import { createSumUpCheckoutSession } from '../utils/sumupRealApiImplementation';
 import { getActiveSumUpGateway } from '../utils/paymentManagementUtils';
+import { cancelPaymentRequest } from '../utils/paymentCancellation';
 import { 
   sendBookingNotificationWithPaymentStatus, 
   sendSimpleBookingConfirmation,
@@ -120,7 +121,7 @@ const BookingForm: React.FC = () => {
         
         // Fallback to old behavior if no payment request
         showSuccess('Booking Submitted!', 'Check your email for booking confirmation. We will contact you to schedule your appointment.');
-        resetForm();
+        await resetForm();
       }
     } catch (error) {
       console.error('💥 Exception during booking creation:', error);
@@ -221,7 +222,16 @@ const BookingForm: React.FC = () => {
     showSuccess('Payment Successful!', 'Your booking is confirmed. Check your email for confirmation and next steps.');
   };
 
-  const resetForm = () => {
+  const resetForm = async () => {
+    // Cancel any active payment request
+    if (paymentState.paymentRequest?.id) {
+      try {
+        await cancelPaymentRequest(paymentState.paymentRequest.id);
+      } catch (error) {
+        console.error('Error cancelling payment request:', error);
+      }
+    }
+
     setFirstName('');
     setLastName('');
     setCustomerEmail('');
