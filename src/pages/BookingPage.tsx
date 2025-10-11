@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,8 @@ import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
 import PaymentModal from '../components/shared/PaymentModal';
-import { createBookingWithCustomer } from '../utils/customerBookingUtils';
+import { createBookingWithCustomer, Customer, BookingRecord } from '../utils/customerBookingUtils';
+import { PaymentRequestWithCustomer } from '../types/paymentTypes';
 import {
   emailValidation,
   phoneValidation,
@@ -46,9 +47,9 @@ interface Service {
 
 interface PaymentState {
   showPayment: boolean;
-  paymentRequest: any;
-  booking: any;
-  customer: any;
+  paymentRequest: PaymentRequestWithCustomer | null;
+  booking: BookingRecord | null;
+  customer: Customer | null;
   checkoutUrl?: string;
   paymentCompleted: boolean;
   paymentOptions?: {
@@ -78,20 +79,129 @@ const BookingPage: React.FC = () => {
   });
   const [countdown, setCountdown] = useState<number>(20);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<any>(null);
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequestWithCustomer | null>(null);
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
   const [loadingNextSlot, setLoadingNextSlot] = useState(false);
+  const [autoSelectTime, setAutoSelectTime] = useState<string | null>(null); // Track time to auto-select
 
   // Watch the service and date fields to trigger time slot updates
   const watchedService = watch('service');
   const watchedDate = watch('date');
+
+  // Define resetForm with useCallback
+  const resetForm = useCallback(async () => {
+    // Silently cancel any active payment request (no email - user may have already received one from modal close)
+    if (paymentState.paymentRequest?.id) {
+      try {
+        // Use silent cancel to avoid duplicate cancellation emails
+        const { silentCancelPaymentRequest } = await import('../utils/paymentCancellation');
+        await silentCancelPaymentRequest(paymentState.paymentRequest.id, 'Form reset by user');
+        console.log('🔇 Payment request silently cancelled during form reset');
+      } catch (error) {
+        console.error('Error silently cancelling payment request:', error);
+      }
+    }
+
+    reset();
+    setSuccessMsg('');
+    setCountdown(20);
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    setPaymentState({
+      showPayment: false,
+      paymentRequest: null,
+      booking: null,
+      customer: null,
+      paymentCompleted: false
+    });
+  }, [paymentState.paymentRequest?.id, reset]);
+
+  const redirectToHome = useCallback(async () => {
+    await resetForm();
+    navigate('/');
+  }, [resetForm, navigate]);
+
+  const fetchTimeSlots = useCallback(async (service: Service, selectedDate?: string) => {
+    try {
+      setLoadingTimeSlots(true);
+
+      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
+      let serviceId: number;
+      if (typeof service.id === 'string') {
+        if (service.id.includes('-')) {
+          serviceId = parseInt(service.id.split('-')[0], 10);
+        } else {
+          serviceId = parseInt(service.id, 10);
+        }
+      } else {
+        serviceId = service.id;
+      }
+
+      if (!serviceId || isNaN(serviceId)) {
+        console.log('Invalid serviceId, returning');
+        setTimeSlots([]);
+        return;
+      }
+
+      // Fetch available slots for the selected date - EXACT match to HeroSection
+      let availabilityQuery = supabase
+        .from('availability')
+        .select('*')
+        .eq('date', selectedDate || new Date().toISOString().split('T')[0])
+        .eq('is_available', true)
+        .order('start_time', { ascending: true });
+
+      // Filter by slot_type based on service pricing type - match HeroSection exactly
+      if (service.priceType === 'in-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+      } else if (service.priceType === 'out-of-hour') {
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+      }
+      // If service.priceType is 'standard' or undefined, show all slots
+
+      const { data: availabilityData, error } = await availabilityQuery;
+
+      if (error) {
+        console.error('Error fetching time slots:', error);
+        setTimeSlots([]);
+        return;
+      }
+
+      // Convert availability slots to time options - match HeroSection format exactly
+      const timeOptions: string[] = [];
+
+      availabilityData?.forEach(slot => {
+        const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
+        const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
+
+        const startDisplay = formatTimeForDisplay(startTime);
+        const endDisplay = formatTimeForDisplay(endTime);
+
+        // Format: "HH:MM-HH:MM|Display String" - exactly like HeroSection
+        const timeRange = `${startTime}-${endTime}`;
+        const displayRange = `${startDisplay} - ${endDisplay}`;
+        const timeOption = `${timeRange}|${displayRange}`;
+
+        timeOptions.push(timeOption);
+      });
+
+      console.log(`Found ${timeOptions.length} available time slots for service ${serviceId}`);
+      setTimeSlots(timeOptions);
+
+    } catch (error) {
+      console.error('Error fetching time slots:', error);
+      setTimeSlots([]);
+    } finally {
+      setLoadingTimeSlots(false);
+    }
+  }, []);
 
   // Handle countdown reaching zero
   useEffect(() => {
     if (countdown === 0 && paymentState.paymentCompleted) {
       redirectToHome();
     }
-  }, [countdown, paymentState.paymentCompleted]);
+  }, [countdown, paymentState.paymentCompleted, redirectToHome]);
 
   // Handle escape key to close modals
   useEffect(() => {
@@ -107,7 +217,7 @@ const BookingPage: React.FC = () => {
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [paymentState.showPayment, paymentState.paymentCompleted]);
+  }, [paymentState.showPayment, paymentState.paymentCompleted, redirectToHome, resetForm]);
 
   // Memoize time slot rendering to prevent excessive re-renders
   const timeSlotOptions = useMemo(() => {
@@ -171,7 +281,7 @@ const BookingPage: React.FC = () => {
       setSelectedService(null);
       setTimeSlots([]);
     }
-  }, [watchedService, watchedDate, services]);
+  }, [watchedService, watchedDate, services, fetchTimeSlots]);
 
   // Watch for service changes to fetch next available slot recommendation
   useEffect(() => {
@@ -191,6 +301,45 @@ const BookingPage: React.FC = () => {
       setNextAvailableSlot(null);
     }
   }, [watchedService, services]);
+
+  // Auto-select time when time slots are loaded (for "Select This Slot" functionality) - match HeroSection
+  useEffect(() => {
+    if (autoSelectTime && timeSlots.length > 0 && !loadingTimeSlots) {
+      // Find the matching time slot in the available options
+      const matchingSlot = timeSlots.find(slot => {
+        const [timeValue] = slot.split('|');
+        return timeValue === autoSelectTime;
+      });
+      
+      if (matchingSlot) {
+        const [timeValue] = matchingSlot.split('|');
+        setValue('time', timeValue);
+        console.log('✅ Auto-selected time slot:', timeValue);
+        setAutoSelectTime(null); // Clear the auto-select flag
+      } else {
+        console.warn('⚠️ Auto-select time not found in available slots:', autoSelectTime);
+        
+        // Try to extract just the time part from the target
+        const targetTimePart = autoSelectTime.split('|')[0];
+        console.log('🔍 Trying alternative time match with:', targetTimePart);
+        
+        const alternativeMatch = timeSlots.find(slot => {
+          const [timeValue] = slot.split('|');
+          return timeValue === targetTimePart;
+        });
+        
+        if (alternativeMatch) {
+          const [timeValue] = alternativeMatch.split('|');
+          setValue('time', timeValue);
+          console.log('✅ Auto-selected time slot (alternative match):', timeValue);
+        } else {
+          console.error('❌ No matching time slot found at all');
+        }
+        
+        setAutoSelectTime(null); // Clear the flag even if not found
+      }
+    }
+  }, [autoSelectTime, timeSlots, loadingTimeSlots, setValue]);
 
   const fetchNextAvailableSlot = async (service: Service) => {
     try {
@@ -247,7 +396,7 @@ const BookingPage: React.FC = () => {
       // Find the first available slot that's in the future
       const nextSlot = data?.find(slot => {
         const slotDate = slot.date;
-        const startTime = slot.start_time.substring(0, 5);
+        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
 
         // If slot is today, check if time is in the future
         if (slotDate === currentDate) {
@@ -259,8 +408,8 @@ const BookingPage: React.FC = () => {
       });
 
       if (nextSlot) {
-        const startTime = nextSlot.start_time.substring(0, 5);
-        const endTime = nextSlot.end_time.substring(0, 5);
+        const startTime = (nextSlot.start || nextSlot.start_time || '').substring(0, 5);
+        const endTime = (nextSlot.end || nextSlot.end_time || '').substring(0, 5);
         const displayTime = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
         const displayDate = new Date(nextSlot.date).toLocaleDateString('en-IE', {
           weekday: 'long',
@@ -271,7 +420,7 @@ const BookingPage: React.FC = () => {
 
         setNextAvailableSlot({
           date: nextSlot.date,
-          time: `${nextSlot.date}T${startTime}-${endTime}`, // Format for the booking page time field
+          time: `${startTime}-${endTime}|${displayTime}`, // Format to match timeSlots format: "timeValue|displayTime"
           display: `${displayDate} at ${displayTime}`
         });
       } else {
@@ -283,148 +432,6 @@ const BookingPage: React.FC = () => {
       setNextAvailableSlot(null);
     } finally {
       setLoadingNextSlot(false);
-    }
-  };
-
-  const fetchTimeSlots = async (service: Service, selectedDate?: string) => {
-    try {
-      setLoadingTimeSlots(true);
-
-      // Extract service ID from compound ID if needed (e.g., "7-out" -> 7)
-      let serviceId: number;
-      if (typeof service.id === 'string') {
-        if (service.id.includes('-')) {
-          serviceId = parseInt(service.id.split('-')[0]);
-        } else {
-          serviceId = parseInt(service.id);
-        }
-      } else {
-        serviceId = service.id;
-      }
-
-      if (!serviceId || isNaN(serviceId)) {
-        console.log('Invalid serviceId, returning');
-        return;
-      }
-
-      // Get current date and time for filtering
-      const now = new Date();
-      const currentDate = now.toISOString().split('T')[0];
-      const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
-
-      // Determine the minimum date to fetch slots from
-      let minimumDate = currentDate;
-      if (selectedDate && selectedDate >= currentDate) {
-        minimumDate = selectedDate;
-      }
-
-      // Fetch available time slots from availability table, filtering by service type if applicable
-      let availabilityQuery = supabase
-        .from('availability')
-        .select('*')
-        .gte('date', minimumDate) // Only from selected date or current date onwards
-        .eq('is_available', true); // Only available slots
-
-      // Filter by slot_type based on service pricing type
-      if (service.priceType === 'in-hour') {
-        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
-      } else if (service.priceType === 'out-of-hour') {
-        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
-      }
-      // If priceType is 'standard' or undefined, show all slots
-
-      const { data: availabilityData, error: availError } = await availabilityQuery
-        .order('date', { ascending: true })
-        .order('start', { ascending: true });
-
-      if (availError) {
-        console.error('Error fetching availability:', availError);
-        setTimeSlots([]);
-        return;
-      }
-
-      // Filter availability slots based on date selection and time validation
-      // Note: slot_type filtering is now done at database level above
-      let relevantSlots = (availabilityData || []).filter(slot => {
-        const slotDate = slot.date;
-        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
-
-        // If user has selected a specific date, only show slots for that exact date
-        if (selectedDate) {
-          // Only include slots on the exact selected date
-          if (slotDate !== selectedDate) {
-            return false; // Skip slots not on the selected date
-          }
-
-          // If slot is today, check if time is in the future
-          if (slotDate === currentDate) {
-            return startTime > currentTime;
-          }
-
-          // It's the selected date and not today, show all times
-          return true;
-        }
-
-        // If no date selected, use default filtering (current behavior)
-        if (slotDate === currentDate) {
-          return startTime > currentTime; // Only show future times for today
-        }
-
-        return slotDate > currentDate; // Show all slots for future dates
-      });
-
-      console.log(`📅 Booking slots for service "${service.displayName}":`, {
-        serviceType: service.priceType,
-        totalFromDB: availabilityData?.length || 0,
-        afterTimeFiltering: relevantSlots.length,
-        selectedDate,
-        sampleSlots: relevantSlots.slice(0, 3).map(s => ({
-          date: s.date,
-          time: s.start || s.start_time,
-          slotType: s.slot_type
-        }))
-      });
-
-      // Convert availability slots to formatted time options grouped by date
-      const timeOptionsByDate: Record<string, string[]> = {};
-
-      relevantSlots.forEach(slot => {
-        const slotDate = slot.date;
-        const startTime = (slot.start || slot.start_time || '').substring(0, 5);
-        const endTime = slot.end_time.substring(0, 5);
-
-        if (!timeOptionsByDate[slotDate]) {
-          timeOptionsByDate[slotDate] = [];
-        }
-
-        const startDisplay = formatTimeForDisplay(startTime);
-        const endDisplay = formatTimeForDisplay(endTime);
-
-        // Create time range value and display format
-        // Still keep date in the value for processing, but only show time in display
-        const timeRange = `${slotDate}T${startTime}-${endTime}`;
-        const displayRange = `${startDisplay} - ${endDisplay}`; // Only display time range, not date
-        const timeOption = `${timeRange}|${displayRange}`;
-
-        if (!timeOptionsByDate[slotDate].includes(timeOption)) {
-          timeOptionsByDate[slotDate].push(timeOption);
-        }
-      });
-
-      // Flatten and sort all time options
-      const allTimeOptions = Object.values(timeOptionsByDate).flat().sort((a, b) => {
-        const timeA = a.split('|')[0];
-        const timeB = b.split('|')[0];
-        return timeA.localeCompare(timeB);
-      });
-
-      setTimeSlots(allTimeOptions);
-
-    } catch (error) {
-      console.error('Error fetching time slots:', error);
-      setTimeSlots([]);
-    } finally {
-      setLoadingTimeSlots(false);
     }
   };
 
@@ -449,7 +456,7 @@ const BookingPage: React.FC = () => {
         console.error('Error fetching services:', error);
       } else {
         // Transform services to include separate in-hour/out-of-hour options
-        const transformedServices: any[] = [];
+        const transformedServices: Service[] = [];
         (data || []).forEach(service => {
           const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
           const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
@@ -510,7 +517,7 @@ const BookingPage: React.FC = () => {
     }
   };
 
-  const sendBookingEmail = async (booking: BookingFormData, bookingRecord: any) => {
+  const sendBookingEmail = async (booking: BookingFormData, bookingRecord: BookingRecord) => {
     setSendingEmail(true);
     try {
       // Import the proper email utility
@@ -551,20 +558,7 @@ const BookingPage: React.FC = () => {
     setSuccessMsg('');
 
     try {
-      // Check for existing pending/confirmed bookings to prevent duplicates
-      // Note: We'll skip this check for now since customer data is now in a separate customers table
-      // Duplicate checking to be implemented in future version with customer relationships
-      const existingBookings: any[] = [];
-      const checkError = null;
-
-      if (checkError) {
-        console.error('Error checking existing bookings:', checkError);
-      } else if (existingBookings && existingBookings.length > 0) {
-        const recentBooking = existingBookings[0];
-        setSuccessMsg(`You already have a ${recentBooking.status} booking for this service. Please contact us if you need to make changes.`);
-        setSendingEmail(false);
-        return;
-      }
+      // Note: Removed duplicate booking check as business now allows multiple customers with same email
 
       // Map form data to booking data
       // Extract date and time from the combined value (e.g., "2024-01-15T09:00-17:00")
@@ -809,10 +803,20 @@ const BookingPage: React.FC = () => {
             calculationSource: actualServiceCost !== paymentRequest.amount ? 'Pricing Service' : 'Payment Request'
           });
 
+          // Create PaymentRequestWithCustomer for the modal
+          const paymentRequestWithCustomer: PaymentRequestWithCustomer = {
+            ...paymentRequest,
+            customer: {
+              first_name: customer.first_name,
+              last_name: customer.last_name,
+              email: customer.email
+            }
+          };
+
           // Show payment interface for immediate payment only if amount > 0
           setPaymentState({
             showPayment: true,
-            paymentRequest,
+            paymentRequest: paymentRequestWithCustomer,
             booking,
             customer,
             paymentCompleted: false,
@@ -859,8 +863,8 @@ const BookingPage: React.FC = () => {
           amount: selectedAmount, // Use selected payment amount
           payment_type: paymentType, // Add payment type for tracking
           customer: {
-            first_name: customerData.first_name || customerData.firstName || '',
-            last_name: customerData.last_name || customerData.lastName || '',
+            first_name: customerData.first_name || '',
+            last_name: customerData.last_name || '',
             email: customerData.email || ''
           },
           service_name: paymentState.booking?.package_name,
@@ -920,38 +924,6 @@ const BookingPage: React.FC = () => {
         return prev - 1;
       });
     }, 1000);
-  };
-
-  const redirectToHome = async () => {
-    await resetForm();
-    navigate('/');
-  };
-
-  const resetForm = async () => {
-    // Silently cancel any active payment request (no email - user may have already received one from modal close)
-    if (paymentState.paymentRequest?.id) {
-      try {
-        // Use silent cancel to avoid duplicate cancellation emails
-        const { silentCancelPaymentRequest } = await import('../utils/paymentCancellation');
-        await silentCancelPaymentRequest(paymentState.paymentRequest.id, 'Form reset by user');
-        console.log('🔇 Payment request silently cancelled during form reset');
-      } catch (error) {
-        console.error('Error silently cancelling payment request:', error);
-      }
-    }
-
-    reset();
-    setSuccessMsg('');
-    setCountdown(20);
-    setShowPaymentModal(false);
-    setSelectedPaymentRequest(null);
-    setPaymentState({
-      showPayment: false,
-      paymentRequest: null,
-      booking: null,
-      customer: null,
-      paymentCompleted: false
-    });
   };
 
   return (
@@ -1295,13 +1267,40 @@ const BookingPage: React.FC = () => {
                           </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              // Set the recommended date and time using react-hook-form setValue
+                            onClick={async () => {
+                              // Set the date first
                               setValue('date', nextAvailableSlot.date);
-                              // Wait for date to be set, then set time (which depends on date being selected)
-                              setTimeout(() => {
-                                setValue('time', nextAvailableSlot.time);
-                              }, 100);
+                              
+                              // Extract just the time part (before |) for auto-select - match HeroSection exactly
+                              const timeValue = nextAvailableSlot.time.split('|')[0];
+                              setAutoSelectTime(timeValue);
+                              
+                              // Find the selected service and trigger time slots loading
+                              const selectedService = services.find(s => 
+                                s.displayName === watchedService || s.name === watchedService
+                              );
+                              
+                              if (selectedService) {
+                                try {
+                                  // Manually trigger time slots loading for the new date
+                                  await fetchTimeSlots(selectedService, nextAvailableSlot.date);
+                                  console.log('📅 BookingPage time slots loaded, auto-select will trigger');
+                                } catch (error) {
+                                  console.error('❌ Error loading time slots:', error);
+                                  // Fallback - try direct setValue with delay
+                                  setTimeout(() => {
+                                    setValue('time', nextAvailableSlot.time);
+                                    console.log('✅ BookingPage time slot set (error fallback):', nextAvailableSlot.time);
+                                  }, 200);
+                                }
+                              } else {
+                                console.warn('⚠️ Service not found, using fallback timing');
+                                // Fallback - wait for useEffect to trigger, then set time
+                                setTimeout(() => {
+                                  setValue('time', nextAvailableSlot.time);
+                                  console.log('✅ BookingPage time slot set (service fallback):', nextAvailableSlot.time);
+                                }, 300);
+                              }
                             }}
                             className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors ml-3"
                           >

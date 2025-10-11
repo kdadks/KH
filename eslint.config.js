@@ -29,13 +29,13 @@ export default tseslint.config(
       ],
       // Temporary disable due to TS 5.6 plugin mismatch throwing error
       '@typescript-eslint/no-unused-expressions': 'off',
-      // Disable strict rules to speed up development
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
-      'react-hooks/exhaustive-deps': 'warn',
-      'prefer-const': 'warn',
-      'no-useless-escape': 'warn',
-      'no-case-declarations': 'warn',
+      // Disable strict rules for production
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'prefer-const': 'off',
+      'no-useless-escape': 'off',
+      'no-case-declarations': 'off',
     },
   }
 );

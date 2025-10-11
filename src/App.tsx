@@ -13,7 +13,6 @@ const LoadingSpinner = () => (
 );
 
 // Create a robust lazy loader with error handling and retry mechanism
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createLazyComponent = (importFunc: () => Promise<{ default: React.ComponentType<any> }>, componentName: string) => {
   return lazy(() => 
     importFunc().catch((error) => {
