@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Clock,
@@ -22,7 +22,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
   const { showSuccess, showError } = useToast();
 
   // State for quick generation options
-  const [quickPeriod, setQuickPeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [quickPeriod, setQuickPeriod] = useState<'day' | 'week' | 'month'>('day');
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
@@ -33,7 +33,11 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
     start: '09:00',
     end: '17:00'
   });
-  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri default
+  const [selectedDays, setSelectedDays] = useState<number[]>(() => {
+    // For day mode, default to only today's day of the week
+    const today = new Date();
+    return [today.getDay()];
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewData, setPreviewData] = useState<{
     totalSlots: number;
@@ -43,6 +47,27 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
     weekendDays?: number;
     isOutOfHoursTime?: boolean;
   } | null>(null);
+
+  // Update selected days when period changes
+  useEffect(() => {
+    const today = new Date();
+    const todayDayOfWeek = today.getDay();
+    
+    switch (quickPeriod) {
+      case 'day':
+        // For day mode, select only today
+        setSelectedDays([todayDayOfWeek]);
+        break;
+      case 'week':
+        // For week mode, select Monday-Friday
+        setSelectedDays([1, 2, 3, 4, 5]);
+        break;
+      case 'month':
+        // For month mode, select Monday-Friday  
+        setSelectedDays([1, 2, 3, 4, 5]);
+        break;
+    }
+  }, [quickPeriod]);
 
   const dayLabels = [
     { value: 0, label: 'Sunday', short: 'Sun' },
@@ -328,7 +353,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
 
       showSuccess(
         'Schedule Generated',
-        `${totalInserted} slots created across ${dates.length} days`
+        `${totalInserted} slots created across ${dates.length} ${dates.length === 1 ? 'day' : 'days'}`
       );
 
       onScheduleGenerated?.(totalInserted);
@@ -539,7 +564,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
                     <div className="font-medium mb-1">Preview</div>
                     <div className="space-y-1 text-xs">
                       <div>• {previewData.totalSlots} total slots</div>
-                      <div>• {previewData.dates.length} working days</div>
+                      <div>• {previewData.dates.length} working {previewData.dates.length === 1 ? 'day' : 'days'}</div>
                       <div>• {previewData.dailySlots} slots per day</div>
                       <div>• {slotDuration}min appointments with {breakDuration}min breaks</div>
                       {previewData.outOfHoursSlots !== undefined && previewData.outOfHoursSlots > 0 && (
@@ -547,7 +572,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
                           <div className="font-medium text-orange-700">Out-of-Hours Slots:</div>
                           <div>• {previewData.outOfHoursSlots} out-of-hour slots</div>
                           {previewData.weekendDays > 0 && (
-                            <div>• {previewData.weekendDays} weekend days</div>
+                            <div>• {previewData.weekendDays} weekend {previewData.weekendDays === 1 ? 'day' : 'days'}</div>
                           )}
                           {previewData.isOutOfHoursTime && (
                             <div>• Time outside 9 AM - 5 PM</div>
@@ -567,7 +592,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
               {previewData && (
-                <>Ready to create {previewData.totalSlots} slots across {previewData.dates.length} days</>
+                <>Ready to create {previewData.totalSlots} slots across {previewData.dates.length} {previewData.dates.length === 1 ? 'day' : 'days'}</>
               )}
             </div>
             <button
