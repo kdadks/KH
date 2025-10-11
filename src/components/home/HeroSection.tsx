@@ -9,6 +9,7 @@ import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { cancelPaymentRequest } from '../../utils/paymentCancellation';
 import { PaymentRequestWithCustomer } from '../../types/paymentTypes';
+import logger from '../../utils/logger';
 import {
   emailValidation,
   phoneValidation,
@@ -617,21 +618,34 @@ const HeroSection: React.FC = () => {
         return;
       }
       // Check for existing pending/confirmed bookings to prevent duplicates
-      const { data: existingBookings, error: checkError } = await supabase
-        .from('bookings')
-        .select('id, status, created_at')
-        .eq('customer_email', data.email)
-        .eq('package_name', data.service)
-        .in('status', ['pending', 'confirmed', 'paid'])
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+      // First get customer by email, then check their bookings
+      const { data: existingCustomer, error: customerError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('email', data.email.toLowerCase().trim())
+        .eq('is_active', true)
+        .maybeSingle();
 
-      if (checkError) {
-        console.error('Error checking existing bookings:', checkError);
-      } else if (existingBookings && existingBookings.length > 0) {
-        const recentBooking = existingBookings[0];
-        setSuccessMsg(`You already have a ${recentBooking.status} booking for this service. Please contact us if you need to make changes.`);
-        setSendingEmail(false);
-        return;
+      if (customerError) {
+        console.error('Error checking customer:', customerError);
+      } else if (existingCustomer) {
+        // Check for existing bookings for this customer
+        const { data: existingBookings, error: checkError } = await supabase
+          .from('bookings')
+          .select('id, status, created_at')
+          .eq('customer_id', existingCustomer.id)
+          .eq('package_name', data.service)
+          .in('status', ['pending', 'confirmed', 'paid'])
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+
+        if (checkError) {
+          console.error('Error checking existing bookings:', checkError);
+        } else if (existingBookings && existingBookings.length > 0) {
+          const recentBooking = existingBookings[0];
+          setSuccessMsg(`You already have a ${recentBooking.status} booking for this service. Please contact us if you need to make changes.`);
+          setSendingEmail(false);
+          return;
+        }
       }
 
       // Prepare customer data
@@ -683,7 +697,7 @@ const HeroSection: React.FC = () => {
         status: 'pending'
       };
 
-      console.log('📝 HeroSection - About to create booking with:', {
+      logger.debug('HeroSection - About to create booking with:', {
         customerData,
         bookingData,
         serviceValue: data.service
@@ -700,7 +714,7 @@ const HeroSection: React.FC = () => {
       }
 
       if (booking && customer) {
-        console.log('✅ HeroSection - Booking created successfully:', {
+        logger.debug('HeroSection - Booking created successfully:', {
           booking,
           customer,
           paymentRequest: paymentRequest ? 'Created' : 'Not created',
@@ -708,13 +722,13 @@ const HeroSection: React.FC = () => {
         });
 
         if (paymentRequest && paymentRequest.amount > 0) {
-          console.log('💳 Payment request created with amount > 0, showing payment interface');
+          logger.debug('Payment request created with amount > 0, showing payment interface');
 
           // Calculate actual service cost and payment options similar to main booking system
           let actualServiceCost = paymentRequest.amount; // Fallback to payment request amount
 
           try {
-            console.log('🔍 Calculating actual service cost for:', data.service);
+            logger.debug('Calculating actual service cost for:', data.service);
 
             // Import pricing functions
             const { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } = await import('../../services/pricingService');
@@ -728,7 +742,7 @@ const HeroSection: React.FC = () => {
 
             if (servicePricing) {
               actualServiceCost = getServicePrice(servicePricing, timeSlotType);
-              console.log('✅ Service cost calculated from database:', actualServiceCost);
+              logger.debug('Service cost calculated from database:', actualServiceCost);
             } else {
               console.log('⚠️ Service pricing not found in database, using payment request amount');
             }
@@ -744,7 +758,7 @@ const HeroSection: React.FC = () => {
             full: { amount: actualServiceCost }
           };
 
-          console.log('💰 Payment options calculated:', {
+          logger.debug('Payment options calculated:', {
             selectedService: data.service,
             actualServiceCost,
             paymentOptions: {
@@ -1126,7 +1140,7 @@ const HeroSection: React.FC = () => {
                         <button
                           type="button"
                           onClick={async () => {
-                            console.log('🎯 Hero Select This Slot clicked:', {
+                            logger.debug('Hero Select This Slot clicked:', {
                               date: nextAvailableSlot.date,
                               time: nextAvailableSlot.time,
                               display: nextAvailableSlot.display
@@ -1148,7 +1162,7 @@ const HeroSection: React.FC = () => {
                               try {
                                 // Manually trigger time slots loading for the new date
                                 await fetchTimeSlots(selectedService, nextAvailableSlot.date);
-                                console.log('✅ Hero time slots loaded, auto-select will trigger');
+                                logger.debug('Hero time slots loaded, auto-select will trigger');
                               } catch (error) {
                                 console.error('❌ Error loading time slots:', error);
                                 // Fallback - try direct setValue with delay
