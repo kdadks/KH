@@ -2,6 +2,9 @@
 [build]
   command = "npm run predeploy"
   publish = "dist"
+  
+[build.environment]
+  NODE_VERSION = "20.12.2"
 
 # Netlify Functions configuration
 [functions]
