@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import Layout from './components/layout/Layout';
 import { ToastProvider } from './components/shared/toastContext';
 import { UserAuthProvider } from './contexts/UserAuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Loading component
 const LoadingSpinner = () => (
@@ -11,36 +12,110 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Lazy load pages
-const HomePage = lazy(() => import('./pages/HomePage'));
-const AboutPage = lazy(() => import('./pages/AboutPage'));
-const ServicesPage = lazy(() => import('./pages/ServicesPage'));
-const TestimonialsPage = lazy(() => import('./pages/TestimonialsPage'));
-const BookingPage = lazy(() => import('./pages/BookingPage'));
-const ContactPage = lazy(() => import('./pages/ContactPage'));
-const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
-const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage'));
-const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
-const AdminConsole = lazy(() => import('./pages/AdminConsole'));
-const SportsInjuryPage = lazy(() => import('./pages/services/SportsInjuryPage'));
-const ManualTherapyPage = lazy(() => import('./pages/services/ManualTherapyPage'));
-const ChronicPainPage = lazy(() => import('./pages/services/ChronicPainPage'));
-const PostSurgeryPage = lazy(() => import('./pages/services/PostSurgeryPage'));
-const NeuromuscularPage = lazy(() => import('./pages/services/NeuromuscularPage'));
-const WellnessAssessmentPage = lazy(() => import('./pages/services/WellnessAssessmentPage'));
-const UserPortal = lazy(() => import('./components/UserPortal'));
-const ResetPassword = lazy(() => import('./components/user/ResetPassword'));
-const PaymentPage = lazy(() => import('./pages/PaymentPage'));
-const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
-const PaymentCancelledPage = lazy(() => import('./pages/PaymentCancelledPage'));
-const SumUpCheckoutPage = lazy(() => import('./pages/SumUpCheckoutPage'));
+// Create a robust lazy loader with error handling and retry mechanism
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createLazyComponent = (importFunc: () => Promise<{ default: React.ComponentType<any> }>, componentName: string) => {
+  return lazy(() => 
+    importFunc().catch((error) => {
+      console.error(`Dynamic import failed for ${componentName}:`, error);
+      
+      // Try to recover by forcing a page reload if this happens on critical pages
+      if (['HomePage', 'PaymentSuccessPage', 'PaymentCancelledPage'].includes(componentName)) {
+        console.log(`Critical component ${componentName} failed to load, attempting recovery...`);
+        
+        // Give it a moment then try to redirect to home
+        setTimeout(() => {
+          if (window.location.pathname !== '/') {
+            console.log('Redirecting to home due to critical component import failure');
+            window.location.href = '/';
+          } else {
+            // If we're already on home and it's failing, force reload
+            window.location.reload();
+          }
+        }, 1000);
+      }
+      
+      // Return a fallback component
+      return {
+        default: () => (
+          <div style={{ 
+            padding: '2rem', 
+            textAlign: 'center',
+            minHeight: '60vh',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Loading Error</h1>
+            <p style={{ marginBottom: '1.5rem' }}>
+              There was an issue loading this page. This sometimes happens after updates.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button 
+                onClick={() => window.location.reload()} 
+                style={{ 
+                  padding: '10px 20px', 
+                  background: '#007bff', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Refresh Page
+              </button>
+              <a 
+                href="/"
+                style={{ 
+                  padding: '10px 20px', 
+                  background: '#28a745', 
+                  color: 'white', 
+                  textDecoration: 'none',
+                  borderRadius: '4px'
+                }}
+              >
+                Go to Home
+              </a>
+            </div>
+          </div>
+        )
+      };
+    })
+  );
+};
+
+// Lazy load pages with error handling
+const HomePage = createLazyComponent(() => import('./pages/HomePage'), 'HomePage');
+const AboutPage = createLazyComponent(() => import('./pages/AboutPage'), 'AboutPage');
+const ServicesPage = createLazyComponent(() => import('./pages/ServicesPage'), 'ServicesPage');
+const TestimonialsPage = createLazyComponent(() => import('./pages/TestimonialsPage'), 'TestimonialsPage');
+const BookingPage = createLazyComponent(() => import('./pages/BookingPage'), 'BookingPage');
+const ContactPage = createLazyComponent(() => import('./pages/ContactPage'), 'ContactPage');
+const PrivacyPolicyPage = createLazyComponent(() => import('./pages/PrivacyPolicyPage'), 'PrivacyPolicyPage');
+const TermsOfServicePage = createLazyComponent(() => import('./pages/TermsOfServicePage'), 'TermsOfServicePage');
+const CookiePolicyPage = createLazyComponent(() => import('./pages/CookiePolicyPage'), 'CookiePolicyPage');
+const NotFoundPage = createLazyComponent(() => import('./pages/NotFoundPage'), 'NotFoundPage');
+const AdminConsole = createLazyComponent(() => import('./pages/AdminConsole'), 'AdminConsole');
+const SportsInjuryPage = createLazyComponent(() => import('./pages/services/SportsInjuryPage'), 'SportsInjuryPage');
+const ManualTherapyPage = createLazyComponent(() => import('./pages/services/ManualTherapyPage'), 'ManualTherapyPage');
+const ChronicPainPage = createLazyComponent(() => import('./pages/services/ChronicPainPage'), 'ChronicPainPage');
+const PostSurgeryPage = createLazyComponent(() => import('./pages/services/PostSurgeryPage'), 'PostSurgeryPage');
+const NeuromuscularPage = createLazyComponent(() => import('./pages/services/NeuromuscularPage'), 'NeuromuscularPage');
+const WellnessAssessmentPage = createLazyComponent(() => import('./pages/services/WellnessAssessmentPage'), 'WellnessAssessmentPage');
+const UserPortal = createLazyComponent(() => import('./components/UserPortal'), 'UserPortal');
+const ResetPassword = createLazyComponent(() => import('./components/user/ResetPassword'), 'ResetPassword');
+const PaymentPage = createLazyComponent(() => import('./pages/PaymentPage'), 'PaymentPage');
+const PaymentSuccessPage = createLazyComponent(() => import('./pages/PaymentSuccessPage'), 'PaymentSuccessPage');
+const PaymentCancelledPage = createLazyComponent(() => import('./pages/PaymentCancelledPage'), 'PaymentCancelledPage');
+const SumUpCheckoutPage = createLazyComponent(() => import('./pages/SumUpCheckoutPage'), 'SumUpCheckoutPage');
 
 function App() {
   return (
     <ToastProvider>
       <UserAuthProvider>
-        <Suspense fallback={<LoadingSpinner />}>
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
@@ -73,6 +148,7 @@ function App() {
             <Route path="/sumup-checkout" element={<SumUpCheckoutPage />} />
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </UserAuthProvider>
     </ToastProvider>
   );
