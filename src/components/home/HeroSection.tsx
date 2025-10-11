@@ -8,6 +8,7 @@ import PaymentModal from '../shared/PaymentModal';
 import { supabase } from '../../supabaseClient';
 import { createBookingWithCustomer } from '../../utils/customerBookingUtils';
 import { cancelPaymentRequest } from '../../utils/paymentCancellation';
+import { PaymentRequestWithCustomer } from '../../types/paymentTypes';
 import {
   emailValidation,
   phoneValidation,
@@ -144,7 +145,7 @@ const HeroSection: React.FC = () => {
     });
   }, [reset]);
 
-  const resetForm = async () => {
+  const resetForm = useCallback(async () => {
     // Cancel any active payment request - check both state locations
     const paymentRequestToCancel = selectedPaymentRequest || paymentState.paymentRequest;
     
@@ -182,7 +183,7 @@ const HeroSection: React.FC = () => {
       paymentOptions: undefined,
       selectedPaymentType: undefined
     });
-  }, [reset]);
+  }, [reset, selectedPaymentRequest, paymentState.paymentRequest]);
 
   // Handle countdown reaching zero - just reset form instead of redirecting
   useEffect(() => {
