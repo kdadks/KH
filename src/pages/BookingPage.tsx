@@ -22,6 +22,7 @@ import {
   validateNameRealTime,
   validateNotesRealTime
 } from '../utils/formValidation';
+import logger from '../utils/logger';
 
 interface BookingFormData {
   firstName: string;
@@ -185,7 +186,7 @@ const BookingPage: React.FC = () => {
         timeOptions.push(timeOption);
       });
 
-      console.log(`Found ${timeOptions.length} available time slots for service ${serviceId}`);
+      logger.devOnly(() => console.log(`Found ${timeOptions.length} available time slots for service ${serviceId}`));
       setTimeSlots(timeOptions);
 
     } catch (error) {
@@ -314,14 +315,14 @@ const BookingPage: React.FC = () => {
       if (matchingSlot) {
         const [timeValue] = matchingSlot.split('|');
         setValue('time', timeValue);
-        console.log('✅ Auto-selected time slot:', timeValue);
+        logger.devOnly(() => console.log('✅ Auto-selected time slot:', timeValue));
         setAutoSelectTime(null); // Clear the auto-select flag
       } else {
         console.warn('⚠️ Auto-select time not found in available slots:', autoSelectTime);
         
         // Try to extract just the time part from the target
         const targetTimePart = autoSelectTime.split('|')[0];
-        console.log('🔍 Trying alternative time match with:', targetTimePart);
+        logger.devOnly(() => console.log('🔍 Trying alternative time match with:', targetTimePart));
         
         const alternativeMatch = timeSlots.find(slot => {
           const [timeValue] = slot.split('|');
@@ -331,7 +332,7 @@ const BookingPage: React.FC = () => {
         if (alternativeMatch) {
           const [timeValue] = alternativeMatch.split('|');
           setValue('time', timeValue);
-          console.log('✅ Auto-selected time slot (alternative match):', timeValue);
+          logger.devOnly(() => console.log('✅ Auto-selected time slot (alternative match):', timeValue));
         } else {
           console.error('❌ No matching time slot found at all');
         }
@@ -566,7 +567,7 @@ const BookingPage: React.FC = () => {
       let timeslotStartTime = null;
       let timeslotEndTime = null;
 
-      console.log('🔍 BookingPage - Form data received:', { date: data.date, time: data.time });
+      logger.devOnly(() => console.log('🔍 BookingPage - Form data received:', { date: data.date, time: data.time }));
 
       if (data.time && data.time.includes('T')) {
         // Parse the combined datetime-range format (e.g., "2024-09-18T09:00-17:00")
@@ -603,7 +604,7 @@ const BookingPage: React.FC = () => {
           `${startTime}:00:00`;
         bookingDateTime = `${dateStr}T${formattedStartTime}`;
 
-        console.log('✅ Parsed datetime-range format:', { dateStr, startTime, endTime, bookingDateTime });
+        logger.devOnly(() => console.log('✅ Parsed datetime-range format:', { dateStr, startTime, endTime, bookingDateTime }));
       } else if (data.time && data.time.includes('-')) {
         // Legacy format: just time range (e.g., "09:00-17:00")
         const [startTime, endTime] = data.time.split('-');
@@ -623,7 +624,7 @@ const BookingPage: React.FC = () => {
           `${startTime}:00:00`;
         bookingDateTime = `${data.date}T${formattedStartTime}`;
 
-        console.log('✅ Parsed time-range format:', { startTime, endTime, bookingDateTime });
+        logger.devOnly(() => console.log('✅ Parsed time-range format:', { startTime, endTime, bookingDateTime }));
       } else if (data.time) {
         // Fallback for single time value
         if (!data.time) {
@@ -640,7 +641,7 @@ const BookingPage: React.FC = () => {
           `${data.time}:00:00`;
         bookingDateTime = `${data.date}T${formattedTime}`;
 
-        console.log('✅ Parsed single time format:', { time: data.time, bookingDateTime });
+        logger.devOnly(() => console.log('✅ Parsed single time format:', { time: data.time, bookingDateTime }));
       } else {
         // No time selected - use date only with default time
         bookingDateTime = `${data.date}T09:00:00`; // Default to 9 AM if no time selected
@@ -674,13 +675,13 @@ const BookingPage: React.FC = () => {
         status: 'pending'
       };
 
-      console.log('📋 BookingPage - Final booking data:', bookingData);
+      logger.devOnly(() => console.log('📋 BookingPage - Final booking data:', bookingData));
 
-      console.log('📝 BookingPage - About to create booking with:', {
+      logger.devOnly(() => console.log('📝 BookingPage - About to create booking with:', {
         customerData,
         bookingData,
         serviceValue: data.service
-      });
+      }));
 
       // Create booking with customer integration
       const { booking, customer, paymentRequest, error } = await createBookingWithCustomer(customerData, bookingData);
@@ -693,12 +694,12 @@ const BookingPage: React.FC = () => {
       }
 
       if (booking && customer) {
-        console.log('✅ BookingPage - Booking created successfully:', {
+        logger.devOnly(() => console.log('✅ BookingPage - Booking created successfully:', {
           booking,
           customer,
           paymentRequest: paymentRequest ? 'Created' : 'Not created',
           paymentRequestDetails: paymentRequest
-        });
+        }));
 
         // Dispatch event to notify admin views of booking update
         window.dispatchEvent(new CustomEvent('bookingUpdated', {
@@ -706,13 +707,13 @@ const BookingPage: React.FC = () => {
         }));
         
         if (paymentRequest && paymentRequest.amount > 0) {
-          console.log('💳 Payment request created with amount > 0, showing payment interface');
+          logger.devOnly(() => console.log('💳 Payment request created with amount > 0, showing payment interface'));
 
           // Calculate actual service cost based on selected service and time slot
           let actualServiceCost = paymentRequest.amount; // Fallback to payment request amount
 
           try {
-            console.log('🔍 Calculating actual service cost for:', data.service);
+            logger.devOnly(() => console.log('🔍 Calculating actual service cost for:', data.service));
 
             // Import pricing functions
             const { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } = await import('../services/pricingService');
@@ -721,13 +722,13 @@ const BookingPage: React.FC = () => {
             const baseServiceName = extractBaseServiceName(data.service);
             const timeSlotType = determineTimeSlotType(data.service);
 
-            console.log('📊 Service pricing calculation:', {
+            logger.devOnly(() => console.log('📊 Service pricing calculation:', {
               originalService: data.service,
               baseServiceName,
               timeSlotType,
               serviceLength: data.service.length,
               baseServiceLength: baseServiceName.length
-            });
+            }));
 
             // Fetch service pricing from database
             const servicePricing = await fetchServicePricing(baseServiceName);

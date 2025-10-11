@@ -12,6 +12,16 @@ export type PaymentEnvironment = 'production' | 'sandbox';
 let cachedEnvironment: PaymentEnvironment | null = null;
 
 /**
+ * Check if we're in development mode (for console logging)
+ */
+export const isDevelopmentMode = (): boolean => {
+  if (typeof window === 'undefined') {
+    return process.env.NODE_ENV === 'development';
+  }
+  return window.location.hostname === 'localhost' || window.location.hostname.includes('localhost');
+};
+
+/**
  * Clear the cached environment (useful for testing or if environment changes)
  */
 export const clearEnvironmentCache = (): void => {
