@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUserAuth } from '../contexts/UserAuthContext';
-import { getUserDashboardData } from '../utils/userManagementUtils';
+import { getUserDashboardData, getConsolidatedDashboardData } from '../utils/userManagementUtils';
 import { UserDashboardData, UserPortalTab } from '../types/userManagement';
 import { useToast } from './shared/toastContext';
 
@@ -12,6 +12,7 @@ import UserInvoices from './user/UserInvoices';
 import UserPayments from './user/UserPayments';
 import UserBookings from './user/UserBookings';
 import FirstLoginPasswordChange from './user/FirstLoginPasswordChange';
+import PatientSelector from './user/PatientSelector';
 import { 
   User, 
   FileText, 
@@ -22,11 +23,23 @@ import {
 } from 'lucide-react';
 
 const UserPortal: React.FC = () => {
-  const { user, authUser, loading: authLoading, logout } = useUserAuth();
+  const { 
+    user, 
+    authUser, 
+    loading: authLoading, 
+    logout,
+    // Multi-patient support
+    allPatients = [],
+    activePatient,
+    isMultiPatient = false,
+    switchPatient,
+    refreshPatients
+  } = useUserAuth() as any; // TODO: Update type when UserAuthContext is extended
   const { showSuccess, showError, showInfo } = useToast();
   const [activeTab, setActiveTab] = useState<UserPortalTab>('dashboard');
   const [dashboardData, setDashboardData] = useState<UserDashboardData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'individual' | 'consolidated'>('individual');
 
   // Load dashboard data when user logs in
   useEffect(() => {
@@ -35,15 +48,36 @@ const UserPortal: React.FC = () => {
     }
   }, [user]);
 
+  // Reload dashboard data when active patient changes (for individual view)
+  useEffect(() => {
+    if (user?.id && viewMode === 'individual' && activePatient) {
+      loadDashboardData();
+    }
+  }, [activePatient, viewMode]);
+
   useEffect(() => {
   }, [user, authUser, authLoading]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (mode?: 'individual' | 'consolidated') => {
     if (!user?.id) return;
 
+    const currentMode = mode || viewMode;
     setLoading(true);
+    
     try {
-      const { data, error } = await getUserDashboardData(user.id.toString());
+      let data, error;
+      
+      if (currentMode === 'consolidated' && isMultiPatient && allPatients.length > 1) {
+        // Load consolidated data for all patients
+        const result = await getConsolidatedDashboardData(allPatients);
+        data = result.data;
+        error = result.error;
+      } else {
+        // Load individual patient data
+        const result = await getUserDashboardData(user.id.toString());
+        data = result.data;
+        error = result.error;
+      }
       
       if (error) {
         showError('Error', `Failed to load dashboard: ${error}`);
@@ -58,6 +92,11 @@ const UserPortal: React.FC = () => {
     }
   };
 
+  const handleViewModeChange = async (mode: 'individual' | 'consolidated') => {
+    setViewMode(mode);
+    await loadDashboardData(mode);
+  };
+
   // Listen for navigation events from child components
   useEffect(() => {
     const handleNavigateToInvoices = () => {
@@ -65,12 +104,10 @@ const UserPortal: React.FC = () => {
     };
 
     const handleRefreshDashboard = () => {
-      console.log('UserPortal: Received refreshDashboard event, refreshing data...');
       loadDashboardData();
     };
 
     const handleNavigateToDashboardForPayment = () => {
-      console.log('UserPortal: Received navigateToDashboardForPayment event, switching to dashboard...');
       // Add a brief delay to allow the booking modal to close properly
       setTimeout(() => {
         setActiveTab('dashboard');
@@ -134,7 +171,13 @@ const UserPortal: React.FC = () => {
   }
 
   // Check if user needs to change password on first login
-  if (user?.must_change_password) {
+  // For multi-patient accounts, only check the original user's password change requirement
+  // Don't trigger password change when switching between patients
+  const shouldShowPasswordChange = isMultiPatient 
+    ? (allPatients.length > 0 && allPatients[0]?.must_change_password)
+    : user?.must_change_password;
+    
+  if (shouldShowPasswordChange) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <FirstLoginPasswordChange 
@@ -210,6 +253,20 @@ const UserPortal: React.FC = () => {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar Navigation */}
           <aside className="lg:w-64 flex-shrink-0">
+            {/* Patient Selector for Multi-Patient Accounts */}
+            {isMultiPatient && allPatients.length > 1 && (
+              <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Select Patient</h3>
+                <PatientSelector
+                  allPatients={allPatients}
+                  activePatient={activePatient}
+                  onPatientSwitch={switchPatient}
+                  viewMode={viewMode}
+                  onViewModeChange={handleViewModeChange}
+                />
+              </div>
+            )}
+            
             <nav className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <ul className="space-y-2">
                 {navigation.map((item) => {
@@ -284,14 +341,32 @@ const UserPortal: React.FC = () => {
                   {activeTab === 'dashboard' && (
                     <UserDashboard 
                       data={dashboardData} 
-                      onRefresh={loadDashboardData}
+                      onRefresh={() => loadDashboardData()}
                       onTabChange={handleTabChange}
+                      allPatients={allPatients}
+                      activePatient={activePatient}
+                      isMultiPatient={isMultiPatient}
+                      viewMode={viewMode}
+                      onViewModeChange={handleViewModeChange}
                     />
                   )}
                   {activeTab === 'profile' && <UserProfile />}
                   {activeTab === 'invoices' && <UserInvoices />}
-                  {activeTab === 'payments' && <UserPayments onDataChange={loadDashboardData} />}
-                  {activeTab === 'bookings' && <UserBookings />}
+                  {activeTab === 'payments' && (
+                    <UserPayments 
+                      onDataChange={loadDashboardData}
+                      allPatients={allPatients}
+                      activePatient={activePatient}
+                      isMultiPatient={isMultiPatient}
+                    />
+                  )}
+                  {activeTab === 'bookings' && (
+                    <UserBookings
+                      allPatients={allPatients}
+                      activePatient={activePatient}
+                      isMultiPatient={isMultiPatient}
+                    />
+                  )}
                 </>
               )}
             </div>

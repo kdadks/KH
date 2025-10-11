@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { UserDashboardData, UserPortalTab } from '../../types/userManagement';
+import { UserDashboardData, UserPortalTab, UserCustomer } from '../../types/userManagement';
 import { 
   AlertCircle, 
   CreditCard, 
@@ -10,7 +10,9 @@ import {
   Euro,
   RefreshCw,
   X,
-  Plus
+  Plus,
+  Users,
+  Eye
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/userManagementUtils';
 import { getCustomerPaymentRequests } from '../../utils/paymentRequestUtils';
@@ -22,14 +24,35 @@ interface UserDashboardProps {
   data: UserDashboardData | null;
   onRefresh: () => void;
   onTabChange: (tab: UserPortalTab) => void;
+  // Multi-patient support
+  allPatients?: UserCustomer[];
+  activePatient?: UserCustomer | null;
+  isMultiPatient?: boolean;
+  viewMode?: 'individual' | 'consolidated';
+  onViewModeChange?: (mode: 'individual' | 'consolidated') => void;
 }
 
-const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabChange }) => {
+const UserDashboard: React.FC<UserDashboardProps> = ({ 
+  data, 
+  onRefresh, 
+  onTabChange,
+  allPatients = [],
+  activePatient,
+  isMultiPatient = false,
+  viewMode = 'individual',
+  onViewModeChange
+}) => {
   const { showSuccess } = useToast();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequestWithCustomer[]>([]);
   const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(true);
   const [dismissedNotifications, setDismissedNotifications] = useState<number[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  
+  const handleViewModeChange = (mode: 'individual' | 'consolidated') => {
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    }
+  };
 
   const loadPaymentRequests = useCallback(async () => {
     if (!data?.customer?.id) return;
@@ -80,22 +103,59 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ data, onRefresh, onTabCha
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 space-y-4 lg:space-y-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome back, {customer.first_name}!
+            {isMultiPatient && viewMode === 'consolidated' 
+              ? `Welcome back! Managing ${allPatients.length} patients`
+              : `Welcome back, ${activePatient?.first_name || customer.first_name}!`
+            }
           </h1>
           <p className="text-gray-600 mt-1">
-            Here's your account overview for today.
+            {isMultiPatient && viewMode === 'consolidated' 
+              ? 'Consolidated view of all your patients'
+              : `Here's ${activePatient?.first_name || customer.first_name}'s account overview for today.`
+            }
           </p>
         </div>
-        <button
-          onClick={onRefresh}
-          className="flex items-center px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </button>
+        
+        <div className="flex items-center space-x-3">
+          {/* Multi-patient view toggle */}
+          {isMultiPatient && (
+            <div className="flex items-center bg-white rounded-lg border border-gray-200 p-1">
+              <button
+                onClick={() => handleViewModeChange('individual')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center space-x-1 ${
+                  viewMode === 'individual' 
+                    ? 'bg-blue-100 text-blue-700 font-medium' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+                <span>Individual</span>
+              </button>
+              <button
+                onClick={() => handleViewModeChange('consolidated')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center space-x-1 ${
+                  viewMode === 'consolidated' 
+                    ? 'bg-blue-100 text-blue-700 font-medium' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>All Patients</span>
+              </button>
+            </div>
+          )}
+          
+          <button
+            onClick={onRefresh}
+            className="flex items-center px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}

@@ -50,8 +50,34 @@ export const getCustomerByAuthId = async (authUserId: string): Promise<{ custome
 
 /**
  * Get customer by email (for custom authentication)
+ * Handles multiple customers with same email by returning the most recently active one
+ * For backwards compatibility with single-patient login
  */
 export const getCustomerByEmail = async (email: string): Promise<{ customer: UserCustomer | null; error?: string }> => {
+  try {
+    const { patients, error } = await getAllPatientsByEmail(email);
+    
+    if (error) {
+      return { customer: null, error };
+    }
+
+    if (!patients || patients.length === 0) {
+      return { customer: null };
+    }
+
+    // Return the primary patient (most recently active)
+    return { customer: patients[0] };
+  } catch (error) {
+    console.error('Exception in getCustomerByEmail:', error);
+    return { customer: null, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get all patients/customers associated with an email address
+ * This is the main function for multi-patient support
+ */
+export const getAllPatientsByEmail = async (email: string): Promise<{ patients: UserCustomer[] | null; error?: string }> => {
   try {
     // Query with all customer fields including address data for complete user profile
     const { data, error } = await supabase
@@ -59,23 +85,25 @@ export const getCustomerByEmail = async (email: string): Promise<{ customer: Use
       .select('*')
       .eq('email', email.toLowerCase())
       .eq('is_active', true)
-      .single();
+      .order('last_login', { ascending: false, nullsFirst: false })
+      .order('updated_at', { ascending: false })
+      .order('first_name', { ascending: true }); // Secondary sort by name for consistency
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching customer by email:', error);
-      return { customer: null, error: error.message };
+    if (error) {
+      console.error('Error fetching patients by email:', error);
+      return { patients: null, error: error.message };
     }
 
-    if (!data) {
-      return { customer: null };
+    if (!data || data.length === 0) {
+      return { patients: null };
     }
 
-    // Decrypt customer PII data for user display
-    const decryptedCustomer = decryptCustomerPII(data);
-    return { customer: decryptedCustomer };
+    // Decrypt all patient PII data
+    const decryptedPatients = data.map(patient => decryptCustomerPII(patient));
+    return { patients: decryptedPatients };
   } catch (error) {
-    console.error('Exception in getCustomerByEmail:', error);
-    return { customer: null, error: 'Unexpected error occurred' };
+    console.error('Exception in getAllPatientsByEmail:', error);
+    return { patients: null, error: 'Unexpected error occurred' };
   }
 };
 
@@ -465,6 +493,143 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
     return { data: dashboardData };
   } catch (error) {
     console.error('Exception in getUserDashboardData:', error);
+    return { data: null, error: 'Unexpected error occurred' };
+  }
+};
+
+/**
+ * Get consolidated dashboard data for multiple patients
+ */
+export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Promise<{ data: UserDashboardData | null; error?: string }> => {
+  try {
+    if (patients.length === 0) {
+      return { data: null, error: 'No patients provided' };
+    }
+
+    // Use the first patient as the primary customer for display purposes
+    const primaryCustomer = patients[0];
+    
+    // Collect data from all patients
+    let allInvoices: any[] = [];
+    let allBookings: any[] = [];
+    let allPayments: any[] = [];
+    let allPaymentRequests: any[] = [];
+
+    for (const patient of patients) {
+      // Get invoices for this patient
+      const { data: invoicesData } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('customer_id', patient.id)
+        .in('status', ['sent', 'paid'])
+        .order('invoice_date', { ascending: false });
+
+      if (invoicesData) {
+        const invoicesWithOverdue = invoicesData.map(invoice => ({
+          ...invoice,
+          is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date(),
+          patient_name: `${patient.first_name} ${patient.last_name}` // Add patient name for reference
+        }));
+        allInvoices = [...allInvoices, ...invoicesWithOverdue];
+      }
+
+      // Get bookings for this patient
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('customer_id', patient.id)
+        .in('status', ['pending', 'confirmed'])
+        .order('booking_date', { ascending: false });
+
+      if (bookingsData) {
+        const bookingsWithPatient = bookingsData.map(booking => ({
+          ...booking,
+          patient_name: `${patient.first_name} ${patient.last_name}`
+        }));
+        allBookings = [...allBookings, ...bookingsWithPatient];
+      }
+
+      // Get payments for this patient
+      const payments = await getCustomerPayments(patient.id);
+      const paymentsWithPatient = payments.map(payment => ({
+        ...payment,
+        patient_name: `${patient.first_name} ${patient.last_name}`
+      }));
+      allPayments = [...allPayments, ...paymentsWithPatient];
+
+      // Get payment requests for this patient
+      const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
+      const paymentRequests = await getCustomerPaymentRequests(patient.id);
+      const paymentRequestsWithPatient = paymentRequests.map(req => ({
+        ...req,
+        patient_name: `${patient.first_name} ${patient.last_name}`
+      }));
+      allPaymentRequests = [...allPaymentRequests, ...paymentRequestsWithPatient];
+    }
+
+    // Sort all data by date (most recent first)
+    allInvoices.sort((a, b) => new Date(b.invoice_date || 0).getTime() - new Date(a.invoice_date || 0).getTime());
+    allBookings.sort((a, b) => new Date(b.booking_date || 0).getTime() - new Date(a.booking_date || 0).getTime());
+    allPayments.sort((a, b) => new Date(b.payment_date || b.created_at || 0).getTime() - new Date(a.payment_date || a.created_at || 0).getTime());
+
+    // Calculate consolidated stats
+    const outstandingInvoices = allInvoices.reduce((sum, inv) => 
+      inv.status === 'sent' ? sum + (inv.total_amount || 0) : sum, 0);
+    const outstandingPaymentRequests = allPaymentRequests.reduce((sum, req) => 
+      (req.status === 'pending' || req.status === 'sent') ? sum + (req.amount || 0) : sum, 0);
+    const totalOutstanding = outstandingInvoices + outstandingPaymentRequests;
+    
+    const overdueInvoices = allInvoices.filter(inv => 
+      inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
+    ).length;
+    const overduePaymentRequests = allPaymentRequests.filter(req => 
+      (req.status === 'pending' || req.status === 'sent') &&
+      req.payment_due_date && 
+      new Date(req.payment_due_date) < new Date()
+    ).length;
+    const overdueCount = overdueInvoices + overduePaymentRequests;
+
+    const totalPaid = allPayments.reduce((sum, payment) => 
+      payment.status === 'paid' ? sum + payment.amount : sum, 0);
+
+    const dashboardData: UserDashboardData = {
+      customer: primaryCustomer,
+      recentInvoices: allInvoices.slice(0, 5), // Show top 5 most recent
+      recentPayments: allPayments.slice(0, 5).map(payment => ({
+        id: payment.id,
+        invoice_id: payment.invoice_id || 0,
+        customer_id: payment.customer_id,
+        amount: payment.amount,
+        currency: payment.currency || 'EUR',
+        payment_date: payment.payment_date || undefined,
+        payment_method: payment.payment_method || undefined,
+        status: payment.status as 'pending' | 'processing' | 'paid' | 'failed' | 'refunded' | 'cancelled',
+        created_at: payment.created_at || undefined,
+        updated_at: payment.updated_at || undefined,
+        notes: payment.notes || undefined,
+        sumup_transaction_id: payment.sumup_transaction_id || undefined,
+        sumup_checkout_id: payment.sumup_checkout_id || undefined,
+        sumup_payment_type: payment.sumup_payment_type || undefined,
+        patient_name: payment.patient_name // Add patient name
+      })),
+      overdueInvoices: allInvoices.filter(inv => 
+        inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
+      ),
+      totalOutstanding: totalOutstanding,
+      upcomingBookings: allBookings.filter(booking =>
+        (booking.status === 'confirmed' || booking.status === 'pending') && new Date(booking.booking_date) > new Date()
+      ).slice(0, 5), // Show top 5 upcoming
+      stats: {
+        totalInvoices: allInvoices.length,
+        totalPaid: totalPaid,
+        totalOutstanding: totalOutstanding,
+        overdueCount: overdueCount
+      }
+    };
+
+    return { data: dashboardData };
+  } catch (error) {
+    console.error('Exception in getConsolidatedDashboardData:', error);
     return { data: null, error: 'Unexpected error occurred' };
   }
 };
