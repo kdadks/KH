@@ -1,8 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, CreditCard, Shield, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
 import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
 import type { SumUpCreateCheckoutResponse } from '../../utils/sumupRealApiImplementation';
+
+// Extended interfaces for better type safety
+interface ExtendedCheckoutResponse extends SumUpCreateCheckoutResponse {
+  hosted_checkout_url?: string;
+  redirect_url?: string;
+  payment_link?: string;
+  links?: Array<{
+    href: string;
+    rel: string;
+    method?: string;
+  }>;
+}
+
+interface PaymentLogEntry {
+  timestamp: string;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+// Window interface extension for debug functions
+declare global {
+  interface Window {
+    viewPaymentLogs?: () => void;
+    clearPaymentLogs?: () => void;
+  }
+}
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
 import { PaymentEnvironmentIndicator } from '../ui/PaymentEnvironmentIndicator';
 // Gateway management now handled by domain-based environment detection
@@ -75,6 +101,7 @@ const SumUpPaymentForm: React.FC<SumUpPaymentFormProps> = ({
       
       onPaymentComplete();
     } catch (error) {
+      console.error('Payment processing error:', error);
       onPaymentError('Payment processing failed');
     } finally {
       setProcessing(false);
@@ -187,26 +214,26 @@ interface PaymentModalProps {
 }
 
 const extractCheckoutUrl = (
-  checkout: SumUpCreateCheckoutResponse | Record<string, any> | null | undefined
+  checkout: ExtendedCheckoutResponse | null | undefined
 ): string | null => {
   if (!checkout) {
     return null;
   }
 
   const directUrlCandidates = [
-    (checkout as any).hosted_checkout_url,
-    (checkout as any).checkout_url,
-    (checkout as any).redirect_url,
-    (checkout as any).payment_link
+    checkout.hosted_checkout_url,
+    checkout.checkout_url,
+    checkout.redirect_url,
+    checkout.payment_link
   ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 
   if (directUrlCandidates.length > 0) {
     return directUrlCandidates[0];
   }
 
-  const links = (checkout as any).links;
+  const links = checkout.links;
   if (Array.isArray(links)) {
-    const linkMatch = links.find((link: any) => {
+    const linkMatch = links.find((link) => {
       if (!link || typeof link !== 'object') return false;
       const relation = typeof link.rel === 'string' ? link.rel.toLowerCase() : '';
       return relation.includes('checkout') || relation.includes('redirect');
@@ -217,7 +244,7 @@ const extractCheckoutUrl = (
   } else if (links && typeof links === 'object') {
     const linkKeys = ['checkout_url', 'redirect_url', 'pay_to_url', 'pay_to_card_url'];
     for (const key of linkKeys) {
-      const candidate = links[key];
+      const candidate = (links as Record<string, unknown>)[key];
       if (typeof candidate === 'string' && candidate.length > 0) {
         return candidate;
       }
@@ -237,7 +264,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   context = 'booking' // Default context
 }) => {
   // Store payment logs in localStorage for post-redirect analysis
-  const logToStorage = (message: string, data?: any) => {
+  const logToStorage = (message: string, data?: Record<string, unknown>) => {
     const timestamp = new Date().toISOString();
     const logEntry = { timestamp, message, data };
     
@@ -259,7 +286,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (logs) {
       const parsedLogs = JSON.parse(logs);
       // Debug logs retrieved
-      console.table(parsedLogs.map(log => ({ 
+      console.table(parsedLogs.map((log: PaymentLogEntry) => ({ 
         time: new Date(log.timestamp).toLocaleTimeString(),
         message: log.message 
       })));
@@ -271,8 +298,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   // Make debug functions globally available
-  (window as any).viewPaymentLogs = viewDebugLogs;
-  (window as any).clearPaymentLogs = () => {
+  window.viewPaymentLogs = viewDebugLogs;
+  window.clearPaymentLogs = () => {
     localStorage.removeItem('payment_debug_logs');
     // Debug logs cleared
   };
@@ -351,7 +378,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   // Fetch booking details if booking_id is available
-  const fetchBookingDetails = async () => {
+  const fetchBookingDetails = useCallback(async () => {
     if (!paymentRequest.booking_id) {
       setBookingDetails(null);
       return;
@@ -374,7 +401,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       console.error('Error fetching booking details:', error);
       setBookingDetails(null);
     }
-  };
+  }, [paymentRequest.booking_id]);
 
   // Reset modal state when opened
   useEffect(() => {
@@ -394,8 +421,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         try {
           // Use domain-based environment detection instead of database config
           const currentEnvironment = getPaymentEnvironment();
-          const environmentConfig = getSumUpEnvironmentConfig();
-          
           // Set development mode based on environment (sandbox = development mode)
           const developmentMode = currentEnvironment === 'sandbox';
           setIsDevelopmentMode(developmentMode);
@@ -411,7 +436,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       
       loadGatewayConfig();
     }
-  }, [isOpen, paymentRequest.booking_id]);
+  }, [isOpen, paymentRequest.booking_id, fetchBookingDetails]);
 
   const handleStartPayment = async () => {
     // SIMPLE CONSOLE OUTPUT
@@ -528,7 +553,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const resolveCheckoutUrl = async (
         initial: SumUpCreateCheckoutResponse
       ): Promise<string | null> => {
-        let latestPayload: SumUpCreateCheckoutResponse | Record<string, any> | null = initial;
+        let latestPayload: ExtendedCheckoutResponse | null = initial;
 
         for (let attempt = 0; attempt < 3; attempt++) {
           const derivedUrl = extractCheckoutUrl(latestPayload);
@@ -614,19 +639,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         fullResponse: checkoutResponse
       });
       
-      // DEBUGGING: Prevent redirect to examine logs
-      logToStorage('SumUp redirect prevented for debugging', { 
-        wouldRedirectTo: responseCheckoutUrl 
-      });
+      // Environment-based redirect handling
+      const paymentEnv = getPaymentEnvironment();
+      const isProduction = paymentEnv === 'production';
       
-      // Show non-intrusive notification instead of alert
-      console.log('� SumUp checkout created successfully. Redirect prevented for debugging.');
-      console.log('� Check localStorage payment_debug_logs for full details');
-      
-      // ORIGINAL REDIRECT - COMMENTED OUT FOR DEBUGGING
-      // setTimeout(() => {
-      //   window.location.href = responseCheckoutUrl;
-      // }, 350);
+      if (isProduction) {
+        // Production: Redirect to SumUp checkout
+        setTimeout(() => {
+          window.location.href = responseCheckoutUrl;
+        }, 350);
+      } else {
+        // Development/Sandbox: Prevent redirect for debugging
+        logToStorage('SumUp redirect prevented for debugging (sandbox mode)', { 
+          wouldRedirectTo: responseCheckoutUrl,
+          environment: paymentEnv
+        });
+        
+        console.log('� SumUp checkout created successfully. Redirect prevented for debugging (sandbox mode).');
+        console.log('� Check localStorage payment_debug_logs for full details');
+        console.log('� Redirect URL:', responseCheckoutUrl);
+      }
       
     } catch (error) {
       console.error('Failed to create payment checkout:', error);
@@ -797,6 +829,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         day: 'numeric'
       });
     } catch (error) {
+      console.error('Error formatting date:', error);
       return dateString;
     }
   };
@@ -811,6 +844,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
       return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
     } catch (error) {
+      console.error('Error formatting time:', error);
       return timeString;
     }
   };
