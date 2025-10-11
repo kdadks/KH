@@ -974,19 +974,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </p>
                 </div>
                 
-                {/* Customer Details */}
-                <div className="bg-white rounded-lg p-4 mb-4 text-left">
-                  <h5 className="font-medium text-gray-800 mb-2">Customer Details</h5>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div>
-                      <span className="font-medium">Name:</span> {paymentRequest.customer ? `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}` : 'Customer'}
-                    </div>
-                    <div>
-                      <span className="font-medium">Email:</span> {paymentRequest.customer?.email || 'Not provided'}
-                    </div>
-                  </div>
-                </div>
-
                 <div className="text-center">
                   <div className="text-3xl font-bold text-primary-600 mb-2">
                     Total: {formatCurrency(paymentRequest.amount, paymentRequest.currency)}

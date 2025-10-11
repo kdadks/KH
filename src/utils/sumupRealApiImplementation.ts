@@ -125,10 +125,11 @@ export const createSumUpCheckoutSession = async (
       
       // Log customer information if provided
       if (checkoutData.customer) {
-        console.log('📧 Customer information included in checkout:', {
+        console.log('📧 Customer information included in checkout (internal tracking only):', {
           name: checkoutData.customer.name,
           email: checkoutData.customer.email
         });
+        console.log('ℹ️ Note: SumUp checkout UI does not display customer details to users');
       }
       
       const mockResponse: SumUpCreateCheckoutResponse = {
@@ -172,14 +173,13 @@ export const createSumUpCheckoutSession = async (
       ...(checkoutData.customer ? { customer: checkoutData.customer } : {})
     };
 
-    // Log customer data being sent for debugging
+    // Log customer data being sent (for internal SumUp tracking only - not displayed in checkout UI)
     if (checkoutData.customer) {
-      console.log('📧 Sending customer data to SumUp API:', {
+      console.log('📧 Customer data sent to SumUp for transaction records:', {
         customer_email: apiPayload.customer_email,
-        customer_name: apiPayload.customer_name,
-        customer: apiPayload.customer,
-        pay_to_email: apiPayload.pay_to_email
+        customer_name: apiPayload.customer_name
       });
+      console.log('ℹ️ Note: Customer details are stored by SumUp but not displayed in their checkout UI');
     }
     
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
