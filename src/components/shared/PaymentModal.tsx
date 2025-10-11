@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import logger from '../../utils/logger';
 import { X, CreditCard, Shield, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
 import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
@@ -32,7 +33,7 @@ declare global {
 import { processPaymentRequest, sendPaymentFailedNotification } from '../../utils/paymentRequestUtils';
 import { PaymentEnvironmentIndicator } from '../ui/PaymentEnvironmentIndicator';
 // Gateway management now handled by domain-based environment detection
-import { getPaymentEnvironment, getSumUpEnvironmentConfig } from '../../utils/environmentDetection';
+import { getPaymentEnvironment, getSumUpEnvironmentConfig, clearEnvironmentCache } from '../../utils/environmentDetection';
 import { useToast } from './toastContext';
 import { supabase } from '../../supabaseClient';
 import { handlePaymentModalCancellation } from '../../utils/paymentCancellation';
@@ -413,7 +414,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCheckoutReference(null);
       setCheckoutSessionId(null);
       setIsCancelling(false);
-      console.log('PaymentModal opening with booking_id:', paymentRequest.booking_id);
+      logger.debug('PaymentModal opening with booking_id:', paymentRequest.booking_id);
       fetchBookingDetails();
       
       // Pre-fetch gateway config to show correct environment immediately
@@ -640,8 +641,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       });
       
       // Environment-based redirect handling
+      // Clear cache to ensure fresh detection
+      clearEnvironmentCache();
       const paymentEnv = getPaymentEnvironment();
       const isProduction = paymentEnv === 'production';
+      
+      console.log('🚀 PaymentModal Environment Check:', { paymentEnv, isProduction, hostname: window.location.hostname });
       
       if (isProduction) {
         // Production: Redirect to SumUp checkout

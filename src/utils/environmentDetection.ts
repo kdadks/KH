@@ -4,7 +4,19 @@
  * based on the current domain/hostname
  */
 
+import logger from './logger';
+
 export type PaymentEnvironment = 'production' | 'sandbox';
+
+// Cache the environment detection result to avoid repeated computation and logging
+let cachedEnvironment: PaymentEnvironment | null = null;
+
+/**
+ * Clear the cached environment (useful for testing or if environment changes)
+ */
+export const clearEnvironmentCache = (): void => {
+  cachedEnvironment = null;
+};
 
 /**
  * Get the current payment environment based on domain
@@ -12,6 +24,11 @@ export type PaymentEnvironment = 'production' | 'sandbox';
  * Sandbox: All other domains (localhost, netlify previews, etc.)
  */
 export const getPaymentEnvironment = (): PaymentEnvironment => {
+  // Return cached result if available
+  if (cachedEnvironment) {
+    return cachedEnvironment;
+  }
+
   // Check if we're in a server-side environment (Node.js)
   if (typeof window === 'undefined') {
     // For server-side rendering or Netlify functions
@@ -21,9 +38,11 @@ export const getPaymentEnvironment = (): PaymentEnvironment => {
     
     // If explicitly set to production via environment
     if (nodeEnv === 'production' && netlifyContext === 'production') {
+      cachedEnvironment = 'production';
       return 'production';
     }
     
+    cachedEnvironment = 'sandbox';
     return 'sandbox';
   }
 
@@ -32,7 +51,8 @@ export const getPaymentEnvironment = (): PaymentEnvironment => {
   const protocol = window.location.protocol;
   const fullDomain = `${protocol}//${hostname}`;
 
-  console.log('🌐 Detecting payment environment:', {
+  // Only log once when environment is first detected
+  logger.debug('Detecting payment environment:', {
     hostname,
     protocol,
     fullDomain,
@@ -59,18 +79,18 @@ export const getPaymentEnvironment = (): PaymentEnvironment => {
   const isExactProductionDomain = productionDomains.includes(hostname) && protocol === 'https:';
 
   if (isUATOrStaging) {
-    console.log('🧪 UAT/Staging environment detected - Forcing sandbox mode');
-    console.log('📍 Current hostname:', hostname);
+    logger.info('UAT/Staging environment detected - Forcing sandbox mode');
+    cachedEnvironment = 'sandbox';
     return 'sandbox';
   }
 
   if (isExactProductionDomain) {
-    console.log('💰 Production payment environment detected - Using live SumUp integration');
+    logger.info('Production payment environment detected - Using live SumUp integration');
+    cachedEnvironment = 'production';
     return 'production';
   } else {
-    console.log('🧪 Sandbox payment environment detected - Using SumUp sandbox for testing');
-    console.log('📍 Current hostname:', hostname);
-    console.log('🔗 Production domains:', productionDomains.join(', '));
+    logger.debug('Sandbox payment environment detected', { hostname, productionDomains });
+    cachedEnvironment = 'sandbox';
     return 'sandbox';
   }
 };
