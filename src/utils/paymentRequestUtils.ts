@@ -158,7 +158,7 @@ export async function createPaymentRequest(
         console.log(`💰 Creating payment request for FULL amount: €${finalAmount}`);
       } else {
         finalAmount = Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE); // 20% deposit
-        console.log(`💰 Creating payment request for DEPOSIT (20%): €${finalAmount} of €${baseCost}`);
+        console.log(`💰 Creating INITIAL payment request for deposit (20%): €${finalAmount} of €${baseCost} - will be updated if user selects full payment`);
       }
     }
     
