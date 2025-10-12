@@ -212,10 +212,11 @@ const PaymentPage: React.FC = () => {
                   This payment request has been cancelled and is no longer available for payment.
                 </p>
                 <button
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => window.location.href = '/'}
                   className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
-                  Go to Dashboard
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Go to Home
                 </button>
               </div>
             ) : (
