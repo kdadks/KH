@@ -755,7 +755,19 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
 
       // Create payment record from payment_request if found
       if (paymentRequest) {
-        console.log('� Creating payment record from payment_request:', paymentRequest.id);
+        console.log('💳 Creating payment record from payment_request:', paymentRequest.id);
+        
+        // Determine payment type from notes or amount
+        let paymentType = 'card'; // default
+        if (paymentRequest.notes) {
+          if (paymentRequest.notes.toLowerCase().includes('full payment')) {
+            paymentType = 'full';
+          } else if (paymentRequest.notes.toLowerCase().includes('deposit') || paymentRequest.notes.toLowerCase().includes('20%')) {
+            paymentType = 'deposit';
+          }
+        }
+        
+        console.log('💰 Payment type determined:', paymentType, 'from notes:', paymentRequest.notes);
         
         const { data: newPayment, error: createError } = await supabase
           .from('payments')
@@ -768,8 +780,9 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
             status: mappedStatus,
             payment_method: 'sumup',
             sumup_checkout_id: checkoutId,
-            sumup_checkout_reference: checkoutReference,
-            sumup_transaction_id: checkoutDetails?.transaction_id || checkoutDetails?.transactions?.[0]?.id,
+            sumup_checkout_reference: checkoutReference || `payment-request-${paymentRequest.id}-${Date.now()}`,
+            sumup_transaction_id: checkoutDetails?.transaction_id || checkoutDetails?.transactions?.[0]?.id || checkoutId,
+            sumup_payment_type: paymentType,
             webhook_processed_at: new Date().toISOString(),
             sumup_event_type: event_type || 'CHECKOUT_STATUS_CHANGED',
             sumup_event_id: checkoutId,
