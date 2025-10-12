@@ -585,14 +585,10 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
     let checkoutReference = null;
     let checkoutStatus = null;
     
-    // For internal calls, skip SumUp API fetch and use status from payload or default to PAID
-    if (isInternalCall) {
-      console.log('� Internal call detected - skipping SumUp API fetch');
-      checkoutStatus = status || 'PAID'; // Default to PAID for internal calls from successful checkout
-      console.log('💰 Using status for internal call:', checkoutStatus);
-    } else {
-      // Fetch checkout details from SumUp API to get the status, reference and full details
-      console.log('📞 Fetching checkout details from SumUp API for checkout:', checkoutId);
+    // ALWAYS fetch checkout details from SumUp API to get transaction ID
+    // Even for internal calls, we need the full checkout data including transaction_code
+    console.log('� Fetching checkout details from SumUp API for checkout:', checkoutId);
+    console.log(`� Call type: ${isInternalCall ? 'INTERNAL' : 'EXTERNAL'} - fetching full checkout data`);
       
       try {
         const sumupAccessToken = process.env.SUMUP_ACCESS_TOKEN || process.env.SUMUP_UAT_ACCESS_TOKEN;
@@ -640,12 +636,26 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
         throw new Error('Could not determine payment status: SumUp API fetch failed and no status in webhook payload');
       }
       
-      console.log('💰 Payment status:', {
-        fromAPI: checkoutDetails?.status,
-        fromWebhook: status,
-        used: checkoutStatus
-      });
+    // Get status from API response, fallback to webhook payload, or use PAID for internal calls
+    if (checkoutDetails?.status) {
+      checkoutStatus = checkoutDetails.status;
+    } else if (status) {
+      checkoutStatus = status;
+    } else if (isInternalCall) {
+      // For internal calls, default to PAID if no status available
+      checkoutStatus = 'PAID';
+      console.log('💰 Using default PAID status for internal call');
+    } else {
+      // If we can't get status from API or webhook, throw an error
+      throw new Error('Could not determine payment status: SumUp API fetch failed and no status in webhook payload');
     }
+    
+    console.log('💰 Payment status:', {
+      fromAPI: checkoutDetails?.status,
+      fromWebhook: status,
+      used: checkoutStatus,
+      isInternalCall
+    });
     
     const mappedStatus = mapSumUpStatus(checkoutStatus);
     
