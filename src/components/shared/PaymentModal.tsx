@@ -692,15 +692,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       const responseCheckoutUrl = await resolveCheckoutUrl(checkoutResponse);
-      const shouldStayInApp = developmentMode || currentEnvironment !== 'production';
-
-      if (shouldStayInApp) {
-        // Create a shorter, cleaner checkout URL for sandbox mode
+      
+      // Check if we should use real SumUp hosted checkout
+      // Use real SumUp checkout in sandbox to test actual payment flow
+      const useRealSumUpCheckout = currentEnvironment === 'sandbox' || currentEnvironment === 'production';
+      
+      if (!useRealSumUpCheckout && developmentMode) {
+        // Local development only: use mock checkout page
         const fallbackCheckoutUrl = responseCheckoutUrl || `/sumup-checkout?ref=${checkoutResponse.checkout_reference}&amt=${paymentRequest.amount}&cur=${paymentRequest.currency || 'EUR'}&id=${checkoutResponse.id}&env=${currentEnvironment}&pr_id=${paymentRequest.id}&ctx=booking`;
         setCheckoutUrl(fallbackCheckoutUrl);
         setCurrentStep('payment');
 
-        logger.devOnly(() => console.log('Sandbox checkout session ready:', {
+        logger.devOnly(() => console.log('Local dev checkout session ready (mock):', {
           checkoutUrl: fallbackCheckoutUrl,
           amount: paymentRequest.amount,
           currency: paymentRequest.currency
