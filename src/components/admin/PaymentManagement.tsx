@@ -68,6 +68,10 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<PaymentRequestType | null>(null);
   
+  // Payment details modal state
+  const [showPaymentDetailsModal, setShowPaymentDetailsModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentType | null>(null);
+  
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -984,13 +988,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                       Customer
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Service
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payment Method
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -998,43 +996,42 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Payment Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Transaction ID
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {getCurrentPageData(getFilteredPayments(), currentPage, itemsPerPage).length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                         {getFilteredPayments().length === 0 ? 'No payments found matching your criteria' : 'No payments on this page'}
                       </td>
                     </tr>
                   ) : (
                     getCurrentPageData(getFilteredPayments(), currentPage, itemsPerPage).map((payment) => (
-                      <tr key={payment.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <tr key={payment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
                           <div>
                             <div className="text-sm font-medium text-gray-900">
                               {payment.customer_name || 'Unknown Customer'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {payment.customer_email || 'Unknown Email'}
+                              {payment.service_name || 'Payment'}
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {payment.service_name || 'Payment'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          €{payment.amount.toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {payment.payment_method || 'Unknown'}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-gray-900">
+                            €{payment.amount.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize">
+                            {payment.sumup_payment_type || payment.payment_method || 'N/A'}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            payment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            payment.status === 'paid' || payment.status === 'completed' ? 'bg-green-100 text-green-800' :
                             payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                             'bg-red-100 text-red-800'
                           }`}>
@@ -1043,12 +1040,34 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {payment.payment_date ? 
-                            new Date(payment.payment_date).toLocaleString() : 
-                            new Date(payment.created_at).toLocaleString()
+                            new Date(payment.payment_date).toLocaleDateString('en-IE', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            }) : 
+                            new Date(payment.created_at).toLocaleDateString('en-IE', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
                           }
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                          {payment.transaction_id || 'N/A'}
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedPayment(payment);
+                              setShowPaymentDetailsModal(true);
+                            }}
+                            className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -1364,6 +1383,228 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Details Modal */}
+      {showPaymentDetailsModal && selectedPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">Payment Details</h3>
+              <button
+                onClick={() => {
+                  setShowPaymentDetailsModal(false);
+                  setSelectedPayment(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <span className="text-2xl">&times;</span>
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Customer Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Customer Information
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Name:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedPayment.customer_name || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedPayment.customer_email || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Customer ID:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedPayment.customer_id}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Payment Information
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Payment ID:</span>
+                    <span className="text-sm font-medium text-gray-900">#{selectedPayment.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Amount:</span>
+                    <span className="text-sm font-bold text-gray-900">€{selectedPayment.amount.toFixed(2)} {selectedPayment.currency}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Payment Method:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedPayment.payment_method || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Payment Type:</span>
+                    <span className="text-sm font-medium text-gray-900 capitalize">
+                      {selectedPayment.sumup_payment_type || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Status:</span>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedPayment.status === 'paid' || selectedPayment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      selectedPayment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {selectedPayment.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Service:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedPayment.service_name || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transaction Details */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Transaction Details
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Transaction ID:</span>
+                    <span className="text-sm font-mono text-gray-900 break-all">
+                      {selectedPayment.sumup_transaction_id || selectedPayment.transaction_id || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Checkout ID:</span>
+                    <span className="text-sm font-mono text-gray-900 break-all">
+                      {selectedPayment.sumup_checkout_id || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Checkout Reference:</span>
+                    <span className="text-sm font-mono text-gray-900 break-all">
+                      {selectedPayment.sumup_checkout_reference || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Payment Request ID:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {selectedPayment.payment_request_id ? `#${selectedPayment.payment_request_id}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Booking ID:</span>
+                    <span className="text-sm font-mono text-gray-900 break-all">
+                      {selectedPayment.booking_id || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Invoice ID:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {selectedPayment.invoice_id ? `#${selectedPayment.invoice_id}` : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Timestamps
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Payment Date:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {selectedPayment.payment_date ? 
+                        new Date(selectedPayment.payment_date).toLocaleString() : 
+                        'N/A'
+                      }
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Created At:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {new Date(selectedPayment.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  {selectedPayment.updated_at && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Updated At:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {new Date(selectedPayment.updated_at).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  {selectedPayment.webhook_processed_at && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Webhook Processed:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {new Date(selectedPayment.webhook_processed_at).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Information */}
+              {(selectedPayment.notes || selectedPayment.failure_reason || selectedPayment.refund_amount) && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Additional Information</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    {selectedPayment.notes && (
+                      <div>
+                        <span className="text-sm text-gray-600 block mb-1">Notes:</span>
+                        <p className="text-sm text-gray-900">{selectedPayment.notes}</p>
+                      </div>
+                    )}
+                    {selectedPayment.failure_reason && (
+                      <div>
+                        <span className="text-sm text-gray-600 block mb-1">Failure Reason:</span>
+                        <p className="text-sm text-red-700">{selectedPayment.failure_reason}</p>
+                      </div>
+                    )}
+                    {selectedPayment.refund_amount && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Refund Amount:</span>
+                          <span className="text-sm font-medium text-red-700">
+                            €{parseFloat(selectedPayment.refund_amount).toFixed(2)}
+                          </span>
+                        </div>
+                        {selectedPayment.refund_reason && (
+                          <div>
+                            <span className="text-sm text-gray-600 block mb-1">Refund Reason:</span>
+                            <p className="text-sm text-gray-900">{selectedPayment.refund_reason}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowPaymentDetailsModal(false);
+                  setSelectedPayment(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
