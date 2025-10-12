@@ -858,6 +858,44 @@ const BookingPage: React.FC = () => {
           ? paymentState.paymentOptions.deposit.amount
           : paymentState.paymentOptions.full.amount;
 
+        // Update payment request with selected amount first
+        console.log(`🔄 Updating payment request from €${paymentState.paymentRequest.amount} to €${selectedAmount} (${paymentType} payment)`);
+        
+        const { supabase } = await import('../supabaseClient');
+        const { error: updateError } = await supabase
+          .from('payment_requests')
+          .update({ 
+            amount: selectedAmount,
+            notes: paymentType === 'full' 
+              ? `Full payment for ${paymentState.booking?.package_name || 'Service'}`
+              : `20% deposit for ${paymentState.booking?.package_name || 'Service'}`
+          })
+          .eq('id', paymentState.paymentRequest.id);
+
+        if (updateError) {
+          console.error('❌ Error updating payment request amount:', updateError);
+          setSuccessMsg('Error updating payment amount. Please try again.');
+          return;
+        }
+        
+        console.log(`✅ Payment request updated to ${paymentType} amount: €${selectedAmount}`);
+
+        // Send payment request email with the correct amount
+        try {
+          const { sendPaymentRequestNotification } = await import('../utils/paymentRequestUtils');
+          console.log(`📧 Sending payment request email with ${paymentType} amount: €${selectedAmount}`);
+          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentState.paymentRequest.id);
+          if (!emailSuccess) {
+            console.error('❌ Failed to send payment request email:', emailError);
+            // Don't block payment flow if email fails
+          } else {
+            console.log('✅ Payment request email sent successfully');
+          }
+        } catch (emailError) {
+          console.error('❌ Payment request email failed:', emailError);
+          // Don't block payment flow if email fails
+        }
+
         // Transform the payment request to match PaymentRequestWithCustomer structure
         const paymentRequestWithCustomer = {
           ...paymentState.paymentRequest,

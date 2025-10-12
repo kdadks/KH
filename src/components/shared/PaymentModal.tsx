@@ -584,60 +584,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
 
-      // Update the payment request amount if user selected a different amount than default
-      if (paymentOptions && actualPaymentAmount !== paymentRequest.amount) {
-        console.log(`🔄 Updating payment request amount from €${paymentRequest.amount} to €${actualPaymentAmount} (${selectedPaymentType} payment)`);
-        
-        const { error: updateError } = await supabase
-          .from('payment_requests')
-          .update({ 
-            amount: actualPaymentAmount,
-            notes: selectedPaymentType === 'full' 
-              ? `Full payment for ${paymentRequest.service_name || 'Service'}`
-              : paymentRequest.notes // Keep original deposit notes
-          })
-          .eq('id', paymentRequest.id);
-
-        if (updateError) {
-          console.error('❌ Error updating payment request amount:', updateError);
-          throw new Error('Failed to update payment amount. Please try again.');
-        }
-        
-        // Update the local payment request object
-        paymentRequest.amount = actualPaymentAmount;
-        console.log(`✅ Payment request updated to ${selectedPaymentType} amount: €${actualPaymentAmount}`);
-        
-        // Send payment request email with the correct amount
-        try {
-          const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
-          console.log(`📧 Sending payment request email with ${selectedPaymentType} amount: €${actualPaymentAmount}`);
-          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-          if (!emailSuccess) {
-            console.error('❌ Failed to send payment request email:', emailError);
-          } else {
-            console.log('✅ Payment request email sent successfully');
-          }
-        } catch (emailError) {
-          console.error('❌ Payment request email failed:', emailError);
-          // Don't block payment flow if email fails
-        }
-      } else {
-        // Amount not changed (user selected default deposit amount)
-        // Send payment request email with deposit amount
-        try {
-          const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
-          console.log(`📧 Sending payment request email with deposit amount: €${actualPaymentAmount}`);
-          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-          if (!emailSuccess) {
-            console.error('❌ Failed to send payment request email:', emailError);
-          } else {
-            console.log('✅ Payment request email sent successfully');
-          }
-        } catch (emailError) {
-          console.error('❌ Payment request email failed:', emailError);
-          // Don't block payment flow if email fails
-        }
-      }
+      // Note: Payment request amount and email are already handled by handlePayNow()
+      // before opening this modal, so we just use the amount from paymentRequest
 
       // DUPLICATE FIX: Don't create initial payment - let SumUp webhook/return handler create the only payment record
       // Payment record will be created by webhook
