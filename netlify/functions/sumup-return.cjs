@@ -1177,18 +1177,15 @@ exports.handler = async (event, context) => {
         secretSource: isProduction ? 'PROD' : 'UAT/STAGING'
       });
       
-      // Allow test mode for UAT/staging without signature verification
-      // Also allow internal calls from PaymentRequestUtils
+      // Detect internal calls from PaymentRequestUtils via User-Agent header
       // Note: Netlify normalizes headers to lowercase
       const userAgent = event.headers['user-agent'] || event.headers['User-Agent'] || '';
-      const hasInternalMarker = event.body?.includes('INTERNAL_PROCESSING');
-      const isInternalCall = userAgent.includes('PaymentRequestUtils') || hasInternalMarker;
+      const isInternalCall = userAgent.includes('PaymentRequestUtils');
       
       console.log('🔍 Internal call detection:', {
         userAgent,
-        bodyPreview: event.body?.substring(0, 200),
-        hasInternalMarker,
         isInternalCall,
+        detectionMethod: isInternalCall ? 'User-Agent header' : 'Not detected',
         isProduction,
         hasWebhookSecret: !!webhookSecret
       });
