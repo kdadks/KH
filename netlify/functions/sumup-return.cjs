@@ -561,7 +561,10 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
             checkout_id: checkoutId,
             reference: checkoutReference,
             status: checkoutDetails.status,
-            amount: checkoutDetails.amount
+            amount: checkoutDetails.amount,
+            transactions: checkoutDetails.transactions,
+            transaction_code: checkoutDetails.transaction_code,
+            transaction_id: checkoutDetails.transaction_id
           });
         } else {
           console.warn('⚠️ Could not fetch checkout details:', checkoutResponse.status, checkoutResponse.statusText);
@@ -781,12 +784,12 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
             payment_method: 'sumup',
             sumup_checkout_id: checkoutId,
             sumup_checkout_reference: checkoutReference || `payment-request-${paymentRequest.id}-${Date.now()}`,
-            sumup_transaction_id: checkoutDetails?.transaction_id || checkoutDetails?.transactions?.[0]?.id || checkoutId,
+            sumup_transaction_id: checkoutDetails?.transaction_code || checkoutDetails?.transactions?.[0]?.transaction_code || checkoutDetails?.transactions?.[0]?.id || checkoutDetails?.transaction_id || null,
             sumup_payment_type: paymentType,
             webhook_processed_at: new Date().toISOString(),
             sumup_event_type: event_type || 'CHECKOUT_STATUS_CHANGED',
             sumup_event_id: checkoutId,
-            notes: `Payment created from webhook for payment_request #${paymentRequest.id}`
+            notes: `Payment created from webhook for payment_request #${paymentRequest.id}. Transaction ID: ${checkoutDetails?.transaction_code || checkoutDetails?.transactions?.[0]?.transaction_code || 'pending'}`
           })
           .select()
           .single();
@@ -855,7 +858,7 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
       sumup_event_id: checkoutId,
       sumup_checkout_id: checkoutId,
       sumup_checkout_reference: checkoutReference || payment.sumup_checkout_reference,
-      sumup_transaction_id: checkoutDetails?.transaction_id || checkoutDetails?.transactions?.[0]?.id || payment.sumup_transaction_id,
+      sumup_transaction_id: checkoutDetails?.transaction_code || checkoutDetails?.transactions?.[0]?.transaction_code || checkoutDetails?.transactions?.[0]?.id || checkoutDetails?.transaction_id || payment.sumup_transaction_id,
       payment_request_id: payment.payment_request_id, // Preserve existing value
       updated_at: new Date().toISOString()
     };
@@ -1049,9 +1052,11 @@ exports.handler = async (event, context) => {
       });
       
       // Extract SumUp parameters
+      // Note: SumUp may send transaction_code instead of transaction_id
       const {
         checkout_id,
-        transaction_id,
+        transaction_id: txId,
+        transaction_code,
         status,
         amount,
         currency,
@@ -1059,6 +1064,9 @@ exports.handler = async (event, context) => {
         checkout_reference,
         timestamp
       } = queryParams;
+      
+      // Use transaction_code if available, fallback to transaction_id
+      const transaction_id = transaction_code || txId;
       
       // If no SumUp parameters, log what we DID receive and return endpoint info
       if (!checkout_id && !transaction_id) {
