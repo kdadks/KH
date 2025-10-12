@@ -519,14 +519,11 @@ const processSumUpWebhook = async (supabase, eventData) => {
     });
 
     // Validate required fields
-    if (!checkoutId || !status) {
-      throw new Error('Invalid webhook payload: missing checkout id or status');
+    if (!checkoutId) {
+      throw new Error('Invalid webhook payload: missing checkout id');
     }
 
-    // Map SumUp webhook status to our database values
-    const mappedStatus = mapSumUpStatus(status);
-    
-    // Fetch checkout details from SumUp API to get the reference and full details
+    // Fetch checkout details from SumUp API to get the status, reference and full details
     console.log('📞 Fetching checkout details from SumUp API for checkout:', checkoutId);
     let checkoutDetails = null;
     let checkoutReference = null;
@@ -560,6 +557,25 @@ const processSumUpWebhook = async (supabase, eventData) => {
     } catch (fetchError) {
       console.error('❌ Error fetching checkout details:', fetchError.message);
     }
+    
+    // Get status from API response or fallback to webhook payload (for backwards compatibility)
+    let checkoutStatus;
+    if (checkoutDetails?.status) {
+      checkoutStatus = checkoutDetails.status;
+    } else if (status) {
+      checkoutStatus = status;
+    } else {
+      // If we can't get status from API or webhook, throw an error
+      throw new Error('Could not determine payment status: SumUp API fetch failed and no status in webhook payload');
+    }
+    const mappedStatus = mapSumUpStatus(checkoutStatus);
+    
+    console.log('💰 Payment status:', {
+      fromAPI: checkoutDetails?.status,
+      fromWebhook: status,
+      used: checkoutStatus,
+      mapped: mappedStatus
+    });
     
     // Find payment by checkout reference - try multiple search strategies
     let payment = null;
@@ -1164,6 +1180,9 @@ exports.handler = async (event, context) => {
 
     // Handle POST requests from SumUp webhooks
     if (event.httpMethod === 'POST') {
+      // Log ALL headers to debug User-Agent detection
+      console.log('📨 POST Request Headers:', JSON.stringify(event.headers, null, 2));
+      
       // Use environment-specific webhook secrets
       const isProduction = environmentLabel === 'LIVE';
       const webhookSecret = isProduction 
@@ -1177,17 +1196,17 @@ exports.handler = async (event, context) => {
         secretSource: isProduction ? 'PROD' : 'UAT/STAGING'
       });
       
-      // Detect internal calls from PaymentRequestUtils via User-Agent header
+      // Detect internal calls from PaymentRequestUtils via custom header
       // Note: Netlify normalizes headers to lowercase
-      const userAgent = event.headers['user-agent'] || event.headers['User-Agent'] || '';
-      const isInternalCall = userAgent.includes('PaymentRequestUtils');
+      const internalCallHeader = event.headers['x-internal-call'] || event.headers['X-Internal-Call'] || '';
+      const paymentRequestId = event.headers['x-payment-request-id'] || event.headers['X-Payment-Request-Id'] || '';
+      const isInternalCall = internalCallHeader === 'PaymentRequestUtils';
       
       console.log('🔍 Internal call detection:', {
-        userAgent,
+        internalCallHeader,
+        paymentRequestId,
         isInternalCall,
-        detectionMethod: isInternalCall ? 'User-Agent header' : 'Not detected',
-        isProduction,
-        hasWebhookSecret: !!webhookSecret
+        detectionMethod: isInternalCall ? 'X-Internal-Call header' : 'Not detected'
       });
       
       // Allow internal calls from PaymentRequestUtils to bypass signature verification
