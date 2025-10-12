@@ -449,6 +449,7 @@ export async function processPaymentRequest(
     try {
       // Routing payment through SumUp handler
       // Format payload to match SumUp webhook structure (flat, not nested)
+      // Get the proper merchant code from the gateway config (will be fetched by webhook handler)
       const requestBody = {
         id: paymentData.sumup_checkout_id, // Use checkout ID as the main ID (matches SumUp webhook format)
         event_type: 'checkout.completed',
@@ -460,7 +461,6 @@ export async function processPaymentRequest(
                   `payment-request-${paymentRequestId}-${Date.now()}`,
         amount: paymentRequest.amount,
         currency: paymentRequest.currency || 'EUR',
-        merchant_code: 'INTERNAL_PROCESSING', // Marker for internal calls
         payment_method: paymentData.payment_method || 'card',
         payment_request_id: paymentRequestId,
         booking_id: paymentRequest.booking_id,
@@ -473,8 +473,9 @@ export async function processPaymentRequest(
         endpoint: sumupEndpoint,
         checkoutId: paymentData.sumup_checkout_id,
         paymentRequestId: paymentRequestId,
-        hasInternalProcessingMarker: requestBody.merchant_code === 'INTERNAL_PROCESSING',
-        payloadStructure: 'flat (matches SumUp webhook format)'
+        eventType: requestBody.event_type,
+        payloadStructure: 'flat (matches SumUp webhook format)',
+        detectionMethod: 'User-Agent header (PaymentRequestUtils/Processing)'
       });
 
       const response = await fetch(sumupEndpoint, {
