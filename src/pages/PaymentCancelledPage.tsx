@@ -19,6 +19,13 @@ const PaymentCancelledPage: React.FC = () => {
     // 2. Log the cancellation reason
     // 3. Potentially send notification emails
     // 4. Clean up any pending payment requests
+    
+    // Auto-redirect to account/payments page after 5 seconds
+    const redirectTimer = setTimeout(() => {
+      window.location.href = '/my-account?tab=payments';
+    }, 5000);
+    
+    return () => clearTimeout(redirectTimer);
   }, [checkoutReference, reason]);
 
   const getReason = () => {
@@ -103,6 +110,9 @@ const PaymentCancelledPage: React.FC = () => {
               <li>• Contact us if you need assistance</li>
               <li>• Your booking is still pending payment</li>
             </ul>
+            <p className="text-xs text-blue-600 mt-3 italic">
+              Redirecting to your account in 5 seconds...
+            </p>
           </div>
 
           {/* Action Buttons */}

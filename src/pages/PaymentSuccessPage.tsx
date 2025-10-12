@@ -89,6 +89,9 @@ const PaymentSuccessPage: React.FC = () => {
       }
 
       setVerifying(true);
+      
+      // Auto-redirect after successful verification
+      let autoRedirectTimer: NodeJS.Timeout | null = null;
 
       try {
         const existingRequest = await getPaymentRequestById(Number(paymentRequestIdParam));
@@ -139,13 +142,19 @@ const PaymentSuccessPage: React.FC = () => {
           setResolvedAmount(resolvedAmountValue ?? null);
           setResolvedCurrency(firstTransaction?.currency || checkoutStatus.currency || currencyParam);
 
-          applyVerificationState('confirmed', 'Your payment has been verified successfully.');
+          applyVerificationState('confirmed', 'Your payment has been verified successfully. Redirecting...');
 
           try {
             localStorage.removeItem(`sumupCheckout:${checkoutReference}`);
           } catch (storageError) {
             console.warn('Unable to remove stored SumUp metadata:', storageError);
           }
+          
+          // Auto-redirect to account page after 2 seconds
+          autoRedirectTimer = setTimeout(() => {
+            window.location.href = '/my-account?tab=payments&highlight=success';
+          }, 2000);
+          
           return;
         }
 
@@ -164,6 +173,11 @@ const PaymentSuccessPage: React.FC = () => {
     };
 
     verifyPayment();
+    
+    // Cleanup function
+    return () => {
+      // Note: autoRedirectTimer is managed within verifyPayment's closure
+    };
   }, [paymentRequestIdParam, checkoutReference, checkoutIdParam, transactionIdParam, amountParam, currencyParam, statusParam]);
 
   const formatAmount = (amountStr: string | null, currencyCode: string) => {
