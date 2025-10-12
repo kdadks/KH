@@ -156,6 +156,14 @@ export const createSumUpCheckoutSession = async (
     // Real SumUp API (production or sandbox)
     logger.devOnly(() => console.log(`🚀 Using real SumUp API in ${currentEnvironment} mode`));
     
+    // Log configuration being used for debugging
+    console.log('🔧 SumUp API Configuration:', {
+      environment: currentEnvironment,
+      apiKeyPrefix: effectiveConfig.api_key?.substring(0, 20) + '...',
+      merchantCode: effectiveConfig.merchant_id,
+      apiBase: SUMUP_API_BASE
+    });
+    
     // Prepare the API payload
     const apiPayload = {
       checkout_reference: checkoutData.checkout_reference,
@@ -163,9 +171,6 @@ export const createSumUpCheckoutSession = async (
       currency: checkoutData.currency,
       merchant_code: effectiveConfig.merchant_id,
       description: checkoutData.description,
-      hosted_checkout: {
-        enabled: true
-      },
       ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
       ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {}),
       // Add customer information at root level for SumUp
@@ -198,13 +203,37 @@ export const createSumUpCheckoutSession = async (
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (parseError) {
+        errorData = { message: 'Could not parse error response' };
+      }
+      
+      // Enhanced error logging for debugging
+      console.error('🚨 SumUp API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+        requestPayload: {
+          checkout_reference: apiPayload.checkout_reference,
+          amount: apiPayload.amount,
+          currency: apiPayload.currency,
+          merchant_code: apiPayload.merchant_code,
+          environment: currentEnvironment
+        },
+        apiKeyPrefix: effectiveConfig.api_key?.substring(0, 15) + '...'
+      });
       
       if (response.status === 401) {
         throw new Error(`SumUp API Authentication Failed (401): Invalid API key. Please check your SumUp API credentials at https://developer.sumup.com`);
       }
       
-      throw new Error(`SumUp API Error: ${response.status} - ${errorData.message || 'Unknown error'}`);
+      if (response.status === 500) {
+        throw new Error(`SumUp API Server Error (500): ${errorData.message || errorData.error_message || 'Internal server error'}. Please verify your sandbox credentials are valid and active.`);
+      }
+      
+      throw new Error(`SumUp API Error: ${response.status} - ${errorData.message || errorData.error_message || 'Unknown error'}`);
     }
 
     const result = await response.json();    return result;
