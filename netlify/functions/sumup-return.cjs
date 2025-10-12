@@ -673,22 +673,45 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
       
       let paymentRequest = null;
       
+      // For internal calls, use the payment_request_id from options
+      if (isInternalCall && paymentRequestId) {
+        console.log(`🔍 Internal call - using payment_request_id from header: ${paymentRequestId}`);
+        
+        const { data: paymentRequests, error: prError } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .eq('id', paymentRequestId)
+          .limit(1);
+        
+        searchAttempts.push({
+          method: 'payment_request_by_header_id',
+          query: `X-Payment-Request-Id: ${paymentRequestId}`,
+          found: paymentRequests?.length || 0,
+          error: prError?.message
+        });
+
+        if (!prError && paymentRequests && paymentRequests.length > 0) {
+          paymentRequest = paymentRequests[0];
+          console.log('✅ Found payment_request by header ID:', paymentRequest.id);
+        }
+      }
+      
       // Parse payment_request_id from checkout reference pattern: payment-request-{id}-{timestamp}
-      if (checkoutReference && checkoutReference.startsWith('payment-request-')) {
+      if (!paymentRequest && checkoutReference && checkoutReference.startsWith('payment-request-')) {
         const match = checkoutReference.match(/^payment-request-(\d+)-/);
         if (match) {
-          const paymentRequestId = parseInt(match[1]);
-          console.log(`🔍 Parsed payment_request_id from checkout reference: ${paymentRequestId}`);
+          const prId = parseInt(match[1]);
+          console.log(`🔍 Parsed payment_request_id from checkout reference: ${prId}`);
           
           const { data: paymentRequests, error: prError } = await supabase
             .from('payment_requests')
             .select('*')
-            .eq('id', paymentRequestId)
+            .eq('id', prId)
             .limit(1);
           
           searchAttempts.push({
             method: 'payment_request_by_parsed_id',
-            query: `${checkoutReference} -> id:${paymentRequestId}`,
+            query: `${checkoutReference} -> id:${prId}`,
             found: paymentRequests?.length || 0,
             error: prError?.message
           });
