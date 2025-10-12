@@ -473,6 +473,13 @@ export async function processPaymentRequest(
       
       // Sending webhook payload
 
+      console.log('📤 Sending payment to webhook endpoint:', {
+        endpoint: sumupEndpoint,
+        checkoutId: paymentData.sumup_checkout_id,
+        paymentRequestId: paymentRequestId,
+        hasInternalProcessingMarker: requestBody.payload.merchant_code === 'INTERNAL_PROCESSING'
+      });
+
       const response = await fetch(sumupEndpoint, {
         method: 'POST',
         headers: {
@@ -482,11 +489,20 @@ export async function processPaymentRequest(
         body: JSON.stringify(requestBody)
       });
 
+      console.log('📥 Webhook endpoint response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       if (!response.ok) {
-        throw new Error(`SumUp endpoint returned ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Webhook endpoint error response:', errorText);
+        throw new Error(`SumUp endpoint returned ${response.status}: ${errorText}`);
       }
 
-      await response.text();
+      const responseText = await response.text();
+      console.log('✅ Webhook endpoint success:', responseText);
       // Payment processed successfully
       
       // Get the created payment record for return (most recent for this payment_request_id)
