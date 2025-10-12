@@ -628,7 +628,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         currency: paymentRequest.currency || 'EUR',
         merchant_code: environmentConfig.merchantCode,
         description: `${selectedPaymentType === 'full' ? 'Full payment' : '20% deposit'} for ${paymentRequest.service_name || 'Service'}`,
-        redirect_url: cancelRedirectUrl.toString(), // Where to redirect after successful payment (hosted checkout)
+        redirect_url: successRedirectUrl.toString(), // Where to redirect after successful payment (hosted checkout)
         return_url: sumupReturnUrl, // Webhook callback URL
         cancel_url: cancelRedirectUrl.toString(), // Where users go when they cancel
         customer: {
