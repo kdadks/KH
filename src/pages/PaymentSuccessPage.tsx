@@ -89,9 +89,6 @@ const PaymentSuccessPage: React.FC = () => {
       }
 
       setVerifying(true);
-      
-      // Auto-redirect after successful verification
-      let autoRedirectTimer: NodeJS.Timeout | null = null;
 
       try {
         const existingRequest = await getPaymentRequestById(Number(paymentRequestIdParam));
@@ -122,12 +119,44 @@ const PaymentSuccessPage: React.FC = () => {
         }
 
         const checkoutStatus = await getSumUpCheckoutStatus(checkoutId);
+        
+        // ENHANCED LOGGING: Log the full checkout response
+        console.log('🔍 Full SumUp checkout status response:', JSON.stringify(checkoutStatus, null, 2));
+        console.log('🔍 Checkout status details:', {
+          status: checkoutStatus.status,
+          amount: checkoutStatus.amount,
+          currency: checkoutStatus.currency,
+          transaction_code: checkoutStatus.transaction_code,
+          transaction_id: checkoutStatus.transaction_id,
+          transactions: checkoutStatus.transactions,
+          date: checkoutStatus.date
+        });
 
         const normalizedStatus = checkoutStatus.status?.toUpperCase?.() ?? 'PENDING';
         const firstTransaction = checkoutStatus.transactions?.[0];
+        
+        console.log('🔍 First transaction details:', firstTransaction);
 
         if (normalizedStatus === 'PAID') {
-          const transactionCode = firstTransaction?.transaction_code || firstTransaction?.id || transactionIdParam || `sumup-${Date.now()}`;
+          // Try multiple field names for transaction ID
+          const transactionCode = checkoutStatus.transaction_code || // Top-level field
+                                  checkoutStatus.transaction_id ||
+                                  firstTransaction?.transaction_code || 
+                                  firstTransaction?.transaction_id ||
+                                  firstTransaction?.id || 
+                                  transactionIdParam || 
+                                  `sumup-${Date.now()}`;
+          
+          console.log('✅ Extracted transaction code:', transactionCode);
+          console.log('🔍 Transaction code source:', {
+            from_checkout_transaction_code: !!checkoutStatus.transaction_code,
+            from_checkout_transaction_id: !!checkoutStatus.transaction_id,
+            from_first_transaction_code: !!firstTransaction?.transaction_code,
+            from_first_transaction_id: !!firstTransaction?.transaction_id,
+            from_first_transaction_id_field: !!firstTransaction?.id,
+            from_url_param: !!transactionIdParam,
+            used_fallback: transactionCode.startsWith('sumup-')
+          });
 
           await processPaymentRequest(Number(paymentRequestIdParam), {
             payment_request_id: Number(paymentRequestIdParam),
@@ -155,7 +184,7 @@ const PaymentSuccessPage: React.FC = () => {
           }
           
           // Auto-redirect to account page after 2 seconds
-          autoRedirectTimer = setTimeout(() => {
+          setTimeout(() => {
             window.location.href = '/my-account?tab=payments&highlight=success';
           }, 2000);
           
@@ -177,11 +206,6 @@ const PaymentSuccessPage: React.FC = () => {
     };
 
     verifyPayment();
-    
-    // Cleanup function
-    return () => {
-      // Note: autoRedirectTimer is managed within verifyPayment's closure
-    };
   }, [paymentRequestIdParam, checkoutReference, checkoutIdParam, transactionIdParam, amountParam, currencyParam, statusParam]);
 
   const formatAmount = (amountStr: string | null, currencyCode: string) => {
