@@ -828,6 +828,7 @@ const HeroSection: React.FC = () => {
         const paymentRequestWithCustomer = {
           ...paymentState.paymentRequest!,
           amount: selectedAmount, // Use selected payment amount
+          payment_type: paymentType, // Store payment type for tracking
           customer: {
             first_name: customerData.first_name || '',
             last_name: customerData.last_name || '',
@@ -1412,6 +1413,8 @@ const HeroSection: React.FC = () => {
               paymentRequest={selectedPaymentRequest}
               onPaymentComplete={handlePaymentModalComplete}
               context="booking" // Booking context - redirect to home
+              paymentOptions={paymentState.paymentOptions}
+              selectedPaymentType={selectedPaymentRequest.payment_type || 'deposit'}
             />
           )}
           

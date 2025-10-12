@@ -1531,6 +1531,8 @@ const BookingPage: React.FC = () => {
           paymentRequest={selectedPaymentRequest}
           onPaymentComplete={handlePaymentModalComplete}
           context="booking" // Booking context - redirect to home
+          paymentOptions={paymentState.paymentOptions}
+          selectedPaymentType={selectedPaymentRequest.payment_type || 'deposit'}
         />
       )}
     </>

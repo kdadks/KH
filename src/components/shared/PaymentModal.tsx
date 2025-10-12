@@ -213,6 +213,11 @@ interface PaymentModalProps {
   onPaymentFailed?: (error: string) => void; // New prop for payment failure callback
   redirectAfterPayment?: string | false; // New prop to control redirect behavior
   context?: 'email' | 'dashboard' | 'admin' | 'booking'; // Context to determine redirect behavior
+  paymentOptions?: {
+    deposit: { amount: number; percentage: number };
+    full: { amount: number };
+  };
+  selectedPaymentType?: 'deposit' | 'full';
 }
 
 const extractCheckoutUrl = (
@@ -263,8 +268,29 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   onPaymentComplete,
   onPaymentFailed,
   redirectAfterPayment,
-  context = 'booking' // Default context
+  context = 'booking', // Default context
+  paymentOptions,
+  selectedPaymentType = 'deposit' // Default to deposit if not specified
 }) => {
+  // Calculate the actual payment amount based on selected payment type
+  const getActualPaymentAmount = (): number => {
+    if (!paymentOptions || !selectedPaymentType) {
+      // No payment options provided, use the payment request amount (backward compatibility)
+      return paymentRequest.amount;
+    }
+    
+    // Use the selected payment type amount
+    if (selectedPaymentType === 'full') {
+      console.log(`💰 Using FULL payment amount: €${paymentOptions.full.amount}`);
+      return paymentOptions.full.amount;
+    } else {
+      console.log(`💰 Using DEPOSIT amount: €${paymentOptions.deposit.amount} (${paymentOptions.deposit.percentage}%)`);
+      return paymentOptions.deposit.amount;
+    }
+  };
+
+  const actualPaymentAmount = getActualPaymentAmount();
+
   // Store payment logs in localStorage for post-redirect analysis
   const logToStorage = (message: string, data?: Record<string, unknown>) => {
     const timestamp = new Date().toISOString();
@@ -558,10 +584,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       const newCheckoutReference = `payment-request-${paymentRequest.id}-${Date.now()}`;
       setCheckoutReference(newCheckoutReference);
 
+      // Update the payment request amount if user selected a different amount than default
+      if (paymentOptions && actualPaymentAmount !== paymentRequest.amount) {
+        console.log(`🔄 Updating payment request amount from €${paymentRequest.amount} to €${actualPaymentAmount} (${selectedPaymentType} payment)`);
+        
+        const { error: updateError } = await supabase
+          .from('payment_requests')
+          .update({ 
+            amount: actualPaymentAmount,
+            notes: selectedPaymentType === 'full' 
+              ? `Full payment for ${paymentRequest.service_name || 'Service'}`
+              : paymentRequest.notes // Keep original deposit notes
+          })
+          .eq('id', paymentRequest.id);
+
+        if (updateError) {
+          console.error('❌ Error updating payment request amount:', updateError);
+          throw new Error('Failed to update payment amount. Please try again.');
+        }
+        
+        // Update the local payment request object
+        paymentRequest.amount = actualPaymentAmount;
+        console.log(`✅ Payment request updated to ${selectedPaymentType} amount: €${actualPaymentAmount}`);
+      }
+
       // DUPLICATE FIX: Don't create initial payment - let SumUp webhook/return handler create the only payment record
       // Payment record will be created by webhook
       logToStorage('Payment flow initiated - no initial record created', { 
         checkoutReference: newCheckoutReference,
+        amount: actualPaymentAmount,
+        paymentType: selectedPaymentType,
         reason: 'Preventing duplicate payments - SumUp handler will create single record'
       });
 
@@ -580,7 +632,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       cancelRedirectUrl.searchParams.set('context', context);
 
       logger.devOnly(() => console.log('Creating SumUp checkout session...', {
-        amount: paymentRequest.amount,
+        amount: actualPaymentAmount,
+        paymentType: selectedPaymentType,
+        originalRequestAmount: paymentRequest.amount,
         currency: paymentRequest.currency,
         merchant_code: environmentConfig.merchantCode,
         environment: currentEnvironment,
@@ -591,10 +645,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       const checkoutResponse = await createSumUpCheckoutSession({
         checkout_reference: newCheckoutReference,
-        amount: paymentRequest.amount,
+        amount: actualPaymentAmount,
         currency: paymentRequest.currency || 'EUR',
         merchant_code: environmentConfig.merchantCode,
-        description: `Payment for ${paymentRequest.service_name || 'Service'}`,
+        description: `${selectedPaymentType === 'full' ? 'Full payment' : '20% deposit'} for ${paymentRequest.service_name || 'Service'}`,
         redirect_url: cancelRedirectUrl.toString(), // Where to redirect after successful payment (hosted checkout)
         return_url: sumupReturnUrl, // Webhook callback URL
         cancel_url: cancelRedirectUrl.toString(), // Where users go when they cancel
