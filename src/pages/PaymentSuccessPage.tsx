@@ -146,8 +146,12 @@ const PaymentSuccessPage: React.FC = () => {
 
           try {
             localStorage.removeItem(`sumupCheckout:${checkoutReference}`);
+            
+            // Set completion flag for PaymentModal to detect
+            localStorage.setItem(`payment_completed_${checkoutReference}`, 'true');
+            console.log('✅ Set payment completion flag:', `payment_completed_${checkoutReference}`);
           } catch (storageError) {
-            console.warn('Unable to remove stored SumUp metadata:', storageError);
+            console.warn('Unable to manage stored payment metadata:', storageError);
           }
           
           // Auto-redirect to account page after 2 seconds
