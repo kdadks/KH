@@ -236,7 +236,15 @@ export const createSumUpCheckoutSession = async (
       throw new Error(`SumUp API Error: ${response.status} - ${errorData.message || errorData.error_message || 'Unknown error'}`);
     }
 
-    const result = await response.json();    return result;
+    const result = await response.json();
+    
+    // Sandbox API might not return checkout_url - generate our own for testing
+    if (currentEnvironment === 'sandbox' && !result.checkout_url) {
+      console.warn('⚠️ Sandbox checkout created but no checkout_url provided. Generating test checkout page URL.');
+      result.checkout_url = `/sumup-checkout?ref=${result.checkout_reference}&id=${result.id}&test=1`;
+    }
+    
+    return result;
 
   } catch (error) {
     console.error('Error creating SumUp checkout session:', error);
