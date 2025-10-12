@@ -517,6 +517,68 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   }, [isOpen, paymentRequest.booking_id, fetchBookingDetails]);
 
+  // Listen for payment completion from payment success page
+  useEffect(() => {
+    if (!isOpen || !checkoutReference) return;
+
+    const checkPaymentCompletion = async () => {
+      try {
+        // Check localStorage for payment completion flag
+        const completionKey = `payment_completed_${checkoutReference}`;
+        const paymentCompleted = localStorage.getItem(completionKey);
+        
+        if (paymentCompleted) {
+          console.log('✅ Payment completion detected from payment success page');
+          
+          // Clean up flag
+          localStorage.removeItem(completionKey);
+          
+          // Close modal and show success
+          setShowSumUpModal(false);
+          setCurrentStep('success');
+          
+          // Call parent success handler
+          onPaymentComplete?.();
+          
+          // Auto-close modal after short delay
+          setTimeout(() => {
+            onClose();
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('Error checking payment completion:', error);
+      }
+    };
+
+    // Check immediately
+    checkPaymentCompletion();
+
+    // Set up storage event listener (for changes in other tabs/windows)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key?.startsWith('payment_completed_') && e.newValue) {
+        checkPaymentCompletion();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also check on window focus (when user returns to this tab)
+    const handleWindowFocus = () => {
+      checkPaymentCompletion();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+
+    // Poll periodically as fallback
+    const pollInterval = setInterval(checkPaymentCompletion, 2000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleWindowFocus);
+      clearInterval(pollInterval);
+    };
+  }, [isOpen, checkoutReference, onPaymentComplete, onClose]);
+
   const handleStartPayment = async () => {
     // SIMPLE CONSOLE OUTPUT
     // Payment process initiated
