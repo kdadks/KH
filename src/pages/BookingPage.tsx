@@ -84,6 +84,7 @@ const BookingPage: React.FC = () => {
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
   const [loadingNextSlot, setLoadingNextSlot] = useState(false);
   const [autoSelectTime, setAutoSelectTime] = useState<string | null>(null); // Track time to auto-select
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Watch the service and date fields to trigger time slot updates
   const watchedService = watch('service');
@@ -847,7 +848,11 @@ const BookingPage: React.FC = () => {
   };
 
   const handlePayNow = async (paymentType: 'deposit' | 'full') => {
+    if (isProcessingPayment) return; // Prevent multiple clicks
+    
     try {
+      setIsProcessingPayment(true);
+      
       // Open the PaymentModal with the payment request
       if (paymentState.paymentRequest && paymentState.customer && paymentState.paymentOptions) {
         // Ensure customer data is properly structured
@@ -923,10 +928,12 @@ const BookingPage: React.FC = () => {
           paymentOptions: paymentState.paymentOptions
         });
         setSuccessMsg('Payment Error: Missing payment information. Please try again.');
+        setIsProcessingPayment(false);
       }
     } catch (error) {
       console.error('Error opening payment modal:', error);
       setSuccessMsg('Payment Error: Failed to open payment interface. Please try again.');
+      setIsProcessingPayment(false);
     }
   };
 
@@ -1100,8 +1107,19 @@ const BookingPage: React.FC = () => {
                             onClick={() => handlePayNow('deposit')}
                             variant="primary"
                             className="w-full"
+                            disabled={isProcessingPayment}
                           >
-                            Pay 20% Deposit - €{paymentState.paymentOptions.deposit.amount}
+                            {isProcessingPayment ? (
+                              <span className="flex items-center justify-center">
+                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processing...
+                              </span>
+                            ) : (
+                              `Pay 20% Deposit - €${paymentState.paymentOptions.deposit.amount}`
+                            )}
                           </Button>
                         </div>
 
@@ -1125,8 +1143,19 @@ const BookingPage: React.FC = () => {
                             onClick={() => handlePayNow('full')}
                             variant="secondary"
                             className="w-full"
+                            disabled={isProcessingPayment}
                           >
-                            Pay Full Amount - €{paymentState.paymentOptions.full.amount}
+                            {isProcessingPayment ? (
+                              <span className="flex items-center justify-center">
+                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processing...
+                              </span>
+                            ) : (
+                              `Pay Full Amount - €${paymentState.paymentOptions.full.amount}`
+                            )}
                           </Button>
                         </div>
                       </div>

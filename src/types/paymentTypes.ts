@@ -48,6 +48,7 @@ export interface PaymentRequestWithCustomer extends PaymentRequest {
   };
   service_name?: string;
   booking_date?: string;
+  payment_type?: 'deposit' | 'full';
 }
 
 export interface PaymentWithCustomer extends Payment {
