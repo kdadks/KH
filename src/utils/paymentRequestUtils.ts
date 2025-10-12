@@ -759,6 +759,9 @@ export async function sendPaymentRequestNotification(
   paymentRequestId: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Small delay to ensure database update is committed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Get payment request with customer details
     const { data: paymentRequest, error } = await supabase
       .from('payment_requests')
@@ -776,6 +779,8 @@ export async function sendPaymentRequestNotification(
     if (error || !paymentRequest) {
       throw new Error('Payment request not found');
     }
+    
+    console.log(`📋 Payment request fetched for email - ID: ${paymentRequestId}, Amount: €${paymentRequest.amount}, Notes: ${paymentRequest.notes}`);
 
     // Generate SumUp checkout URL for direct payment (try real API first)
     let directPaymentUrl = '';
