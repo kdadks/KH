@@ -3304,22 +3304,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                           new Date(status.paymentRequest.updated_at).toLocaleDateString() :
                                           new Date(status.paymentRequest.created_at).toLocaleDateString()}
                                       </p>
-                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && booking.status !== 'paid' && (
-                                        <div className="mt-2">
-                                          <button
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleFixBookingStatus(booking);
-                                            }}
-                                            disabled={loadingPaymentStatus}
-                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
-                                            title="Update booking status to reflect payment"
-                                          >
-                                            {loadingPaymentStatus ? '...' : 'Sync Status'}
-                                          </button>
-                                        </div>
-                                      )}
                                     </div>
                                   );
                                 }
@@ -3350,22 +3334,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                           new Date(status.payment.payment_date).toLocaleDateString() :
                                           new Date(status.payment.created_at).toLocaleDateString()}
                                       </p>
-                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && booking.status !== 'paid' && (
-                                        <div className="mt-2">
-                                          <button
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleFixBookingStatus(booking);
-                                            }}
-                                            disabled={loadingPaymentStatus}
-                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
-                                            title="Update booking status to reflect payment"
-                                          >
-                                            {loadingPaymentStatus ? '...' : 'Sync Status'}
-                                          </button>
-                                        </div>
-                                      )}
                                     </div>
                                   );
                                 }
@@ -3395,20 +3363,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                         Status: {status.paymentRequest.status} • Due: {status.paymentRequest.payment_due_date ?
                                           new Date(status.paymentRequest.payment_due_date).toLocaleDateString() : 'N/A'}
                                       </p>
-                                      <div className="mt-2">
-                                        <button
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleFixBookingStatus(booking);
-                                          }}
-                                          disabled={loadingPaymentStatus}
-                                          className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
-                                          title="Check if payment was completed and update status"
-                                        >
-                                          {loadingPaymentStatus ? '...' : 'Check Payment'}
-                                        </button>
-                                      </div>
                                     </div>
                                   );
                                 }
