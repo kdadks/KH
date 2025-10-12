@@ -192,6 +192,16 @@ export const createSumUpCheckoutSession = async (
       });
     }
     
+    // Log the actual request payload for debugging
+    console.log('📤 SumUp API Request:', {
+      url: `${SUMUP_API_BASE}/v0.1/checkouts`,
+      payload: {
+        ...apiPayload,
+        // Hide sensitive data
+        merchant_code: apiPayload.merchant_code
+      }
+    });
+    
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
       method: 'POST',
       headers: {
@@ -201,6 +211,8 @@ export const createSumUpCheckoutSession = async (
       },
       body: JSON.stringify(apiPayload)
     });
+    
+    console.log('📥 SumUp API Response Status:', response.status, response.statusText);
 
     if (!response.ok) {
       let errorData;
@@ -238,10 +250,28 @@ export const createSumUpCheckoutSession = async (
 
     const result = await response.json();
     
-    // Sandbox API might not return checkout_url - generate our own for testing
-    if (currentEnvironment === 'sandbox' && !result.checkout_url) {
-      console.warn('⚠️ Sandbox checkout created but no checkout_url provided. Generating test checkout page URL.');
-      result.checkout_url = `/sumup-checkout?ref=${result.checkout_reference}&id=${result.id}&test=1`;
+    // Log the complete API response for debugging
+    console.log('📥 SumUp API Response Body:', {
+      id: result.id,
+      status: result.status,
+      checkout_reference: result.checkout_reference,
+      amount: result.amount,
+      currency: result.currency,
+      has_checkout_url: !!result.checkout_url,
+      checkout_url: result.checkout_url,
+      all_fields: Object.keys(result)
+    });
+    
+    // Check if checkout_url is missing
+    if (!result.checkout_url) {
+      console.error('❌ ISSUE: SumUp API did not return checkout_url in response!');
+      console.error('📋 This usually means one of the following:');
+      console.error('   1. Missing redirect_url in request (required for hosted checkout)');
+      console.error('   2. Sandbox environment may not support hosted checkouts');
+      console.error('   3. API key permissions may not include checkout URL generation');
+      console.error('   4. Merchant account not configured for online payments');
+      console.error('');
+      console.error('🔍 Full API Response:', JSON.stringify(result, null, 2));
     }
     
     return result;
