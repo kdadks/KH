@@ -23,7 +23,7 @@ export interface Payment {
   payment_request_id: number; // Changed from string to number
   amount: number;
   currency: string;
-  status: 'completed' | 'failed' | 'pending';
+  status: 'completed' | 'failed' | 'pending' | 'paid';
   payment_method: string;
   transaction_id: string;
   created_at: string;
@@ -31,6 +31,22 @@ export interface Payment {
   customer_email?: string; // Added for display
   service_name?: string; // Added for display
   payment_date?: string; // Added for actual payment date
+  // Extended fields from Supabase payments table
+  customer_id?: number;
+  invoice_id?: number | null;
+  booking_id?: string | null;
+  sumup_transaction_id?: string | null;
+  sumup_checkout_id?: string | null;
+  sumup_checkout_reference?: string | null;
+  sumup_payment_type?: 'deposit' | 'full' | null;
+  failure_reason?: string | null;
+  refund_amount?: string | null;
+  refund_reason?: string | null;
+  notes?: string | null;
+  updated_at?: string;
+  webhook_processed_at?: string | null;
+  sumup_event_type?: string | null;
+  sumup_event_id?: string | null;
 }
 
 export interface InvoiceWithPayments {
@@ -287,11 +303,23 @@ export const getAllPayments = async (): Promise<Payment[]> => {
         status,
         payment_method,
         sumup_transaction_id,
+        sumup_checkout_id,
+        sumup_checkout_reference,
+        sumup_payment_type,
         payment_date,
         created_at,
+        updated_at,
         customer_id,
         invoice_id,
-        booking_id
+        booking_id,
+        payment_request_id,
+        failure_reason,
+        refund_amount,
+        refund_reason,
+        notes,
+        webhook_processed_at,
+        sumup_event_type,
+        sumup_event_id
       `)
       .order('created_at', { ascending: false });
 
@@ -354,17 +382,33 @@ export const getAllPayments = async (): Promise<Payment[]> => {
     // Combine payment data with customer and service information
     return paymentsData.map(payment => ({
       id: payment.id?.toString() || '',
-      payment_request_id: 0, // Not applicable for direct payments
+      payment_request_id: payment.payment_request_id || 0,
       amount: payment.amount || 0,
       currency: payment.currency || 'EUR',
-      status: payment.status === 'paid' ? 'completed' as const : payment.status as 'completed' | 'failed' | 'pending',
+      status: payment.status === 'paid' ? 'completed' as const : payment.status as 'completed' | 'failed' | 'pending' | 'paid',
       payment_method: payment.payment_method || 'Unknown',
-      transaction_id: payment.sumup_transaction_id || '',
+      transaction_id: payment.sumup_transaction_id || '', // Use sumup_transaction_id as transaction_id
       created_at: payment.created_at || '',
       customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
       customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
       service_name: bookingMap.get(payment.booking_id) || 'Payment',
-      payment_date: payment.payment_date || payment.created_at
+      payment_date: payment.payment_date || payment.created_at,
+      // Extended fields
+      customer_id: payment.customer_id,
+      invoice_id: payment.invoice_id,
+      booking_id: payment.booking_id,
+      sumup_transaction_id: payment.sumup_transaction_id,
+      sumup_checkout_id: payment.sumup_checkout_id,
+      sumup_checkout_reference: payment.sumup_checkout_reference,
+      sumup_payment_type: payment.sumup_payment_type,
+      failure_reason: payment.failure_reason,
+      refund_amount: payment.refund_amount,
+      refund_reason: payment.refund_reason,
+      notes: payment.notes,
+      updated_at: payment.updated_at,
+      webhook_processed_at: payment.webhook_processed_at,
+      sumup_event_type: payment.sumup_event_type,
+      sumup_event_id: payment.sumup_event_id
     }));
 
   } catch (error) {
