@@ -744,7 +744,9 @@ export async function sendPaymentRequestNotification(
         const successRedirectUrl = `${baseUrl}/payment?request=${paymentRequestId}&status=success`;
         const cancelRedirectUrl = `${baseUrl}/payment?request=${paymentRequestId}&status=cancelled`;
         
-        const checkoutResponse = await createSumUpCheckoutSession({
+        // Create SumUp checkout session (needed for payment processing)
+        // We don't use the checkout_url from response - we route through internal validation page instead
+        await createSumUpCheckoutSession({
           checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
           amount: paymentRequest.amount,
           currency: 'EUR',
@@ -760,15 +762,10 @@ export async function sendPaymentRequestNotification(
           pay_to_email: paymentRequest.customer.email
         });
         
-        // Use the checkout_url provided by SumUp if available, otherwise construct fallback
-        if (checkoutResponse.checkout_url) {
-          directPaymentUrl = checkoutResponse.checkout_url;
-          console.log('✅ Using SumUp checkout_url from API:', directPaymentUrl);
-        } else {
-          // Fallback: Create internal checkout URL with email context for proper redirect behavior
-          directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
-          console.warn('⚠️ SumUp checkout_url not available, using internal fallback URL');
-        }
+        // ALWAYS use internal payment page URL to validate status before proceeding to SumUp
+        // This prevents cancelled/paid payment requests from being processed via email links
+        directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
+        console.log('✅ Using internal payment validation URL (will redirect to SumUp after status check):', directPaymentUrl);
       }
       
     } catch (realApiError) {

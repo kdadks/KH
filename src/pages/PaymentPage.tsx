@@ -140,11 +140,14 @@ const PaymentPage: React.FC = () => {
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 paymentRequest.status === 'paid' 
                   ? 'bg-green-100 text-green-800'
+                  : paymentRequest.status === 'cancelled'
+                  ? 'bg-red-100 text-red-800'
                   : paymentRequest.status === 'pending' || paymentRequest.status === 'sent'
                   ? 'bg-yellow-100 text-yellow-800' 
                   : 'bg-gray-100 text-gray-800'
               }`}>
                 {paymentRequest.status === 'paid' ? 'Paid' : 
+                 paymentRequest.status === 'cancelled' ? 'Cancelled' :
                  paymentRequest.status === 'pending' ? 'Pending' :
                  paymentRequest.status === 'sent' ? 'Sent' : paymentRequest.status}
               </span>
@@ -190,6 +193,23 @@ const PaymentPage: React.FC = () => {
                 <h3 className="text-xl font-semibold text-green-700 mb-2">Already Paid</h3>
                 <p className="text-gray-600 mb-6">
                   This payment request has already been completed.
+                </p>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            ) : paymentRequest.status === 'cancelled' ? (
+              /* Cancelled State */
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CreditCard className="w-10 h-10 text-red-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-red-700 mb-2">Payment Request Cancelled</h3>
+                <p className="text-gray-600 mb-6">
+                  This payment request has been cancelled and is no longer available for payment.
                 </p>
                 <button
                   onClick={() => navigate('/dashboard')}
