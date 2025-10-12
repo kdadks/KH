@@ -182,10 +182,20 @@ export const logAdminDataAccess = async (
       .insert(auditEntries);
 
     if (error) {
-      console.error('Failed to log admin data access:', error);
+      console.error('Failed to log admin data access:', {
+        error,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        auditEntries
+      });
     }
   } catch (error) {
-    console.error('Error logging admin data access:', error);
+    console.error('Error logging admin data access:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined
+    });
   }
 };
 
