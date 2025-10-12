@@ -1179,16 +1179,42 @@ exports.handler = async (event, context) => {
       
       // Allow test mode for UAT/staging without signature verification
       // Also allow internal calls from PaymentRequestUtils
-      const isInternalCall = event.headers['user-agent']?.includes('PaymentRequestUtils') ||
-        event.body?.includes('INTERNAL_PROCESSING');
+      // Note: Netlify normalizes headers to lowercase
+      const userAgent = event.headers['user-agent'] || event.headers['User-Agent'] || '';
+      const hasInternalMarker = event.body?.includes('INTERNAL_PROCESSING');
+      const isInternalCall = userAgent.includes('PaymentRequestUtils') || hasInternalMarker;
+      
+      console.log('🔍 Internal call detection:', {
+        userAgent,
+        bodyPreview: event.body?.substring(0, 200),
+        hasInternalMarker,
+        isInternalCall,
+        isProduction,
+        hasWebhookSecret: !!webhookSecret
+      });
       
       const isTestMode = !isProduction && (!webhookSecret || 
         event.headers['x-test-webhook'] === 'true' ||
         event.body?.includes('test_webhook_payload') ||
         isInternalCall);
-      
+
+      console.log('🧪 Test mode evaluation:', {
+        isTestMode,
+        isProduction,
+        hasWebhookSecret: !!webhookSecret,
+        hasTestHeader: event.headers['x-test-webhook'] === 'true',
+        hasTestPayload: !!event.body?.includes('test_webhook_payload'),
+        isInternalCall
+      });
+
       if (!webhookSecret && !isTestMode) {
         console.error(`❌ Missing webhook secret for ${environmentLabel} environment`);
+        console.error('Webhook secret check failed:', {
+          isProduction,
+          isTestMode,
+          isInternalCall,
+          environment: environmentLabel
+        });
         return {
           statusCode: 500,
           headers: { 'Content-Type': 'application/json' },
@@ -1198,9 +1224,7 @@ exports.handler = async (event, context) => {
             environment: environmentLabel
           })
         };
-      }
-
-      // Verify webhook signature (skip for test mode)
+      }      // Verify webhook signature (skip for test mode)
       const signature = event.headers['x-payload-signature'];
       const rawBody = event.body;
       
