@@ -1052,13 +1052,6 @@ export const Bookings: React.FC<BookingsProps> = ({
   // Helper function to check for existing confirmed bookings in the same time slot
   const checkForConflictingBookings = async (booking: BookingFormData): Promise<{ hasConflict: boolean; conflictDetails?: Record<string, unknown>; message?: string }> => {
     try {
-      console.log('🔍 CONFLICT CHECK: Starting conflict check for booking:', {
-        id: booking.id,
-        booking_date: booking.booking_date,
-        timeslot_start_time: booking.timeslot_start_time,
-        timeslot_end_time: booking.timeslot_end_time
-      });
-      
       // Extract booking date and time
       let bookingDate: string = '';
       let bookingStartTime: string = '';
@@ -1098,38 +1091,19 @@ export const Bookings: React.FC<BookingsProps> = ({
       }
 
       if (!bookingDate || !bookingStartTime) {
-        console.log('🔍 CONFLICT CHECK: Missing date/time data:', { bookingDate, bookingStartTime, bookingEndTime });
         return {
           hasConflict: false,
           message: 'Cannot check for conflicts: Missing date or time information.'
         };
       }
-      
-      console.log('🔍 CONFLICT CHECK: Extracted booking details:', { 
-        bookingDate, 
-        bookingStartTime, 
-        bookingEndTime,
-        originalBookingDate: booking.booking_date,
-        timeslots: {
-          start: booking.timeslot_start_time,
-          end: booking.timeslot_end_time
-        }
-      });
 
       // Check for other confirmed bookings at the same date and time
       // We need to exclude the current booking if we're updating an existing one
-      console.log('🔍 CONFLICT CHECK: Querying database for existing bookings...');
       const { data: existingBookings, error } = await supabase
         .from('bookings')
         .select('id, booking_reference, booking_date, timeslot_start_time, timeslot_end_time, status, customer_id, package_name')
         .eq('status', 'confirmed')
         .neq('id', booking.id || '00000000-0000-0000-0000-000000000000'); // Exclude current booking if exists
-
-      console.log('🔍 CONFLICT CHECK: Database query result:', { 
-        error, 
-        bookingsCount: existingBookings?.length || 0,
-        existingBookings: existingBookings?.map(b => ({ id: b.id, booking_date: b.booking_date, status: b.status }))
-      });
 
       if (error) {
         console.error('Error checking for conflicting bookings:', error);
@@ -1141,9 +1115,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       }
 
       // Check each existing booking to see if it conflicts with our time slot
-      console.log('🔍 CONFLICT CHECK: Starting detailed conflict analysis...');
       const conflictingBookings = existingBookings?.filter(existingBooking => {
-
         // First check if dates match
         const existingDateTime = new Date(existingBooking.booking_date);
         const year = existingDateTime.getUTCFullYear();
@@ -1152,10 +1124,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         const existingDate = `${year}-${month}-${day}`;
 
         if (existingDate !== bookingDate) {
-          console.log('🔍 CONFLICT CHECK: Different dates, no conflict:', {
-            existing: existingDate,
-            new: bookingDate
-          });
           return false; // Different dates, no conflict
         }
 
@@ -1164,11 +1132,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         const existingEndTime = existingBooking.timeslot_end_time;
 
         if (!existingStartTime || !existingEndTime) {
-          console.log('🔍 CONFLICT CHECK: Existing booking missing timeslot data:', {
-            id: existingBooking.id,
-            start: existingStartTime,
-            end: existingEndTime
-          });
           return false; // Can't compare without time data
         }
 
@@ -1181,23 +1144,10 @@ export const Bookings: React.FC<BookingsProps> = ({
         // Check for time overlap: two time ranges overlap if one doesn't end before the other starts
         const hasTimeOverlap = !(newEndMinutes <= existingStartMinutes || newStartMinutes >= existingEndMinutes);
 
-        console.log('🔍 CONFLICT CHECK: Time overlap analysis:', {
-          newTimeRange: `${bookingStartTime}-${bookingEndTime} (${newStartMinutes}-${newEndMinutes} min)`,
-          existingTimeRange: `${existingStartTime}-${existingEndTime} (${existingStartMinutes}-${existingEndMinutes} min)`,
-          hasTimeOverlap,
-          bookingId: existingBooking.id
-        });
-
         return hasTimeOverlap;
       }) || [];
 
-      console.log('🔍 CONFLICT CHECK: Conflict analysis complete:', {
-        conflictingBookingsCount: conflictingBookings.length,
-        hasConflicts: conflictingBookings.length > 0
-      });
-
       if (conflictingBookings.length > 0) {
-        console.log('🔍 CONFLICT CHECK: Found conflicts, gathering customer details...');
         const conflictedBooking = conflictingBookings[0];
         
         // Get customer details for the conflicting booking
@@ -1205,30 +1155,23 @@ export const Bookings: React.FC<BookingsProps> = ({
         let customerEmail = '';
         
         if (conflictedBooking.customer_id) {
-          console.log('🔍 CONFLICT CHECK: Fetching customer data for ID:', conflictedBooking.customer_id);
           const { data: customerData, error: customerError } = await supabase
             .from('customers')
             .select('first_name, last_name, email')
             .eq('id', conflictedBooking.customer_id)
             .single();
             
-          console.log('🔍 CONFLICT CHECK: Customer data result:', { customerError, hasData: !!customerData });
-            
           if (customerData && !customerError) {
             // Decrypt customer data for admin viewing
-            console.log('🔍 CONFLICT CHECK: Decrypting customer data...');
             try {
               const decryptedCustomer = decryptCustomerDataForAdmin(customerData);
               customerName = `${decryptedCustomer.first_name} ${decryptedCustomer.last_name}`;
               customerEmail = decryptedCustomer.email || '';
-              console.log('🔍 CONFLICT CHECK: Customer data decrypted successfully');
             } catch (decryptError) {
-              console.error('🔍 CONFLICT CHECK: Decryption failed:', decryptError);
+              console.error('Error decrypting customer data for conflict:', decryptError);
               customerName = 'Customer Data Unavailable';
               customerEmail = 'Email Unavailable';
             }
-          } else {
-            console.log('🔍 CONFLICT CHECK: No customer data found or error occurred');
           }
         }
         
@@ -1272,10 +1215,10 @@ export const Bookings: React.FC<BookingsProps> = ({
                   `Note: You can edit or cancel the existing booking using the reference ID above.`
         };
       }
-      console.log('🔍 CONFLICT CHECK: No conflicts found, returning success');
+      
       return { hasConflict: false };
     } catch (error) {
-      console.error('❌ CONFLICT CHECK: Error checking for conflicting bookings:', error);
+      console.error('Error checking for conflicting bookings:', error);
       return {
         hasConflict: false,
         message: 'Error checking for existing bookings. Please try again.'
@@ -1301,8 +1244,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                               (normalizeTime(booking.timeslot_start_time || '') === '09:00' && normalizeTime(booking.timeslot_end_time || '') === '17:00');
 
       if (isFullDayBooking) {
-        console.log('📅 Processing full-day booking confirmation');
-
         // For full-day bookings, check if there are ANY available slots during business hours
         const bookingDate = booking.booking_date?.split('T')[0] || booking.appointment_date;
 
@@ -1312,7 +1253,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         }
 
         // First check if there are any available slots for this date for validation
-        console.log('🔍 Checking for any available slots on date:', bookingDate);
         const { data: availableSlots, error: slotsError } = await supabase
           .from('availability')
           .select('id, start_time, end_time, is_available')
@@ -1320,7 +1260,7 @@ export const Bookings: React.FC<BookingsProps> = ({
           .eq('is_available', true);
 
         if (slotsError) {
-          console.error('❌ Error checking availability for full-day booking:', slotsError);
+          console.error('Error checking availability for full-day booking:', slotsError);
           showError('Cannot Confirm Booking', 'Error checking availability. Please try again.');
           return;
         }
@@ -1330,10 +1270,7 @@ export const Bookings: React.FC<BookingsProps> = ({
           return;
         }
 
-        console.log(`✅ Found ${availableSlots.length} available slots for full-day booking`);
-
         // Now get ALL slots for the date (both available and unavailable) to mark them as unavailable
-        console.log('🔍 Fetching ALL slots for the date to mark as unavailable:', bookingDate);
         const { data: allSlots } = await supabase
           .from('availability')
           .select('id, start_time, end_time, is_available')
@@ -1357,15 +1294,13 @@ export const Bookings: React.FC<BookingsProps> = ({
           status: 'confirmed'
         };
 
-        console.log('📍 Updating full-day booking with data:', updateData);
-
         const { error } = await supabase
           .from('bookings')
           .update(updateData)
           .eq('id', booking.id);
 
         if (error) {
-          console.error('❌ Database update error:', error);
+          console.error('Database update error:', error);
           throw new Error(`Failed to update booking: ${error.message}`);
         }
 
@@ -1386,8 +1321,6 @@ export const Bookings: React.FC<BookingsProps> = ({
           return !(slotEndMinutes <= allDayStartMinutes || slotStartMinutes >= allDayEndMinutes);
         }) || [];
 
-        console.log(`🔄 Marking ${slotsToUpdate.length} slots (9:00 AM - 5:00 PM) as unavailable for date:`, bookingDate);
-
         if (slotsToUpdate.length > 0) {
           const slotIds = slotsToUpdate.map(slot => slot.id);
 
@@ -1397,13 +1330,9 @@ export const Bookings: React.FC<BookingsProps> = ({
             .in('id', slotIds);
 
           if (availabilityError) {
-            console.error('❌ Failed to update availability slots for all-day booking:', availabilityError);
+            console.error('Failed to update availability slots for all-day booking:', availabilityError);
             // Don't throw error - booking is already confirmed, just log the issue
-          } else {
-            console.log(`✅ ${slotsToUpdate.length} availability slots between 9:00 AM - 5:00 PM marked as unavailable`);
           }
-        } else {
-          console.log('ℹ️ No slots found in 9:00 AM - 5:00 PM range to mark as unavailable');
         }
       } else {
         // Regular time-specific booking logic
@@ -1458,16 +1387,14 @@ export const Bookings: React.FC<BookingsProps> = ({
             showError('Cannot Confirm Booking', availabilityCheck.message || 'No availability found for this booking time.');
             return;
           }
-        }        // Check for conflicting bookings
-        console.log('🔍 About to check for conflicting bookings...');
+        }
+        
+        // Check for conflicting bookings
         const conflictCheck = await checkForConflictingBookings(booking);
-        console.log('🔍 Conflict check result:', conflictCheck);
 
         if (conflictCheck.hasConflict) {          showError('Booking Conflict Detected', conflictCheck.message || 'This time slot is already taken by another confirmed booking.');
           return;
         }
-        
-        console.log('✅ No conflicts found, proceeding with booking update...');
 
         // Update booking with confirmed status and matched slot time if available
         const updateData: Record<string, unknown> = {
@@ -1487,38 +1414,21 @@ export const Bookings: React.FC<BookingsProps> = ({
 
             // Don't update booking_date during confirmation to avoid timezone issues
             // The booking should keep its original booking_date and we only update the status and slot fields
-
-            console.log('✅ Confirming booking with corrected time:', {
-              originalTime: booking.booking_date,
-              confirmedSlot: {
-                start: slotStartTime,
-                end: slotEndTime
-              },
-              correctedBookingDate: updateData.booking_date
-            });
           }
         }
 
-        console.log('📍 Updating booking with data:', updateData);
-
-        console.log('🔄 About to execute database update...');
         const { error } = await supabase
           .from('bookings')
           .update(updateData)
           .eq('id', booking.id);
 
-        console.log('🔄 Database update result:', { error, success: !error });
-
         if (error) {
-          console.error('❌ Database update error:', error);
+          console.error('Database update error:', error);
           throw new Error(`Failed to update booking: ${error.message}`);
         }
-        
-        console.log('✅ Database update successful, proceeding with availability update...');
 
         // CRITICAL: Update the availability table to mark the slot as unavailable
         if (availabilityCheck.matchedSlot && availabilityCheck.matchedSlot.id) {
-          console.log('🔄 Updating availability slot to mark as unavailable:', availabilityCheck.matchedSlot.id);
 
           const { error: availabilityError } = await supabase
             .from('availability')
@@ -1526,16 +1436,10 @@ export const Bookings: React.FC<BookingsProps> = ({
             .eq('id', availabilityCheck.matchedSlot.id);
 
           if (availabilityError) {
-            console.error('❌ Failed to update availability slot:', availabilityError);
+            console.error('Failed to update availability slot:', availabilityError);
             // Don't throw error - booking is already confirmed, just log the issue
-          } else {
-            console.log('✅ Availability slot marked as unavailable');
           }
-        } else {
-          console.log('⚠️ No matched slot found to mark as unavailable');
         }
-        
-        console.log('✅ Booking confirmation completed, updating UI state...');
       }
 
       const updatedBookings = [...allBookings];
