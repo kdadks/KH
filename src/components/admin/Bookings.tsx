@@ -80,6 +80,7 @@ interface Payment {
 interface BookingPaymentStatus {
   paymentRequest: PaymentRequest | null;
   payment: Payment | null;
+  paymentType?: 'deposit' | 'full' | null;
 }
 
 interface AvailabilitySlot {
@@ -1596,9 +1597,8 @@ export const Bookings: React.FC<BookingsProps> = ({
 
 
   // Payment request functions
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const checkBookingPaymentStatus = async (booking: BookingFormData, retryCount = 0) => {
-    if (!booking.customer_id) return { paymentRequest: null, payment: null };
+    if (!booking.customer_id) return { paymentRequest: null, payment: null, paymentType: null };
 
 
     const maxRetries = 3;
@@ -1709,18 +1709,58 @@ export const Bookings: React.FC<BookingsProps> = ({
         // This prevents showing incorrect payment amounts for different services
       }
 
+      // Determine payment type from payment request notes field
+      let paymentType: 'deposit' | 'full' | null = null;
+      if (matchingPaymentRequest?.notes) {
+        const notes = matchingPaymentRequest.notes.toLowerCase();
+        if (notes.includes('deposit') || notes.includes('20%')) {
+          paymentType = 'deposit';
+        } else if (notes.includes('full') || notes.includes('100%') || notes.includes('full payment')) {
+          paymentType = 'full';
+        }
+      }
+
+      // If payment exists, also check its payment type field
+      if (matchingPayment) {
+        // Check sumup_payment_type field in payments table
+        const paymentTypeField = (matchingPayment as any).sumup_payment_type;
+        if (paymentTypeField === 'deposit' || paymentTypeField === 'full') {
+          paymentType = paymentTypeField;
+        }
+        // Also check notes in payment record
+        if (!paymentType && matchingPayment.notes) {
+          const paymentNotes = matchingPayment.notes.toLowerCase();
+          if (paymentNotes.includes('deposit') || paymentNotes.includes('20%')) {
+            paymentType = 'deposit';
+          } else if (paymentNotes.includes('full') || paymentNotes.includes('100%') || paymentNotes.includes('full payment')) {
+            paymentType = 'full';
+          }
+        }
+      }
+
+      console.log('💳 Payment status check for booking:', {
+        bookingId: booking.id,
+        hasPaymentRequest: !!matchingPaymentRequest,
+        paymentRequestStatus: matchingPaymentRequest?.status,
+        hasPayment: !!matchingPayment,
+        paymentType,
+        paymentRequestNotes: matchingPaymentRequest?.notes,
+        paymentNotes: matchingPayment?.notes
+      });
+
       // Record success if we got here without errors
 
       return {
         paymentRequest: matchingPaymentRequest,
-        payment: matchingPayment
+        payment: matchingPayment,
+        paymentType
       };
     } catch (error) {
       console.error('Error checking payment status:', error);
 
       // Record the failure for circuit breaker
 
-      return { paymentRequest: null, payment: null };
+      return { paymentRequest: null, payment: null, paymentType: null };
     }
   };
 
@@ -1793,9 +1833,10 @@ export const Bookings: React.FC<BookingsProps> = ({
         const depositMap = new Map();
         
         for (const booking of currentPageBookings) {
-          if (booking.customer_id) {
-            // Skip individual API calls for now - load payment status only when specifically needed
-            statusMap.set(booking.id, { paymentRequest: null, payment: null });
+          if (booking.customer_id && booking.id) {
+            // Fetch actual payment status for each booking
+            const paymentStatus = await checkBookingPaymentStatus(booking);
+            statusMap.set(booking.id, paymentStatus);
 
             // Calculate deposit amount for this booking (cached/simplified)
             if (booking.package_name) {
@@ -1816,17 +1857,7 @@ export const Bookings: React.FC<BookingsProps> = ({
     };
 
     loadPaymentStatus();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    // Only reload payment status when page/filter changes, not when booking status changes
-    currentPage,
-    searchTerm,
-    statusFilter,
-    filterDate,
-    filterRange?.start,
-    filterRange?.end
-    // Removed currentPageBookings and setAllBookings to prevent infinite re-renders
-  ]);
+  }, [currentPage, searchTerm, statusFilter, filterDate, filterRange]);
 
   // Helper function to process booking data for editing
   // Delete booking
@@ -3234,7 +3265,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                           </div>
                         </div>
 
-                        {/* Deposit Payment Status - Hide for Contact for Quote services */}
+                        {/* Payment Status - Hide for Contact for Quote services */}
                         {booking.customer_id && booking.package_name && !isContactForQuoteService(booking.package_name) && (
                           <div className="flex items-start space-x-2">
                             <Euro className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
@@ -3242,24 +3273,84 @@ export const Bookings: React.FC<BookingsProps> = ({
                               {(() => {
                                 const status = bookingPaymentStatus.get(booking.id || '');
                                 const depositAmount = bookingDepositAmounts.get(booking.id || '') || 75; // Default fallback
+                                const paymentType = status?.paymentType;
 
-
-                                // If payment is completed - don't show any action buttons
-                                if (status?.payment) {
+                                // Check if payment request is marked as 'paid' (primary source of truth)
+                                const isPaymentRequestPaid = status?.paymentRequest?.status === 'paid';
+                                
+                                // If payment request is marked as 'paid', show payment completed
+                                if (isPaymentRequestPaid && status?.paymentRequest) {
+                                  const amount = status.paymentRequest.amount;
+                                  const paymentTypeLabel = paymentType === 'full' ? 'Full Payment' : 
+                                                          paymentType === 'deposit' ? 'Deposit' : 
+                                                          'Payment';
+                                  const paymentTypeColor = paymentType === 'full' ? 'text-purple-700' : 'text-green-700';
+                                  
                                   return (
                                     <div className="space-y-1">
-                                      <p className="text-xs text-green-700 font-medium">
-                                        ✓ Deposit Completed - €{status.payment.amount.toFixed(2)}
+                                      <p className={`text-xs font-medium ${paymentTypeColor}`}>
+                                        ✓ {paymentTypeLabel} Completed - €{amount.toFixed(2)}
                                       </p>
                                       <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
                                         Service: {booking.package_name}
                                       </p>
                                       <p className="text-xs text-gray-500">
+                                        {paymentType && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                                            {paymentType === 'deposit' ? '20% Deposit' : '100% Full'}
+                                          </span>
+                                        )}
+                                        Paid: {status.paymentRequest.updated_at ?
+                                          new Date(status.paymentRequest.updated_at).toLocaleDateString() :
+                                          new Date(status.paymentRequest.created_at).toLocaleDateString()}
+                                      </p>
+                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && booking.status !== 'paid' && (
+                                        <div className="mt-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleFixBookingStatus(booking);
+                                            }}
+                                            disabled={loadingPaymentStatus}
+                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
+                                            title="Update booking status to reflect payment"
+                                          >
+                                            {loadingPaymentStatus ? '...' : 'Sync Status'}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
+                                // If payment exists in payments table (backup check)
+                                if (status?.payment) {
+                                  const amount = status.payment.amount;
+                                  const paymentTypeLabel = paymentType === 'full' ? 'Full Payment' : 
+                                                          paymentType === 'deposit' ? 'Deposit' : 
+                                                          'Payment';
+                                  const paymentTypeColor = paymentType === 'full' ? 'text-purple-700' : 'text-green-700';
+                                  
+                                  return (
+                                    <div className="space-y-1">
+                                      <p className={`text-xs font-medium ${paymentTypeColor}`}>
+                                        ✓ {paymentTypeLabel} Completed - €{amount.toFixed(2)}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
+                                        Service: {booking.package_name}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        {paymentType && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                                            {paymentType === 'deposit' ? '20% Deposit' : '100% Full'}
+                                          </span>
+                                        )}
                                         Paid: {status.payment.payment_date ?
                                           new Date(status.payment.payment_date).toLocaleDateString() :
                                           new Date(status.payment.created_at).toLocaleDateString()}
                                       </p>
-                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && (
+                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && booking.status !== 'paid' && (
                                         <div className="mt-2">
                                           <button
                                             onClick={(e) => {
@@ -3283,18 +3374,24 @@ export const Bookings: React.FC<BookingsProps> = ({
                                 if (status?.paymentRequest && status.paymentRequest.status !== 'paid') {
                                   const isExpired = status.paymentRequest.payment_due_date &&
                                     new Date(status.paymentRequest.payment_due_date) < new Date();
+                                  const requestType = paymentType === 'full' ? 'full payment' : 'deposit';
 
                                   return (
                                     <div className="space-y-1">
                                       <p className={`text-xs font-medium ${
                                         isExpired ? 'text-red-600' : 'text-blue-600'
                                       }`}>
-                                        {isExpired ? '⚠ Overdue' : '📧 Request sent'} - €{status.paymentRequest.amount.toFixed(2)} deposit
+                                        {isExpired ? '⚠ Overdue' : '📧 Request sent'} - €{status.paymentRequest.amount.toFixed(2)} {requestType}
                                       </p>
                                       <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
                                         Service: {booking.package_name}
                                       </p>
                                       <p className="text-xs text-gray-500">
+                                        {paymentType && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 mr-2">
+                                            {paymentType === 'deposit' ? '20% Deposit' : '100% Full'}
+                                          </span>
+                                        )}
                                         Status: {status.paymentRequest.status} • Due: {status.paymentRequest.payment_due_date ?
                                           new Date(status.paymentRequest.payment_due_date).toLocaleDateString() : 'N/A'}
                                       </p>
@@ -3312,39 +3409,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                           {loadingPaymentStatus ? '...' : 'Check Payment'}
                                         </button>
                                       </div>
-                                    </div>
-                                  );
-                                }
-
-                                // If payment request is marked as 'paid' but we didn't find payment record
-                                if (status?.paymentRequest && status.paymentRequest.status === 'paid') {
-                                  return (
-                                    <div className="space-y-1">
-                                      <p className="text-xs text-green-700 font-medium">
-                                        ✓ Payment Confirmed - €{status.paymentRequest.amount.toFixed(2)}
-                                      </p>
-                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
-                                        Service: {booking.package_name}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        Payment Request: {status.paymentRequest.status}
-                                      </p>
-                                      {booking.status !== 'confirmed' && booking.status !== 'deposit_paid' && (
-                                        <div className="mt-2">
-                                          <button
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleFixBookingStatus(booking);
-                                            }}
-                                            disabled={loadingPaymentStatus}
-                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors disabled:opacity-50"
-                                            title="Update booking status to reflect payment"
-                                          >
-                                            {loadingPaymentStatus ? '...' : 'Sync Status'}
-                                          </button>
-                                        </div>
-                                      )}
                                     </div>
                                   );
                                 }
