@@ -225,7 +225,6 @@ export const Bookings: React.FC<BookingsProps> = ({
   useEffect(() => {
     const interval = setInterval(() => {
       // Trigger refresh of bookings from parent component
-      console.log('🔄 Auto-refresh: Triggering booking refresh (5min interval)');
       window.dispatchEvent(new CustomEvent('refreshBookings'));
     }, 300000); // 300 seconds (5 minutes)
 
@@ -239,11 +238,8 @@ export const Bookings: React.FC<BookingsProps> = ({
     };
 
     const handleBookingStatusUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('🔄 Admin received booking status update event:', customEvent.detail);
       // Force refresh of bookings to reflect the status change
       window.dispatchEvent(new CustomEvent('refreshBookings'));
-
     };
 
     window.addEventListener('bookingUpdated', handleBookingUpdate);
@@ -652,8 +648,6 @@ export const Bookings: React.FC<BookingsProps> = ({
 
             return hasOverlap;
           });
-
-          console.log(`🔍 Slot ${slot.id} conflict check result: ${isSlotConflicted ? 'CONFLICTED' : 'CLEAR'}`);
 
           return !isSlotConflicted; // Return true only if no conflicts
         }
@@ -1526,11 +1520,10 @@ export const Bookings: React.FC<BookingsProps> = ({
         // Check if this is a network/QUIC error that we should retry
         if (requestError.message?.includes('Failed to fetch') || requestError.message?.includes('QUIC') || requestError.message?.includes('network')) {
           if (retryCount < maxRetries) {
-            console.log(`🔄 Retrying payment status check (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             return checkBookingPaymentStatus(booking, retryCount + 1);
           } else {
-            console.error(`❌ Max retries reached for payment status check`);
+            console.error('Max retries reached for payment status check');
             throw requestError;
           }
         }
@@ -1552,7 +1545,6 @@ export const Bookings: React.FC<BookingsProps> = ({
           // Check if this is a network/QUIC error that we should retry
           if (legacyError.message?.includes('Failed to fetch') || legacyError.message?.includes('QUIC') || legacyError.message?.includes('network')) {
             if (retryCount < maxRetries) {
-              console.log(`🔄 Retrying legacy payment requests check (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
               await new Promise(resolve => setTimeout(resolve, retryDelay));
               return checkBookingPaymentStatus(booking, retryCount + 1);
             }
@@ -1586,7 +1578,6 @@ export const Bookings: React.FC<BookingsProps> = ({
         // Check if this is a network/QUIC error that we should retry
         if (paymentError.message?.includes('Failed to fetch') || paymentError.message?.includes('QUIC') || paymentError.message?.includes('network')) {
           if (retryCount < maxRetries) {
-            console.log(`🔄 Retrying payments check (attempt ${retryCount + 1}/${maxRetries}) in ${retryDelay}ms...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             return checkBookingPaymentStatus(booking, retryCount + 1);
           }
@@ -1641,18 +1632,6 @@ export const Bookings: React.FC<BookingsProps> = ({
           }
         }
       }
-
-      console.log('💳 Payment status check for booking:', {
-        bookingId: booking.id,
-        hasPaymentRequest: !!matchingPaymentRequest,
-        paymentRequestStatus: matchingPaymentRequest?.status,
-        hasPayment: !!matchingPayment,
-        paymentType,
-        paymentRequestNotes: matchingPaymentRequest?.notes,
-        paymentNotes: matchingPayment?.notes
-      });
-
-      // Record success if we got here without errors
 
       return {
         paymentRequest: matchingPaymentRequest,
@@ -1826,12 +1805,6 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // Restore availability slot if one was found
       if (matchingSlot) {
-        console.log('🔄 Restoring availability slot after booking deletion:', {
-          slotId: matchingSlot.id,
-          currentIsAvailable: matchingSlot.is_available,
-          updatingTo: true
-        });
-
         const { data: updateData, error: availabilityError } = await supabase
           .from('availability')
           .update({ is_available: true })
@@ -1909,18 +1882,14 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // Restore availability slot if one was found
       if (matchingSlot) {
-        console.log('🔄 Restoring availability slot after booking cancellation:', matchingSlot.id);
-
         const { error: availabilityError } = await supabase
           .from('availability')
           .update({ is_available: true })
           .eq('id', matchingSlot.id);
 
         if (availabilityError) {
-          console.error('❌ Failed to restore availability slot:', availabilityError);
+          console.error('Failed to restore availability slot:', availabilityError);
           // Don't throw error - booking is already cancelled
-        } else {
-          console.log('✅ Availability slot restored to available');
         }
       }
 
