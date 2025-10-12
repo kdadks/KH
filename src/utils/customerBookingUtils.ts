@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { hashPassword } from './passwordUtils';
-import { createPaymentRequest, sendPaymentRequestNotification } from './paymentRequestUtils';
+import { createPaymentRequest } from './paymentRequestUtils';
 import { sendWelcomeEmail } from './emailUtils';
 import { encryptSensitiveData, decryptSensitiveData, isDataEncrypted } from './gdprUtils';
 import { PaymentRequest } from '../types/paymentTypes';
@@ -306,22 +306,26 @@ export const createBookingWithCustomer = async (
       return { booking: null, customer, error: bookingError.message };
     }
 
-    // Step 4: Try to create payment request for 20% deposit (don't let this block email sending)
+    // Step 4: Create payment request with deposit amount as placeholder
+    // The actual amount will be updated when user selects payment type (deposit or full)
     // Skip payment request generation for admin bookings
     let paymentRequest = null;
     if (customer.id && !isAdminBooking) {
       try {
-              // Creating payment request for booking
+        // Create payment request with 'deposit' as default - will be updated by handlePayNow
         paymentRequest = await createPaymentRequest(
           customer.id,
           bookingData.package_name,
           bookingData.booking_date || new Date().toISOString(),
           null, // invoiceId
-          booking.id // bookingId
+          booking.id, // bookingId
+          false, // isInvoicePaymentRequest
+          undefined, // customAmount
+          'deposit' // paymentType - default to deposit, will be updated based on user selection
         );
 
         if (paymentRequest) {
-          // Payment request created
+          console.log('✅ Payment request created - amount will be updated based on user selection (deposit or full)');
         } else {
           console.log('⚠️ No payment request created (service may require quote or be per-session)');
         }
@@ -419,16 +423,10 @@ export const createBookingWithCustomer = async (
           console.error('Admin booking notification failed:', adminEmailError);
         }
 
-        // Then send payment request email if payment is required
+        // Payment request email will be sent when user selects payment type (deposit or full)
+        // This ensures the email contains the correct amount based on user's choice
         if (paymentRequest) {
-          try {
-            const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
-            if (!emailSuccess) {
-              console.error('Failed to send payment request email:', emailError);
-            }
-          } catch (emailError) {
-            console.error('Payment request email failed:', emailError);
-          }
+          console.log('ℹ️ Payment request created - email will be sent after user selects payment type');
         } else {
           // No payment request created (e.g., "Contact for Quote" services)
           // Send booking confirmation without payment

@@ -606,6 +606,37 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         // Update the local payment request object
         paymentRequest.amount = actualPaymentAmount;
         console.log(`✅ Payment request updated to ${selectedPaymentType} amount: €${actualPaymentAmount}`);
+        
+        // Send payment request email with the correct amount
+        try {
+          const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
+          console.log(`📧 Sending payment request email with ${selectedPaymentType} amount: €${actualPaymentAmount}`);
+          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
+          if (!emailSuccess) {
+            console.error('❌ Failed to send payment request email:', emailError);
+          } else {
+            console.log('✅ Payment request email sent successfully');
+          }
+        } catch (emailError) {
+          console.error('❌ Payment request email failed:', emailError);
+          // Don't block payment flow if email fails
+        }
+      } else {
+        // Amount not changed (user selected default deposit amount)
+        // Send payment request email with deposit amount
+        try {
+          const { sendPaymentRequestNotification } = await import('../../utils/paymentRequestUtils');
+          console.log(`📧 Sending payment request email with deposit amount: €${actualPaymentAmount}`);
+          const { success: emailSuccess, error: emailError } = await sendPaymentRequestNotification(paymentRequest.id);
+          if (!emailSuccess) {
+            console.error('❌ Failed to send payment request email:', emailError);
+          } else {
+            console.log('✅ Payment request email sent successfully');
+          }
+        } catch (emailError) {
+          console.error('❌ Payment request email failed:', emailError);
+          // Don't block payment flow if email fails
+        }
       }
 
       // DUPLICATE FIX: Don't create initial payment - let SumUp webhook/return handler create the only payment record
