@@ -614,42 +614,19 @@ export async function processPaymentRequest(
         } else {
           console.log('🔍 Current booking status for', paymentRequest.booking_id, ':', currentBooking?.status);
 
-          // Update booking status based on payment type
-          // Note: All bookings require manual admin confirmation, even with full payment
-          const targetStatus = isFullPayment ? 'paid' : 'deposit_paid';
+          // ✅ IMPORTANT: Booking status is NOT automatically updated after payment
+          // Bookings remain as 'pending' until admin manually confirms them in the admin console
+          // This ensures proper workflow: payment → admin review → manual confirmation
+          console.log('� Payment processed - booking status remains', currentBooking?.status, '(admin must manually confirm)');
 
-          console.log('🎯 Booking status update decision:', {
-            currentBookingStatus: currentBooking?.status,
-            targetStatus,
-            shouldUpdate: currentBooking && currentBooking.status !== targetStatus,
-            bookingId: paymentRequest.booking_id
-          });
-
-          if (currentBooking && currentBooking.status !== targetStatus) {
-            console.log(`📍 Attempting to update booking status from '${currentBooking.status}' to '${targetStatus}'...`);
-
-            const bookingUpdateResult = await supabase
-              .from('bookings')
-              .update({
-                status: targetStatus,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', paymentRequest.booking_id);
-
-            console.log('📍 Database update result:', {
-              error: bookingUpdateResult.error,
-              data: bookingUpdateResult.data,
-              statusCode: bookingUpdateResult.status
-            });
-
-            if (bookingUpdateResult.error) {
-              console.error('❌ Failed to update booking status:', bookingUpdateResult.error);
-            } else {
-              console.log(`✅ Booking status updated to ${targetStatus} via booking_id`);
+          // Dispatch event to notify UI that payment was processed (for tracking purposes only)
+          window.dispatchEvent(new CustomEvent('bookingPaymentProcessed', {
+            detail: {
+              bookingId: paymentRequest.booking_id,
+              paymentType: isFullPayment ? 'full' : 'deposit',
+              amount: paymentRequest.amount
             }
-          } else {
-            console.log(`ℹ️ Booking update skipped - Current status: ${currentBooking?.status}, Target status: ${targetStatus}`);
-          }
+          }));
         }
       } else {
         // Fallback: try to find booking by customer_id if no booking_id in payment request
@@ -668,60 +645,14 @@ export async function processPaymentRequest(
         } else if (customerBookings && customerBookings.length > 0) {
           const mostRecentBooking = customerBookings[0];
           console.log('🔍 Found most recent booking:', mostRecentBooking.id, 'with status:', mostRecentBooking.status);
-
-          const targetStatus = isFullPayment ? 'paid' : 'deposit_paid';
-
-          if (mostRecentBooking.status !== targetStatus) {
-            const fallbackResult = await supabase
-              .from('bookings')
-              .update({
-                status: targetStatus,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', mostRecentBooking.id);
-
-            if (fallbackResult.error) {
-              console.error('❌ Failed to update booking by customer_id:', fallbackResult.error);
-            } else {
-              console.log(`✅ Booking status updated to ${targetStatus} via customer_id`);
-            }
-          } else {
-            console.log(`ℹ️ Most recent booking already has status ${mostRecentBooking.status}`);
-          }
+          console.log('💰 Payment processed - booking status remains unchanged (admin must manually confirm)');
         } else {
           console.log('⚠️ No bookings found for customer_id:', paymentRequest.customer_id);
         }
       }
 
-      // Verify the update worked by checking the booking status
-      const verificationQuery = paymentRequest.booking_id
-        ? supabase.from('bookings').select('id, status').eq('id', paymentRequest.booking_id)
-        : supabase.from('bookings').select('id, status').eq('customer_id', paymentRequest.customer_id).order('created_at', { ascending: false }).limit(1);
-
-      const { data: verificationData, error: verificationError } = await verificationQuery;
-
-      if (verificationError) {
-        console.error('❌ Failed to verify booking update:', verificationError);
-      } else if (verificationData && verificationData.length > 0) {
-        console.log('🔍 Booking status verification:', {
-          bookingId: verificationData[0].id,
-          currentStatus: verificationData[0].status,
-          expectedStatus: 'paid' // Changed from 'confirmed' to 'paid'
-        });
-
-        // Dispatch event to notify admin views of booking status change
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('bookingStatusUpdated', {
-            detail: {
-              bookingId: verificationData[0].id,
-              newStatus: verificationData[0].status,
-              paymentRequestId: paymentRequestId,
-              customerId: paymentRequest.customer_id
-            }
-          }));
-          console.log('📡 Dispatched booking status update event');
-        }
-      }
+      // Log payment completion for tracking purposes
+      console.log('✅ Payment processing complete - booking status NOT changed (awaiting admin confirmation)');
     }
 
     // Update payment status to 'paid' and set payment date
