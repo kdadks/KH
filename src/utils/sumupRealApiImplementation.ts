@@ -54,6 +54,10 @@ export interface SumUpCreateCheckoutResponse {
     enabled: boolean;
   };
   hosted_checkout_url?: string; // URL for hosted checkout page (when hosted_checkout.enabled = true)
+  transaction_code?: string; // Transaction code if available
+  transaction_id?: string; // Alternative transaction ID field
+  tx_code?: string; // Another possible field name
+  txn_id?: string; // Yet another possible field name
   transactions: SumUpTransaction[];
 }
 
@@ -85,6 +89,7 @@ export interface SumUpProcessPaymentResponse {
 export interface SumUpTransaction {
   id: string;
   transaction_code: string;
+  transaction_id?: string; // Alternative field name
   merchant_code: string;
   amount: number;
   vat_amount: number;
