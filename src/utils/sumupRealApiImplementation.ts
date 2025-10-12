@@ -18,8 +18,12 @@ export interface SumUpCreateCheckoutRequest {
   currency: string;
   merchant_code: string;
   description: string;
-  return_url?: string;
+  redirect_url?: string; // URL to redirect after successful payment (for hosted checkout)
+  return_url?: string; // Webhook callback URL
   cancel_url?: string;
+  hosted_checkout?: {
+    enabled: boolean; // Enable hosted checkout to get hosted_checkout_url
+  };
   customer?: {
     customer_id?: string;
     email?: string;
@@ -45,7 +49,11 @@ export interface SumUpCreateCheckoutResponse {
   id: string; // UUID for the checkout session
   status: 'PENDING' | 'PAID' | 'FAILED';
   date: string; // ISO date
-  checkout_url?: string; // URL for the checkout page (development mode)
+  checkout_url?: string; // URL for the checkout page (legacy/development mode)
+  hosted_checkout?: {
+    enabled: boolean;
+  };
+  hosted_checkout_url?: string; // URL for hosted checkout page (when hosted_checkout.enabled = true)
   transactions: SumUpTransaction[];
 }
 
@@ -171,6 +179,9 @@ export const createSumUpCheckoutSession = async (
       currency: checkoutData.currency,
       merchant_code: effectiveConfig.merchant_id,
       description: checkoutData.description,
+      // Enable hosted checkout to get hosted_checkout_url in response
+      hosted_checkout: { enabled: true },
+      ...(checkoutData.redirect_url ? { redirect_url: checkoutData.redirect_url } : {}),
       ...(checkoutData.return_url ? { return_url: checkoutData.return_url } : {}),
       ...(checkoutData.cancel_url ? { cancel_url: checkoutData.cancel_url } : {}),
       // Add customer information at root level for SumUp
@@ -257,14 +268,21 @@ export const createSumUpCheckoutSession = async (
       checkout_reference: result.checkout_reference,
       amount: result.amount,
       currency: result.currency,
-      has_checkout_url: !!result.checkout_url,
-      checkout_url: result.checkout_url,
+      has_hosted_checkout: !!result.hosted_checkout,
+      hosted_checkout_enabled: result.hosted_checkout?.enabled,
+      has_hosted_checkout_url: !!result.hosted_checkout_url,
+      hosted_checkout_url: result.hosted_checkout_url,
+      has_legacy_checkout_url: !!result.checkout_url,
+      legacy_checkout_url: result.checkout_url,
       all_fields: Object.keys(result)
     });
     
-    // Check if checkout_url is missing
-    if (!result.checkout_url) {
-      console.error('❌ ISSUE: SumUp API did not return checkout_url in response!');
+    // Normalize the checkout URL (prefer hosted_checkout_url over legacy checkout_url)
+    if (result.hosted_checkout_url) {
+      result.checkout_url = result.hosted_checkout_url;
+      console.log('✅ Using hosted_checkout_url from SumUp:', result.hosted_checkout_url);
+    } else if (!result.checkout_url) {
+      console.error('❌ ISSUE: SumUp API did not return hosted_checkout_url or checkout_url in response!');
       console.error('📋 This usually means one of the following:');
       console.error('   1. Missing redirect_url in request (required for hosted checkout)');
       console.error('   2. Sandbox environment may not support hosted checkouts');
