@@ -448,23 +448,12 @@ export async function processPaymentRequest(
     
     try {
       // Routing payment through SumUp handler
-      // Format payload to match SumUp webhook structure (flat, not nested)
-      // Get the proper merchant code from the gateway config (will be fetched by webhook handler)
+      // Match real SumUp webhook structure exactly (minimal payload)
+      // The webhook handler will fetch full details from SumUp API using the checkout ID
       const requestBody = {
-        id: paymentData.sumup_checkout_id, // Use checkout ID as the main ID (matches SumUp webhook format)
-        event_type: 'checkout.completed',
-        status: 'PAID',
-        timestamp: new Date().toISOString(),
-        // Additional fields for internal processing
-        transaction_id: paymentData.sumup_transaction_id,
-        checkout_reference: paymentData.sumup_checkout_reference || 
-                  `payment-request-${paymentRequestId}-${Date.now()}`,
-        amount: paymentRequest.amount,
-        currency: paymentRequest.currency || 'EUR',
-        payment_method: paymentData.payment_method || 'card',
-        payment_request_id: paymentRequestId,
-        booking_id: paymentRequest.booking_id,
-        customer_id: paymentRequest.customer_id
+        id: paymentData.sumup_checkout_id,           // Checkout ID
+        event_type: 'CHECKOUT_STATUS_CHANGED',      // Real SumUp event type
+        timestamp: new Date().toISOString()          // Event timestamp
       };
       
       // Sending webhook payload
@@ -473,16 +462,17 @@ export async function processPaymentRequest(
         endpoint: sumupEndpoint,
         checkoutId: paymentData.sumup_checkout_id,
         paymentRequestId: paymentRequestId,
-        eventType: requestBody.event_type,
-        payloadStructure: 'flat (matches SumUp webhook format)',
-        detectionMethod: 'User-Agent header (PaymentRequestUtils/Processing)'
+        payload: requestBody,
+        payloadNote: 'Minimal payload matching real SumUp webhooks',
+        detectionHeader: 'X-Internal-Call: PaymentRequestUtils'
       });
 
       const response = await fetch(sumupEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'PaymentRequestUtils/Processing'
+          'X-Internal-Call': 'PaymentRequestUtils',  // Custom header (browsers allow this)
+          'X-Payment-Request-Id': paymentRequestId.toString()
         },
         body: JSON.stringify(requestBody)
       });
