@@ -448,27 +448,23 @@ export async function processPaymentRequest(
     
     try {
       // Routing payment through SumUp handler
-      
+      // Format payload to match SumUp webhook structure (flat, not nested)
       const requestBody = {
-        id: `internal_event_${Date.now()}`,
+        id: paymentData.sumup_checkout_id, // Use checkout ID as the main ID (matches SumUp webhook format)
         event_type: 'checkout.completed',
+        status: 'PAID',
         timestamp: new Date().toISOString(),
-        payload: {
-          checkout_id: paymentData.sumup_checkout_id,
-          transaction_id: paymentData.sumup_transaction_id,
-          // FIX: Generate checkout reference based on payment_request ID (matches existing pattern)
-          reference: paymentData.sumup_checkout_reference || 
-                    `payment-request-${paymentRequestId}-${Date.now()}`,
-          amount: paymentRequest.amount,
-          currency: paymentRequest.currency || 'EUR',
-          status: 'PAID',
-          merchant_code: 'INTERNAL_PROCESSING',
-          payment_type: paymentData.payment_method || 'card',
-          created_at: new Date().toISOString(),
-          payment_request_id: paymentRequestId,
-          booking_id: paymentRequest.booking_id,
-          customer_id: paymentRequest.customer_id
-        }
+        // Additional fields for internal processing
+        transaction_id: paymentData.sumup_transaction_id,
+        checkout_reference: paymentData.sumup_checkout_reference || 
+                  `payment-request-${paymentRequestId}-${Date.now()}`,
+        amount: paymentRequest.amount,
+        currency: paymentRequest.currency || 'EUR',
+        merchant_code: 'INTERNAL_PROCESSING', // Marker for internal calls
+        payment_method: paymentData.payment_method || 'card',
+        payment_request_id: paymentRequestId,
+        booking_id: paymentRequest.booking_id,
+        customer_id: paymentRequest.customer_id
       };
       
       // Sending webhook payload
@@ -477,7 +473,8 @@ export async function processPaymentRequest(
         endpoint: sumupEndpoint,
         checkoutId: paymentData.sumup_checkout_id,
         paymentRequestId: paymentRequestId,
-        hasInternalProcessingMarker: requestBody.payload.merchant_code === 'INTERNAL_PROCESSING'
+        hasInternalProcessingMarker: requestBody.merchant_code === 'INTERNAL_PROCESSING',
+        payloadStructure: 'flat (matches SumUp webhook format)'
       });
 
       const response = await fetch(sumupEndpoint, {
