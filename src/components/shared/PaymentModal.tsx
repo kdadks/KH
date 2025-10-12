@@ -595,8 +595,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         currency: paymentRequest.currency || 'EUR',
         merchant_code: environmentConfig.merchantCode,
         description: `Payment for ${paymentRequest.service_name || 'Service'}`,
-        return_url: sumupReturnUrl, // SumUp calls this for both webhook and user redirect
-        cancel_url: cancelRedirectUrl.toString(), // This is where users go when they cancel
+        redirect_url: cancelRedirectUrl.toString(), // Where to redirect after successful payment (hosted checkout)
+        return_url: sumupReturnUrl, // Webhook callback URL
+        cancel_url: cancelRedirectUrl.toString(), // Where users go when they cancel
         customer: {
           email: paymentRequest.customer.email,
           name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`.trim(),

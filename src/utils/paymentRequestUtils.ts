@@ -791,6 +791,7 @@ export async function sendPaymentRequestNotification(
       } else {
         // Construct return URLs for SumUp checkout
         const sumupReturnUrl = `${baseUrl}/api/sumup-return`;
+        const successRedirectUrl = `${baseUrl}/payment?request=${paymentRequestId}&status=success`;
         const cancelRedirectUrl = `${baseUrl}/payment?request=${paymentRequestId}&status=cancelled`;
         
         const checkoutResponse = await createSumUpCheckoutSession({
@@ -799,7 +800,8 @@ export async function sendPaymentRequestNotification(
           currency: 'EUR',
           merchant_code: gatewayConfig.merchant_id,
           description: paymentRequest.service_name || 'Payment Request',
-          return_url: sumupReturnUrl, // Required for SumUp to return checkout_url
+          redirect_url: successRedirectUrl, // Where to redirect after successful payment (hosted checkout)
+          return_url: sumupReturnUrl, // Webhook callback URL
           cancel_url: cancelRedirectUrl,
           customer: {
             email: paymentRequest.customer.email,
