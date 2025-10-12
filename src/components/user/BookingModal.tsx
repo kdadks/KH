@@ -1121,6 +1121,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
             paymentRequest={selectedPaymentRequest}
             onClose={() => setShowPaymentModal(false)}
             onPaymentComplete={handlePaymentModalComplete}
+            paymentOptions={paymentState.paymentOptions}
+            selectedPaymentType={selectedPaymentRequest.payment_type || 'deposit'}
           />
         );
       })()}

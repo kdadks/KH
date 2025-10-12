@@ -125,20 +125,22 @@ export async function createPaymentRequest(
   invoiceId?: number | null,
   bookingId?: string | null, // Changed to string (UUID)
   isInvoicePaymentRequest?: boolean, // New parameter to distinguish invoice payments
-  customAmount?: number // New parameter for custom amounts (used for invoice payments)
+  customAmount?: number, // New parameter for custom amounts (used for invoice payments)
+  paymentType?: 'deposit' | 'full' // New parameter to specify deposit or full payment
 ): Promise<PaymentRequest | null> {
   try {
     // Creating payment request
 
     let finalAmount: number;
+    let baseCost: number | null = null;
 
     if (isInvoicePaymentRequest && customAmount !== undefined) {
       // For invoice payment requests, use the custom amount (no deposit calculation)
       finalAmount = customAmount;
     } else {
-      // For booking payment requests, calculate 20% deposit
+      // For booking payment requests, get the base service cost
       // First, try to get pricing from database
-      let baseCost: number | null = await getServicePriceFromDatabase(serviceName);
+      baseCost = await getServicePriceFromDatabase(serviceName);
       
       // If database lookup fails, fall back to regex extraction (for backward compatibility)
       if (baseCost === null) {
@@ -150,8 +152,14 @@ export async function createPaymentRequest(
         return null; // Return null to indicate no payment request should be created
       }
       
-      // Calculate deposit using configurable percentage (20%)
-      finalAmount = Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+      // Calculate amount based on payment type (default to deposit for backward compatibility)
+      if (paymentType === 'full') {
+        finalAmount = baseCost; // Full amount
+        console.log(`💰 Creating payment request for FULL amount: €${finalAmount}`);
+      } else {
+        finalAmount = Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE); // 20% deposit
+        console.log(`💰 Creating payment request for DEPOSIT (20%): €${finalAmount} of €${baseCost}`);
+      }
     }
     
     // Set payment due date (7 days from now)
@@ -168,7 +176,9 @@ export async function createPaymentRequest(
       payment_due_date: dueDate.toISOString(), // Use payment_due_date to match existing database column
       notes: isInvoicePaymentRequest 
         ? `Payment for ${serviceName} - remaining balance after deposit deduction`
-        : `${PAYMENT_CONFIG.DEPOSIT_PERCENTAGE * 100}% deposit for ${serviceName} appointment on ${new Date(bookingDate).toLocaleDateString()}`
+        : paymentType === 'full'
+          ? `Full payment for ${serviceName} appointment on ${new Date(bookingDate).toLocaleDateString()}`
+          : `${PAYMENT_CONFIG.DEPOSIT_PERCENTAGE * 100}% deposit for ${serviceName} appointment on ${new Date(bookingDate).toLocaleDateString()}`
     };
 
     const { data, error } = await supabase
