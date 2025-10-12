@@ -332,15 +332,62 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
     
     // Processing SumUp return data
 
-    // 🚨 IMMEDIATE DUPLICATE CHECK - Check if we already processed this payment
-    await debugLogger.info('Starting duplicate check', { checkout_reference, checkout_id, transaction_id });
+    // Fetch full checkout details from SumUp API to get transaction ID
+    let checkoutDetails = null;
+    let actualTransactionId = transaction_id; // Start with URL param
+    
+    if (checkout_id) {
+      try {
+        console.log('� Fetching checkout details from SumUp API for return URL:', checkout_id);
+        const sumupAccessToken = process.env.SUMUP_ACCESS_TOKEN || process.env.SUMUP_UAT_ACCESS_TOKEN;
+        
+        if (sumupAccessToken) {
+          const checkoutResponse = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkout_id}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sumupAccessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (checkoutResponse.ok) {
+            checkoutDetails = await checkoutResponse.json();
+            console.log('✅ Fetched checkout details for return URL - FULL RESPONSE:', JSON.stringify(checkoutDetails, null, 2));
+            
+            // Extract transaction ID from checkout details
+            actualTransactionId = checkoutDetails?.transaction_code || 
+                                  checkoutDetails?.transaction_id || 
+                                  checkoutDetails?.transactions?.[0]?.transaction_code || 
+                                  checkoutDetails?.transactions?.[0]?.transaction_id ||
+                                  checkoutDetails?.transactions?.[0]?.id || 
+                                  checkoutDetails?.tx_code ||
+                                  checkoutDetails?.txn_id ||
+                                  transaction_id; // Fallback to URL param
+            
+            console.log('✅ Extracted transaction ID:', actualTransactionId);
+            await debugLogger.info('Extracted transaction ID from checkout details', {
+              transactionId: actualTransactionId,
+              fromField: checkoutDetails?.transaction_code ? 'transaction_code' : 
+                         checkoutDetails?.transaction_id ? 'transaction_id' : 'fallback'
+            });
+          } else {
+            console.warn('⚠️ Could not fetch checkout details for return URL:', checkoutResponse.status);
+          }
+        }
+      } catch (fetchError) {
+        console.error('❌ Error fetching checkout details for return URL:', fetchError.message);
+      }
+    }
+
+    // �🚨 IMMEDIATE DUPLICATE CHECK - Check if we already processed this payment
+    await debugLogger.info('Starting duplicate check', { checkout_reference, checkout_id, transaction_id: actualTransactionId });
     
     const duplicateResult = await checkForDuplicates(
       supabase, 
       debugLogger, 
       checkout_reference, 
       checkout_id, 
-      transaction_id
+      actualTransactionId
     );
 
     if (duplicateResult.isDuplicate) {
@@ -425,8 +472,8 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
             payment_method: 'sumup',
             sumup_checkout_id: checkout_id,
             sumup_checkout_reference: checkout_reference,
-            sumup_transaction_id: transaction_id,
-            notes: `Payment created from return URL for payment_request #${paymentRequest.id}`
+            sumup_transaction_id: actualTransactionId,
+            notes: `Payment created from return URL for payment_request #${paymentRequest.id}. Transaction ID: ${actualTransactionId || 'pending'}`
           })
           .select()
           .single();
@@ -454,7 +501,7 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
 
     // Update payment with SumUp return data
     const updateData = {
-      sumup_transaction_id: transaction_id,
+      sumup_transaction_id: actualTransactionId || payment.sumup_transaction_id,
       sumup_checkout_id: checkout_id,
       status: mappedStatus,
       payment_date: new Date().toISOString(),
@@ -462,9 +509,16 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
       // Update webhook columns for consistency
       webhook_processed_at: new Date().toISOString(),
       sumup_event_type: 'return_url_processed',
-      sumup_event_id: transaction_id || checkout_id,
+      sumup_event_id: actualTransactionId || checkout_id,
       sumup_checkout_reference: checkout_reference || payment.sumup_checkout_reference
     };
+    
+    console.log('📊 Return URL update data:', {
+      paymentId: payment.id,
+      transactionId: actualTransactionId,
+      checkoutId: checkout_id,
+      status: mappedStatus
+    });
 
     const { data: updatedPayments, error: updateError } = await supabase
       .from('payments')
