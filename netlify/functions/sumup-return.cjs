@@ -1379,31 +1379,39 @@ exports.handler = async (event, context) => {
       if (skipSignatureVerification) {
         console.log('🔓 Internal call detected - skipping signature verification');
       } else {
+        // SumUp sandbox webhooks may not include signature
+        // Only enforce signature verification in production
         if (!signature) {
-          console.error('❌ Missing x-payload-signature header');
-          return {
-            statusCode: 401,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              error: 'Missing webhook signature',
-              environment: environmentLabel,
-              testMode: false
-            })
-          };
-        }
-
-        // Verify signature before processing
-        if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
-          console.error('❌ Invalid webhook signature');
-          return {
-            statusCode: 401,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              error: 'Invalid webhook signature',
-              environment: environmentLabel,
-              testMode: false
-            })
-          };
+          if (isProduction) {
+            console.error('❌ Missing x-payload-signature header in PRODUCTION');
+            return {
+              statusCode: 401,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                error: 'Missing webhook signature',
+                environment: environmentLabel,
+                testMode: false
+              })
+            };
+          } else {
+            console.warn('⚠️ Missing x-payload-signature header in TEST/SANDBOX - allowing webhook');
+            console.log('🧪 Sandbox mode: Accepting webhook without signature verification');
+          }
+        } else {
+          // Verify signature if provided
+          if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+            console.error('❌ Invalid webhook signature');
+            return {
+              statusCode: 401,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                error: 'Invalid webhook signature',
+                environment: environmentLabel,
+                testMode: false
+              })
+            };
+          }
+          console.log('✅ Webhook signature verified');
         }
       }
 
