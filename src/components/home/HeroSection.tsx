@@ -903,9 +903,7 @@ const HeroSection: React.FC = () => {
 
   const handlePaymentModalComplete = () => {
     // Prevent duplicate completion calls
-    if (paymentProcessing || paymentState.paymentCompleted) return;
-    
-    setPaymentProcessing(true);
+    if (paymentState.paymentCompleted) return;
     
     // Close the payment modal
     setShowPaymentModal(false);
@@ -913,8 +911,29 @@ const HeroSection: React.FC = () => {
     
     // Clear any lingering messages and update payment state to completed
     setSuccessMsg('');
-    setPaymentState(prev => ({ ...prev, paymentCompleted: true }));
+    setPaymentState(prev => ({ 
+      ...prev, 
+      paymentCompleted: true,
+      showPayment: false // Hide payment options interface
+    }));
     setCountdown(20);
+    
+    // Reset payment processing flag after a short delay
+    setTimeout(() => {
+      setPaymentProcessing(false);
+    }, 500);
+  };
+
+  const handlePaymentModalFailed = () => {
+    // Close the payment modal
+    setShowPaymentModal(false);
+    setSelectedPaymentRequest(null);
+    
+    // Reset payment processing flag
+    setPaymentProcessing(false);
+    
+    // Optionally show an error message
+    setErrorMsg('Payment was cancelled or failed. Please try again.');
   };
 
   return (
@@ -1475,9 +1494,11 @@ const HeroSection: React.FC = () => {
               onClose={() => {
                 setShowPaymentModal(false);
                 setSelectedPaymentRequest(null);
+                setPaymentProcessing(false);
               }}
               paymentRequest={selectedPaymentRequest}
               onPaymentComplete={handlePaymentModalComplete}
+              onPaymentFailed={handlePaymentModalFailed}
               context="booking" // Booking context - redirect to home
               paymentOptions={paymentState.paymentOptions}
               selectedPaymentType={selectedPaymentRequest.payment_type || 'deposit'}
