@@ -1204,12 +1204,11 @@ exports.handler = async (event, context) => {
         skipSignatureVerification
       });
 
-      // Webhook secret is required for both sandbox and production
-      if (!webhookSecret) {
+      // Webhook secret is required EXCEPT for internal calls from PaymentRequestUtils
+      if (!webhookSecret && !isInternalCall) {
         console.error(`❌ Missing webhook secret for ${environmentLabel} environment`);
         console.error('Webhook secret check failed:', {
           isProduction,
-          isTestMode,
           isInternalCall,
           environment: environmentLabel
         });
