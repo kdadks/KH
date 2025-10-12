@@ -1271,8 +1271,8 @@ exports.handler = async (event, context) => {
         };
       }
 
-      if (isTestMode) {
-        console.log('🧪 Processing webhook in test mode:', webhookData.event_type || 'unknown');
+      if (skipSignatureVerification) {
+        console.log('🔓 Processing internal call (signature verification skipped):', webhookData.event_type || 'unknown');
       } else {
         console.log('✅ Webhook signature verified, processing event:', webhookData.event_type);
       }
@@ -1291,7 +1291,7 @@ exports.handler = async (event, context) => {
           success: true,
           message: 'Webhook processed successfully',
           environment: environmentLabel,
-          testMode: isTestMode,
+          isInternalCall: skipSignatureVerification,
           event_type: webhookData.event_type,
           result: result,
           timestamp: new Date().toISOString()
