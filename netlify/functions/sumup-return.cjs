@@ -497,17 +497,20 @@ const processSumUpReturn = async (supabase, data, debugLogger) => {
 };
 
 // Process SumUp webhook events (checkout.status.updated)
-const processSumUpWebhook = async (supabase, eventData) => {
+const processSumUpWebhook = async (supabase, eventData, options = {}) => {
   try {
     // SumUp webhook sends flat structure: { id, status, event_type }
     // The 'id' is the checkout_id
     const { id: checkoutId, event_type, status, timestamp } = eventData;
+    const { isInternalCall = false, paymentRequestId = null } = options;
     
     console.log('🔍 Processing webhook with data:', {
       checkoutId,
       event_type,
       status,
-      timestamp
+      timestamp,
+      isInternalCall,
+      paymentRequestId
     });
 
     // Log webhook processing to database
@@ -515,7 +518,8 @@ const processSumUpWebhook = async (supabase, eventData) => {
       event_id: checkoutId,
       event_type,
       payload: eventData,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      isInternalCall
     });
 
     // Validate required fields
@@ -523,58 +527,72 @@ const processSumUpWebhook = async (supabase, eventData) => {
       throw new Error('Invalid webhook payload: missing checkout id');
     }
 
-    // Fetch checkout details from SumUp API to get the status, reference and full details
-    console.log('📞 Fetching checkout details from SumUp API for checkout:', checkoutId);
     let checkoutDetails = null;
     let checkoutReference = null;
+    let checkoutStatus = null;
     
-    try {
-      const sumupAccessToken = process.env.SUMUP_ACCESS_TOKEN || process.env.SUMUP_UAT_ACCESS_TOKEN;
-      if (!sumupAccessToken) {
-        throw new Error('SumUp access token not configured');
-      }
-
-      const checkoutResponse = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${sumupAccessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (checkoutResponse.ok) {
-        checkoutDetails = await checkoutResponse.json();
-        checkoutReference = checkoutDetails.checkout_reference;
-        console.log('✅ Fetched checkout details:', {
-          checkout_id: checkoutId,
-          reference: checkoutReference,
-          status: checkoutDetails.status,
-          amount: checkoutDetails.amount
-        });
-      } else {
-        console.warn('⚠️ Could not fetch checkout details:', checkoutResponse.status, checkoutResponse.statusText);
-      }
-    } catch (fetchError) {
-      console.error('❌ Error fetching checkout details:', fetchError.message);
-    }
-    
-    // Get status from API response or fallback to webhook payload (for backwards compatibility)
-    let checkoutStatus;
-    if (checkoutDetails?.status) {
-      checkoutStatus = checkoutDetails.status;
-    } else if (status) {
-      checkoutStatus = status;
+    // For internal calls, skip SumUp API fetch and use status from payload or default to PAID
+    if (isInternalCall) {
+      console.log('� Internal call detected - skipping SumUp API fetch');
+      checkoutStatus = status || 'PAID'; // Default to PAID for internal calls from successful checkout
+      console.log('💰 Using status for internal call:', checkoutStatus);
     } else {
-      // If we can't get status from API or webhook, throw an error
-      throw new Error('Could not determine payment status: SumUp API fetch failed and no status in webhook payload');
+      // Fetch checkout details from SumUp API to get the status, reference and full details
+      console.log('📞 Fetching checkout details from SumUp API for checkout:', checkoutId);
+      
+      try {
+        const sumupAccessToken = process.env.SUMUP_ACCESS_TOKEN || process.env.SUMUP_UAT_ACCESS_TOKEN;
+        if (!sumupAccessToken) {
+          throw new Error('SumUp access token not configured');
+        }
+
+        const checkoutResponse = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sumupAccessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (checkoutResponse.ok) {
+          checkoutDetails = await checkoutResponse.json();
+          checkoutReference = checkoutDetails.checkout_reference;
+          console.log('✅ Fetched checkout details:', {
+            checkout_id: checkoutId,
+            reference: checkoutReference,
+            status: checkoutDetails.status,
+            amount: checkoutDetails.amount
+          });
+        } else {
+          console.warn('⚠️ Could not fetch checkout details:', checkoutResponse.status, checkoutResponse.statusText);
+        }
+      } catch (fetchError) {
+        console.error('❌ Error fetching checkout details:', fetchError.message);
+      }
+      
+      // Get status from API response or fallback to webhook payload (for backwards compatibility)
+      if (checkoutDetails?.status) {
+        checkoutStatus = checkoutDetails.status;
+      } else if (status) {
+        checkoutStatus = status;
+      } else {
+        // If we can't get status from API or webhook, throw an error
+        throw new Error('Could not determine payment status: SumUp API fetch failed and no status in webhook payload');
+      }
+      
+      console.log('💰 Payment status:', {
+        fromAPI: checkoutDetails?.status,
+        fromWebhook: status,
+        used: checkoutStatus
+      });
     }
+    
     const mappedStatus = mapSumUpStatus(checkoutStatus);
     
-    console.log('💰 Payment status:', {
-      fromAPI: checkoutDetails?.status,
-      fromWebhook: status,
-      used: checkoutStatus,
-      mapped: mappedStatus
+    console.log('💰 Final payment status:', {
+      checkoutStatus,
+      mapped: mappedStatus,
+      isInternalCall
     });
     
     // Find payment by checkout reference - try multiple search strategies
@@ -1294,7 +1312,7 @@ exports.handler = async (event, context) => {
       }
 
       // Process the webhook event
-      const result = await processSumUpWebhook(supabase, webhookData);
+      const result = await processSumUpWebhook(supabase, webhookData, { isInternalCall: skipSignatureVerification, paymentRequestId });
       
       // Return 200 status as required by SumUp for successful processing
       return {
