@@ -789,12 +789,18 @@ export async function sendPaymentRequestNotification(
         // Don't return here - continue with fallback URL and send email
         directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
       } else {
+        // Construct return URLs for SumUp checkout
+        const sumupReturnUrl = `${baseUrl}/api/sumup-return`;
+        const cancelRedirectUrl = `${baseUrl}/payment?request=${paymentRequestId}&status=cancelled`;
+        
         const checkoutResponse = await createSumUpCheckoutSession({
           checkout_reference: `payment-request-${paymentRequestId}-${Date.now()}`,
           amount: paymentRequest.amount,
           currency: 'EUR',
           merchant_code: gatewayConfig.merchant_id,
           description: paymentRequest.service_name || 'Payment Request',
+          return_url: sumupReturnUrl, // Required for SumUp to return checkout_url
+          cancel_url: cancelRedirectUrl,
           customer: {
             email: paymentRequest.customer.email,
             name: `${paymentRequest.customer.first_name} ${paymentRequest.customer.last_name}`.trim(),
@@ -802,8 +808,15 @@ export async function sendPaymentRequestNotification(
           pay_to_email: paymentRequest.customer.email
         });
         
-        // Create direct checkout URL with email context for proper redirect behavior
-        directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
+        // Use the checkout_url provided by SumUp if available, otherwise construct fallback
+        if (checkoutResponse.checkout_url) {
+          directPaymentUrl = checkoutResponse.checkout_url;
+          console.log('✅ Using SumUp checkout_url from API:', directPaymentUrl);
+        } else {
+          // Fallback: Create internal checkout URL with email context for proper redirect behavior
+          directPaymentUrl = `${baseUrl}/sumup-checkout?checkout_reference=${checkoutResponse.checkout_reference}&amount=${paymentRequest.amount}&currency=EUR&description=${encodeURIComponent(paymentRequest.service_name || 'Payment Request')}&merchant_code=${checkoutResponse.merchant_code}&checkout_id=${checkoutResponse.id}&payment_request_id=${paymentRequestId}&context=email&return_url=${encodeURIComponent(baseUrl)}`;
+          console.warn('⚠️ SumUp checkout_url not available, using internal fallback URL');
+        }
       }
       
     } catch (realApiError) {
