@@ -1193,21 +1193,19 @@ exports.handler = async (event, context) => {
         hasWebhookSecret: !!webhookSecret
       });
       
-      const isTestMode = !isProduction && (!webhookSecret || 
-        event.headers['x-test-webhook'] === 'true' ||
-        event.body?.includes('test_webhook_payload') ||
-        isInternalCall);
+      // Allow internal calls from PaymentRequestUtils to bypass signature verification
+      // (they include INTERNAL_PROCESSING marker in the payload)
+      const skipSignatureVerification = isInternalCall;
 
-      console.log('🧪 Test mode evaluation:', {
-        isTestMode,
+      console.log('🧪 Webhook processing mode:', {
         isProduction,
         hasWebhookSecret: !!webhookSecret,
-        hasTestHeader: event.headers['x-test-webhook'] === 'true',
-        hasTestPayload: !!event.body?.includes('test_webhook_payload'),
-        isInternalCall
+        isInternalCall,
+        skipSignatureVerification
       });
 
-      if (!webhookSecret && !isTestMode) {
+      // Webhook secret is required for both sandbox and production
+      if (!webhookSecret) {
         console.error(`❌ Missing webhook secret for ${environmentLabel} environment`);
         console.error('Webhook secret check failed:', {
           isProduction,
@@ -1224,12 +1222,14 @@ exports.handler = async (event, context) => {
             environment: environmentLabel
           })
         };
-      }      // Verify webhook signature (skip for test mode)
+      }
+
+      // Verify webhook signature (skip only for internal calls from PaymentRequestUtils)
       const signature = event.headers['x-payload-signature'];
       const rawBody = event.body;
       
-      if (isTestMode) {
-        console.log('🧪 Test mode enabled - skipping signature verification');
+      if (skipSignatureVerification) {
+        console.log('🔓 Internal call detected - skipping signature verification');
       } else {
         if (!signature) {
           console.error('❌ Missing x-payload-signature header');

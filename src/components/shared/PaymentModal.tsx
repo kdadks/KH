@@ -778,11 +778,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handlePaymentComplete = async () => {
-    if (!isDevelopmentMode) {
-      console.warn('handlePaymentComplete invoked outside development mode; ignoring direct completion call.');
-      return;
-    }
-
     try {
       setCurrentStep('processing');
       
@@ -829,55 +824,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       // Process the payment request (updates status to 'paid' and creates payment record)
-      // In development/sandbox mode, create payment directly instead of routing through webhook
-      let result;
-      
-      if (isDevelopmentMode) {
-        logger.devOnly(() => console.log('🧪 Development mode: Creating payment directly in database'));
-        
-        // Create payment record directly
-        const { data: payment, error: paymentError } = await supabase
-          .from('payments')
-          .insert([{
-            customer_id: paymentRequest.customer_id,
-            invoice_id: paymentRequest.invoice_id,
-            amount: paymentRequest.amount,
-            currency: paymentRequest.currency || 'EUR',
-            status: 'paid',
-            payment_method: 'card',
-            sumup_checkout_id: fallbackCheckoutId,
-            sumup_transaction_id: generatedTransactionId,
-            sumup_checkout_reference: checkoutReference,
-            booking_id: paymentRequest.booking_id,
-            payment_request_id: paymentRequest.id,
-            notes: `Development payment for payment request #${paymentRequest.id}`
-          }])
-          .select()
-          .single();
-
-        if (paymentError) {
-          throw new Error(`Failed to create payment record: ${paymentError.message}`);
-        }
-
-        // Update payment request status to 'paid'
-        const { error: updateError } = await supabase
-          .from('payment_requests')
-          .update({
-            status: 'paid',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', paymentRequest.id);
-
-        if (updateError) {
-          throw new Error(`Failed to update payment request: ${updateError.message}`);
-        }
-
-        result = { success: true, payment };
-        logger.devOnly(() => console.log('✅ Development payment created successfully'));
-      } else {
-        // Production: Route through webhook endpoint for proper processing
-        result = await processPaymentRequest(paymentRequest.id, paymentData);
-      }
+      // Routes through webhook endpoint for proper processing in both sandbox and production
+      const result = await processPaymentRequest(paymentRequest.id, paymentData);
 
       if (result.success) {
         setCurrentStep('success');
