@@ -93,14 +93,14 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
     }
   }, [propPaymentRequests, propPayments, propRecentPayments, propGateways]);
 
-  // Reset pagination when tab changes
+  // Reset pagination and filters when tab changes
   useEffect(() => {
     resetPagination();
   }, [activeSubTab]);
 
-  // Reset pagination when search/filter changes
+  // Reset pagination (but NOT filters) when search/filter changes
   useEffect(() => {
-    resetPagination();
+    setCurrentPage(1);
   }, [searchTerm, statusFilter, dateFilter]);
 
   const loadAllData = async () => {
