@@ -265,7 +265,11 @@ export const Bookings: React.FC<BookingsProps> = ({
     const customerEmail = getCustomerEmail(booking);
     const packageName = booking.package_name || booking.service || '';
 
-    // Collect all possible date sources
+    // Get the primary appointment date for filtering
+    const appointmentDate = booking.appointment_date || booking.date || booking.booking_date || '';
+    const appointmentDateOnly = appointmentDate ? appointmentDate.split('T')[0].split(' ')[0] : '';
+
+    // For range comparisons, collect all possible date sources
     const rawDates: string[] = [
       booking.appointment_date,
       booking.date,
@@ -273,7 +277,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       booking.created_at
     ].filter((d): d is string => !!d);
 
-    // Extract date-only (YYYY-MM-DD) portions
+    // Extract date-only (YYYY-MM-DD) portions for range filtering
     const dateOnlySet = new Set(
       rawDates.map(d => {
         // If contains 'T' split; if space split; else assume already date-only
@@ -295,7 +299,8 @@ export const Bookings: React.FC<BookingsProps> = ({
       (statusFilter === 'pending' && (!booking.status || booking.status === 'pending')) ||
       booking.status === statusFilter;
 
-    const matchesDate = !filterDate || dateOnlySet.has(filterDate);
+    // For date filter, only check appointment date (not all date fields)
+    const matchesDate = !filterDate || appointmentDateOnly === filterDate;
 
     const matchesRange = !filterRange || (
       primaryDate && primaryDate >= filterRange.start && primaryDate <= filterRange.end
