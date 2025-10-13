@@ -886,6 +886,24 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
           booking_id: payment.booking_id
         });
 
+        // Update payment_request status to paid if payment was successful
+        if (mappedStatus === 'paid') {
+          console.log('💳 Updating payment_request status to paid:', paymentRequest.id);
+          const { error: updateError } = await supabase
+            .from('payment_requests')
+            .update({ 
+              status: 'paid',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', paymentRequest.id);
+
+          if (updateError) {
+            console.error('❌ Failed to update payment_request status:', updateError);
+          } else {
+            console.log('✅ Payment request status updated to paid');
+          }
+        }
+
         // Return early since payment is already created with webhook data
         return {
           success: true,
@@ -979,6 +997,24 @@ const processSumUpWebhook = async (supabase, eventData, options = {}) => {
         payment_request_id: updateData.payment_request_id
       }
     });
+
+    // Update payment_request status to paid if payment was successful and has payment_request_id
+    if (mappedStatus === 'paid' && payment.payment_request_id) {
+      console.log('💳 Updating payment_request status to paid:', payment.payment_request_id);
+      const { error: updatePRError } = await supabase
+        .from('payment_requests')
+        .update({ 
+          status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.payment_request_id);
+
+      if (updatePRError) {
+        console.error('❌ Failed to update payment_request status:', updatePRError);
+      } else {
+        console.log('✅ Payment request status updated to paid');
+      }
+    }
 
     return {
       success: true,
