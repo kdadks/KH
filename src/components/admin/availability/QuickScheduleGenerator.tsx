@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Calendar,
-  Clock,
   Zap,
-  AlertTriangle,
-  Settings,
   Play,
   Info
 } from 'lucide-react';
@@ -50,13 +47,13 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
 
   // Update selected days when period changes
   useEffect(() => {
-    const today = new Date();
-    const todayDayOfWeek = today.getDay();
+    const selectedDate = new Date(startDate);
+    const selectedDayOfWeek = selectedDate.getDay();
     
     switch (quickPeriod) {
       case 'day':
-        // For day mode, select only today
-        setSelectedDays([todayDayOfWeek]);
+        // For day mode, select only the day of the selected date
+        setSelectedDays([selectedDayOfWeek]);
         break;
       case 'week':
         // For week mode, select Monday-Friday
@@ -67,7 +64,72 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
         setSelectedDays([1, 2, 3, 4, 5]);
         break;
     }
-  }, [quickPeriod]);
+  }, [quickPeriod, startDate]);
+
+  // Auto-calculate preview when any input changes
+  useEffect(() => {
+    const calculateAndSetPreview = () => {
+      const start = new Date(startDate);
+      // Calculate end date based on quick period
+      const start_date = new Date(startDate);
+      let end_date = new Date(start_date);
+
+      switch (quickPeriod) {
+        case 'day':
+          end_date = new Date(start_date);
+          break;
+        case 'week':
+          end_date.setDate(start_date.getDate() + 6);
+          break;
+        case 'month':
+          end_date = new Date(start_date.getFullYear(), start_date.getMonth() + 1, 0);
+          break;
+      }
+
+      const end = end_date;
+      const dates: string[] = [];
+      const current = new Date(start);
+
+      // Collect all dates in range that match selected days
+      while (current <= end) {
+        const dayOfWeek = current.getDay();
+        if (selectedDays.includes(dayOfWeek)) {
+          dates.push(current.toISOString().split('T')[0]);
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Calculate slots per day
+      const startTime = workingHours.start;
+      const endTime = workingHours.end;
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      const totalMinutes = endMinutes - startMinutes;
+
+      const slotWithBreak = slotDuration + breakDuration;
+      const dailySlots = Math.max(0, Math.floor(totalMinutes / slotWithBreak));
+
+      // Calculate weekend days count
+      const weekendDays = dates.filter(date => {
+        const dateObj = new Date(date);
+        const dayOfWeek = dateObj.getDay();
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      });
+
+      setPreviewData({
+        totalSlots: dailySlots * dates.length,
+        dates,
+        dailySlots,
+        weekendDays: weekendDays.length,
+        isOutOfHoursTime: false
+      });
+    };
+
+    calculateAndSetPreview();
+  }, [startDate, workingHours.start, workingHours.end, slotDuration, breakDuration, selectedDays, quickPeriod]);
 
   const dayLabels = [
     { value: 0, label: 'Sunday', short: 'Sun' },
@@ -337,7 +399,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
       for (let i = 0; i < slotsToInsert.length; i += batchSize) {
         const batch = slotsToInsert.slice(i, i + batchSize);
 
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('availability')
           .insert(batch)
           .select();
@@ -567,16 +629,10 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
                       <div>• {previewData.dates.length} working {previewData.dates.length === 1 ? 'day' : 'days'}</div>
                       <div>• {previewData.dailySlots} slots per day</div>
                       <div>• {slotDuration}min appointments with {breakDuration}min breaks</div>
-                      {previewData.outOfHoursSlots !== undefined && previewData.outOfHoursSlots > 0 && (
+                      {(previewData.weekendDays ?? 0) > 0 && (
                         <div className="pt-1 border-t border-blue-300">
-                          <div className="font-medium text-orange-700">Out-of-Hours Slots:</div>
-                          <div>• {previewData.outOfHoursSlots} out-of-hour slots</div>
-                          {previewData.weekendDays > 0 && (
-                            <div>• {previewData.weekendDays} weekend {previewData.weekendDays === 1 ? 'day' : 'days'}</div>
-                          )}
-                          {previewData.isOutOfHoursTime && (
-                            <div>• Time outside 9 AM - 5 PM</div>
-                          )}
+                          <div className="font-medium text-orange-700">Weekend Days:</div>
+                          <div>• {previewData.weekendDays} weekend {previewData.weekendDays === 1 ? 'day' : 'days'}</div>
                         </div>
                       )}
                     </div>
