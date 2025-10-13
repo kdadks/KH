@@ -768,38 +768,48 @@ export const Availability: React.FC<AvailabilityProps> = () => {
             Debug: {availabilitySlots.length} availability slots, {bookedSlots.length} booked slots
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
           {/* Main Tabs */}
-          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+          <div className="flex rounded-md overflow-hidden border border-gray-300 shadow-sm bg-white">
             <button
               onClick={() => setMainTab('overview')}
-              className={`px-4 py-2 text-sm ${mainTab === 'overview' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                mainTab === 'overview' 
+                  ? 'bg-primary-600 text-white shadow-sm' 
+                  : 'bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
             >
               Overview
             </button>
             <button
               onClick={() => setMainTab('default')}
-              className={`px-4 py-2 text-sm ${mainTab === 'default' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 text-xs font-medium border-l border-gray-300 transition-all duration-200 ${
+                mainTab === 'default' 
+                  ? 'bg-primary-600 text-white shadow-sm' 
+                  : 'bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
             >
               Default Schedule
             </button>
           </div>
+          
+          {/* View Toggle */}
           <button
             onClick={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}
-            className={`w-full sm:w-auto flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
+            className={`flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 shadow-sm border ${
               viewMode === 'calendar'
-                ? 'bg-primary-600 text-white hover:bg-primary-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-primary-600 text-white border-primary-600 hover:bg-primary-700'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             {viewMode === 'calendar' ? (
               <>
-                <List className="w-4 h-4 mr-2" />
+                <List className="w-3.5 h-3.5 mr-1.5" />
                 List View
               </>
             ) : (
               <>
-                <CalendarIcon className="w-4 h-4 mr-2" />
+                <CalendarIcon className="w-3.5 h-3.5 mr-1.5" />
                 Calendar View
               </>
             )}
@@ -849,9 +859,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
             )}
             <button
               onClick={handleAddSlot}
-              className="mt-4 flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              className="mt-4 flex items-center px-3 py-1.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-all duration-200 text-sm font-medium shadow-sm"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
               Add Time Slot
             </button>
           </div>
@@ -1093,15 +1103,72 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                         Available Slots ({availabilitySlots.length})
                       </h4>
                       
-                      {/* Group slots by date */}
+                      {/* Group slots by date - combine availability slots and booked slots */}
                       {Object.entries(
-                        availabilitySlots.reduce((acc, slot) => {
-                          const date = slot.date;
-                          if (!acc[date]) acc[date] = [];
-                          acc[date].push(slot);
-                          return acc;
-                        }, {} as Record<string, AvailabilitySlot[]>)
-                      ).map(([date, slotsForDate]) => (
+                        (() => {
+                          const allSlotsByDate: Record<string, AvailabilitySlot[]> = {};
+                          
+                          // Add all availability slots
+                          availabilitySlots.forEach(slot => {
+                            const date = slot.date;
+                            if (!allSlotsByDate[date]) allSlotsByDate[date] = [];
+                            allSlotsByDate[date].push(slot);
+                          });
+                          
+                          // Add booked slots that don't have corresponding availability slots
+                          bookedSlots.forEach(booking => {
+                            const bookingDateTime = getBookingDateTime(booking);
+                            if (!bookingDateTime) return;
+                            
+                            const date = bookingDateTime.date;
+                            const time = bookingDateTime.time;
+                            
+                            // Check if this booking already has a corresponding availability slot
+                            const hasAvailabilitySlot = availabilitySlots.some(slot => 
+                              slot.date === date && getSlotStart(slot) === time
+                            );
+                            
+                            // If no availability slot exists for this booking, create a virtual one
+                            if (!hasAvailabilitySlot) {
+                              if (!allSlotsByDate[date]) allSlotsByDate[date] = [];
+                              
+                              // Create virtual slot for the booking
+                              const endTime = booking.timeslot_end_time || (() => {
+                                const [hours, minutes] = time.split(':').map(Number);
+                                const endMinutes = minutes + 50;
+                                const endHours = hours + Math.floor(endMinutes / 60);
+                                const finalMinutes = endMinutes % 60;
+                                return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+                              })();
+                              
+                              allSlotsByDate[date].push({
+                                // Use negative ID for virtual slots to avoid conflicts
+                                id: -parseInt(booking.id) || -Math.random() * 1000000,
+                                date: date,
+                                start: time,
+                                end_time: endTime,
+                                is_available: false // Mark as booked
+                              });
+                            }
+                          });
+                          
+                          // Sort slots by time within each date
+                          Object.keys(allSlotsByDate).forEach(date => {
+                            allSlotsByDate[date].sort((a, b) => {
+                              const timeA = getSlotStart(a);
+                              const timeB = getSlotStart(b);
+                              return timeA.localeCompare(timeB);
+                            });
+                          });
+                          
+                          return allSlotsByDate;
+                        })()
+                      )
+                      // Sort dates chronologically before mapping
+                      .sort(([dateA], [dateB]) => {
+                        return new Date(dateA).getTime() - new Date(dateB).getTime();
+                      })
+                      .map(([date, slotsForDate]) => (
                         <div key={date} className="mb-6">
                           <div className="flex items-center justify-between mb-3">
                             <h5 className="text-sm font-medium text-gray-700">
@@ -1135,15 +1202,29 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                           </div>
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {slotsForDate.map((slot) => {
+                            {slotsForDate
+                              .filter((slot) => {
+                                // Check if there's a matching booking for this slot
+                                const hasMatchingBooking = bookedSlots.some(booking => {
+                                  const bookingDateTime = getBookingDateTime(booking);
+                                  if (!bookingDateTime) return false;
+                                  return bookingDateTime.date === slot.date &&
+                                    bookingDateTime.time === getSlotStart(slot);
+                                });
+                                
+                                // Show all slots EXCEPT empty unavailable ones
+                                // Show if: available OR has a booking
+                                return slot.is_available !== false || hasMatchingBooking;
+                              })
+                              .map((slot) => {
                               // Find specific booking that matches this slot (same logic as calendar view)
                               const matchingBooking = bookedSlots.find(booking => {
                                 const bookingDateTime = getBookingDateTime(booking);
                                 if (!bookingDateTime) return false;
 
+                                // Exact time matching - booking start time must match slot start time
                                 return bookingDateTime.date === slot.date &&
-                                  bookingDateTime.time >= getSlotStart(slot) &&
-                                  bookingDateTime.time < slot.end_time;
+                                  bookingDateTime.time === getSlotStart(slot);
                               });
 
                               // A slot is considered booked if there's a matching booking OR it's marked unavailable
@@ -1154,7 +1235,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                   key={slot.id || `${slot.date}-${getSlotStart(slot)}-${slot.end_time}`}
                                   className={`p-3 border rounded-lg relative transition-colors ${
                                     isBooked
-                                      ? 'border-red-300 bg-red-50'
+                                      ? 'border-gray-300 bg-gray-50'
                                       : 'border-emerald-200 bg-emerald-50 hover:border-emerald-300'
                                   }`}
                                 >
@@ -1162,63 +1243,13 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                     <div className="flex-1">
                                       {isBooked ? (
                                         (() => {
-                          // Try to find booking details - use multiple strategies for better matching
-                          let displayBooking = matchingBooking;
-
-                          if (!displayBooking && slot.is_available === false) {
-                            // Strategy 1: Look for any booking that overlaps with this slot (original logic)
-                            displayBooking = bookedSlots.find(booking => {
-                              const bookingDateTime = getBookingDateTime(booking);
-                              if (!bookingDateTime || bookingDateTime.date !== slot.date) return false;
-
-                              const bookingStart = bookingDateTime.time;
-                              const slotStart = getSlotStart(slot);
-                              const slotEnd = slot.end_time;
-
-                              return bookingStart >= slotStart && bookingStart < slotEnd;
-                            });
-
-                            // Strategy 2: If no exact overlap, look for any booking on the same date with close times
-                            if (!displayBooking) {
-                              displayBooking = bookedSlots.find(booking => {
-                                const bookingDateTime = getBookingDateTime(booking);
-                                if (!bookingDateTime || bookingDateTime.date !== slot.date) return false;
-
-                                // Convert times to minutes for easier comparison
-                                const timeToMinutes = (time: string) => {
-                                  const [hours, minutes] = time.split(':').map(Number);
-                                  return hours * 60 + minutes;
-                                };
-
-                                const bookingMinutes = timeToMinutes(bookingDateTime.time);
-                                const slotStartMinutes = timeToMinutes(getSlotStart(slot));
-                                const slotEndMinutes = timeToMinutes(slot.end_time);
-
-                                // Check if booking time is within 30 minutes of slot start/end (flexible matching)
-                                const withinRange = Math.abs(bookingMinutes - slotStartMinutes) <= 30 || 
-                                                   Math.abs(bookingMinutes - slotEndMinutes) <= 30 ||
-                                                   (bookingMinutes >= slotStartMinutes && bookingMinutes <= slotEndMinutes);
-
-                                return withinRange;
-                              });
-                            }
-
-                            // Strategy 3: Last resort - find ANY booking on the same date
-                            if (!displayBooking) {
-                              displayBooking = bookedSlots.find(booking => {
-                                const bookingDateTime = getBookingDateTime(booking);
-                                return bookingDateTime && bookingDateTime.date === slot.date;
-                              });
-                            }
-                          }
+                          // Use only the exact matching booking found above
+                          const displayBooking = matchingBooking;
 
                           if (displayBooking) {
                             // Found booking for unavailable slot
                                             return (
                                               <div>
-                                                <p className="text-sm font-medium text-red-700 mb-1">
-                                                  📅 BOOKED
-                                                </p>
                                                 <p className="text-xs text-gray-700">
                                                   <strong>Customer:</strong> {displayBooking.customer_name}
                                                 </p>
@@ -1259,7 +1290,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                       ) : (
                                         <p className={`text-sm font-medium ${isBooked ? 'text-gray-500' : 'text-emerald-600'}`}>
                                           {formatTime(getSlotStart(slot))} - {formatTime(slot.end_time)}
-                                          {!isBooked && ' (Available)'}
                                         </p>
                                       )}
                                     </div>
