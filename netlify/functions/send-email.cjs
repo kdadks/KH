@@ -150,7 +150,7 @@ const generateICS = (data, isRescheduled = false) => {
     `UID:${data.booking_reference}@khtherapy.ie`,
     `DTSTART;TZID=Europe/Dublin:${formatDate(startDate)}`,
     `DTEND;TZID=Europe/Dublin:${formatDate(endDate)}`,
-    `SUMMARY:${data.service_name} - KH Therapy${isRescheduled ? ' (Rescheduled)' : ''}`,
+    `SUMMARY:${data.customer_name || data.first_name + ' ' + data.last_name} - ${data.service_name}${isRescheduled ? ' (Rescheduled)' : ''}`,
     `DESCRIPTION:${description}`,
     `LOCATION:${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}`,
     'STATUS:CONFIRMED',
