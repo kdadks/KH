@@ -69,7 +69,6 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
   // Auto-calculate preview when any input changes
   useEffect(() => {
     const calculateAndSetPreview = () => {
-      const start = new Date(startDate);
       // Calculate end date based on quick period
       const start_date = new Date(startDate);
       let end_date = new Date(start_date);
@@ -88,7 +87,7 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
 
       const end = end_date;
       const dates: string[] = [];
-      const current = new Date(start);
+      const current = new Date(start_date);
 
       // Collect all dates in range that match selected days
       while (current <= end) {
@@ -166,10 +165,25 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
 
   // Calculate preview
   const calculatePreview = () => {
-    const start = new Date(startDate);
-    const end = new Date(calculateEndDate());
+    // Calculate end date based on quick period
+    const start_date = new Date(startDate);
+    let end_date = new Date(start_date);
+
+    switch (quickPeriod) {
+      case 'day':
+        end_date = new Date(start_date);
+        break;
+      case 'week':
+        end_date.setDate(start_date.getDate() + 6);
+        break;
+      case 'month':
+        end_date = new Date(start_date.getFullYear(), start_date.getMonth() + 1, 0);
+        break;
+    }
+
+    const end = end_date;
     const dates: string[] = [];
-    const current = new Date(start);
+    const current = new Date(start_date);
 
     // Collect all dates in range that match selected days
     while (current <= end) {
@@ -191,67 +205,21 @@ export const QuickScheduleGenerator: React.FC<QuickScheduleGeneratorProps> = ({
     const totalMinutes = endMinutes - startMinutes;
 
     const slotWithBreak = slotDuration + breakDuration;
-    const dailySlots = Math.floor(totalMinutes / slotWithBreak);
+    const dailySlots = Math.max(0, Math.floor(totalMinutes / slotWithBreak));
 
-    // Calculate out-of-hours information
+    // Calculate weekend days count
     const weekendDays = dates.filter(date => {
       const dateObj = new Date(date);
       const dayOfWeek = dateObj.getDay();
       return dayOfWeek === 0 || dayOfWeek === 6;
     });
 
-    // Calculate out-of-hours slots more accurately using the same logic as slot generation
-    const tempTimeSlots = generateTimeSlotsForDay(startTime, endTime, slotDuration, breakDuration);
-
-    let outOfHoursSlots = 0;
-    for (const date of dates) {
-      const dateObj = new Date(date);
-      const dayOfWeek = dateObj.getDay();
-
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        // Weekend - all slots are out-of-hour
-        outOfHoursSlots += tempTimeSlots.length;
-      } else {
-        // Weekday - check each time slot
-        for (const slot of tempTimeSlots) {
-          const [startHours, startMins] = slot.start_time.split(':').map(Number);
-          const [endHours, endMins] = slot.end_time.split(':').map(Number);
-
-          const slotStartMinutes = startHours * 60 + startMins;
-          const slotEndMinutes = endHours * 60 + endMins;
-
-          const nineAM = 9 * 60;
-          const nineQuarterAM = 9 * 60 + 15;
-          const fivePM = 17 * 60;
-
-          // Apply the same logic as getSlotType
-          let isOutOfHour = true;
-
-          // Special rule: If slot starts before 9 AM but ends after 9:15 AM, consider it in-hour
-          if (slotStartMinutes < nineAM && slotEndMinutes >= nineQuarterAM) {
-            isOutOfHour = false;
-          }
-          // Regular rule: slot must start at or after 9 AM and start before 5 PM
-          else if (slotStartMinutes >= nineAM && slotStartMinutes < fivePM) {
-            isOutOfHour = false;
-          }
-
-          if (isOutOfHour) {
-            outOfHoursSlots++;
-          }
-        }
-      }
-    }
-
-    const isOutOfHoursTime = outOfHoursSlots > 0;
-
     setPreviewData({
       totalSlots: dailySlots * dates.length,
       dates,
       dailySlots,
-      outOfHoursSlots,
       weekendDays: weekendDays.length,
-      isOutOfHoursTime
+      isOutOfHoursTime: false
     });
   };
 
