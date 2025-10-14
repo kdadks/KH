@@ -385,6 +385,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [showSumUpModal, setShowSumUpModal] = useState<boolean>(false);
+  const [paymentCancelled, setPaymentCancelled] = useState<boolean>(false);
 
   const getRedirectUrl = (isSuccess: boolean = true): string | null => {
     // If redirectAfterPayment is explicitly set, use it
@@ -435,6 +436,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // SumUp Modal Handlers
   const handleSumUpSuccess = useCallback((data: { transaction_id?: string; amount?: string; checkout_reference?: string }) => {
     logger.devOnly(() => console.log('SumUp payment successful:', data));
+    setPaymentCancelled(false); // Reset cancellation flag on success
     setShowSumUpModal(false);
     setCurrentStep('success');
     
@@ -453,6 +455,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleSumUpFailure = useCallback((error: { error?: string; code?: string; message?: string }) => {
     console.error('SumUp payment failed:', error);
+    setPaymentCancelled(false); // Reset cancellation flag on failure
     setShowSumUpModal(false);
     setErrorMessage(error.error || 'Payment failed. Please try again.');
     setCurrentStep('error');
@@ -465,7 +468,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [onPaymentFailed]);
 
   const handleSumUpCancel = useCallback(() => {
+    console.log('🚫 handleSumUpCancel called - setting error state');
     logger.devOnly(() => console.log('SumUp payment cancelled by user'));
+    setPaymentCancelled(true); // Mark as cancelled to prevent onClose from overriding
     setShowSumUpModal(false);
     setCurrentStep('error'); // Show error state instead of confirm to indicate cancellation
     setErrorMessage('Payment was cancelled. You can try again or contact support if needed.');
@@ -475,12 +480,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, []);
 
   const handleSumUpModalClose = useCallback(() => {
+    console.log('🔄 handleSumUpModalClose called - currentStep:', currentStep, 'paymentCancelled:', paymentCancelled);
     setShowSumUpModal(false);
-    // Return to confirm step if modal is closed without completion
-    if (currentStep === 'modal') {
+    // Only return to confirm step if payment wasn't cancelled
+    // Don't override error state set by cancellation
+    if (currentStep === 'modal' && !paymentCancelled) {
+      console.log('📝 Setting step to confirm (not cancelled)');
       setCurrentStep('confirm');
+    } else if (paymentCancelled) {
+      console.log('🚫 Keeping error state (payment was cancelled)');
     }
-  }, [currentStep]);
+    // If payment was cancelled, leave the error state as is
+  }, [currentStep, paymentCancelled]);
 
   // Reset modal state when opened
   useEffect(() => {
@@ -493,6 +504,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setCheckoutSessionId(null);
       setIsCancelling(false);
       setShowSumUpModal(false);
+      setPaymentCancelled(false); // Reset cancellation flag when opening modal
       logger.debug('PaymentModal opening with booking_id:', paymentRequest.booking_id);
       fetchBookingDetails();
       
