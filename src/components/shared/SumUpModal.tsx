@@ -48,6 +48,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
   const messageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isPaymentCompletedRef = useRef<boolean>(false); // Track if payment was completed or cancelled
+  const isCancelledRef = useRef<boolean>(false); // Track if payment was cancelled to prevent success callbacks
 
   // iOS detection for redirect-based payment flow
   const isIOS = () => {
@@ -85,6 +86,10 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     
     switch (message.type) {
       case 'success':
+        // Don't process success if already cancelled
+        if (isCancelledRef.current) {
+          break;
+        }
         isPaymentCompletedRef.current = true; // Mark as completed
         if (message.data) {
           setSuccessData(message.data as PaymentSuccessData);
@@ -104,6 +109,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
       }
       case 'cancel':
         isPaymentCompletedRef.current = true; // Mark as completed (cancelled)
+        isCancelledRef.current = true; // Mark as cancelled to prevent success callbacks
         setModalState('cancelled');
         onCancel?.();
         break;
@@ -135,6 +141,11 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
           currency: urlParams.get('currency') || undefined,
           checkout_reference: urlParams.get('checkout_reference') || undefined
         };
+        
+        // Don't process success if already cancelled
+        if (isCancelledRef.current) {
+          return;
+        }
         
         console.log('Payment success detected:', successData);
         setSuccessData(successData);
@@ -177,6 +188,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     setErrorMessage('');
     setSuccessData(null);
     isPaymentCompletedRef.current = false; // Reset completion flag
+    isCancelledRef.current = false; // Reset cancellation flag
 
     // Security check
     if (!isSumUpUrl(checkoutUrl)) {
@@ -254,6 +266,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
           // Only trigger cancel if payment wasn't completed through other means
           if (!isPaymentCompletedRef.current) {
             console.log('🔄 SumUp popup closed without completion - triggering cancel');
+            isCancelledRef.current = true; // Mark as cancelled to prevent any subsequent success callbacks
             setModalState('cancelled');
             onCancel?.();
           }
