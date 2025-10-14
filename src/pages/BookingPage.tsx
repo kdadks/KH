@@ -343,13 +343,22 @@ const BookingPage: React.FC = () => {
     }
   }, [autoSelectTime, timeSlots, loadingTimeSlots, setValue]);
 
-  // Check for payment return on page load (mobile redirect flow)
+  // Check for payment return on page load (iOS redirect flow ONLY)
   useEffect(() => {
+    // iOS detection function (same as in SumUpModal)
+    const isIOS = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      return /iPad|iPhone|iPod/.test(userAgent) || 
+             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad Pro detection
+    };
+
     const checkPaymentReturn = async () => {
       const paymentInProgress = sessionStorage.getItem('paymentInProgress');
       const paymentData = sessionStorage.getItem('paymentData');
       
-      if (paymentInProgress && paymentData) {
+      // Only process payment returns for iOS devices (redirect flow)
+      // Android/Desktop use popup flow which is handled by SumUpModal callbacks
+      if (paymentInProgress && paymentData && isIOS()) {
         try {
           const data = JSON.parse(paymentData);
           const timestamp = data.timestamp || 0;
@@ -507,9 +516,9 @@ const BookingPage: React.FC = () => {
     // Check on component mount
     checkPaymentReturn();
     
-    // Set up visibility change listener for iOS back navigation detection
+    // Set up visibility change listener for iOS back navigation detection ONLY
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && isIOS()) {
         const paymentInProgress = sessionStorage.getItem('paymentInProgress');
         if (paymentInProgress) {
           // User returned to the page, check payment status after a short delay
@@ -518,12 +527,14 @@ const BookingPage: React.FC = () => {
       }
     };
     
-    // Set up focus listener for additional detection
+    // Set up focus listener for additional iOS detection
     const handleWindowFocus = () => {
-      const paymentInProgress = sessionStorage.getItem('paymentInProgress');
-      if (paymentInProgress) {
-        // User focused the window, check payment status after a short delay
-        setTimeout(checkPaymentReturn, 1000);
+      if (isIOS()) {
+        const paymentInProgress = sessionStorage.getItem('paymentInProgress');
+        if (paymentInProgress) {
+          // User focused the window, check payment status after a short delay
+          setTimeout(checkPaymentReturn, 1000);
+        }
       }
     };
     

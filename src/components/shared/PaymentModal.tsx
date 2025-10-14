@@ -467,7 +467,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleSumUpCancel = useCallback(() => {
     logger.devOnly(() => console.log('SumUp payment cancelled by user'));
     setShowSumUpModal(false);
-    setCurrentStep('confirm');
+    setCurrentStep('error'); // Show error state instead of confirm to indicate cancellation
+    setErrorMessage('Payment was cancelled. You can try again or contact support if needed.');
     
     // Log the cancellation
     logger.info('Payment cancelled by user in SumUp modal');
