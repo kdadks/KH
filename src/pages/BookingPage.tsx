@@ -352,11 +352,26 @@ const BookingPage: React.FC = () => {
       if (paymentInProgress && paymentData) {
         try {
           const data = JSON.parse(paymentData);
-          console.log('📱 Detected payment return, checking status...');
+          const timestamp = data.timestamp || 0;
+          const timeElapsed = Date.now() - timestamp;
           
-          // Clear the storage first
-          sessionStorage.removeItem('paymentInProgress');
-          sessionStorage.removeItem('paymentData');
+          console.log('📱 Detected payment return, checking status...', { timeElapsed: Math.round(timeElapsed / 1000) + 's' });
+          
+          // If more than 10 minutes have passed, consider it abandoned
+          if (timeElapsed > 10 * 60 * 1000) {
+            console.log('⏰ Payment session expired (>10 minutes), cleaning up...');
+            sessionStorage.removeItem('paymentInProgress');
+            sessionStorage.removeItem('paymentData');
+            sessionStorage.removeItem('paymentReturnUrl');
+            
+            // Clear any cleanup timeout
+            const cleanupTimeout = sessionStorage.getItem('paymentCleanupTimeout');
+            if (cleanupTimeout) {
+              clearTimeout(parseInt(cleanupTimeout));
+              sessionStorage.removeItem('paymentCleanupTimeout');
+            }
+            return;
+          }
           
           // Check payment status with SumUp
           const checkoutId = data.checkoutId;
@@ -378,8 +393,19 @@ const BookingPage: React.FC = () => {
                   if (result.status === 'PAID') {
                     console.log('✅ Mobile payment completed successfully');
                     
-                    // Trigger success flow - since we can't reconstruct the full payment state
-                    // from the simple data, we'll just show a success message and reset the form
+                    // Clear all payment session data
+                    sessionStorage.removeItem('paymentInProgress');
+                    sessionStorage.removeItem('paymentData');
+                    sessionStorage.removeItem('paymentReturnUrl');
+                    
+                    // Clear any cleanup timeout
+                    const cleanupTimeout = sessionStorage.getItem('paymentCleanupTimeout');
+                    if (cleanupTimeout) {
+                      clearTimeout(parseInt(cleanupTimeout));
+                      sessionStorage.removeItem('paymentCleanupTimeout');
+                    }
+                    
+                    // Trigger success flow
                     setSuccessMsg('Payment completed successfully! Your booking has been confirmed.');
                     setPaymentState(prev => ({
                       ...prev,
@@ -392,20 +418,61 @@ const BookingPage: React.FC = () => {
                     // Retry a few times for pending payments
                     setTimeout(() => checkPaymentStatus(retryCount + 1), 2000);
                     return;
+                  } else if (result.status === 'CANCELLED') {
+                    console.log('🚫 Payment was cancelled by user');
+                    // Clean up and reset - no error message for user cancellation
+                    return; // This will trigger the cleanup in the main else block
+                  } else if (result.status === 'FAILED') {
+                    console.log('💥 Payment failed');
+                    return; // This will trigger the cleanup in the main else block
                   }
                 }
                 
-                // If we get here, payment failed or couldn't be verified
-                console.log('❌ Mobile payment failed or could not be verified');
+                // If we get here, payment failed, was cancelled, or couldn't be verified
+                console.log('❌ Mobile payment failed, cancelled, or could not be verified');
                 
-                // Show error message
-                setRealTimeErrors(prev => ({
-                  ...prev,
-                  payment: 'Payment could not be completed. Please try again.'
-                }));
+                // Clear all payment session data
+                sessionStorage.removeItem('paymentInProgress');
+                sessionStorage.removeItem('paymentData');
+                sessionStorage.removeItem('paymentReturnUrl');
+                
+                // Clear any cleanup timeout
+                const cleanupTimeout = sessionStorage.getItem('paymentCleanupTimeout');
+                if (cleanupTimeout) {
+                  clearTimeout(parseInt(cleanupTimeout));
+                  sessionStorage.removeItem('paymentCleanupTimeout');
+                }
+                
+                // Reset payment state to allow retry
+                setPaymentState({
+                  showPayment: false,
+                  paymentRequest: null,
+                  booking: null,
+                  customer: null,
+                  paymentCompleted: false
+                });
+                
+                // Clear any existing success messages
+                setSuccessMsg('');
+                
+                // Don't show error message for user-initiated cancellation
+                // Instead, just reset to initial state for retry
+                console.log('🔄 Payment session cleared, ready for retry');
                 
               } catch (error) {
                 console.error('Error checking mobile payment status:', error);
+                
+                // Clean up session storage on error
+                sessionStorage.removeItem('paymentInProgress');
+                sessionStorage.removeItem('paymentData');
+                sessionStorage.removeItem('paymentReturnUrl');
+                
+                const cleanupTimeout = sessionStorage.getItem('paymentCleanupTimeout');
+                if (cleanupTimeout) {
+                  clearTimeout(parseInt(cleanupTimeout));
+                  sessionStorage.removeItem('paymentCleanupTimeout');
+                }
+                
                 setRealTimeErrors(prev => ({
                   ...prev,
                   payment: 'Error verifying payment. Please contact support if charged.'
@@ -414,18 +481,60 @@ const BookingPage: React.FC = () => {
             };
             
             await checkPaymentStatus();
+          } else {
+            // No checkout ID, just clean up
+            console.log('⚠️ No checkout ID found, cleaning up session');
+            sessionStorage.removeItem('paymentInProgress');
+            sessionStorage.removeItem('paymentData');
+            sessionStorage.removeItem('paymentReturnUrl');
           }
           
         } catch (error) {
           console.error('Error processing payment return:', error);
           sessionStorage.removeItem('paymentInProgress');
           sessionStorage.removeItem('paymentData');
+          sessionStorage.removeItem('paymentReturnUrl');
+          
+          const cleanupTimeout = sessionStorage.getItem('paymentCleanupTimeout');
+          if (cleanupTimeout) {
+            clearTimeout(parseInt(cleanupTimeout));
+            sessionStorage.removeItem('paymentCleanupTimeout');
+          }
         }
       }
     };
     
     // Check on component mount
     checkPaymentReturn();
+    
+    // Set up visibility change listener for iOS back navigation detection
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const paymentInProgress = sessionStorage.getItem('paymentInProgress');
+        if (paymentInProgress) {
+          // User returned to the page, check payment status after a short delay
+          setTimeout(checkPaymentReturn, 1000);
+        }
+      }
+    };
+    
+    // Set up focus listener for additional detection
+    const handleWindowFocus = () => {
+      const paymentInProgress = sessionStorage.getItem('paymentInProgress');
+      if (paymentInProgress) {
+        // User focused the window, check payment status after a short delay
+        setTimeout(checkPaymentReturn, 1000);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, []); // Run once on mount
 
   const fetchNextAvailableSlot = async (service: Service) => {

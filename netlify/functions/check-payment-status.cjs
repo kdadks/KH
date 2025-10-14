@@ -54,16 +54,17 @@ exports.handler = async (event, context) => {
 
     const checkoutData = await response.json();
     
-    // Return the checkout status
+    // Return the checkout status with additional info
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        status: checkoutData.status,
+        status: checkoutData.status, // PAID, PENDING, CANCELLED, FAILED
         amount: checkoutData.amount,
         currency: checkoutData.currency,
         transaction_id: checkoutData.transaction_id,
-        date: checkoutData.date
+        date: checkoutData.date,
+        checkout_reference: checkoutData.checkout_reference
       })
     };
 
