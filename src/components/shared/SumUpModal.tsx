@@ -49,18 +49,11 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isPaymentCompletedRef = useRef<boolean>(false); // Track if payment was completed or cancelled
 
-  // Device detection
-  const isMobileDevice = () => {
-    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase()) ||
-           /iPad|iPhone|iPod/.test(userAgent) ||
-           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad Pro detection
-  };
-
+  // iOS detection for redirect-based payment flow
   const isIOS = () => {
     const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
     return /iPad|iPhone|iPod/.test(userAgent) || 
-           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad Pro detection
   };
 
   // Format currency amount
@@ -197,9 +190,9 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     messageListenerRef.current = messageListener;
     window.addEventListener('message', messageListener);
 
-    // Handle mobile devices (iPad/iPhone/Android) differently
-    if (isMobileDevice() || isIOS()) {
-      console.log('🔄 Mobile device detected - redirecting to SumUp payment page');
+    // Handle iOS devices with redirect (full screen experience)
+    if (isIOS()) {
+      console.log('🍎 iOS device detected - using redirect flow for mobile Safari compatibility');
       setModalState('redirect');
       
       // Extract checkout ID from URL for status checking
@@ -211,13 +204,14 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
         console.error('Error extracting checkout ID:', error);
       }
       
-      // Store payment data for return flow
+      // Store payment data for return flow with timestamp for timeout detection
       const paymentData = {
         checkoutId,
         checkoutUrl,
-        onSuccess: !!onSuccess, // Flag to indicate if success callback exists
+        onSuccess: !!onSuccess,
         amount: paymentAmount,
-        currency: currency
+        currency: currency,
+        timestamp: Date.now() // Add timestamp to detect abandoned flows
       };
       
       const currentUrl = window.location.href;
@@ -225,12 +219,24 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
       sessionStorage.setItem('paymentInProgress', 'true');
       sessionStorage.setItem('paymentData', JSON.stringify(paymentData));
       
+      // Set up cleanup timeout - if user returns within 2 minutes without completing payment
+      const cleanupTimeout = setTimeout(() => {
+        console.log('🧹 Cleaning up abandoned iOS payment session');
+        sessionStorage.removeItem('paymentInProgress');
+        sessionStorage.removeItem('paymentData');
+        sessionStorage.removeItem('paymentReturnUrl');
+      }, 2 * 60 * 1000); // 2 minutes
+      
+      // Store cleanup timeout ID
+      sessionStorage.setItem('paymentCleanupTimeout', cleanupTimeout.toString());
+      
       // Redirect to SumUp checkout
       window.location.href = checkoutUrl;
       return;
     }
 
-    // For desktop devices, use popup as before
+    // For desktop and Android devices, use popup as before (unchanged functionality)
+    console.log('🖥️ Desktop/Android device detected - using popup flow (original functionality)');
     const popup = window.open(
       checkoutUrl,
       'sumup-checkout',
