@@ -343,6 +343,91 @@ const BookingPage: React.FC = () => {
     }
   }, [autoSelectTime, timeSlots, loadingTimeSlots, setValue]);
 
+  // Check for payment return on page load (mobile redirect flow)
+  useEffect(() => {
+    const checkPaymentReturn = async () => {
+      const paymentInProgress = sessionStorage.getItem('paymentInProgress');
+      const paymentData = sessionStorage.getItem('paymentData');
+      
+      if (paymentInProgress && paymentData) {
+        try {
+          const data = JSON.parse(paymentData);
+          console.log('📱 Detected payment return, checking status...');
+          
+          // Clear the storage first
+          sessionStorage.removeItem('paymentInProgress');
+          sessionStorage.removeItem('paymentData');
+          
+          // Check payment status with SumUp
+          const checkoutId = data.checkoutId;
+          if (checkoutId) {
+            // Poll for payment completion (similar to popup flow)
+            const checkPaymentStatus = async (retryCount = 0) => {
+              try {
+                const response = await fetch('/netlify/functions/check-payment-status', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ checkout_id: checkoutId })
+                });
+                
+                if (response.ok) {
+                  const result = await response.json();
+                  
+                  if (result.status === 'PAID') {
+                    console.log('✅ Mobile payment completed successfully');
+                    
+                    // Trigger success flow - since we can't reconstruct the full payment state
+                    // from the simple data, we'll just show a success message and reset the form
+                    setSuccessMsg('Payment completed successfully! Your booking has been confirmed.');
+                    setPaymentState(prev => ({
+                      ...prev,
+                      showPayment: false,
+                      paymentCompleted: true
+                    }));
+                    
+                    return;
+                  } else if (result.status === 'PENDING' && retryCount < 3) {
+                    // Retry a few times for pending payments
+                    setTimeout(() => checkPaymentStatus(retryCount + 1), 2000);
+                    return;
+                  }
+                }
+                
+                // If we get here, payment failed or couldn't be verified
+                console.log('❌ Mobile payment failed or could not be verified');
+                
+                // Show error message
+                setRealTimeErrors(prev => ({
+                  ...prev,
+                  payment: 'Payment could not be completed. Please try again.'
+                }));
+                
+              } catch (error) {
+                console.error('Error checking mobile payment status:', error);
+                setRealTimeErrors(prev => ({
+                  ...prev,
+                  payment: 'Error verifying payment. Please contact support if charged.'
+                }));
+              }
+            };
+            
+            await checkPaymentStatus();
+          }
+          
+        } catch (error) {
+          console.error('Error processing payment return:', error);
+          sessionStorage.removeItem('paymentInProgress');
+          sessionStorage.removeItem('paymentData');
+        }
+      }
+    };
+    
+    // Check on component mount
+    checkPaymentReturn();
+  }, []); // Run once on mount
+
   const fetchNextAvailableSlot = async (service: Service) => {
     try {
       setLoadingNextSlot(true);

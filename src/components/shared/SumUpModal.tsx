@@ -40,7 +40,7 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
   onFailure,
   onCancel
 }) => {
-  const [modalState, setModalState] = useState<'loading' | 'iframe' | 'popup' | 'success' | 'error' | 'cancelled'>('loading');
+  const [modalState, setModalState] = useState<'loading' | 'iframe' | 'popup' | 'success' | 'error' | 'cancelled' | 'redirect'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [successData, setSuccessData] = useState<PaymentSuccessData | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -48,6 +48,20 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
   const messageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isPaymentCompletedRef = useRef<boolean>(false); // Track if payment was completed or cancelled
+
+  // Device detection
+  const isMobileDevice = () => {
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase()) ||
+           /iPad|iPhone|iPod/.test(userAgent) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad Pro detection
+  };
+
+  const isIOS = () => {
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    return /iPad|iPhone|iPod/.test(userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  };
 
   // Format currency amount
   const formatAmount = (amount: number, curr: string) => {
@@ -183,7 +197,40 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
     messageListenerRef.current = messageListener;
     window.addEventListener('message', messageListener);
 
-    // SumUp doesn't allow iframe embedding, so open directly in popup
+    // Handle mobile devices (iPad/iPhone/Android) differently
+    if (isMobileDevice() || isIOS()) {
+      console.log('🔄 Mobile device detected - redirecting to SumUp payment page');
+      setModalState('redirect');
+      
+      // Extract checkout ID from URL for status checking
+      let checkoutId = '';
+      try {
+        const url = new URL(checkoutUrl);
+        checkoutId = url.pathname.split('/').pop() || '';
+      } catch (error) {
+        console.error('Error extracting checkout ID:', error);
+      }
+      
+      // Store payment data for return flow
+      const paymentData = {
+        checkoutId,
+        checkoutUrl,
+        onSuccess: !!onSuccess, // Flag to indicate if success callback exists
+        amount: paymentAmount,
+        currency: currency
+      };
+      
+      const currentUrl = window.location.href;
+      sessionStorage.setItem('paymentReturnUrl', currentUrl);
+      sessionStorage.setItem('paymentInProgress', 'true');
+      sessionStorage.setItem('paymentData', JSON.stringify(paymentData));
+      
+      // Redirect to SumUp checkout
+      window.location.href = checkoutUrl;
+      return;
+    }
+
+    // For desktop devices, use popup as before
     const popup = window.open(
       checkoutUrl,
       'sumup-checkout',
@@ -339,6 +386,21 @@ const SumUpModal: React.FC<SumUpModalProps> = ({
                   >
                     Reopen Payment Window
                   </button>
+                </div>
+              </div>
+            )}
+
+            {modalState === 'redirect' && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <ExternalLink className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-4">
+                    Redirecting to SumUp secure payment...
+                  </p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    You will be taken to SumUp's secure payment page to complete your transaction.
+                  </p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 </div>
               </div>
             )}
