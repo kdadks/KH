@@ -10,10 +10,9 @@ const ManualTherapyPage: React.FC = () => {
     'Joint mobilization and manipulation',
     'Soft tissue massage and myofascial release',
     'Trigger point therapy',
-    'Spinal manipulation',
-    'Craniosacral therapy',
+    'Dry needling',
+    'Tens machine stimulation',
     'Visceral manipulation',
-    'Lymphatic drainage',
     'Deep tissue massage'
   ];
 
