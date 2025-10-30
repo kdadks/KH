@@ -915,9 +915,9 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
             </div>
 
             {/* Payment Requests Pagination */}
-            {paymentRequests.length > 0 && (
+            {getFilteredPaymentRequests().length > 0 && (
               <PaginationComponent 
-                totalItems={paymentRequests.length}
+                totalItems={getFilteredPaymentRequests().length}
                 currentPage={currentPage}
                 itemsPerPage={itemsPerPage}
                 totalPages={getTotalPages(getFilteredPaymentRequests().length, itemsPerPage)}
@@ -1077,9 +1077,9 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
             </div>
 
             {/* Payments Pagination */}
-            {payments.length > 0 && (
+            {getFilteredPayments().length > 0 && (
               <PaginationComponent 
-                totalItems={payments.length}
+                totalItems={getFilteredPayments().length}
                 currentPage={currentPage}
                 itemsPerPage={itemsPerPage}
                 totalPages={getTotalPages(getFilteredPayments().length, itemsPerPage)}

@@ -147,7 +147,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   
   // State management
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'deposit_paid' | 'paid' | 'confirmed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'cancelled'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<BookingFormData | null>(null);
@@ -294,10 +294,17 @@ export const Bookings: React.FC<BookingsProps> = ({
       customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
       packageName.toLowerCase().includes(searchTerm.toLowerCase());
 
+    // Normalize status by trimming whitespace and converting to lowercase for comparison
+    const rawStatus = booking.status?.trim() || '';
+    const normalizedBookingStatus = rawStatus.toLowerCase();
+    const normalizedStatusFilter = statusFilter.toLowerCase();
+    
+    // Treat empty/null status as 'pending'
+    const effectiveStatus = normalizedBookingStatus || 'pending';
+    
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'pending' && (!booking.status || booking.status === 'pending')) ||
-      booking.status === statusFilter;
+      effectiveStatus === normalizedStatusFilter;
 
     // For date filter, only check appointment date (not all date fields)
     const matchesDate = !filterDate || appointmentDateOnly === filterDate;
@@ -1887,15 +1894,26 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       // Restore availability slot if one was found
       if (matchingSlot) {
-        const { error: availabilityError } = await supabase
+        const { data: updateData, error: availabilityError } = await supabase
           .from('availability')
           .update({ is_available: true })
-          .eq('id', matchingSlot.id);
+          .eq('id', matchingSlot.id)
+          .select();
 
         if (availabilityError) {
-          console.error('Failed to restore availability slot:', availabilityError);
-          // Don't throw error - booking is already cancelled
+          console.error('❌ Failed to restore availability slot:', {
+            error: availabilityError,
+            slotId: matchingSlot.id
+          });
+          showError('Warning', 'Booking cancelled but failed to restore availability slot. Please check availability manually.');
+        } else {
+          console.log('✅ Availability slot restored to available:', {
+            updatedData: updateData,
+            slotId: matchingSlot.id
+          });
         }
+      } else if (bookingToCancel.status === 'confirmed') {
+        console.log('⚠️ No matching slot found to restore - this may be expected if booking was manually created without slot reservation');
       }
 
       const updatedBookings = allBookings.map(booking =>
@@ -2856,13 +2874,10 @@ export const Bookings: React.FC<BookingsProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'deposit_paid' | 'paid' | 'confirmed' | 'cancelled')}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'confirmed' | 'cancelled')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="deposit_paid">Deposit Paid</option>
-                <option value="paid">Paid (Awaiting Confirmation)</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -3169,9 +3184,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                       <p className={`text-xs font-medium ${paymentTypeColor}`}>
                                         ✓ {paymentTypeLabel} Completed - €{amount.toFixed(2)}
                                       </p>
-                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
-                                        Service: {booking.package_name}
-                                      </p>
                                       <p className="text-xs text-gray-500">
                                         {paymentType && (
                                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-2">
@@ -3198,9 +3210,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                     <div className="space-y-1">
                                       <p className={`text-xs font-medium ${paymentTypeColor}`}>
                                         ✓ {paymentTypeLabel} Completed - €{amount.toFixed(2)}
-                                      </p>
-                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
-                                        Service: {booking.package_name}
                                       </p>
                                       <p className="text-xs text-gray-500">
                                         {paymentType && (
@@ -3229,9 +3238,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                       }`}>
                                         {isExpired ? '⚠ Overdue' : '📧 Request sent'} - €{status.paymentRequest.amount.toFixed(2)} {requestType}
                                       </p>
-                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
-                                        Service: {booking.package_name}
-                                      </p>
                                       <p className="text-xs text-gray-500">
                                         {paymentType && (
                                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 mr-2">
@@ -3246,17 +3252,18 @@ export const Bookings: React.FC<BookingsProps> = ({
                                 }
                                 
                                 // No payment request exists
-                                // Don't show payment request options for confirmed, paid, or deposit_paid bookings
-                                if (booking.status === 'confirmed' || booking.status === 'paid' || booking.status === 'deposit_paid') {
+                                // Don't show payment request options for confirmed, paid, deposit_paid, or cancelled bookings
+                                if (booking.status === 'confirmed' || booking.status === 'paid' || booking.status === 'deposit_paid' || booking.status === 'cancelled') {
                                   const statusText = booking.status === 'confirmed' ? 'confirmed' : 
-                                                   booking.status === 'paid' ? 'paid (awaiting confirmation)' : 'deposit paid';
+                                                   booking.status === 'paid' ? 'paid (awaiting confirmation)' : 
+                                                   booking.status === 'deposit_paid' ? 'deposit paid' :
+                                                   'cancelled';
+                                  const statusColor = booking.status === 'cancelled' ? 'text-red-600' : 'text-green-600';
+                                  const statusIcon = booking.status === 'cancelled' ? '❌' : '✅';
                                   return (
                                     <div className="space-y-1">
-                                      <p className="text-xs text-green-600">
-                                        ✅ Booking {statusText} - No action needed
-                                      </p>
-                                      <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
-                                        Service: {booking.package_name}
+                                      <p className={`text-xs ${statusColor}`}>
+                                        {statusIcon} Booking {statusText} - No action needed
                                       </p>
                                     </div>
                                   );
@@ -3293,9 +3300,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                                         {loadingPaymentStatus ? '...' : 'Fix Status'}
                                       </button>
                                     </div>
-                                    <p className="text-xs text-gray-500 truncate" title={booking.package_name}>
-                                      Service: {booking.package_name}
-                                    </p>
                                   </div>
                                 );
                               })()}
