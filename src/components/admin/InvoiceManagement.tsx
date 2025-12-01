@@ -316,6 +316,20 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
 
       setBookingPayments(payments || []);
       // Found payments for booking
+      
+      // Auto-detect invoice type based on payments
+      if (payments && payments.length > 0) {
+        const onlinePayments = payments.filter(p => 
+          (p.status === 'paid' || p.status === 'completed') && 
+          p.payment_method !== 'offline'
+        );
+        
+        // If there are online payments, set invoice type to 'online'
+        // Otherwise, default to 'offline' for manual payment recording
+        if (onlinePayments.length > 0) {
+          setInvoiceType('online');
+        }
+      }
     } catch (error) {
       console.error('Error fetching booking payments:', error);
       setBookingPayments([]);
@@ -910,10 +924,15 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Calculate total online payments
       const totalOnlinePayments = onlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
       
-      // Calculate offline payment amount
+      // Calculate offline payment amount (only if invoice is marked as paid and has offline payment notes)
       const offlineAmount = invoiceTotal - totalOnlinePayments;
-      // Create offline payment object if there's an offline amount
-      const offlinePayment = offlineAmount > 0 ? {
+      const hasOfflinePaymentNotes = invoice.notes?.includes('Offline Payment Received');
+      
+      // Create offline payment object only if:
+      // 1. There's a meaningful offline amount (> 0.01 to handle rounding)
+      // 2. Invoice is marked as paid
+      // 3. Invoice notes indicate offline payment received
+      const offlinePayment = (offlineAmount > 0.01 && invoice.status === 'paid' && hasOfflinePaymentNotes) ? {
         id: `offline-${invoice.id}`,
         amount: offlineAmount,
         currency: 'EUR',
@@ -1558,18 +1577,24 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           allPayments.push(offlinePayment);
         }
         
-        // Separate payments by type for PDF display
-        const depositPayments = allPayments.filter(p => !p.invoice_id);
-        const invoiceOnlinePayments = allPayments.filter(p => p.invoice_id && p.payment_method !== 'offline');
-        const invoiceOfflinePayments = allPayments.filter(p => p.invoice_id && p.payment_method === 'offline');
+        // Separate payments by sumup_payment_type (not by invoice_id)
+        const depositPayments = allPayments.filter(p => (p as any).sumup_payment_type === 'deposit');
+        const fullPayments = allPayments.filter(p => (p as any).sumup_payment_type === 'full');
+        const invoiceOnlinePayments = allPayments.filter(p => {
+          const paymentType = (p as any).sumup_payment_type;
+          return paymentType !== 'deposit' && paymentType !== 'full' && p.payment_method !== 'offline';
+        });
+        const invoiceOfflinePayments = allPayments.filter(p => p.payment_method === 'offline');
         
         const totalPaid = allPayments.reduce((sum, payment) => sum + payment.amount, 0);
         const depositAmount = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const fullPaymentAmount = fullPayments.reduce((sum, payment) => sum + payment.amount, 0);
         const onlineAmount = invoiceOnlinePayments.reduce((sum, payment) => sum + payment.amount, 0);
         const offlineAmount = invoiceOfflinePayments.reduce((sum, payment) => sum + payment.amount, 0);
         
         console.log('📊 Enhanced PDF Payment Data:', {
           depositAmount,
+          fullPaymentAmount,
           onlineAmount,
           offlineAmount,
           totalPaid,
@@ -1582,10 +1607,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           enhancedPaymentData: {
             allPayments,
             depositPayments,
+            fullPayments,
             invoiceOnlinePayments,
             invoiceOfflinePayments,
             totalPaid,
             depositAmount,
+            fullPaymentAmount,
             onlineAmount,
             offlineAmount
           }
@@ -2403,10 +2430,10 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                 // Calculate total payments from all booking payments
                 const totalPaid = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
                 
-                // Separate payments by sumup_payment_type (deposit vs full) and invoice association
+                // Separate payments by sumup_payment_type (deposit vs full)
                 const depositPayments = invoicePayments.filter(p => {
                   const paymentType = (p as any).sumup_payment_type;
-                  return paymentType === 'deposit' || (!p.invoice_id && paymentType !== 'full');
+                  return paymentType === 'deposit';
                 });
                 
                 const fullPayments = invoicePayments.filter(p => {

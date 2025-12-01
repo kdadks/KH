@@ -501,9 +501,23 @@ export class PDFInvoiceGenerator {
         currentY += 8;
       }
       
-      // Show balance paid (additional payments excluding deposit)
+      // Show full payment if applicable (separate from deposits)
+      if (this.options.enhancedPaymentData) {
+        const { fullPaymentAmount } = this.options.enhancedPaymentData;
+        
+        if (fullPaymentAmount > 0) {
+          this.doc.setFontSize(10);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setTextColor(this.COLORS.success);
+          this.doc.text('Full Payment:', labelX, currentY);
+          this.doc.text(`-${this.formatCurrency(fullPaymentAmount, invoiceData.financial.currency)}`, rightX, currentY, { align: 'right' });
+          currentY += 8;
+        }
+      }
+      
+      // Show balance paid (additional payments excluding deposit and full payment)
       const balancePaid = Math.max(0, totalPaidAmount - depositAmount);
-      if (balancePaid > 0) {
+      if (balancePaid > 0 && !this.options.enhancedPaymentData?.fullPaymentAmount) {
         // Check if we have enhanced payment data for separate online/offline display
         if (this.options.enhancedPaymentData) {
           const { onlineAmount, offlineAmount } = this.options.enhancedPaymentData;

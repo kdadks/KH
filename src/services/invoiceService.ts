@@ -247,13 +247,15 @@ export class InvoiceService {
       let otherPaymentsAmount = 0;
       
       invoicePayments.forEach((payment: PaymentRecord) => {
-        if (payment.status === 'paid') {
-          // Deposits are payments that have booking_id but no invoice_id
-          const isDeposit = payment.booking_id && !payment.invoice_id;
+        if (payment.status === 'paid' || payment.status === 'completed') {
+          // Use sumup_payment_type to determine if it's a deposit or full/other payment
+          const paymentType = (payment as any).sumup_payment_type;
+          const isDeposit = paymentType === 'deposit';
           
           if (isDeposit) {
             depositAmount += payment.amount || 0;
           } else {
+            // Full payments and other invoice payments
             otherPaymentsAmount += payment.amount || 0;
           }
         }
@@ -740,13 +742,18 @@ export async function downloadInvoicePDFWithPayments(
     invoicePayments.forEach((payment: PaymentRecord) => {
       // Use same status filter as enhanced preview: both 'paid' and 'completed'
       if (payment.status === 'paid' || payment.status === 'completed') {
-        // Deposits are payments that have booking_id but no invoice_id
-        const isDeposit = payment.booking_id && !payment.invoice_id;
+        // Use sumup_payment_type to determine if it's a deposit or full payment
+        const paymentType = (payment as any).sumup_payment_type;
+        const isDeposit = paymentType === 'deposit';
+        const isFullPayment = paymentType === 'full';
         
         if (isDeposit) {
           depositAmount += payment.amount || 0;
+        } else if (isFullPayment) {
+          // Full payments go to invoice payments (online)
+          onlineInvoicePayments += payment.amount || 0;
         } else {
-          // Separate online vs offline invoice payments
+          // Other invoice payments - separate online vs offline
           if (payment.payment_method === 'offline') {
             offlineInvoicePayments += payment.amount || 0;
           } else {
