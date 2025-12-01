@@ -92,6 +92,10 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   const [sendingInvoice, setSendingInvoice] = useState<{ [key: string]: boolean }>({});
   const [sendingPaymentRequest, setSendingPaymentRequest] = useState<{ [key: string]: boolean }>({});
   const [invoicePaymentStatus, setInvoicePaymentStatus] = useState<{ [key: string]: 'paid' | 'unpaid' | 'checking' }>({});
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(25);
 
   useEffect(() => {
     if (propInvoices && propCustomers && propServices) {
@@ -704,6 +708,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     }
 
     setFilteredInvoices(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
   }, [invoices, searchTerm, statusFilter]);
 
   const generateInvoiceNumber = () => {
@@ -1608,6 +1613,16 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       console.error('Error downloading invoice:', error);
       showError('Download Error', 'An unexpected error occurred while downloading the invoice');
     }
+  };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   const formatCurrency = (amount: number) => {
@@ -2608,7 +2623,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredInvoices.map((invoice) => (
+                {paginatedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -2723,6 +2738,74 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && filteredInvoices.length > 0 && (
+        <div className="bg-white px-6 py-4 flex items-center justify-between border-t border-gray-200 rounded-b-lg shadow-sm">
+          <div className="flex-1 flex justify-between sm:hidden">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
+                <span className="font-medium">{Math.min(endIndex, filteredInvoices.length)}</span> of{' '}
+                <span className="font-medium">{filteredInvoices.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="sr-only">Previous</span>
+                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium transition-colors ${
+                      page === currentPage
+                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="sr-only">Next</span>
+                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
