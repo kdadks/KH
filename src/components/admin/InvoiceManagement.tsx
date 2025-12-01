@@ -86,6 +86,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     amount: 0,
     serviceName: undefined
   });
+  const [fullPaymentAmount, setFullPaymentAmount] = useState<number>(0);
 
   // Payment request and invoice sending states
   const [sendingInvoice, setSendingInvoice] = useState<{ [key: string]: boolean }>({});
@@ -246,17 +247,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       const allBookings = data || [];
       setCustomerBookings(allBookings);
       
-      // Filter out fully paid bookings for invoice creation
-      const unpaidBookings: BookingFormData[] = [];
-      
-      for (const booking of allBookings) {
-        const isFullyPaid = await isBookingFullyPaid(booking);
-        if (!isFullyPaid) {
-          unpaidBookings.push(booking);
-        }
-      }
-      
-      setAvailableBookings(unpaidBookings);
+      // Make all confirmed bookings available for invoicing
+      setAvailableBookings(allBookings);
       // Found bookings available for invoicing
     } catch (err) {
       console.error('Error fetching customer bookings:', err);
@@ -270,9 +262,9 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     
     try {
       setFormData(prev => ({ ...prev, customer_id: customerId, booking_id: '' }));
-      setSelectedBooking(null);
+    setSelectedBooking(null);
       setCustomerDeposits({ amount: 0, serviceName: undefined });
-      
+      setFullPaymentAmount(0);
       // Clear any existing invoice items when customer changes
       setFormData(prev => ({
         ...prev,
@@ -306,7 +298,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           created_at,
           booking_id,
           invoice_id,
-          notes
+          notes,
+          payment_request_id
         `)
         .eq('booking_id', bookingId)
         .order('created_at', { ascending: false });
@@ -393,6 +386,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     // Clear previous invoice items and deposits
     setFormData(prev => ({ ...prev, items: [] }));
     setCustomerDeposits({ amount: 0, serviceName: undefined });
+    setFullPaymentAmount(0);
     
     // Auto-populate invoice item with selected booking's service details
     if (booking) {
@@ -401,11 +395,11 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       // Service name from booking
       
       if (serviceName) {
+        // Clean service name by removing price info in parentheses
+        const cleanServiceName = serviceName.replace(/\s*\([^)]*\)$/, '').trim();
+        // Cleaned service name by removing price info
+        
         try {
-          // Clean service name by removing price info in parentheses
-          const cleanServiceName = serviceName.replace(/\s*\([^)]*\)$/, '').trim();
-          // Cleaned service name by removing price info
-          
           // Try to find matching service by exact name or cleaned name
           let matchingService = services.find(s => s.name === serviceName);
           if (!matchingService) {
@@ -467,30 +461,93 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
               items: [newItem]
             }));
             
-            // Fetch deposit payments for this customer and service
+            // Fetch payment information for this customer and service
             if (formData.customer_id) {
-              console.log('🏦 Fetching deposit payments for selected service...');
-              const { getCustomerDepositPayments } = await import('../../utils/paymentRequestUtils');
-              const depositData = await getCustomerDepositPayments(formData.customer_id, cleanServiceName, bookingId);
-              console.log('💳 Deposit found for selected service:', depositData.amount, 'using booking ID:', bookingId);
+              console.log('🏦 Fetching payment information for selected service...');
+              
+              // Fetch all payments for this booking to check payment types
+              const { data: allPayments } = await supabase
+                .from('payments')
+                .select('amount, status, sumup_payment_type')
+                .eq('booking_id', bookingId)
+                .eq('status', 'paid');
+              
+              let totalDepositPayment = 0;
+              let totalFullPayment = 0;
+              
+              if (allPayments && allPayments.length > 0) {
+                // Calculate deposit payments using sumup_payment_type column
+                totalDepositPayment = allPayments
+                  .filter(p => p.sumup_payment_type === 'deposit')
+                  .reduce((sum, p) => sum + (p.amount || 0), 0);
+                
+                // Calculate full payments using sumup_payment_type column
+                totalFullPayment = allPayments
+                  .filter(p => p.sumup_payment_type === 'full')
+                  .reduce((sum, p) => sum + (p.amount || 0), 0);
+                
+                console.log('💰 Payment breakdown from payments table:', {
+                  deposits: totalDepositPayment,
+                  fullPayments: totalFullPayment,
+                  allPayments: allPayments.map(p => ({ 
+                    amount: p.amount, 
+                    type: p.sumup_payment_type 
+                  }))
+                });
+              } else {
+                // No payments found in payments table, check payment_requests table
+                console.log('ℹ️ No payments found in payments table, checking payment_requests...');
+                const { data: paymentRequests, error: prError } = await supabase
+                  .from('payment_requests')
+                  .select('amount, status')
+                  .eq('booking_id', bookingId)
+                  .eq('status', 'paid');
+                
+                console.log('📊 Payment requests query result (service matched):', {
+                  bookingId,
+                  found: paymentRequests?.length || 0,
+                  error: prError,
+                  data: paymentRequests
+                });
+                
+                if (prError) {
+                  console.error('❌ Error fetching payment_requests:', prError);
+                }
+                
+                if (paymentRequests && paymentRequests.length > 0) {
+                  // All paid payment_requests are treated as deposits
+                  totalDepositPayment = paymentRequests.reduce((sum, pr) => sum + (pr.amount || 0), 0);
+                  
+                  console.log('💰 Payment breakdown from payment_requests table:', {
+                    deposits: totalDepositPayment,
+                    paymentRequests: paymentRequests.map(pr => ({ 
+                      amount: pr.amount
+                    }))
+                  });
+                } else {
+                  console.log('⚠️ No paid payment_requests found for booking:', bookingId);
+                }
+              }
+              
+              setFullPaymentAmount(totalFullPayment);
               
               // Verify deposit calculation: deposit should be 20% of the unit price
               const expectedDeposit = Math.round(unitPrice * 0.20);
-              console.log('🔍 Deposit verification - Expected:', expectedDeposit, 'Found:', depositData.amount, 'Service Price:', unitPrice);
+              console.log('🔍 Deposit verification - Expected:', expectedDeposit, 'Found:', totalDepositPayment, 'Service Price:', unitPrice);
               
               // Use the actual deposit amount found in payments (not calculated)
               setCustomerDeposits({
-                amount: depositData.amount,
+                amount: totalDepositPayment,
                 serviceName: cleanServiceName
               });
               
               // Log discrepancy if any
-              if (depositData.amount > 0 && Math.abs(depositData.amount - expectedDeposit) > 1) {
+              if (totalDepositPayment > 0 && Math.abs(totalDepositPayment - expectedDeposit) > 1) {
                 console.warn('⚠️ Deposit amount discrepancy detected:', {
                   expected: expectedDeposit,
-                  actual: depositData.amount,
+                  actual: totalDepositPayment,
                   servicePrice: unitPrice,
-                  difference: Math.abs(depositData.amount - expectedDeposit)
+                  difference: Math.abs(totalDepositPayment - expectedDeposit)
                 });
               }
             }
@@ -499,6 +556,89 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           } else {
             console.log('❌ No matching service found for selected booking');
             console.log('❌ Available services:', services.map(s => s.name));
+          }
+          
+          // Fetch payment information regardless of service match
+          // This ensures we get deposit info even if service name doesn't match
+          if (formData.customer_id && bookingId) {
+            console.log('🏦 Fetching payment information for booking (outside service match)...');
+            
+            // Fetch all payments for this booking to check payment types
+            const { data: allPayments } = await supabase
+              .from('payments')
+              .select('amount, status, sumup_payment_type')
+              .eq('booking_id', bookingId)
+              .eq('status', 'paid');
+            
+            let totalDepositPayment = 0;
+            let totalFullPayment = 0;
+            
+            if (allPayments && allPayments.length > 0) {
+              // Calculate deposit payments using sumup_payment_type column
+              totalDepositPayment = allPayments
+                .filter(p => p.sumup_payment_type === 'deposit')
+                .reduce((sum, p) => sum + (p.amount || 0), 0);
+              
+              // Calculate full payments using sumup_payment_type column
+              totalFullPayment = allPayments
+                .filter(p => p.sumup_payment_type === 'full')
+                .reduce((sum, p) => sum + (p.amount || 0), 0);
+              
+              console.log('💰 Payment breakdown from payments table (fallback):', {
+                deposits: totalDepositPayment,
+                fullPayments: totalFullPayment,
+                allPayments: allPayments.map(p => ({ 
+                  amount: p.amount, 
+                  type: p.sumup_payment_type 
+                }))
+              });
+            } else {
+              // No payments found in payments table, check payment_requests table
+              console.log('ℹ️ No payments found in payments table, checking payment_requests (fallback)...');
+              const { data: paymentRequests, error: prError } = await supabase
+                .from('payment_requests')
+                .select('amount, status')
+                .eq('booking_id', bookingId)
+                .eq('status', 'paid');
+              
+              console.log('📊 Payment requests query result:', {
+                bookingId,
+                found: paymentRequests?.length || 0,
+                error: prError,
+                data: paymentRequests
+              });
+              
+              if (prError) {
+                console.error('❌ Error fetching payment_requests:', prError);
+              }
+              
+              if (paymentRequests && paymentRequests.length > 0) {
+                // All paid payment_requests are treated as deposits
+                totalDepositPayment = paymentRequests.reduce((sum, pr) => sum + (pr.amount || 0), 0);
+                
+                console.log('💰 Payment breakdown from payment_requests table (fallback):', {
+                  deposits: totalDepositPayment,
+                  paymentRequests: paymentRequests.map(pr => ({ 
+                    amount: pr.amount
+                  }))
+                });
+              } else {
+                console.log('⚠️ No paid payment_requests found for booking:', bookingId);
+              }
+            }
+            
+            // Only update if we haven't already set these values
+            if (totalDepositPayment > 0 || totalFullPayment > 0) {
+              setFullPaymentAmount(totalFullPayment);
+              setCustomerDeposits({
+                amount: totalDepositPayment,
+                serviceName: cleanServiceName
+              });
+              console.log('✅ Updated payment amounts from fallback fetch:', {
+                deposits: totalDepositPayment,
+                fullPayments: totalFullPayment
+              });
+            }
           }
         } catch (error) {
           console.error('❌ Error processing selected booking:', error);
@@ -566,6 +706,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     setSelectedBooking(null);
     setCustomerBookings([]);
     setCustomerDeposits({ amount: 0, serviceName: undefined });
+    setFullPaymentAmount(0);
     setInvoiceType('online'); // Reset to default online type
     setFormData({
       customer_id: 0,
@@ -621,18 +762,29 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     try {
       // Transform form data to invoice data format
       const totalAmount = formData.items.reduce((sum, item) => sum + item.total_price, 0);
+      
+      // Calculate total paid based on payment type
+      let totalPaidAmount = 0;
+      if (invoiceType === 'offline') {
+        totalPaidAmount = totalAmount; // Offline invoices are fully paid
+      } else if (fullPaymentAmount > 0) {
+        totalPaidAmount = fullPaymentAmount; // Full payment made online
+      } else {
+        totalPaidAmount = customerDeposits.amount; // Only deposit paid
+      }
+      
       const invoiceData = {
         id: undefined,
         invoice_number: generateInvoiceNumber(),
         customer_id: formData.customer_id,
         invoice_date: formData.invoice_date,
         due_date: formData.due_date,
-        status: invoiceType === 'offline' ? 'paid' : 'draft',
+        status: invoiceType === 'offline' || fullPaymentAmount >= totalAmount ? 'paid' : 'draft',
         subtotal: totalAmount,
         vat_amount: 0,
         total_amount: totalAmount,
         total: totalAmount,
-        total_paid: invoiceType === 'offline' ? totalAmount : customerDeposits.amount,
+        total_paid: totalPaidAmount,
         deposit_paid: customerDeposits.amount,
         notes: formData.notes,
         currency: 'EUR'
@@ -694,7 +846,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
           created_at,
           booking_id,
           invoice_id,
-          notes
+          notes,
+          sumup_payment_type
         `)
         .eq('booking_id', bookingId)
         .order('created_at', { ascending: true });
@@ -1573,24 +1726,14 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                       First select a customer to see their bookings
                     </p>
                   )}
-                  {formData.customer_id > 0 && availableBookings.length === 0 && customerBookings.length === 0 && (
+                  {formData.customer_id > 0 && availableBookings.length === 0 && (
                     <p className="mt-1 text-xs text-amber-600">
                       No confirmed bookings found for this customer. Only confirmed bookings can be used for invoice generation.
-                    </p>
-                  )}
-                  {formData.customer_id > 0 && availableBookings.length === 0 && customerBookings.length > 0 && (
-                    <p className="mt-1 text-xs text-amber-600">
-                      All bookings for this customer are fully paid. No bookings available for invoicing.
                     </p>
                   )}
                   {formData.customer_id > 0 && availableBookings.length > 0 && !formData.booking_id && (
                     <p className="mt-1 text-xs text-blue-600">
                       💡 Select a booking to automatically populate the invoice item with correct pricing
-                      {customerBookings.length > availableBookings.length && (
-                        <span className="block text-gray-500 mt-1">
-                          ℹ️ {customerBookings.length - availableBookings.length} fully paid booking(s) excluded from list
-                        </span>
-                      )}
                     </p>
                   )}
                   {selectedBooking && (
@@ -1731,11 +1874,22 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                         <div>
                           <p className="font-medium text-blue-800">Online Invoice</p>
                           <p className="text-gray-600 mt-1">
-                            Deposit will be deducted from total amount, customer pays remaining balance online.
-                            {customerDeposits.amount > 0 && (
-                              <span className="text-green-600 font-medium">
-                                {' '}Deposit of €{customerDeposits.amount.toFixed(2)} will be deducted.
-                              </span>
+                            {fullPaymentAmount > 0 ? (
+                              <>
+                                <span className="text-green-600 font-medium">
+                                  ✅ Full payment of €{fullPaymentAmount.toFixed(2)} has been received.
+                                </span>
+                                {' '}This invoice serves as a payment confirmation.
+                              </>
+                            ) : customerDeposits.amount > 0 ? (
+                              <>
+                                Deposit will be deducted from total amount, customer pays remaining balance online.
+                                <span className="text-green-600 font-medium">
+                                  {' '}Deposit of €{customerDeposits.amount.toFixed(2)} will be deducted.
+                                </span>
+                              </>
+                            ) : (
+                              'Customer pays full amount online.'
                             )}
                           </p>
                         </div>
@@ -1942,10 +2096,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                   
                   {/* Amount Due calculation based on invoice type */}
                   <div className="flex justify-between font-medium text-lg">
-                    <span>{invoiceType === 'offline' ? 'Amount Fully Paid:' : 'Amount Due:'}</span>
-                    <span className={invoiceType === 'offline' ? 'text-green-600' : ''}>
+                    <span>{invoiceType === 'offline' || fullPaymentAmount > 0 ? 'Amount Fully Paid:' : 'Amount Due:'}</span>
+                    <span className={invoiceType === 'offline' || fullPaymentAmount > 0 ? 'text-green-600' : ''}>
                       {invoiceType === 'offline' 
                         ? formatCurrency(formData.items.reduce((sum, item) => sum + item.total_price, 0))
+                        : fullPaymentAmount > 0
+                        ? formatCurrency(fullPaymentAmount)
                         : formatCurrency(
                             Math.max(0, formData.items.reduce((sum, item) => sum + item.total_price, 0) - customerDeposits.amount)
                           )
@@ -1979,9 +2135,15 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                     </div>
                   )}
                   
-                  {invoiceType === 'online' && customerDeposits.amount === 0 && (
+                  {invoiceType === 'online' && customerDeposits.amount === 0 && fullPaymentAmount === 0 && (
                     <div className="text-xs text-amber-600 mt-2 p-2 bg-amber-50 rounded">
                       ⚠️ No deposit payment found for this service. Full amount will be due.
+                    </div>
+                  )}
+                  
+                  {invoiceType === 'online' && fullPaymentAmount > 0 && (
+                    <div className="text-xs text-green-600 mt-2 p-2 bg-green-50 rounded">
+                      ✅ Full payment of {formatCurrency(fullPaymentAmount)} has been received. No amount is due.
                     </div>
                   )}
                 </div>
@@ -2214,8 +2376,17 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                 // Calculate total payments from all booking payments
                 const totalPaid = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
                 
-                // Separate payments by type and method
-                const depositPayments = invoicePayments.filter(p => !p.invoice_id);
+                // Separate payments by sumup_payment_type (deposit vs full) and invoice association
+                const depositPayments = invoicePayments.filter(p => {
+                  const paymentType = (p as any).sumup_payment_type;
+                  return paymentType === 'deposit' || (!p.invoice_id && paymentType !== 'full');
+                });
+                
+                const fullPayments = invoicePayments.filter(p => {
+                  const paymentType = (p as any).sumup_payment_type;
+                  return paymentType === 'full';
+                });
+                
                 const invoicePayments_filtered = invoicePayments.filter(p => p.invoice_id);
                 
                 // Further separate invoice payments by method (online vs offline)
@@ -2223,23 +2394,26 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                 const offlineInvoicePayments = invoicePayments_filtered.filter(p => p.payment_method === 'offline');
                 
                 const totalDepositPaid = depositPayments.reduce((sum, payment) => sum + payment.amount, 0);
+                const totalFullPaid = fullPayments.reduce((sum, payment) => sum + payment.amount, 0);
                 const totalOnlineInvoicePaid = onlineInvoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
                 const totalOfflineInvoicePaid = offlineInvoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
                 const totalInvoicePaid = totalOnlineInvoicePaid + totalOfflineInvoicePaid;
                 
                 const remainingBalance = itemsSubtotal - totalPaid;
-                const isFullyPaid = remainingBalance <= 0;
+                const isFullyPaid = remainingBalance <= 0 || totalFullPaid >= itemsSubtotal;
                 
                 console.log('💰 Payment Summary:', {
                   itemsSubtotal,
                   totalPaid,
                   totalDepositPaid,
+                  totalFullPaid,
                   totalOnlineInvoicePaid,
                   totalOfflineInvoicePaid,
                   totalInvoicePaid,
                   remainingBalance,
                   isFullyPaid,
-                  allPayments: invoicePayments
+                  allPayments: invoicePayments,
+                  fullPayments
                 });
 
                 return (
@@ -2258,6 +2432,18 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                           <div key={`deposit-${index}`} className="flex justify-between items-center text-sm text-blue-600 min-w-0">
                             <span className="whitespace-nowrap mr-2">
                               Deposit Payment {payment.payment_date ? 
+                                `(${new Date(payment.payment_date).toLocaleDateString()})` :
+                                `(${new Date(payment.created_at).toLocaleDateString()})`
+                              }:
+                            </span>
+                            <span className="whitespace-nowrap">-{formatCurrency(payment.amount)}</span>
+                          </div>
+                        ))}
+                        
+                        {fullPayments.map((payment, index) => (
+                          <div key={`full-${index}`} className="flex justify-between items-center text-sm text-green-600 min-w-0">
+                            <span className="whitespace-nowrap mr-2">
+                              Full Payment {payment.payment_date ? 
                                 `(${new Date(payment.payment_date).toLocaleDateString()})` :
                                 `(${new Date(payment.created_at).toLocaleDateString()})`
                               }:

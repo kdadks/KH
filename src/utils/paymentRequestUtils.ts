@@ -988,58 +988,49 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
           )
         `)
         .eq('customer_id', customerId)
-        .eq('booking_id', bookingId) // Remove parseInt - booking_id might be UUID
+        .eq('booking_id', bookingId)
         .eq('status', 'paid')
         .order('created_at', { ascending: false });
 
       if (!bookingError && bookingPayments && bookingPayments.length > 0) {
+        // Fetch payment types separately for all payments
+        const paymentRequestIds = bookingPayments
+          .map(p => p.payment_request_id)
+          .filter(id => id != null);
+        
+        let paymentTypesMap: Record<number, string> = {};
+        if (paymentRequestIds.length > 0) {
+          const { data: paymentRequests } = await supabase
+            .from('payment_requests')
+            .select('id, payment_type')
+            .in('id', paymentRequestIds);
+          
+          if (paymentRequests) {
+            paymentTypesMap = Object.fromEntries(
+              paymentRequests.map(pr => [pr.id, pr.payment_type])
+            );
+          }
+        }
         console.log('💳 Found', bookingPayments.length, 'payments for booking ID:', bookingId);
         console.log('💳 All payments for this booking:', bookingPayments.map(p => ({ 
           amount: p.amount, 
           notes: p.notes, 
           created_at: p.created_at,
-          payment_type: p.payment_type 
+          payment_request_id: p.payment_request_id,
+          payment_type: p.payment_request_id ? paymentTypesMap[p.payment_request_id] : null
         })));
         
-        // Find deposits (payments that are typically 20% of service cost and are not full payments)
+        // Find deposits - only payments where payment_type is 'deposit'
         const deposits = bookingPayments.filter(payment => {
+          const paymentType = payment.payment_request_id ? paymentTypesMap[payment.payment_request_id] : null;
           console.log('🔍 Analyzing payment:', {
             amount: payment.amount,
-            notes: payment.notes,
-            payment_type: payment.payment_type
+            payment_request_id: payment.payment_request_id,
+            payment_type: paymentType
           });
           
-          // Check if it's likely a deposit (not a full payment)
-          if (serviceName) {
-            const servicePrice = serviceName.match(/€(\d+)/);
-            if (servicePrice) {
-              const fullPrice = parseInt(servicePrice[1]);
-              const depositPercentage = (payment.amount / fullPrice) * 100;
-              console.log('📊 Payment analysis:', {
-                amount: payment.amount,
-                fullPrice: fullPrice,
-                percentage: depositPercentage.toFixed(1) + '%'
-              });
-              
-              // Deposits are typically 10-30% of service cost
-              const isDeposit = depositPercentage >= 10 && depositPercentage <= 30;
-              console.log('🎯 Is this a deposit?', isDeposit);
-              return isDeposit;
-            }
-          }
-          
-          // If no service price info, check if amount seems reasonable for a deposit
-          // Also check if notes indicate it's a deposit
-          const isSmallAmount = payment.amount > 0 && payment.amount < 100;
-          const notesIndicateDeposit = payment.notes?.toLowerCase().includes('deposit') || 
-                                     payment.notes?.toLowerCase().includes('payment request');
-          console.log('🔍 Fallback analysis:', {
-            isSmallAmount,
-            notesIndicateDeposit,
-            notes: payment.notes
-          });
-          
-          return isSmallAmount || notesIndicateDeposit;
+          // Only include payments explicitly marked as 'deposit'
+          return paymentType === 'deposit';
         });
         
         console.log('💰 Found', deposits.length, 'deposits out of', bookingPayments.length, 'total payments');
@@ -1069,174 +1060,18 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
             }] as PaymentWithCustomer[]
           };
         } else {
-          console.log('⚠️ No deposits found for booking ID:', bookingId);
-          console.log('💡 Will fall back to service name matching...');
+          console.log('ℹ️ No deposits found for booking ID:', bookingId);
+          return { amount: 0, payments: [] };
         }
       } else {
         console.log('❌ No payments found for booking ID:', bookingId, 'Error:', bookingError);
-        console.log('💡 Will fall back to service name matching...');
+        return { amount: 0, payments: [] };
       }
     }
     
-    // Strategy 2: Try to match through payment request service names (fallback)
-    console.log('📋 Falling back to service name matching...');
-    if (serviceName) {
-      const { data: paymentRequestData, error: prError } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          customer:customers!payments_customer_id_fkey(
-            first_name,
-            last_name,
-            email
-          ),
-          invoice:invoices(
-            invoice_number
-          )
-        `)
-        .eq('customer_id', customerId)
-        .eq('status', 'paid')
-        .like('notes', '%payment request%')
-        .order('created_at', { ascending: false });
-
-      if (!prError && paymentRequestData && paymentRequestData.length > 0) {
-        console.log('💳 Found payment request deposits:', paymentRequestData.length);
-        
-        // Extract payment request IDs from notes
-        const matchingPayments = [];
-        for (const payment of paymentRequestData) {
-          const match = payment.notes?.match(/payment request #(\d+)/i);
-          if (match) {
-            const requestId = parseInt(match[1]);
-            
-            // Check if this payment request matches the service
-            const { data: requestData } = await supabase
-              .from('payment_requests')
-              .select('service_name, description')
-              .eq('id', requestId)
-              .single();
-              
-            if (requestData) {
-              console.log('🎯 Checking payment request service:', requestData.service_name, 'vs', serviceName);
-              
-              // Enhanced service matching logic
-              const cleanRequestService = requestData.service_name?.toLowerCase()
-                .replace(/[^\w\s]/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-              const cleanTargetService = serviceName.toLowerCase()
-                .replace(/[^\w\s]/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-              
-              // More precise matching: check if the core service name matches
-              // Extract base service name (e.g., "Basic Wellness" from "Basic Wellness - In Hour")
-              const extractBaseServiceName = (name: string) => {
-                return name.split('-')[0].trim().split('(')[0].trim();
-              };
-              
-              const baseRequestService = extractBaseServiceName(cleanRequestService || '');
-              const baseTargetService = extractBaseServiceName(cleanTargetService);
-              
-              console.log('🔍 Comparing base services:', baseRequestService, 'vs', baseTargetService);
-              
-              if (baseRequestService && baseTargetService &&
-                  (baseRequestService === baseTargetService ||
-                   baseRequestService.includes(baseTargetService) || 
-                   baseTargetService.includes(baseRequestService))) {
-                console.log('✅ Service match found!');
-                
-                // Check if this is likely a deposit payment (typically 20% of service cost)
-                // Extract service cost from the target service name
-                const servicePrice = serviceName.match(/€(\d+)/);
-                if (servicePrice) {
-                  const expectedDeposit = Math.round(parseInt(servicePrice[1]) * 0.20);
-                  const actualAmount = payment.amount;
-                  console.log('💡 Deposit validation - Expected ~€' + expectedDeposit + ', Found €' + actualAmount);
-                  
-                  // If the payment amount is close to 20% of service cost, it's likely the correct deposit
-                  if (Math.abs(actualAmount - expectedDeposit) <= 2) {
-                    console.log('✅ Amount matches expected deposit percentage');
-                  }
-                }
-                
-                // Decrypt customer data if encrypted
-                const customer = payment.customer;
-                if (customer) {
-                  if (customer.first_name && isDataEncrypted(customer.first_name)) {
-                    customer.first_name = decryptSensitiveData(customer.first_name);
-                  }
-                  if (customer.last_name && isDataEncrypted(customer.last_name)) {
-                    customer.last_name = decryptSensitiveData(customer.last_name);
-                  }
-                }
-                
-                matchingPayments.push({
-                  ...payment,
-                  invoice_number: payment.invoice?.invoice_number,
-                  customer: customer
-                });
-              }
-            }
-          }
-        }
-        
-        if (matchingPayments.length > 0) {
-          // For invoice generation, we want the most recent deposit for this specific service
-          // Not the sum of all deposits, as the customer might have multiple services
-          const mostRecentPayment = matchingPayments[0]; // Already ordered by created_at desc
-          console.log('💰 Most recent matching deposit:', mostRecentPayment.amount, 'for service:', serviceName);
-          console.log('� Found', matchingPayments.length, 'total matching payments, using most recent');
-          
-          return { amount: mostRecentPayment.amount, payments: [mostRecentPayment] as PaymentWithCustomer[] };
-        }
-      }
-    }
-
-    // Strategy 2: Get all paid deposits for this customer if no service match
-    console.log('📋 Fetching all customer deposits...');
-    const { data, error } = await supabase
-      .from('payments')
-      .select(`
-        *,
-        customer:customers!payments_customer_id_fkey(
-          first_name,
-          last_name,
-          email
-        ),
-        invoice:invoices(
-          invoice_number
-        )
-      `)
-      .eq('customer_id', customerId)
-      .eq('status', 'paid')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw new Error(`Failed to get deposit payments: ${error.message}`);
-    }
-
-    const payments = data.map(payment => ({
-      ...payment,
-      invoice_number: payment.invoice?.invoice_number
-    })) as PaymentWithCustomer[];
-
-    if (payments.length > 0) {
-      // If no service name provided, return the most recent deposit (not sum of all)
-      const mostRecentDeposit = payments[0]; // Already ordered by created_at desc
-      console.log('💰 Most recent customer deposit (no service match):', mostRecentDeposit.amount);
-      console.log('📋 Customer has', payments.length, 'total deposits, using most recent');
-      
-      return {
-        amount: mostRecentDeposit.amount,
-        payments: [mostRecentDeposit]
-      };
-    }
-
-    return {
-      amount: 0,
-      payments: []
-    };
+    // No booking ID provided, return empty
+    console.log('ℹ️ No booking ID provided, cannot fetch deposits');
+    return { amount: 0, payments: [] };
   } catch (error) {
     console.error('❌ Error getting customer deposit payments:', error);
     return { amount: 0, payments: [] };
