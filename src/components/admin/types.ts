@@ -59,6 +59,7 @@ export type BookingFormData = {
   notes?: string;
   status?: string;
   created_at?: string;
+  updated_at?: string; // Timestamp when booking was last updated (e.g., confirmed by admin)
   customer_id?: number; // New field for customer relationship
   customer_details?: { // New field for customer relationship data
     id: number;

@@ -383,6 +383,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     const booking = customerBookings.find(b => b.id === bookingId);
     setSelectedBooking(booking || null);
     
+    // Update invoice date to booking date
+    if (booking && booking.booking_date) {
+      const invoiceDate = new Date(booking.booking_date).toISOString().split('T')[0];
+      setFormData(prev => ({ ...prev, invoice_date: invoiceDate }));
+    }
+    
     // Clear previous invoice items and deposits
     setFormData(prev => ({ ...prev, items: [] }));
     setCustomerDeposits({ amount: 0, serviceName: undefined });
@@ -456,8 +462,14 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
             
             console.log('📝 Auto-populating invoice item for selected booking:', newItem);
             
+            // Set invoice date to booking date
+            const invoiceDate = booking.booking_date 
+              ? new Date(booking.booking_date).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0];
+            
             setFormData(prev => ({
               ...prev,
+              invoice_date: invoiceDate,
               items: [newItem]
             }));
             
