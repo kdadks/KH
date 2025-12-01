@@ -61,6 +61,13 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
   const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [listViewTab, setListViewTab] = useState<'slots' | 'appointments'>('slots');
+  
+  // Pagination state for list view
+  const [slotsPage, setSlotsPage] = useState(1);
+  const [appointmentsPage, setAppointmentsPage] = useState(1);
+  const [itemsPerPage] = useState(25);
+  const slotsItemsPerPage = 10; // 10 dates per page for availability slots
   const [mainTab, setMainTab] = useState<'overview' | 'default'>('overview');
   const [showDeleteDayModal, setShowDeleteDayModal] = useState(false);
   const [dateToDeleteSlots, setDateToDeleteSlots] = useState<string>('');
@@ -92,8 +99,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       const { data, error } = await supabase
         .from('availability')
         .select('*')
-        .order('date', { ascending: true })
-        .order('start', { ascending: true });
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: false })
+        .order('start', { ascending: false });
 
       if (error) {
         console.error('❌ Error fetching availability slots:', error);
@@ -116,7 +124,8 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         .from('bookings')
         .select('id, package_name, booking_date, status, customer_id, timeslot_start_time, timeslot_end_time')
         .in('status', ['confirmed', 'completed'])
-        .order('booking_date', { ascending: true })
+        .order('booking_date', { ascending: false })
+        .order('timeslot_start_time', { ascending: false })
         .limit(500); // Add limit for performance
 
       if (simpleError) {
@@ -1086,36 +1095,68 @@ export const Availability: React.FC<AvailabilityProps> = () => {
               </div>
             </div>
           ) : (
-            <div className="p-6">
-              {availabilitySlots.length === 0 && bookedSlots.length === 0 ? (
-                <div className="text-center py-8">
-                  <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No availability slots or bookings found</p>
-                  <p className="text-sm text-gray-400 mt-1">Add some time slots to get started</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Available Slots Section */}
-                  {availabilitySlots.length > 0 && (
-                    <div>
-                      <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                        <div className="w-3 h-3 bg-emerald-600 rounded mr-2"></div>
-                        Available Slots ({availabilitySlots.length})
-                      </h4>
+            <div>
+              {/* Tabs */}
+              <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                  <button
+                    onClick={() => {
+                      setListViewTab('slots');
+                      setSlotsPage(1);
+                    }}
+                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                      listViewTab === 'slots'
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Available Slots ({availabilitySlots.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setListViewTab('appointments');
+                      setAppointmentsPage(1);
+                    }}
+                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                      listViewTab === 'appointments'
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Customer Appointments ({bookedSlots.length})
+                  </button>
+                </nav>
+              </div>
+
+              <div className="p-6">
+                {availabilitySlots.length === 0 && bookedSlots.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">No availability slots or bookings found</p>
+                    <p className="text-sm text-gray-400 mt-1">Add some time slots to get started</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {listViewTab === 'slots' && (
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                          <div className="w-3 h-3 bg-emerald-600 rounded mr-2"></div>
+                          Available Slots ({availabilitySlots.length})
+                        </h4>
                       
-                      {/* Group slots by date - combine availability slots and booked slots */}
+                      {/* Group slots by date */}
                       {Object.entries(
                         (() => {
-                          const allSlotsByDate: Record<string, AvailabilitySlot[]> = {};
+                          const slotsByDate: Record<string, AvailabilitySlot[]> = {};
                           
                           // Add all availability slots
                           availabilitySlots.forEach(slot => {
                             const date = slot.date;
-                            if (!allSlotsByDate[date]) allSlotsByDate[date] = [];
-                            allSlotsByDate[date].push(slot);
+                            if (!slotsByDate[date]) slotsByDate[date] = [];
+                            slotsByDate[date].push(slot);
                           });
                           
-                          // Add booked slots that don't have corresponding availability slots
+                          // Add bookings that don't have availability slots (virtual slots)
                           bookedSlots.forEach(booking => {
                             const bookingDateTime = getBookingDateTime(booking);
                             if (!bookingDateTime) return;
@@ -1123,52 +1164,79 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                             const date = bookingDateTime.date;
                             const time = bookingDateTime.time;
                             
-                            // Check if this booking already has a corresponding availability slot
-                            const hasAvailabilitySlot = availabilitySlots.some(slot => 
-                              slot.date === date && getSlotStart(slot) === time
+                            // Check if there's already a slot in slotsByDate for this booking
+                            const hasSlotInGroup = slotsByDate[date]?.some(slot => 
+                              getSlotStart(slot) === time
                             );
                             
-                            // If no availability slot exists for this booking, create a virtual one
-                            if (!hasAvailabilitySlot) {
-                              if (!allSlotsByDate[date]) allSlotsByDate[date] = [];
+                            // If no slot exists, create a virtual slot for the booking
+                            if (!hasSlotInGroup) {
+                              if (!slotsByDate[date]) slotsByDate[date] = [];
                               
-                              // Create virtual slot for the booking
+                              // Calculate end time
                               const endTime = booking.timeslot_end_time || (() => {
                                 const [hours, minutes] = time.split(':').map(Number);
                                 const endMinutes = minutes + 50;
                                 const endHours = hours + Math.floor(endMinutes / 60);
                                 const finalMinutes = endMinutes % 60;
-                                return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+                                return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}:00`;
                               })();
                               
-                              allSlotsByDate[date].push({
-                                // Use negative ID for virtual slots to avoid conflicts
-                                id: -parseInt(booking.id) || -Math.random() * 1000000,
+                              slotsByDate[date].push({
+                                id: -booking.id, // Use negative booking ID to ensure uniqueness
                                 date: date,
-                                start: time,
+                                start_time: time,
                                 end_time: endTime,
-                                is_available: false // Mark as booked
-                              });
+                                is_available: false,
+                                created_at: new Date().toISOString()
+                              } as AvailabilitySlot);
                             }
                           });
                           
-                          // Sort slots by time within each date
-                          Object.keys(allSlotsByDate).forEach(date => {
-                            allSlotsByDate[date].sort((a, b) => {
+                          // Deduplicate slots by time (keep only one slot per time)
+                          Object.keys(slotsByDate).forEach(date => {
+                            const seen = new Map<string, AvailabilitySlot>();
+                            slotsByDate[date].forEach(slot => {
+                              const timeKey = getSlotStart(slot);
+                              // Keep the first occurrence (real slots come before virtual ones)
+                              if (!seen.has(timeKey)) {
+                                seen.set(timeKey, slot);
+                              }
+                            });
+                            slotsByDate[date] = Array.from(seen.values());
+                          });
+                          
+                          // Sort slots by time within each date (ascending - earliest first)
+                          Object.keys(slotsByDate).forEach(date => {
+                            slotsByDate[date].sort((a, b) => {
                               const timeA = getSlotStart(a);
                               const timeB = getSlotStart(b);
                               return timeA.localeCompare(timeB);
                             });
                           });
                           
-                          return allSlotsByDate;
+                          return slotsByDate;
                         })()
                       )
-                      // Sort dates chronologically before mapping
+                      // Sort dates descending (most recent first)
                       .sort(([dateA], [dateB]) => {
-                        return new Date(dateA).getTime() - new Date(dateB).getTime();
+                        return new Date(dateB).getTime() - new Date(dateA).getTime();
                       })
-                      .map(([date, slotsForDate]) => (
+                      // Paginate (10 dates per page)
+                      .slice((slotsPage - 1) * slotsItemsPerPage, slotsPage * slotsItemsPerPage)
+                      .map(([date, slotsForDate]) => {
+                        // Count only visible slots (after filtering)
+                        const visibleSlots = slotsForDate.filter((slot) => {
+                          const hasMatchingBooking = bookedSlots.some(booking => {
+                            const bookingDateTime = getBookingDateTime(booking);
+                            if (!bookingDateTime) return false;
+                            return bookingDateTime.date === slot.date &&
+                              bookingDateTime.time === getSlotStart(slot);
+                          });
+                          return slot.is_available !== false || hasMatchingBooking;
+                        });
+                        
+                        return (
                         <div key={date} className="mb-6">
                           <div className="flex items-center justify-between mb-3">
                             <h5 className="text-sm font-medium text-gray-700">
@@ -1177,7 +1245,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric'
-                              })} ({slotsForDate.length} slot{slotsForDate.length !== 1 ? 's' : ''})
+                              })} ({visibleSlots.length} slot{visibleSlots.length !== 1 ? 's' : ''})
                             </h5>
                             {slotsForDate.length > 1 && (
                               <button
@@ -1316,53 +1384,21 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                             })}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        );
+                      })}
+                      </div>
+                    )}
 
-                  {/* Booked Appointments Without Availability Slots */}
-                  {bookedSlots.filter(booking => {
-                    const bookingDateTime = getBookingDateTime(booking);
-                    if (!bookingDateTime) return false;
-                    
-                    const hasAvailabilitySlot = availabilitySlots.some(slot => 
-                      slot.date === bookingDateTime.date &&
-                      bookingDateTime.time >= getSlotStart(slot) &&
-                      bookingDateTime.time < slot.end_time
-                    );
-                    
-                    return !hasAvailabilitySlot;
-                  }).length > 0 && (
+                    {/* Customer Appointments Tab */}
+                  {listViewTab === 'appointments' && (
                     <div>
                       <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
                         <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
-                        Customer Appointments ({bookedSlots.filter(booking => {
-                          const bookingDateTime = getBookingDateTime(booking);
-                          if (!bookingDateTime) return false;
-                          
-              const hasAvailabilitySlot = availabilitySlots.some(slot => 
-                            slot.date === bookingDateTime.date &&
-                bookingDateTime.time >= getSlotStart(slot) &&
-                            bookingDateTime.time < slot.end_time
-                          );
-                          
-                          return !hasAvailabilitySlot;
-                        }).length})
+                        Customer Appointments ({bookedSlots.length})
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {bookedSlots
-                          .filter(booking => {
-                            const bookingDateTime = getBookingDateTime(booking);
-                            if (!bookingDateTime) return false;
-                            
-                            const hasAvailabilitySlot = availabilitySlots.some(slot => 
-                              slot.date === bookingDateTime.date &&
-                              bookingDateTime.time >= getSlotStart(slot) &&
-                              bookingDateTime.time < slot.end_time
-                            );
-                            
-                            return !hasAvailabilitySlot;
-                          })
+                          .slice((appointmentsPage - 1) * itemsPerPage, appointmentsPage * itemsPerPage)
                           .map((booking) => {
                             const bookingDateTime = getBookingDateTime(booking);
                             if (!bookingDateTime) return null;
@@ -1391,8 +1427,77 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                   )}
                 </div>
               )}
+
+              {/* Pagination */}
+              {listViewTab === 'slots' && availabilitySlots.length > 0 && (() => {
+                const totalDates = Object.keys(availabilitySlots.reduce((acc: Record<string, boolean>, slot) => {
+                  acc[slot.date] = true;
+                  return acc;
+                }, {})).length;
+                const totalPages = Math.ceil(totalDates / slotsItemsPerPage);
+                
+                return (
+                  <div className="flex items-center justify-between border-t pt-4 mt-4">
+                    <div>
+                      <p className="text-sm text-gray-700">
+                        Page <span className="font-medium">{slotsPage}</span> of{' '}
+                        <span className="font-medium">{totalPages}</span>
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setSlotsPage(p => Math.max(1, p - 1))}
+                        disabled={slotsPage === 1}
+                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setSlotsPage(p => Math.min(totalPages, p + 1))}
+                        disabled={slotsPage === totalPages}
+                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {listViewTab === 'appointments' && bookedSlots.length > itemsPerPage && (() => {
+                const totalPages = Math.ceil(bookedSlots.length / itemsPerPage);
+                
+                return (
+                  <div className="flex items-center justify-between border-t pt-4 mt-4">
+                    <div>
+                      <p className="text-sm text-gray-700">
+                        Showing <span className="font-medium">{(appointmentsPage - 1) * itemsPerPage + 1}</span> to{' '}
+                        <span className="font-medium">{Math.min(appointmentsPage * itemsPerPage, bookedSlots.length)}</span> of{' '}
+                        <span className="font-medium">{bookedSlots.length}</span> appointments
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setAppointmentsPage(p => Math.max(1, p - 1))}
+                        disabled={appointmentsPage === 1}
+                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setAppointmentsPage(p => Math.min(totalPages, p + 1))}
+                        disabled={appointmentsPage === totalPages}
+                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-      )}
+          </div>
+          )}
         </div>
       </div>
     )}
