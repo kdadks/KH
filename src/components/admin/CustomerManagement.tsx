@@ -642,7 +642,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                       <input
                         type="text"
                         name="address_line_1"
-                        value={formData.address_line_1}
+                        value={formData.address_line_1 || ''}
                         onChange={handleInputChange}
                         placeholder="Street address, apartment, building, etc."
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -655,7 +655,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                       <input
                         type="text"
                         name="address_line_2"
-                        value={formData.address_line_2}
+                        value={formData.address_line_2 || ''}
                         onChange={handleInputChange}
                         placeholder="Apartment, suite, unit, floor, etc."
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -668,7 +668,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                       <input
                         type="text"
                         name="city"
-                        value={formData.city}
+                        value={formData.city || ''}
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
@@ -680,7 +680,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                       <input
                         type="text"
                         name="county"
-                        value={formData.county}
+                        value={formData.county || ''}
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
@@ -692,7 +692,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                       <input
                         type="text"
                         name="eircode"
-                        value={formData.eircode}
+                        value={formData.eircode || ''}
                         onChange={handleInputChange}
                         placeholder="A12 B3C4"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -715,7 +715,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                         <input
                           type="date"
                           name="date_of_birth"
-                          value={formData.date_of_birth}
+                          value={formData.date_of_birth || ''}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
@@ -727,7 +727,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                         <input
                           type="text"
                           name="country"
-                          value={formData.country}
+                          value={formData.country || ''}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
@@ -749,7 +749,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                         <input
                           type="text"
                           name="emergency_contact_name"
-                          value={formData.emergency_contact_name}
+                          value={formData.emergency_contact_name || ''}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
@@ -761,7 +761,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                         <input
                           type="tel"
                           name="emergency_contact_phone"
-                          value={formData.emergency_contact_phone}
+                          value={formData.emergency_contact_phone || ''}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
@@ -779,7 +779,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({
                     </label>
                     <textarea
                       name="medical_notes"
-                      value={formData.medical_notes}
+                      value={formData.medical_notes || ''}
                       onChange={handleInputChange}
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
