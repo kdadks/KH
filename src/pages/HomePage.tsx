@@ -4,7 +4,6 @@ import HeroSection from '../components/home/HeroSection';
 import ServicesSection from '../components/home/ServicesSection';
 import WhyChooseUsSection from '../components/home/WhyChooseUsSection';
 import ImageGallery from '../components/shared/ImageGallery';
-import StatisticsSection from '../components/home/StatisticsSection';
 // import TestimonialsSection from '../components/home/TestimonialsSection';
 import FaqSection from '../components/home/FaqSection';
 import CtaSection from '../components/home/CtaSection';
@@ -47,7 +46,6 @@ const HomePage: React.FC = () => {
           />
         </div>
       </section>
-      <StatisticsSection />
       {/* <TestimonialsSection /> */}
       <FaqSection />
       <CtaSection />

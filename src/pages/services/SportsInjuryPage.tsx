@@ -36,7 +36,7 @@ const SportsInjuryPage: React.FC = () => {
       
       <main>
         {/* Hero Section */}
-        <section className="relative py-10 md:py-10 bg-gradient-to-r from-secondary-600 to-secondary-800 text-white overflow-hidden">
+        <section className="relative py-6 md:py-6 bg-gradient-to-r from-secondary-600 to-secondary-800 text-white overflow-hidden">
           <div className="absolute inset-0 bg-black opacity-10"></div>
           <Container>
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -112,7 +112,7 @@ const SportsInjuryPage: React.FC = () => {
         </section>
 
         {/* What We Treat Section */}
-        <section className="py-16 md:py-24 bg-white">
+        <section className="py-8 md:py-12 bg-white">
           <Container>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <motion.div
@@ -163,7 +163,7 @@ const SportsInjuryPage: React.FC = () => {
         </section>
 
         {/* Benefits Section */}
-        <section className="py-16 md:py-24 bg-neutral-50">
+        <section className="py-8 md:py-12 bg-neutral-50">
           <Container>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -200,7 +200,7 @@ const SportsInjuryPage: React.FC = () => {
         </section>
 
         {/* Treatment Process Section */}
-        <section className="py-16 md:py-24 bg-white">
+        <section className="py-8 md:py-12 bg-white">
           <Container>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -260,7 +260,7 @@ const SportsInjuryPage: React.FC = () => {
         </section>
 
         {/* CTA Section */}
-        <section className="py-16 md:py-24 bg-primary-600 text-white">
+        <section className="py-8 md:py-12 bg-primary-600 text-white">
           <Container>
             <motion.div
               initial={{ opacity: 0, y: 20 }}

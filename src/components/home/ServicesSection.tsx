@@ -81,7 +81,7 @@ const ServicesSection: React.FC = () => {
   ];
 
   return (
-    <section className="py-16 md:py-24 bg-neutral-50">
+    <section className="py-8 md:py-12 bg-neutral-50">
       <Container>
         <SectionHeading
           title="Our Specialized Services"

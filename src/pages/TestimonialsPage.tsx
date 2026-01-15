@@ -13,7 +13,7 @@ const TestimonialsPage: React.FC = () => {
         canonicalUrl="/testimonials"
       />
       <Container>
-        <div className="py-12">
+        <div className="py-6">
           {/* Hero Section with Title, Subtitle and CTA */}
           <div className="text-center">
             <div className="bg-green-50 rounded-xl p-6">
@@ -49,7 +49,7 @@ const TestimonialsPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="mt-12">
+          <div className="mt-6">
             {/* <GoogleReviewsGrid 
               maxReviews={12}
               showPagination={true}

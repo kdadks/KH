@@ -1,0 +1,23 @@
+{
+  "name": "KH Therapy - Professional Physiotherapy & Rehabilitation Services",
+  "short_name": "KH Therapy",
+  "description": "Professional physiotherapy services with personalized care plans designed to help you move better, feel better, and live better.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/Logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/Logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

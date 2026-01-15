@@ -234,7 +234,7 @@ const ContactPage: React.FC = () => {
         description="Get in touch with KH Therapy for professional physiotherapy and rehabilitation services."
         canonicalUrl="/contact"
       />
-      <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-16">
+      <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
         <Container>
           <SectionHeading
             title="Contact Us"
