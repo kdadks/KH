@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import Container from '../shared/Container';
 import SectionHeading from '../shared/SectionHeading';
+import Button from '../shared/Button';
 
 const WhyChooseUsSection: React.FC = () => {
   const reasons = [
@@ -44,7 +45,7 @@ const WhyChooseUsSection: React.FC = () => {
   ];
 
   return (
-    <section className="py-16 md:py-24 bg-white">
+    <section id="why-choose-us" className="py-6 md:py-10 bg-white">
       <Container>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Left side - Image */}
@@ -66,10 +67,20 @@ const WhyChooseUsSection: React.FC = () => {
           
           {/* Right side - Content */}
           <div>
-            <SectionHeading
-              title="Why Choose Us"
-              subtitle="Experience the difference with our patient-centered approach to physical therapy and rehabilitation."
-            />
+            <div className="mb-8">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+                <h2 className="text-3xl md:text-4xl font-bold text-neutral-800">Why Choose Us</h2>
+                <div className="mt-4 md:mt-0">
+                  <Button to="/about" size="lg" variant="primary">
+                    Meet Kelly
+                  </Button>
+                </div>
+              </div>
+              <p className="text-lg text-neutral-600 max-w-3xl">
+                Experience the difference with our patient-centered approach to physical therapy and rehabilitation.
+              </p>
+              <div className="h-1 w-24 bg-primary-500 mt-4"></div>
+            </div>
             
             <div className="space-y-6">
               {reasons.map((reason, index) => (

@@ -30,59 +30,119 @@ const Header: React.FC = () => {
   };
 
   const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
-    `px-3 py-2 text-sm font-medium transition-colors ${
-      isActive 
-        ? 'text-primary-600 hover:text-primary-700' 
-        : 'text-neutral-700 hover:text-primary-600'
+    `relative px-4 py-2.5 text-sm font-semibold transition-all duration-300 rounded-full ${
+      isActive
+        ? 'text-white'
+        : 'text-gray-700 hover:text-primary-600'
     }`;
 
   return (
-    <header 
-      className={`fixed w-full z-50 transition-all duration-300 overflow-visible ${
-        isScrolled 
-          ? 'bg-white shadow-md py-2' 
-          : 'bg-white/90 backdrop-blur-sm py-4'
-      }`}
+    <header
+      className="fixed w-full z-50 transition-all duration-500 overflow-visible py-4"
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative overflow-visible">
+      {/* Glossy background blur */}
+      <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/80 to-white/70 backdrop-blur-xl"></div>
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="flex justify-between items-center">
-          <Link to="/" className="flex items-center space-x-2" onClick={closeMenu}>
-            <Logo className="w-12 h-12" />
-            <img 
-              src="/KHtherapy.png" 
-              alt="KH Therapy" 
-              className="h-8 w-auto"
+          {/* Logo Section */}
+          <Link
+            to="/"
+            className="flex items-center space-x-2 z-10 transition-transform duration-300 hover:scale-105"
+            onClick={closeMenu}
+          >
+            <Logo className="w-12 h-12 drop-shadow-lg" />
+            <img
+              src="/KHtherapy.png"
+              alt="KH Therapy"
+              className="h-8 w-auto drop-shadow-md"
             />
           </Link>
 
-          {/* Desktop Navigation - Hide all navigation for admin users */}
+          {/* Desktop Navigation - Curved Center Bar with All Items */}
           {!isAdmin && (
-            <nav className="hidden md:flex items-center justify-center flex-1 space-x-4">
-              <NavLink to="/" className={navLinkClasses} end>Home</NavLink>
-              <NavLink to="/about" className={navLinkClasses}>About</NavLink>
-              <NavLink to="/services" className={navLinkClasses}>Services</NavLink>
-              <NavLink to="/testimonials" className={navLinkClasses}>Testimonials</NavLink>
-              <NavLink to="/contact" className={navLinkClasses}>Contact</NavLink>
-            </nav>
-          )}
+            <nav className="hidden md:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+              <div className="
+                flex items-center gap-1 px-3 py-2
+                bg-gradient-to-br from-white/90 via-white/95 to-white/90
+                backdrop-blur-2xl
+                rounded-full
+                shadow-[0_8px_32px_rgba(0,0,0,0.12)]
+                border border-white/60
+                transition-all duration-500
+              ">
+                <NavLink
+                  to="/"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                  end
+                >
+                  Home
+                </NavLink>
+                <NavLink
+                  to="/about"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                >
+                  About
+                </NavLink>
+                <NavLink
+                  to="/services"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                >
+                  Services
+                </NavLink>
+                <NavLink
+                  to="/testimonials"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                >
+                  Testimonials
+                </NavLink>
+                <NavLink
+                  to="/contact"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                >
+                  Contact
+                </NavLink>
 
-          {/* Book Now Button and My Account - Hide for admin users */}
-          {!isAdmin && (
-            <div className="hidden md:flex items-center space-x-3">
-              <Link 
-                to="/my-account" 
-                className="flex items-center px-3 py-2 rounded-md border border-primary-600 text-primary-600 hover:bg-primary-50 transition-colors text-sm font-medium"
-              >
-                <User className="w-4 h-4 mr-2" />
-                My Account
-              </Link>
-              <Link 
-                to="/booking" 
-                className="px-4 py-2 rounded-md bg-[#71db77] text-white hover:bg-[#5fcf68] transition-colors text-sm font-medium"
-              >
-                Book Now
-              </Link>
-            </div>
+                {/* Divider */}
+                <div className="w-px h-6 bg-gray-300/50 mx-1"></div>
+
+                {/* My Account */}
+                <Link
+                  to="/my-account"
+                  className="flex items-center px-4 py-2.5 text-sm font-semibold text-primary-600 hover:text-primary-700 transition-all duration-300 rounded-full hover:bg-primary-50"
+                >
+                  <User className="w-4 h-4 mr-1.5" />
+                  My Account
+                </Link>
+
+                {/* Book Now */}
+                <Link
+                  to="/booking"
+                  className="
+                    px-5 py-2.5 rounded-full
+                    bg-gradient-to-r from-[#71db77] to-[#5fcf68]
+                    text-white font-semibold text-sm
+                    shadow-[0_4px_20px_rgba(113,219,119,0.4)]
+                    hover:shadow-[0_6px_28px_rgba(113,219,119,0.5)]
+                    transition-all duration-300
+                    hover:scale-105
+                    hover:from-[#5fcf68] hover:to-[#4dbd58]
+                  "
+                >
+                  Book Now
+                </Link>
+              </div>
+            </nav>
           )}
 
           {/* Emergency Contact */}
@@ -111,72 +171,111 @@ const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Navigation Menu - Hide for admin users */}
+      {/* Mobile Navigation Menu - Glossy Design */}
       {isOpen && !isAdmin && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-50 border-t border-gray-200 animate-fade-in">
-          <div className="px-4 pt-2 pb-4 space-y-1">
-          <NavLink 
-            to="/" 
-            className={({ isActive }) => 
-              `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-            } 
-            onClick={closeMenu}
-            end
-          >
-            Home
-          </NavLink>
-              <NavLink 
-                to="/about" 
-                className={({ isActive }) => 
-                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-                } 
+        <div className="md:hidden absolute top-full left-0 w-full z-50 animate-fade-in">
+          <div className="mx-4 mt-2 mb-4 p-4 rounded-3xl bg-white/90 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] border border-white/60">
+            <div className="space-y-2">
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
+                onClick={closeMenu}
+                end
+              >
+                Home
+              </NavLink>
+              <NavLink
+                to="/about"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
                 onClick={closeMenu}
               >
                 About
               </NavLink>
-              <NavLink 
-                to="/services" 
-                className={({ isActive }) => 
-                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-                } 
+              <NavLink
+                to="/services"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
                 onClick={closeMenu}
               >
                 Services
               </NavLink>
-              <NavLink 
-                to="/testimonials" 
-                className={({ isActive }) => 
-                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-                } 
+              <NavLink
+                to="/testimonials"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
                 onClick={closeMenu}
               >
                 Testimonials
               </NavLink>
-              <NavLink 
-                to="/contact" 
-                className={({ isActive }) => 
-                  `block px-3 py-2 rounded-md ${isActive ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-gray-50'}`
-                } 
+              <NavLink
+                to="/contact"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
                 onClick={closeMenu}
               >
                 Contact
               </NavLink>
-          {/* Mobile Book Now Button and My Account */}
-              <Link 
-                to="/my-account" 
-                className="flex items-center px-3 py-2 mt-4 rounded-md border border-primary-600 text-primary-600 hover:bg-primary-50 transition-colors font-medium"
-                onClick={closeMenu}
-              >
-                <User className="w-4 h-4 mr-2" />
-                My Account
-              </Link>
-              <Link 
-                to="/booking" 
-                className="block w-full mt-2 px-4 py-2 text-center rounded-md bg-[#71db77] text-white hover:bg-[#5fcf68] transition-colors font-medium"
-                onClick={closeMenu}
-              >
-                Book Now
-              </Link>
+
+              {/* Mobile Book Now Button and My Account */}
+              <div className="pt-4 space-y-2 border-t border-gray-200/50 mt-4">
+                <Link
+                  to="/my-account"
+                  className="
+                    flex items-center justify-center px-4 py-3 rounded-2xl
+                    bg-white/80 backdrop-blur-md
+                    border border-primary-500/30
+                    text-primary-600 font-semibold
+                    shadow-md hover:shadow-lg
+                    transition-all duration-300
+                  "
+                  onClick={closeMenu}
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  My Account
+                </Link>
+                <Link
+                  to="/booking"
+                  className="
+                    block w-full px-4 py-3 text-center rounded-2xl
+                    bg-gradient-to-r from-[#71db77] to-[#5fcf68]
+                    text-white font-semibold
+                    shadow-[0_4px_20px_rgba(113,219,119,0.4)]
+                    hover:shadow-[0_6px_28px_rgba(113,219,119,0.5)]
+                    transition-all duration-300
+                  "
+                  onClick={closeMenu}
+                >
+                  Book Now
+                </Link>
+              </div>
+            </div>
           {/* 
           <a 
             href="tel:+353123456789" 

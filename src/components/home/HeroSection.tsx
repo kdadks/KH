@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Calendar } from 'lucide-react';
+import { ArrowRight, Calendar, User } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import Button from '../shared/Button';
@@ -185,6 +185,14 @@ const HeroSection: React.FC = () => {
       selectedPaymentType: undefined
     });
   }, [reset, selectedPaymentRequest, paymentState.paymentRequest]);
+
+  // Scroll to Why Choose Us section
+  const scrollToWhyChooseUs = () => {
+    const element = document.getElementById('why-choose-us');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Handle countdown reaching zero - just reset form instead of redirecting
   useEffect(() => {
@@ -933,14 +941,14 @@ const HeroSection: React.FC = () => {
     setPaymentProcessing(false);
     
     // Optionally show an error message
-    setErrorMsg('Payment was cancelled or failed. Please try again.');
+    setSuccessMsg('Payment was cancelled or failed. Please try again.');
   };
 
   return (
-  <section className="relative pt-16 pb-12 md:pt-24 md:pb-20 overflow-hidden bg-gray-100">
+  <section className="relative pt-8 pb-12 md:pt-12 md:pb-20 overflow-hidden bg-gray-100">
       {/* Light grey background applied via Tailwind class */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-  <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center" style={{ color: '#333333' }}>
+  <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start" style={{ color: '#333333' }}>
           
           {/* Hero Content - Left Side */}
           <div className="lg:col-span-7">
@@ -953,12 +961,12 @@ const HeroSection: React.FC = () => {
                 Your Journey to <span>Recovery</span> and <span>Wellness</span>
               </h1>
               <p className="text-lg md:text-xl mb-8 max-w-2xl">
-                Professional physiotherapy services with personalised care plans 
+                Professional physiotherapy & Pilates services with personalised care plans 
                 designed to help you move better, feel better, and live better.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
-                <Button to="/booking" size="lg" variant="secondary" icon={<Calendar size={20} />}>
-                  Book Now
+                <Button onClick={scrollToWhyChooseUs} size="lg" variant="secondary" icon={<User size={20} />}>
+                  Why Kelly
                 </Button>
                 <Button to="/services" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
                   Explore Services
@@ -968,52 +976,69 @@ const HeroSection: React.FC = () => {
                 </Button>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {/* Combined Badges, Logos and Stats Grid */}
+              <div className="mt-8 grid grid-cols-3 md:grid-cols-3 gap-3 md:gap-6 md:-ml-4">
+                {/* Row 1: Badges */}
                 <div className="flex items-center">
-                  <div className="bg-gray-300 rounded-full p-2 mr-3">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-gray-300 rounded-full p-1.5 md:p-2 mr-2 md:mr-3 flex-shrink-0">
+                    <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                   </div>
-                  <p className="font-medium">Certified Specialists</p>
+                  <p className="font-medium text-sm md:text-base">Certified Specialists</p>
                 </div>
                 <div className="flex items-center">
-                  <div className="bg-gray-300 rounded-full p-2 mr-3">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-gray-300 rounded-full p-1.5 md:p-2 mr-2 md:mr-3 flex-shrink-0">
+                    <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                   </div>
-                  <p className="font-medium">Modern Techniques</p>
+                  <p className="font-medium text-sm md:text-base">Modern Techniques</p>
                 </div>
                 <div className="flex items-center">
-                  <div className="bg-gray-300 rounded-full p-2 mr-3">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-gray-300 rounded-full p-1.5 md:p-2 mr-2 md:mr-3 flex-shrink-0">
+                    <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                   </div>
-                  <p className="font-medium">Personalised Care</p>
+                  <p className="font-medium text-sm md:text-base">Personalised Care</p>
                 </div>
-              </div>
-              
-              {/* Brand Associations */}
-              <div className="mt-8">
-                <p className="text-sm font-medium text-gray-600 mb-6 text-center"></p>
-                <div className="flex justify-center items-center gap-8 md:gap-12 lg:gap-16">
-                  <img 
-                    src="/vhi.png" 
-                    alt="VHI Healthcare" 
-                    className="h-24 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+
+                {/* Row 2: Brand Logos */}
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/vhi.png"
+                    alt="VHI Healthcare"
+                    className="h-12 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
                   />
-                  <img 
-                    src="/IAPT Logo.png" 
-                    alt="IAPT - Improving Access to Psychological Therapies" 
-                    className="h-20 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+                </div>
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/IAPT Logo.png"
+                    alt="IAPT - Improving Access to Psychological Therapies"
+                    className="h-10 md:h-20 lg:h-24 w-auto object-contain hover:scale-105 transition-transform duration-300"
                   />
-                  <img 
-                    src="/laya_conservative.png" 
-                    alt="Laya Healthcare" 
-                    className="h-20 md:h-24 lg:h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+                </div>
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/laya_conservative.png"
+                    alt="Laya Healthcare"
+                    className="h-10 md:h-20 lg:h-24 w-auto object-contain hover:scale-105 transition-transform duration-300"
                   />
+                </div>
+
+                {/* Row 3: Stats */}
+                <div className="flex flex-col items-center justify-center p-2 md:p-4">
+                  <div className="text-xl md:text-2xl font-bold text-primary-600 mb-1">5+</div>
+                  <div className="text-xs md:text-sm text-gray-600">Years Experience</div>
+                </div>
+                <div className="flex flex-col items-center justify-center p-2 md:p-4">
+                  <div className="text-xl md:text-2xl font-bold text-primary-600 mb-1">2000+</div>
+                  <div className="text-xs md:text-sm text-gray-600">Satisfied Patients</div>
+                </div>
+                <div className="flex flex-col items-center justify-center p-2 md:p-4">
+                  <div className="text-xl md:text-2xl font-bold text-primary-600 mb-1">90%+</div>
+                  <div className="text-xs md:text-sm text-gray-600">Satisfaction Rate</div>
                 </div>
               </div>
             </motion.div>

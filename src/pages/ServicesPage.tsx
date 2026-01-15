@@ -165,7 +165,7 @@ const ServicesPage: React.FC = () => {
 				description="Discover KH Therapy's range of physiotherapy services, from sports injury rehabilitation to wellness assessments. Personalized care for your wellness journey."
 				canonicalUrl="/services"
 			/>
-			<main className="py-16">
+			<main className="py-8">
 				<Container>
 					<SectionHeading
 						title="Our Services"

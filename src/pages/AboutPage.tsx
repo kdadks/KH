@@ -23,7 +23,7 @@ const AboutPage = () => {
         description="Learn about KH Therapy’s mission, values, and the story behind our personalized physiotherapy services in Clondalkin, Dublin."
         canonicalUrl="/about"
       />
-      <main className="py-16 bg-gray-50">
+      <main className="py-8 bg-gray-50">
         <Container>
           <SectionHeading
             title="About Us"
