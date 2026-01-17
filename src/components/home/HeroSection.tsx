@@ -31,6 +31,7 @@ interface Service {
   displayName?: string;
   priceType?: string;
   booking_type?: 'book_now' | 'contact_me';
+  visit_type?: 'home' | 'online' | 'clinic';
 }
 
 interface BookingRecord {
@@ -86,11 +87,12 @@ interface PaymentState {
 
 const HeroSection: React.FC = () => {
   // Form and UI states
-  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; service: string; preferredDate?: string; time?: string; }
+  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; eircode?: string; visitType: string; service: string; preferredDate?: string; time?: string; }
   const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<BookingFormData>();
   const navigate = useNavigate();
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
@@ -100,6 +102,7 @@ const HeroSection: React.FC = () => {
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{date: string, time: string, display: string} | null>(null);
   const [loadingNextSlot, setLoadingNextSlot] = useState(false);
   const [autoSelectTime, setAutoSelectTime] = useState<string | null>(null); // Track time to auto-select
+  const [visitType, setVisitType] = useState<'home' | 'online' | 'clinic'>('online'); // Default to online
 
   // Watch form fields for time slot fetching
   const watchedService = watch('service');
@@ -244,6 +247,18 @@ const HeroSection: React.FC = () => {
     fetchServices();
   }, []);
 
+  // Re-filter services when visit type changes
+  useEffect(() => {
+    if (allServices.length > 0) {
+      // Filter by visit type
+      const filteredServices = allServices.filter(s => s.visit_type === visitType);
+      setServices(filteredServices);
+      
+      // Reset service selection when visit type changes
+      setValue('service', '');
+    }
+  }, [visitType, allServices, setValue]);
+
   // Watch for service and date changes to fetch time slots
   useEffect(() => {
     if (watchedService && watchedDate) {
@@ -326,7 +341,7 @@ const HeroSection: React.FC = () => {
       setLoadingServices(true);
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, category, price, in_hour_price, out_of_hour_price, booking_type')
+        .select('id, name, category, price, in_hour_price, out_of_hour_price, booking_type, visit_type')
         .eq('is_active', true)
         .order('name', { ascending: true });
 
@@ -348,7 +363,8 @@ const HeroSection: React.FC = () => {
               displayName: `${service.name} - In Hour (${service.in_hour_price})`,
               name: service.name,
               priceType: 'in-hour',
-              booking_type: service.booking_type || 'book_now'
+              booking_type: service.booking_type || 'book_now',
+              visit_type: service.visit_type || 'clinic'
             });
             transformedServices.push({
               ...service,
@@ -356,7 +372,8 @@ const HeroSection: React.FC = () => {
               displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
               name: service.name,
               priceType: 'out-of-hour',
-              booking_type: service.booking_type || 'book_now'
+              booking_type: service.booking_type || 'book_now',
+              visit_type: service.visit_type || 'clinic'
             });
           } else if (hasInHour || hasOutOfHour || hasMainPrice) {
             // Only one pricing option or main price
@@ -378,7 +395,8 @@ const HeroSection: React.FC = () => {
               ...service,
               displayName,
               priceType,
-              booking_type: service.booking_type || 'book_now'
+              booking_type: service.booking_type || 'book_now',
+              visit_type: service.visit_type || 'clinic'
             });
           } else {
             // No pricing info, just show service name
@@ -386,11 +404,15 @@ const HeroSection: React.FC = () => {
               ...service,
               displayName: service.name,
               priceType: 'standard',
-              booking_type: service.booking_type || 'book_now'
+              booking_type: service.booking_type || 'book_now',
+              visit_type: service.visit_type || 'clinic'
             });
           }
         });
-        setServices(transformedServices);
+        setAllServices(transformedServices);
+        // Filter services by current visit type
+        const filteredServices = transformedServices.filter(s => s.visit_type === visitType);
+        setServices(filteredServices);
       }
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -670,6 +692,8 @@ const HeroSection: React.FC = () => {
         booking_date: bookingDate,
         timeslot_start_time: startTime,
         timeslot_end_time: endTime,
+        visit_type: visitType,
+        ...(data.eircode && { eircode: data.eircode }), // Add eircode if provided (for home visits)
         notes: data.preferredDate || data.time
           ? `Quick Appointment from Hero Section${data.preferredDate ? ` - Customer preferred date: ${data.preferredDate}` : ''}${data.time ? ` - Requested time: ${data.time}` : ''}. Please contact to confirm.`
           : 'Quick Appointment from Hero Section - Please contact customer to confirm exact time',
@@ -1059,6 +1083,50 @@ const HeroSection: React.FC = () => {
             {/* Main Booking Form - Only show if not in payment flow */}
             {!paymentState.showPayment && !paymentState.paymentCompleted && (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Visit Type Selection - First */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-3">
+                  Select Visit Type *
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setVisitType('online')}
+                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                      visitType === 'online'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">💻</div>
+                    <div className="font-medium text-xs">Online</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisitType('clinic')}
+                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                      visitType === 'clinic'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">🏥</div>
+                    <div className="font-medium text-xs">Clinic</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisitType('home')}
+                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                      visitType === 'home'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">🏠</div>
+                    <div className="font-medium text-xs">Home</div>
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="firstName" className="block text-sm font-medium text-neutral-700 mb-1">
@@ -1133,28 +1201,54 @@ const HeroSection: React.FC = () => {
                   </p>
                 )}
               </div>
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
-                  Phone Number *
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  {...register('phone', phoneValidation)}
-                  onChange={(e) => {
-                    const error = validatePhoneRealTime(e.target.value);
-                    setRealTimeErrors(prev => ({ ...prev, phone: error }));
-                    register('phone', phoneValidation).onChange(e);
-                  }}
-                  className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                    realTimeErrors.phone || errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                  }`}
-                  placeholder="+353 1 234 5678"
-                />
-                {(realTimeErrors.phone || errors.phone) && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {realTimeErrors.phone || errors.phone?.message}
-                  </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    {...register('phone', phoneValidation)}
+                    onChange={(e) => {
+                      const error = validatePhoneRealTime(e.target.value);
+                      setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                      register('phone', phoneValidation).onChange(e);
+                    }}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      realTimeErrors.phone || errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                    placeholder="+353 1 234 5678"
+                  />
+                  {(realTimeErrors.phone || errors.phone) && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {realTimeErrors.phone || errors.phone?.message}
+                    </p>
+                  )}
+                </div>
+                {visitType === 'home' && (
+                  <div>
+                    <label htmlFor="eircode" className="block text-sm font-medium text-neutral-700 mb-1">
+                      Eircode / Postal Code *
+                    </label>
+                    <input
+                      type="text"
+                      id="eircode"
+                      {...register('eircode', { 
+                        required: visitType === 'home' ? 'Eircode is required for home visits' : false,
+                        minLength: { value: 3, message: 'Eircode must be at least 3 characters' }
+                      })}
+                      className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                        errors.eircode ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                      placeholder="D01 A2B3"
+                    />
+                    {errors.eircode && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.eircode?.message}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <div>

@@ -29,6 +29,8 @@ interface BookingFormData {
   lastName: string;
   email: string;
   phone: string;
+  visitType: string;
+  eircode?: string;
   service: string;
   date: string;
   time: string;
@@ -44,6 +46,7 @@ interface Service {
   out_of_hour_price?: string;
   displayName?: string;
   priceType?: string;
+  visit_type?: 'home' | 'online' | 'clinic';
 }
 
 interface PaymentState {
@@ -85,10 +88,13 @@ const BookingPage: React.FC = () => {
   const [loadingNextSlot, setLoadingNextSlot] = useState(false);
   const [autoSelectTime, setAutoSelectTime] = useState<string | null>(null); // Track time to auto-select
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [visitType, setVisitType] = useState<'home' | 'online' | 'clinic'>('online'); // Default to online
+  const [allServices, setAllServices] = useState<Service[]>([]); // Store all services
 
-  // Watch the service and date fields to trigger time slot updates
+  // Watch the service, date, and visitType fields to trigger time slot updates
   const watchedService = watch('service');
   const watchedDate = watch('date');
+  const watchedEircode = watch('eircode');
 
   // Define resetForm with useCallback
   const resetForm = useCallback(async () => {
@@ -261,6 +267,75 @@ const BookingPage: React.FC = () => {
   useEffect(() => {
     fetchServices();
   }, []);
+
+  // Re-filter services when visit type changes
+  useEffect(() => {
+    if (allServices.length > 0) {
+      // Transform all services first
+      const transformedServices: Service[] = [];
+      allServices.forEach(service => {
+        const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
+        const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
+        const hasMainPrice = service.price && service.price.trim() !== '';
+
+        if (hasInHour && hasOutOfHour) {
+          transformedServices.push({
+            ...service,
+            id: `${service.id}-in`,
+            displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+            name: service.name,
+            priceType: 'in-hour',
+            visit_type: service.visit_type || 'clinic'
+          });
+          transformedServices.push({
+            ...service,
+            id: `${service.id}-out`,
+            displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+            name: service.name,
+            priceType: 'out-of-hour',
+            visit_type: service.visit_type || 'clinic'
+          });
+        } else if (hasInHour || hasOutOfHour || hasMainPrice) {
+          let displayName = service.name;
+          let priceType = 'standard';
+          
+          if (hasInHour) {
+            displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+            priceType = 'in-hour';
+          } else if (hasOutOfHour) {
+            displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+            priceType = 'out-of-hour';
+          } else if (hasMainPrice) {
+            displayName = `${service.name} (${service.price})`;
+            priceType = 'standard';
+          }
+          
+          transformedServices.push({
+            ...service,
+            displayName,
+            priceType,
+            visit_type: service.visit_type || 'clinic'
+          });
+        } else {
+          transformedServices.push({
+            ...service,
+            displayName: service.name,
+            priceType: 'standard',
+            visit_type: service.visit_type || 'clinic'
+          });
+        }
+      });
+
+      // Filter by visit type
+      const filteredServices = transformedServices.filter(s => s.visit_type === visitType);
+      setServices(filteredServices);
+      
+      // Reset service selection when visit type changes
+      setValue('service', '');
+      setSelectedService(null);
+      setTimeSlots([]);
+    }
+  }, [visitType, allServices, setValue]);
 
   // Fetch time slots when service or date changes
   useEffect(() => {
@@ -654,7 +729,7 @@ const BookingPage: React.FC = () => {
       setLoadingServices(true);
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, category, price, in_hour_price, out_of_hour_price')
+        .select('id, name, category, price, in_hour_price, out_of_hour_price, visit_type')
         .eq('is_active', true)
         .neq('booking_type', 'contact_me')
         .order('name', { ascending: true });
@@ -662,6 +737,9 @@ const BookingPage: React.FC = () => {
       if (error) {
         console.error('Error fetching services:', error);
       } else {
+        // Store all services
+        setAllServices(data || []);
+        
         // Transform services to include separate in-hour/out-of-hour options
         const transformedServices: Service[] = [];
         (data || []).forEach(service => {
@@ -676,14 +754,16 @@ const BookingPage: React.FC = () => {
               id: `${service.id}-in`,
               displayName: `${service.name} - In Hour (${service.in_hour_price})`,
               name: service.name,
-              priceType: 'in-hour'
+              priceType: 'in-hour',
+              visit_type: service.visit_type || 'clinic'
             });
             transformedServices.push({
               ...service,
               id: `${service.id}-out`,
               displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
               name: service.name,
-              priceType: 'out-of-hour'
+              priceType: 'out-of-hour',
+              visit_type: service.visit_type || 'clinic'
             });
           } else if (hasInHour || hasOutOfHour || hasMainPrice) {
             // Only one pricing option or main price
@@ -704,18 +784,23 @@ const BookingPage: React.FC = () => {
             transformedServices.push({
               ...service,
               displayName,
-              priceType
+              priceType,
+              visit_type: service.visit_type || 'clinic'
             });
           } else {
             // No pricing info, just show service name
             transformedServices.push({
               ...service,
               displayName: service.name,
-              priceType: 'standard'
+              priceType: 'standard',
+              visit_type: service.visit_type || 'clinic'
             });
           }
         });
-        setServices(transformedServices);
+        
+        // Filter services based on visitType - initially set to match visitType state
+        const filteredServices = transformedServices.filter(s => s.visit_type === visitType);
+        setServices(filteredServices);
       }
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -867,7 +952,8 @@ const BookingPage: React.FC = () => {
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
-        phone: data.phone
+        phone: data.phone,
+        ...(data.eircode && { eircode: data.eircode }) // Add eircode if provided (for home visits)
       };
 
       // Prepare booking data
@@ -878,7 +964,8 @@ const BookingPage: React.FC = () => {
         ...(timeslotStartTime && { timeslot_start_time: timeslotStartTime }),
         ...(timeslotEndTime && { timeslot_end_time: timeslotEndTime }),
         notes: data.notes || '',
-        status: 'pending'
+        status: 'pending',
+        visit_type: visitType // Add visit type to booking
       };
 
       logger.devOnly(() => console.log('📋 BookingPage - Final booking data:', bookingData));
@@ -1385,6 +1472,54 @@ const BookingPage: React.FC = () => {
           <>
           <div className="bg-white rounded-lg shadow-md p-6 md:p-8 mt-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Visit Type Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-neutral-700 mb-3">
+                  Select Visit Type *
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setVisitType('online')}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      visitType === 'online'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-3xl mb-2">💻</div>
+                    <div className="font-medium">Online</div>
+                    <div className="text-xs text-gray-600">Virtual consultation</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisitType('clinic')}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      visitType === 'clinic'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-3xl mb-2">🏥</div>
+                    <div className="font-medium">Clinic Visit</div>
+                    <div className="text-xs text-gray-600">In-person at clinic</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisitType('home')}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      visitType === 'home'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-3xl mb-2">🏠</div>
+                    <div className="font-medium">Home Visit</div>
+                    <div className="text-xs text-gray-600">We come to you</div>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label htmlFor="firstName" className="block text-sm font-medium text-neutral-700 mb-1">
@@ -1485,6 +1620,35 @@ const BookingPage: React.FC = () => {
                     </p>
                   )}
                 </div>
+
+                {/* Show eircode field only for home visits */}
+                {visitType === 'home' && (
+                  <div>
+                    <label htmlFor="eircode" className="block text-sm font-medium text-neutral-700 mb-1">
+                      Eircode / Postal Code *
+                    </label>
+                    <input
+                      type="text"
+                      id="eircode"
+                      {...register('eircode', { 
+                        required: visitType === 'home' ? 'Eircode is required for home visits' : false,
+                        minLength: { value: 3, message: 'Eircode must be at least 3 characters' }
+                      })}
+                      className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                        errors.eircode ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                      placeholder="D01 A2B3"
+                    />
+                    {errors.eircode && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.eircode?.message}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-gray-600">
+                      Required for home visit scheduling and location
+                    </p>
+                  </div>
+                )}
                 
                 <div>
                   <label htmlFor="service" className="block text-sm font-medium text-neutral-700 mb-1">

@@ -167,6 +167,7 @@ export const Services: React.FC<ServicesProps> = ({
         description: service.description,
         isActive: service.is_active,
         bookingType: service.booking_type || 'book_now',
+        visitType: service.visit_type || 'clinic',
         created_at: service.created_at,
         updated_at: service.updated_at
       }));
@@ -197,6 +198,7 @@ export const Services: React.FC<ServicesProps> = ({
           features: newPackage.features.filter(f => f.trim()),
           description: newPackage.description || null,
           booking_type: newPackage.bookingType || 'book_now',
+          visit_type: newPackage.visitType || 'clinic',
           is_active: true
         }])
         .select()
@@ -218,12 +220,13 @@ export const Services: React.FC<ServicesProps> = ({
         description: data.description,
         isActive: data.is_active,
         bookingType: data.booking_type || 'book_now',
+        visitType: data.visit_type || 'clinic',
         created_at: data.created_at,
         updated_at: data.updated_at
       };
 
       setPackages(prev => [transformedService, ...prev]);
-      setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], categories: [], category: '', description: '', bookingType: 'book_now' });
+      setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], categories: [], category: '', description: '', bookingType: 'book_now', visitType: 'clinic' });
       showSuccess('Success', 'Service added successfully');
     } catch (error) {
       console.error('Error adding service:', error);
@@ -282,7 +285,8 @@ export const Services: React.FC<ServicesProps> = ({
           out_of_hour_price: editPackage.outOfHourPrice || null,
           features: editPackage.features.filter(f => f.trim()),
           description: editPackage.description || null,
-          booking_type: editPackage.bookingType || 'book_now'
+          booking_type: editPackage.bookingType || 'book_now',
+          visit_type: editPackage.visitType || 'clinic'
         })
         .eq('id', editPackage.id);
 
@@ -628,6 +632,21 @@ export const Services: React.FC<ServicesProps> = ({
           </div>
           <div>
             <div className="mb-2 h-12">
+              <label className="block text-sm font-medium text-gray-700">Visit Type *</label>
+              <span className="text-xs text-gray-500">Where service is provided</span>
+            </div>
+            <select
+              value={newPackage.visitType || 'clinic'}
+              onChange={(e) => setNewPackage({ ...newPackage, visitType: e.target.value as 'home' | 'online' | 'clinic' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            >
+              <option value="clinic">Clinic Visit</option>
+              <option value="online">Online</option>
+              <option value="home">Home Visit</option>
+            </select>
+          </div>
+          <div>
+            <div className="mb-2 h-12">
               <label className="block text-sm font-medium text-gray-700">Categories</label>
               <span className="text-xs text-gray-500">Select one or more categories</span>
             </div>
@@ -667,6 +686,8 @@ export const Services: React.FC<ServicesProps> = ({
               <option value="contact_me">Contact Me</option>
             </select>
           </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <div className="mb-2 h-12">
               <label className="block text-sm font-medium text-gray-700">
@@ -680,23 +701,6 @@ export const Services: React.FC<ServicesProps> = ({
               onChange={(e) => setNewPackage({ ...newPackage, price: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="€25 / class or Contact for Quote"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">
-                In Hour Price
-              </label>
-              <span className="text-xs text-gray-500">Regular business hours rate</span>
-            </div>
-            <input
-              type="text"
-              value={newPackage.inHourPrice || ''}
-              onChange={(e) => setNewPackage({ ...newPackage, inHourPrice: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="€65"
             />
           </div>
           <div>
@@ -952,7 +956,7 @@ export const Services: React.FC<ServicesProps> = ({
                 {editIndex === idx && editPackage ? (
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Service</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                       <div>
                         <div className="mb-1 h-12">
                           <label className="block text-sm font-medium text-gray-700">
@@ -967,6 +971,23 @@ export const Services: React.FC<ServicesProps> = ({
                           placeholder="Enter service name"
                           required
                         />
+                      </div>
+                      <div>
+                        <div className="mb-1 h-12">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Visit Type *
+                          </label>
+                          <span className="text-xs text-gray-500">Where service is provided</span>
+                        </div>
+                        <select
+                          value={editPackage.visitType || 'clinic'}
+                          onChange={(e) => handleEditChange('visitType', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                        >
+                          <option value="clinic">Clinic Visit</option>
+                          <option value="online">Online</option>
+                          <option value="home">Home Visit</option>
+                        </select>
                       </div>
                       <div>
                         <div className="mb-1 h-12">

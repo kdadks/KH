@@ -12,6 +12,7 @@ export type Package = {
   description?: string;
   isActive?: boolean;
   bookingType?: 'book_now' | 'contact_me';
+  visitType?: 'home' | 'online' | 'clinic'; // Visit type for service-specific rates
   created_at?: string;
   updated_at?: string;
 };
@@ -28,6 +29,7 @@ export type Service = {
   features?: string[];
   description?: string;
   is_active?: boolean;
+  visit_type?: 'home' | 'online' | 'clinic'; // Visit type for service-specific rates
   created_at?: string;
   updated_at?: string;
 };
@@ -61,12 +63,14 @@ export type BookingFormData = {
   created_at?: string;
   updated_at?: string; // Timestamp when booking was last updated (e.g., confirmed by admin)
   customer_id?: number; // New field for customer relationship
+  visit_type?: 'home' | 'online' | 'clinic'; // Visit type selected by customer
   customer_details?: { // New field for customer relationship data
     id: number;
     first_name: string;
     last_name: string;
     email: string;
     phone?: string;
+    eircode?: string; // Include eircode for home visits
     created_at?: string;
     updated_at?: string;
   };
@@ -98,6 +102,8 @@ export type Customer = {
   address_line_1?: string;
   address_line_2?: string;
   city?: string;
+  eircode?: string; // Zipcode/Eircode for home visits
+
   county?: string;
   eircode?: string;
   country?: string;
