@@ -151,23 +151,29 @@ const BookingPage: React.FC = () => {
         return;
       }
 
-      // Fetch available slots for the selected date - EXACT match to HeroSection
-      let availabilityQuery = supabase
-        .from('availability')
+      // Get the selected date or use today
+      const dateToUse = selectedDate || new Date().toISOString().split('T')[0];
+      const dateObj = new Date(dateToUse);
+      const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+      // Fetch available time slots from services_time_slots table
+      let slotsQuery = supabase
+        .from('services_time_slots')
         .select('*')
-        .eq('date', selectedDate || new Date().toISOString().split('T')[0])
+        .eq('service_id', serviceId)
+        .eq('day_of_week', dayOfWeek)
         .eq('is_available', true)
         .order('start_time', { ascending: true });
 
-      // Filter by slot_type based on service pricing type - match HeroSection exactly
+      // Filter by slot_type based on service pricing type
       if (service.priceType === 'in-hour') {
-        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+        slotsQuery = slotsQuery.eq('slot_type', 'in-hour');
       } else if (service.priceType === 'out-of-hour') {
-        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+        slotsQuery = slotsQuery.eq('slot_type', 'out-of-hour');
       }
       // If service.priceType is 'standard' or undefined, show all slots
 
-      const { data: availabilityData, error } = await availabilityQuery;
+      const { data: slotsData, error } = await slotsQuery;
 
       if (error) {
         console.error('Error fetching time slots:', error);
@@ -175,17 +181,17 @@ const BookingPage: React.FC = () => {
         return;
       }
 
-      // Convert availability slots to time options - match HeroSection format exactly
+      // Convert time slots to time options
       const timeOptions: string[] = [];
 
-      availabilityData?.forEach(slot => {
+      slotsData?.forEach(slot => {
         const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
         const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
 
         const startDisplay = formatTimeForDisplay(startTime);
         const endDisplay = formatTimeForDisplay(endTime);
 
-        // Format: "HH:MM-HH:MM|Display String" - exactly like HeroSection
+        // Format: "HH:MM-HH:MM|Display String"
         const timeRange = `${startTime}-${endTime}`;
         const displayRange = `${startDisplay} - ${endDisplay}`;
         const timeOption = `${timeRange}|${displayRange}`;
@@ -193,7 +199,7 @@ const BookingPage: React.FC = () => {
         timeOptions.push(timeOption);
       });
 
-      logger.devOnly(() => console.log(`Found ${timeOptions.length} available time slots for service ${serviceId}`));
+      logger.devOnly(() => console.log(`Found ${timeOptions.length} available time slots for service ${serviceId} on day ${dayOfWeek}`));
       setTimeSlots(timeOptions);
 
     } catch (error) {

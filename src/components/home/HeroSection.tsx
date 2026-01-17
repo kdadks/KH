@@ -537,31 +537,36 @@ const HeroSection: React.FC = () => {
         return;
       }
 
-      // Fetch available slots for the selected date
-      let availabilityQuery = supabase
-        .from('availability')
+      // Get the day of week from the selected date
+      const dateObj = new Date(selectedDate);
+      const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+      // Fetch available time slots from services_time_slots table
+      let slotsQuery = supabase
+        .from('services_time_slots')
         .select('*')
-        .eq('date', selectedDate)
+        .eq('service_id', serviceId)
+        .eq('day_of_week', dayOfWeek)
         .eq('is_available', true)
         .order('start_time', { ascending: true });
 
       // Filter by slot_type based on service pricing type
       if (service.priceType === 'in-hour') {
-        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
+        slotsQuery = slotsQuery.eq('slot_type', 'in-hour');
       } else if (service.priceType === 'out-of-hour') {
-        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
+        slotsQuery = slotsQuery.eq('slot_type', 'out-of-hour');
       }
       // If service.priceType is 'standard' or undefined, show all slots
 
-      const { data, error } = await availabilityQuery;
+      const { data, error } = await slotsQuery;
 
       if (error) {
-        console.error('Error fetching availability for date:', error);
+        console.error('Error fetching time slots:', error);
         setTimeSlots([]);
         return;
       }
 
-      // Convert availability slots to time options
+      // Convert time slots to time options
       const timeOptions: string[] = [];
 
       data?.forEach(slot => {
