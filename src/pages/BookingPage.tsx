@@ -151,29 +151,24 @@ const BookingPage: React.FC = () => {
         return;
       }
 
-      // Get the selected date or use today
-      const dateToUse = selectedDate || new Date().toISOString().split('T')[0];
-      const dateObj = new Date(dateToUse);
-      const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-      // Fetch available time slots from services_time_slots table
-      let slotsQuery = supabase
-        .from('services_time_slots')
+      // Fetch available slots from availability table for the selected date
+      let availabilityQuery = supabase
+        .from('availability')
         .select('*')
-        .eq('service_id', serviceId)
-        .eq('day_of_week', dayOfWeek)
+        .eq('date', selectedDate || new Date().toISOString().split('T')[0])
         .eq('is_available', true)
         .order('start_time', { ascending: true });
 
       // Filter by slot_type based on service pricing type
+      // Note: Visit type does NOT filter slots - slots appear for all visit types
       if (service.priceType === 'in-hour') {
-        slotsQuery = slotsQuery.eq('slot_type', 'in-hour');
+        availabilityQuery = availabilityQuery.eq('slot_type', 'in-hour');
       } else if (service.priceType === 'out-of-hour') {
-        slotsQuery = slotsQuery.eq('slot_type', 'out-of-hour');
+        availabilityQuery = availabilityQuery.eq('slot_type', 'out-of-hour');
       }
       // If service.priceType is 'standard' or undefined, show all slots
 
-      const { data: slotsData, error } = await slotsQuery;
+      const { data: availabilityData, error } = await availabilityQuery;
 
       if (error) {
         console.error('Error fetching time slots:', error);
@@ -181,10 +176,10 @@ const BookingPage: React.FC = () => {
         return;
       }
 
-      // Convert time slots to time options
+      // Convert availability slots to time options
       const timeOptions: string[] = [];
 
-      slotsData?.forEach(slot => {
+      availabilityData?.forEach(slot => {
         const startTime = slot.start_time.substring(0, 5); // Remove seconds (09:00:00 -> 09:00)
         const endTime = slot.end_time.substring(0, 5);     // Remove seconds (17:00:00 -> 17:00)
 
@@ -199,7 +194,7 @@ const BookingPage: React.FC = () => {
         timeOptions.push(timeOption);
       });
 
-      logger.devOnly(() => console.log(`Found ${timeOptions.length} available time slots for service ${serviceId} on day ${dayOfWeek}`));
+      logger.devOnly(() => console.log(`Found ${timeOptions.length} available time slots for service ${serviceId}`));
       setTimeSlots(timeOptions);
 
     } catch (error) {
@@ -959,7 +954,7 @@ const BookingPage: React.FC = () => {
         lastName: data.lastName,
         email: data.email,
         phone: data.phone,
-        ...(data.eircode && { eircode: data.eircode }) // Add eircode if provided (for home visits)
+        ...(data.eircode && visitType === 'home' && { eircode: data.eircode.trim().toUpperCase() }) // Add eircode if provided (for home visits)
       };
 
       // Prepare booking data
@@ -1638,12 +1633,25 @@ const BookingPage: React.FC = () => {
                       id="eircode"
                       {...register('eircode', { 
                         required: visitType === 'home' ? 'Eircode is required for home visits' : false,
-                        minLength: { value: 3, message: 'Eircode must be at least 3 characters' }
+                        pattern: {
+                          value: /^[A-Za-z0-9]{3}\s?[A-Za-z0-9]{4}$/,
+                          message: 'Please enter a valid Irish Eircode (e.g., D01 A2B3)'
+                        },
+                        validate: (value) => {
+                          if (visitType === 'home' && value) {
+                            const normalized = value.replace(/\s/g, '').toUpperCase();
+                            if (normalized.length !== 7) {
+                              return 'Eircode must be 7 characters (e.g., D01A2B3)';
+                            }
+                          }
+                          return true;
+                        }
                       })}
                       className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
                         errors.eircode ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
                       placeholder="D01 A2B3"
+                      maxLength={8}
                     />
                     {errors.eircode && (
                       <p className="mt-1 text-sm text-red-600">

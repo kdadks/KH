@@ -42,6 +42,7 @@ export interface BookingData {
   notes?: string;
   status?: string;
   service_cost?: number;
+  visit_type?: 'home' | 'online' | 'clinic'; // Visit type for the booking
 }
 
 export interface BookingRecord extends BookingData {
@@ -64,6 +65,7 @@ export const findOrCreateCustomer = async (customerData: {
   lastName: string;
   email: string;
   phone?: string;
+  eircode?: string;
 }): Promise<{ customer: Customer | null; error: string | null; isNewCustomer?: boolean }> => {
   try {
     // First, try to find existing customer by email AND name combination
@@ -98,22 +100,34 @@ export const findOrCreateCustomer = async (customerData: {
 
 
     if (existingCustomer) {
-      // Found existing customer with exact name match, just update phone if needed
+      // Found existing customer with exact name match, update phone and eircode if needed
       const decryptedPhone = existingCustomer.phone && isDataEncrypted(existingCustomer.phone) 
         ? decryptSensitiveData(existingCustomer.phone) 
         : existingCustomer.phone;
 
+      const updateData: any = {};
+      
       // Only update phone if it's different and provided
       if (customerData.phone && decryptedPhone !== customerData.phone.trim()) {
+        updateData.phone = encryptSensitiveData(customerData.phone.trim());
+      }
+      
+      // Update eircode if provided (for home visits)
+      if (customerData.eircode && customerData.eircode.trim()) {
+        updateData.eircode = customerData.eircode.trim().toUpperCase();
+      }
+
+      // Only update if there's something to update
+      if (Object.keys(updateData).length > 0) {
         const { data: updatedCustomer, error: updateError } = await supabase
           .from('customers')
-          .update({ phone: encryptSensitiveData(customerData.phone.trim()) })
+          .update(updateData)
           .eq('id', existingCustomer.id)
           .select()
           .single();
 
         if (updateError) {
-          console.error('Error updating customer phone:', updateError);
+          console.error('Error updating customer:', updateError);
         } else {
           existingCustomer = updatedCustomer;
         }
@@ -143,6 +157,7 @@ export const findOrCreateCustomer = async (customerData: {
       last_name: encryptSensitiveData(customerData.lastName.trim()),
       email: customerData.email.toLowerCase().trim(),
       phone: customerData.phone?.trim() ? encryptSensitiveData(customerData.phone.trim()) : undefined,
+      eircode: customerData.eircode?.trim() ? customerData.eircode.trim().toUpperCase() : undefined,
       country: 'Ireland',
       is_active: true,
       password: hashedDefaultPassword, // Store hashed password
@@ -291,7 +306,8 @@ export const createBookingWithCustomer = async (
       timeslot_start_time: bookingData.timeslot_start_time,
       timeslot_end_time: bookingData.timeslot_end_time,
       notes: bookingData.notes,
-      status: bookingData.status || 'confirmed'
+      status: bookingData.status || 'confirmed',
+      visit_type: bookingData.visit_type || 'clinic' // Include visit type, default to clinic
     };
 
     // Step 3: Create booking with customer reference

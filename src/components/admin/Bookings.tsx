@@ -52,6 +52,7 @@ interface ServiceType {
   duration?: number;
   description?: string;
   priceType?: string;
+  visit_type?: 'clinic' | 'online' | 'home';
 }
 
 interface PaymentRequest {
@@ -1717,7 +1718,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   };
 
 
-  // Load payment status for visible bookings
+  // Load payment status for visible bookings (optimized batch fetch)
   useEffect(() => {
     const loadPaymentStatus = async () => {
       if (currentPageBookings.length === 0) return;
@@ -1727,15 +1728,76 @@ export const Bookings: React.FC<BookingsProps> = ({
         const statusMap = new Map();
         const depositMap = new Map();
         
+        // Get all booking IDs and customer IDs
+        const bookingIds = currentPageBookings.filter(b => b.id).map(b => b.id!);
+        const customerIds = currentPageBookings.filter(b => b.customer_id).map(b => b.customer_id!);
+        
+        if (bookingIds.length === 0 || customerIds.length === 0) {
+          setLoadingPaymentStatus(false);
+          return;
+        }
+        
+        // Batch fetch all payment requests for these bookings
+        const [paymentRequestsResult, paymentsResult] = await Promise.all([
+          supabase
+            .from('payment_requests')
+            .select('*')
+            .in('booking_id', bookingIds)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('payments')
+            .select('*')
+            .in('customer_id', customerIds)
+            .in('status', ['paid', 'processing'])
+            .order('created_at', { ascending: false })
+        ]);
+        
+        const allPaymentRequests = paymentRequestsResult.data || [];
+        const allPayments = paymentsResult.data || [];
+        
+        // Process each booking with the fetched data
         for (const booking of currentPageBookings) {
           if (booking.customer_id && booking.id) {
-            // Fetch actual payment status for each booking
-            const paymentStatus = await checkBookingPaymentStatus(booking);
-            statusMap.set(booking.id, paymentStatus);
+            // Find matching payment request
+            const matchingPaymentRequest = allPaymentRequests.find(pr => pr.booking_id === booking.id);
+            
+            // Find matching payment
+            const matchingPayment = allPayments.find(p => p.booking_id === booking.id);
+            
+            // Determine payment type
+            let paymentType: 'deposit' | 'full' | null = null;
+            if (matchingPaymentRequest?.notes) {
+              const notes = matchingPaymentRequest.notes.toLowerCase();
+              if (notes.includes('deposit') || notes.includes('20%')) {
+                paymentType = 'deposit';
+              } else if (notes.includes('full') || notes.includes('100%') || notes.includes('full payment')) {
+                paymentType = 'full';
+              }
+            }
+            
+            if (matchingPayment) {
+              const paymentTypeField = (matchingPayment as any).sumup_payment_type;
+              if (paymentTypeField === 'deposit' || paymentTypeField === 'full') {
+                paymentType = paymentTypeField;
+              }
+              if (!paymentType && matchingPayment.notes) {
+                const paymentNotes = matchingPayment.notes.toLowerCase();
+                if (paymentNotes.includes('deposit') || paymentNotes.includes('20%')) {
+                  paymentType = 'deposit';
+                } else if (paymentNotes.includes('full') || paymentNotes.includes('100%') || paymentNotes.includes('full payment')) {
+                  paymentType = 'full';
+                }
+              }
+            }
+            
+            statusMap.set(booking.id, {
+              paymentRequest: matchingPaymentRequest || null,
+              payment: matchingPayment || null,
+              paymentType
+            });
 
-            // Calculate deposit amount for this booking (cached/simplified)
+            // Set default deposit amount
             if (booking.package_name) {
-              // Use a simple default amount instead of API call
               const depositAmount = 75; // Default deposit amount
               depositMap.set(booking.id, depositAmount);
             }
@@ -3135,6 +3197,12 @@ export const Bookings: React.FC<BookingsProps> = ({
                                 new Date(booking.booking_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
                                 (booking.appointment_time || booking.time || <span className="text-red-500 italic">Not set</span>)
                               }
+                              {booking.visit_type && (
+                                <span className="text-xs ml-2 text-gray-500">
+                                  • {booking.visit_type === 'home' ? '🏠 Home' :
+                                     booking.visit_type === 'online' ? '💻 Online' : '🏥 Clinic'}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -3157,6 +3225,24 @@ export const Bookings: React.FC<BookingsProps> = ({
                             </p>
                           </div>
                         </div>
+
+                        {/* Eircode Display for Home Visits */}
+                        {booking.visit_type === 'home' && booking.customer_details?.eircode && (
+                          <div className="flex items-start space-x-2">
+                            <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <div className="min-w-0">
+                              <p className="text-xs text-blue-700 font-medium">
+                                Eircode: {booking.customer_details.eircode}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Check serviceability before accepting
+                              </p>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Payment Status - Hide for Contact for Quote services */}
                         {booking.customer_id && booking.package_name && !isContactForQuoteService(booking.package_name) && (
@@ -3225,8 +3311,8 @@ export const Bookings: React.FC<BookingsProps> = ({
                                   );
                                 }
                                 
-                                // If payment request exists but not paid yet
-                                if (status?.paymentRequest && status.paymentRequest.status !== 'paid') {
+                                // If payment request exists but not paid yet (hide for cancelled bookings)
+                                if (status?.paymentRequest && status.paymentRequest.status !== 'paid' && booking.status !== 'cancelled') {
                                   const isExpired = status.paymentRequest.payment_due_date &&
                                     new Date(status.paymentRequest.payment_due_date) < new Date();
                                   const requestType = paymentType === 'full' ? 'full payment' : 'deposit';
@@ -3665,6 +3751,24 @@ export const Bookings: React.FC<BookingsProps> = ({
                     {selectedBooking.status || 'pending'}
                   </span>
                 </div>
+                {selectedBooking.visit_type && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-500">Visit Type:</span>
+                    <span className="text-sm text-gray-900">
+                      {selectedBooking.visit_type === 'home' ? '🏠 Home Visit' :
+                       selectedBooking.visit_type === 'online' ? '💻 Online' : '🏥 Clinic'}
+                    </span>
+                  </div>
+                )}
+                {selectedBooking.visit_type === 'home' && selectedBooking.customer_details?.eircode && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm font-medium text-gray-500">Eircode:</span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-blue-700">{selectedBooking.customer_details.eircode}</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Verify serviceability</p>
+                    </div>
+                  </div>
+                )}
                 {selectedBooking.notes && (
                   <div>
                     <span className="text-sm font-medium text-gray-500">Notes:</span>
