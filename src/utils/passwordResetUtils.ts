@@ -19,29 +19,32 @@ export const requestPasswordReset = async (email: string): Promise<{ success: bo
       return { success: false, error: 'Please enter a valid email address' };
     }
 
-    // Check if customer exists
+    const normalizedEmail = email.toLowerCase();
+
+    // ============ SECURITY: Check if customer exists ============
     const { data: customer, error: customerError } = await supabase
       .from('customers')
       .select('id, first_name, last_name, email, is_active')
-      .eq('email', email.toLowerCase())
+      .eq('email', normalizedEmail)
       .eq('is_active', true)
       .single();
 
+    // Log error details for debugging (don't expose to user)
     if (customerError) {
-      console.error('Error checking customer existence:', {
-        message: customerError.message,
-        details: customerError.details,
-        hint: customerError.hint,
-        code: customerError.code
+      console.warn('Customer lookup in password reset:', {
+        email: normalizedEmail,
+        code: customerError.code,
+        message: customerError.message
       });
-      
-      // Don't reveal if email exists or not for security
-      return { success: true }; // Always return success to prevent email enumeration
     }
 
-    if (!customer) {
-      // Don't reveal if email exists or not for security
-      return { success: true }; // Always return success to prevent email enumeration
+    // ============ VALIDATION: Email must exist in system ============
+    if (!customer || customerError) {
+      // Email doesn't exist or account is inactive
+      return { 
+        success: false, 
+        error: 'No account found with this email address. Please check the email or create a new account.' 
+      };
     }
 
     // Generate reset token
@@ -92,13 +95,18 @@ export const requestPasswordReset = async (email: string): Promise<{ success: bo
         })
         .eq('id', customer.id);
       
-      return { success: false, error: 'Failed to send password reset email' };
+      return { success: false, error: 'Failed to send password reset email. Please try again.' };
     }
+
+    console.info('Password reset requested successfully:', {
+      email: normalizedEmail,
+      customerId: customer.id
+    });
 
     return { success: true };
   } catch (error) {
     console.error('Exception in requestPasswordReset:', error);
-    return { success: false, error: 'Unexpected error occurred' };
+    return { success: false, error: 'Unexpected error occurred during password reset request' };
   }
 };
 
