@@ -209,9 +209,22 @@ export const Services: React.FC<ServicesProps> = ({
     }
 
     try {
+      // Get the max ID to ensure we don't have conflicts with deleted records
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('services')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
+
+      if (maxIdError) throw maxIdError;
+
+      // Calculate next ID (MAX + 1, or 1 if no services exist)
+      const nextId = (maxIdData && maxIdData.length > 0) ? maxIdData[0].id + 1 : 1;
+
       const { data, error } = await supabase
         .from('services')
         .insert([{
+          id: nextId,
           name: newPackage.name.trim(),
           category: (newPackage.categories && newPackage.categories.length > 0) ? newPackage.categories : null,
           price: newPackage.price || null,
