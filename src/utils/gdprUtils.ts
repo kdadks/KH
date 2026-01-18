@@ -41,7 +41,7 @@ export const encryptSensitiveData = (data: string): string => {
  */
 export const decryptSensitiveData = (encryptedData: string): string => {
   if (!DECRYPTION_KEY) {
-    console.error('GDPR: Cannot decrypt data - VITE_ENCRYPTION_KEY not configured in .env.local');
+    console.error('GDPR: Cannot decrypt data - VITE_ENCRYPTION_KEY not configured');
     return encryptedData; // Return encrypted data as fallback
   }
   
