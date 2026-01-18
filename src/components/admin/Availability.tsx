@@ -337,8 +337,22 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     return result;
   };
 
-  // Create available slot events
-  const availableSlotEvents = availabilitySlots.map(slot => {
+  // Create available slot events (only show unbooked slots)
+  const availableSlotEvents = availabilitySlots.filter(slot => {
+    // Filter out booked slots - they'll be shown as customer appointments instead
+    const matchingBooking = bookedSlots.find(booking => {
+      const bookingDateTime = getBookingDateTime(booking);
+      if (!bookingDateTime) return false;
+      const bookingTime = formatTime(bookingDateTime.time);
+      const slotStartTime = formatTime(getSlotStart(slot));
+      const slotEndTime = formatTime(slot.end_time);
+      return bookingDateTime.date === slot.date &&
+        bookingTime >= slotStartTime &&
+        bookingTime < slotEndTime;
+    });
+    const isBooked = !!matchingBooking || slot.is_available === false;
+    return !isBooked;
+  }).map(slot => {
     const startFmt = formatTime(getSlotStart(slot));
     const endFmt = formatTime(slot.end_time);
 
@@ -483,10 +497,10 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       start: new Date(`${slot.date}T${getSlotStart(slot)}`),
       end: new Date(`${slot.date}T${slot.end_time}`),
       resource: { ...slot, booking: matchingBooking },
-      type: isBooked ? 'booked-slot' : 'available-slot',
+      type: 'available-slot',
       style: {
-        backgroundColor: isBooked ? '#EF4444' : '#10B981', // Red for booked, green for available
-        borderColor: isBooked ? '#DC2626' : '#059669',
+        backgroundColor: '#10B981', // Green for available
+        borderColor: '#059669',
         color: 'white',
         fontSize: '0.7rem',
         lineHeight: '0.9rem',
@@ -770,11 +784,11 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Availability Management</h2>
           <p className="text-gray-600 mt-1">
-            Manage your available time slots for appointments. Booked slots are automatically marked and cannot be deleted.
+            Manage your available time slots for appointments. Customer appointments are shown in red and cannot be deleted.
           </p>
           {/* Debug Info */}
           <div className="mt-2 text-sm text-gray-500">
-            Debug: {availabilitySlots.length} availability slots, {bookedSlots.length} booked slots
+            Debug: {availabilitySlots.length} availability slots, {bookedSlots.length} customer appointments
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -826,56 +840,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
         </div>
       </div>
 
-      {mainTab === 'overview' ? (
-        <>
-          {/* Add Availability Form (always on top) */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Time Slot</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                <input
-                  type="date"
-                  value={newSlotDate}
-                  onChange={(e) => setNewSlotDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
-                <input
-                  type="time"
-                  value={newSlotStartTime}
-                  onChange={(e) => setNewSlotStartTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
-                <input
-                  type="time"
-                  value={newSlotEndTime}
-                  onChange={(e) => setNewSlotEndTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-            </div>
-            {newSlotError && (
-              <div className="mt-4 flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                <span className="text-sm text-red-700">{newSlotError}</span>
-              </div>
-            )}
-            <button
-              onClick={handleAddSlot}
-              className="mt-4 flex items-center px-3 py-1.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-all duration-200 text-sm font-medium shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Add Time Slot
-            </button>
-          </div>
-        </>
-      ) : (
+      {mainTab === 'overview' ? null : (
         <>
           {/* Default Schedule Manager */}
           {/* Quick Schedule Generator - Redesigned Schedule Creation */}
@@ -896,7 +861,7 @@ export const Availability: React.FC<AvailabilityProps> = () => {
             <h3 className="text-lg font-semibold text-gray-900">
               Availability Overview 
               <span className="text-sm font-normal text-gray-500 ml-2">
-                ({availabilitySlots.length} slots, {bookedSlots.length} bookings)
+                ({availabilitySlots.length} slots, {bookedSlots.length} appointments)
               </span>
             </h3>
           </div>
@@ -944,10 +909,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-emerald-600 rounded"></div>
                   <span className="text-sm text-gray-700">Available Slots</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-gray-400 rounded"></div>
-                  <span className="text-sm text-gray-700">Booked Slots</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-red-500 rounded"></div>
@@ -1030,11 +991,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                       showError('Cannot Delete', 'This is a confirmed booking. Please cancel the booking first to free up the slot.');
                       return;
                     }
-                    
-                    if (event.type === 'booked-slot') {
-                      showError('Cannot Delete', 'This availability slot is booked. Please cancel the booking first to free up the slot.');
-                      return;
-                    }
 
                     if (event.resource?.id && event.type === 'available-slot') {
                       const slot = event.resource as AvailabilitySlot;
@@ -1061,13 +1017,10 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                     let fontSize = '0.7rem';
                     let fontWeight = 500;
                     
-                    if (event.type === 'booked-slot') {
-                      backgroundColor = '#9CA3AF'; // Gray for booked availability slots
-                      borderColor = '#6B7280';
-                    } else if (event.type === 'booked-appointment') {
-                      backgroundColor = '#EF4444'; // Red for booked appointments without availability slots
+                    if (event.type === 'booked-appointment') {
+                      backgroundColor = '#EF4444'; // Red for customer appointments
                       borderColor = '#DC2626';
-                      fontSize = '0.75rem'; // Slightly larger for booked appointments
+                      fontSize = '0.75rem'; // Slightly larger for customer appointments
                       fontWeight = 600;
                     }
                     
@@ -1335,7 +1288,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                                         const finalMinutes = endMinutes % 60;
                                                         return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
                                                       })() : '');
-                                                    return `${bookingDateTime?.time || ''} - ${bookingEndTime}`;
+                                                    const formattedStart = bookingDateTime ? formatTime(bookingDateTime.time) : '';
+                                                    const formattedEnd = bookingEndTime ? formatTime(bookingEndTime) : '';
+                                                    return `${formattedStart} - ${formattedEnd}`;
                                                   })()}
                                                 </p>
                                               </div>
@@ -1411,7 +1366,19 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="font-medium text-gray-900">{bookingDateTime.date}</p>
-                                    <p className="text-sm text-red-600 font-medium">{bookingDateTime.time}</p>
+                                    <p className="text-sm text-red-600 font-medium">{(() => {
+                                      const bookingEndTime = booking.timeslot_end_time ||
+                                        (() => {
+                                          const [hours, minutes] = bookingDateTime.time.split(':').map(Number);
+                                          const endMinutes = minutes + 50;
+                                          const endHours = hours + Math.floor(endMinutes / 60);
+                                          const finalMinutes = endMinutes % 60;
+                                          return `${endHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+                                        })();
+                                      const formattedStart = formatTime(bookingDateTime.time);
+                                      const formattedEnd = formatTime(bookingEndTime);
+                                      return `${formattedStart} - ${formattedEnd}`;
+                                    })()}</p>
                                     <p className="text-sm text-gray-800 mt-1 font-semibold">{booking.customer_name}</p>
                                     <p className="text-xs text-gray-600">{booking.package_name}</p>
                                   </div>
