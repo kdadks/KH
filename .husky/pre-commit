@@ -1,0 +1,30 @@
+#!/bin/sh
+# husky
+. "$(dirname "$0")/_/husky.sh"
+
+# Pre-commit hook to prevent .env files from being committed
+FORBIDDEN_PATTERNS=("^\.env$" "^\.env\.local$" "^\.env\.\w+\.local$" "^secrets\.json$")
+
+echo "🔒 Running pre-commit security checks..."
+
+# Check if any forbidden files are being committed
+FILES=$(git diff --cached --name-only)
+
+for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+    while IFS= read -r file; do
+        if [[ $file =~ $pattern ]]; then
+            echo "❌ ERROR: Cannot commit '$file' - sensitive files are not allowed"
+            echo "   This file must be added to .gitignore"
+            exit 1
+        fi
+    done <<< "$FILES"
+done
+
+# Warn about suspicious patterns in staged changes
+if git diff --cached | grep -iE "(password|api_?key|secret|token|credential).*=" > /dev/null 2>&1; then
+    echo "⚠️  WARNING: Suspicious patterns detected in staged changes"
+    echo "   Please verify no credentials are being committed"
+fi
+
+echo "✅ Pre-commit checks passed"
+exit 0
