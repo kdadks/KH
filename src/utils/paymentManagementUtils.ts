@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { decryptSensitiveDataServer, isDataEncrypted as isDataEncryptedServer } from './encryptionServerWrapper';
 import { getPaymentEnvironment, getSumUpEnvironmentConfig } from './environmentDetection';
 
 export interface PaymentRequest {

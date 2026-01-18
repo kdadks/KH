@@ -10,6 +10,7 @@ import {
 import { getCustomerPayments } from './paymentRequestUtils';
 import { PaymentRecord } from '../services/invoiceService';
 import { decryptCustomerPII, encryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { decryptCustomerPIIServer, encryptSensitiveDataServer, isDataEncrypted as isDataEncryptedServer } from './encryptionServerWrapper';
 
 /**
  * Get customer by auth user ID
@@ -36,8 +37,8 @@ export const getCustomerByAuthId = async (authUserId: string): Promise<{ custome
     }
 
     if (data) {
-      // Decrypt customer PII data for profile display
-      const decryptedCustomer = decryptCustomerPII(data);
+      // Decrypt customer PII data for profile display (server-side decryption)
+      const decryptedCustomer = await decryptCustomerPIIServer(data);
       return { customer: decryptedCustomer };
     }
 
@@ -98,8 +99,10 @@ export const getAllPatientsByEmail = async (email: string): Promise<{ patients: 
       return { patients: null };
     }
 
-    // Decrypt all patient PII data
-    const decryptedPatients = data.map(patient => decryptCustomerPII(patient));
+    // Decrypt all patient PII data (server-side decryption)
+    const decryptedPatients = await Promise.all(
+      data.map(patient => decryptCustomerPIIServer(patient))
+    );
     return { patients: decryptedPatients };
   } catch (error) {
     console.error('Exception in getAllPatientsByEmail:', error);
@@ -125,8 +128,8 @@ export const getCustomerById = async (customerId: number): Promise<{ customer: U
     }
 
     if (data) {
-      // Decrypt customer PII data for display
-      const decryptedCustomer = decryptCustomerPII(data);
+      // Decrypt customer PII data for display (server-side decryption)
+      const decryptedCustomer = await decryptCustomerPIIServer(data);
       return { customer: decryptedCustomer };
     }
 
@@ -181,7 +184,7 @@ export const updateUserProfile = async (customerId: number, profileData: UserPro
       updated_at: new Date().toISOString()
     };
 
-    // Encrypt sensitive fields before saving
+    // Encrypt sensitive fields before saving (server-side encryption)
     const sensitiveFields = [
       'first_name', 
       'last_name', 
@@ -196,11 +199,16 @@ export const updateUserProfile = async (customerId: number, profileData: UserPro
       'emergency_contact_phone'
     ];
 
-    sensitiveFields.forEach(field => {
-      if (updateData[field] && !isDataEncrypted(updateData[field])) {
-        updateData[field] = encryptSensitiveData(updateData[field]);
+    for (const field of sensitiveFields) {
+      if (updateData[field] && !isDataEncryptedServer(updateData[field])) {
+        try {
+          updateData[field] = await encryptSensitiveDataServer(updateData[field], field);
+        } catch (encryptError) {
+          console.error(`Failed to encrypt field ${field}:`, encryptError);
+          throw encryptError;
+        }
       }
-    });
+    }
 
     const { error } = await supabase
       .from('customers')
