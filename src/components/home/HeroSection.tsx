@@ -971,7 +971,7 @@ const HeroSection: React.FC = () => {
   };
 
   return (
-  <section className="relative pt-8 pb-12 md:pt-12 md:pb-20 overflow-hidden bg-gray-100">
+  <section className="relative pt-8 pb-6 md:pt-12 md:pb-10 overflow-hidden bg-gray-100">
       {/* Light grey background applied via Tailwind class */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
   <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start" style={{ color: '#333333' }}>
@@ -1079,7 +1079,6 @@ const HeroSection: React.FC = () => {
           >
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold text-neutral-800">Book Your First Session</h2>
-              <p className="text-neutral-600 mt-2">Quick appointment booking</p>
             </div>
             
             {/* Main Booking Form - Only show if not in payment flow */}
@@ -1087,44 +1086,44 @@ const HeroSection: React.FC = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {/* Visit Type Selection - First */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-3">
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
                   Select Visit Type *
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setVisitType('online')}
-                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                    className={`p-2 rounded-lg border-2 transition-all text-center ${
                       visitType === 'online'
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                         : 'border-gray-300 hover:border-gray-400 text-gray-700'
                     }`}
                   >
-                    <div className="text-2xl mb-1">💻</div>
+                    <div className="text-xl mb-0.5">💻</div>
                     <div className="font-medium text-xs">Online</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisitType('clinic')}
-                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                    className={`p-2 rounded-lg border-2 transition-all text-center ${
                       visitType === 'clinic'
                         ? 'border-green-500 bg-green-50 text-green-700'
                         : 'border-gray-300 hover:border-gray-400 text-gray-700'
                     }`}
                   >
-                    <div className="text-2xl mb-1">🏥</div>
+                    <div className="text-xl mb-0.5">🏥</div>
                     <div className="font-medium text-xs">Clinic</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisitType('home')}
-                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                    className={`p-2 rounded-lg border-2 transition-all text-center ${
                       visitType === 'home'
                         ? 'border-purple-500 bg-purple-50 text-purple-700'
                         : 'border-gray-300 hover:border-gray-400 text-gray-700'
                     }`}
                   >
-                    <div className="text-2xl mb-1">🏠</div>
+                    <div className="text-xl mb-0.5">🏠</div>
                     <div className="font-medium text-xs">Home</div>
                   </button>
                 </div>

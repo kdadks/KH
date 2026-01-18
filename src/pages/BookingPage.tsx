@@ -1475,47 +1475,47 @@ const BookingPage: React.FC = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               {/* Visit Type Selection */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-neutral-700 mb-3">
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
                   Select Visit Type *
                 </label>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setVisitType('online')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
+                    className={`p-2.5 rounded-lg border-2 transition-all ${
                       visitType === 'online'
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                         : 'border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <div className="text-3xl mb-2">💻</div>
-                    <div className="font-medium">Online</div>
+                    <div className="text-2xl mb-1">💻</div>
+                    <div className="font-medium text-sm">Online</div>
                     <div className="text-xs text-gray-600">Virtual consultation</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisitType('clinic')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
+                    className={`p-2.5 rounded-lg border-2 transition-all ${
                       visitType === 'clinic'
                         ? 'border-green-500 bg-green-50 text-green-700'
                         : 'border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <div className="text-3xl mb-2">🏥</div>
-                    <div className="font-medium">Clinic Visit</div>
+                    <div className="text-2xl mb-1">🏥</div>
+                    <div className="font-medium text-sm">Clinic Visit</div>
                     <div className="text-xs text-gray-600">In-person at clinic</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisitType('home')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
+                    className={`p-2.5 rounded-lg border-2 transition-all ${
                       visitType === 'home'
                         ? 'border-purple-500 bg-purple-50 text-purple-700'
                         : 'border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <div className="text-3xl mb-2">🏠</div>
-                    <div className="font-medium">Home Visit</div>
+                    <div className="text-2xl mb-1">🏠</div>
+                    <div className="font-medium text-sm">Home Visit</div>
                     <div className="text-xs text-gray-600">We come to you</div>
                   </button>
                 </div>

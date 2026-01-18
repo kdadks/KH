@@ -133,9 +133,10 @@ function App() {
               <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
               <Route path="terms-of-service" element={<TermsOfServicePage />} />
               <Route path="cookie-policy" element={<CookiePolicyPage />} />
-              <Route path="admin/*" element={<AdminConsole />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
+            {/* Admin console route outside the main layout */}
+            <Route path="/admin/*" element={<AdminConsole />} />
             {/* Reset password route outside the main layout */}
             <Route path="/reset-password" element={<ResetPassword />} />
             {/* Payment page route outside the main layout */}
