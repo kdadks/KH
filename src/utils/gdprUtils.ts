@@ -1,46 +1,52 @@
 /**
  * GDPR Compliance Utilities
  * Handles "Right to be Forgotten", Data Portability, and Privacy Controls
+ * 
+ * SECURITY: Encryption key is now server-side only via Netlify Functions
+ * Client-side uses decryption-only functions for READ operations
+ * All encryption (WRITE) operations must go through server
  */
 
 import { supabase } from '../supabaseClient';
 import * as CryptoJS from 'crypto-js';
 
-// Encryption key for sensitive data (must be set in environment variables)
-const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY;
+// Client-side decryption key for READ operations only
+// For WRITE operations, use encryptSensitiveDataServer() from encryptionServerWrapper.ts
+// In production: This is only used for display/decryption of already-encrypted data
+// In localhost: Uses VITE_ENCRYPTION_KEY from .env.local for development
+const DECRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY;
 
-if (!ENCRYPTION_KEY) {
-  console.error('GDPR: VITE_ENCRYPTION_KEY environment variable is required for data encryption');
+if (!DECRYPTION_KEY && import.meta.env.DEV) {
+  console.warn('GDPR: VITE_ENCRYPTION_KEY not configured in .env.local - decryption will not work on localhost');
 }
 
 /**
  * Encrypt sensitive data using AES encryption
+ * DEPRECATED: Use encryptSensitiveDataServer() instead
+ * This function should no longer be used - encryption key is server-only
+ * @throws Error - Encryption must go through server
  */
 export const encryptSensitiveData = (data: string): string => {
-  if (!ENCRYPTION_KEY) {
-    console.error('GDPR: Cannot encrypt data - encryption key not configured');
-    return data; // Return unencrypted data as fallback
-  }
-  
-  try {
-    return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
-  } catch (error) {
-    console.error('Encryption error:', error);
-    return data; // Fallback to unencrypted data
-  }
+  throw new Error(
+    'SECURITY: Client-side encryption is no longer supported. ' +
+    'Use encryptSensitiveDataServer() from encryptionServerWrapper.ts instead. ' +
+    'Encryption key is server-side only for security compliance.'
+  );
 };
 
 /**
  * Decrypt sensitive data
+ * IMPORTANT: This uses the client-side key for READ operations only
+ * For WRITE operations (encryption), use encryptSensitiveDataServer() from encryptionServerWrapper.ts
  */
 export const decryptSensitiveData = (encryptedData: string): string => {
-  if (!ENCRYPTION_KEY) {
-    console.error('GDPR: Cannot decrypt data - encryption key not configured');
+  if (!DECRYPTION_KEY) {
+    console.error('GDPR: Cannot decrypt data - VITE_ENCRYPTION_KEY not configured in .env.local');
     return encryptedData; // Return encrypted data as fallback
   }
   
   try {
-    const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+    const bytes = CryptoJS.AES.decrypt(encryptedData, DECRYPTION_KEY);
     return bytes.toString(CryptoJS.enc.Utf8);
   } catch (error) {
     console.error('Decryption error:', error);
