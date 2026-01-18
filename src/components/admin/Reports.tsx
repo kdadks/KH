@@ -31,6 +31,7 @@ interface ReportData {
   cancelledBookings: number;
   pendingBookings: number;
   serviceBreakdown: { [key: string]: number };
+  visitTypeBreakdown: { [key: string]: number };
   monthlyTrend: { month: string; bookings: number }[];
   filteredBookings: BookingFormData[]; // retain the exact rows contributing to the stats & exports
   
@@ -56,6 +57,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedService, setSelectedService] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedVisitType, setSelectedVisitType] = useState('');
   const [selectedInvoiceStatus, setSelectedInvoiceStatus] = useState('');
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -218,6 +220,16 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       const key = b.package_name || b.service || 'Unknown';
       serviceBreakdown[key] = (serviceBreakdown[key] || 0) + 1;
     });
+    
+    const visitTypeBreakdown: { [key: string]: number } = {};
+    filteredBookings.forEach(b => {
+      const visitType = b.visit_type || 'Not specified';
+      const label = visitType === 'home' ? 'Home Visit' : 
+                   visitType === 'online' ? 'Online' : 
+                   visitType === 'clinic' ? 'Clinic' : 'Not specified';
+      visitTypeBreakdown[label] = (visitTypeBreakdown[label] || 0) + 1;
+    });
+    
     const monthlyTrend: { month: string; bookings: number }[] = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
@@ -266,6 +278,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       cancelledBookings,
       pendingBookings,
       serviceBreakdown,
+      visitTypeBreakdown,
       monthlyTrend,
       filteredBookings,
       totalInvoices,
@@ -302,6 +315,9 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     if (selectedStatus) {
       filtered = filtered.filter(b => (b.status || 'pending') === selectedStatus);
     }
+    if (selectedVisitType) {
+      filtered = filtered.filter(b => b.visit_type === selectedVisitType);
+    }
 
     // Filter invoices based on the same date range and status
     let filteredInvoices = [...allInvoices];
@@ -317,7 +333,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
 
     setReportData(buildStats(filtered, filteredInvoices));
     setLoading(false);
-  }, [allBookings, allInvoices, dateRange.start, dateRange.end, selectedService, selectedStatus, selectedInvoiceStatus, buildStats]);
+  }, [allBookings, allInvoices, dateRange.start, dateRange.end, selectedService, selectedStatus, selectedVisitType, selectedInvoiceStatus, buildStats]);
 
   // Baseline stats on initial load / when bookings change before any manual generate
   useEffect(() => {
@@ -350,7 +366,10 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       ['Unpaid Revenue', `€${reportData.unpaidRevenue.toFixed(2)}`],
       [''],
       ['SERVICE BREAKDOWN', ''],
-      ...Object.entries(reportData.serviceBreakdown).map(([service, count]) => [service, count])
+      ...Object.entries(reportData.serviceBreakdown).map(([service, count]) => [service, count]),
+      [''],
+      ['VISIT TYPE BREAKDOWN', ''],
+      ...Object.entries(reportData.visitTypeBreakdown).map(([visitType, count]) => [visitType, count])
     ];
     const summaryWS = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, summaryWS, 'Summary');
@@ -375,6 +394,9 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
         Contact_Phone: b.customer_phone || b.phone || '',
         Contact_Email: b.customer_email || b.email || '',
         Service: b.package_name || b.service || '',
+        Visit_Type: b.visit_type === 'home' ? 'Home Visit' : 
+                   b.visit_type === 'online' ? 'Online' : 
+                   b.visit_type === 'clinic' ? 'Clinic' : 'Not specified',
         Date: date,
         Time: time,
         Status: b.status || 'pending',
@@ -494,9 +516,22 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
         theme: 'striped'
       });
 
+      // Visit Type breakdown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const afterServiceY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : afterInvoiceY + 40;
+      doc.setFontSize(16);
+      doc.text('Visit Type Breakdown', 20, afterServiceY);
+      const visitTypeData = Object.entries(reportData.visitTypeBreakdown).map(([visitType, count]) => [visitType, count.toString()]);
+  autoTable(doc, {
+        startY: afterServiceY + 5,
+        head: [['Visit Type', 'Bookings']],
+        body: visitTypeData,
+        theme: 'striped'
+      });
+
       // Detailed bookings table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterServicesY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : afterInvoiceY + 40;
+  const afterServicesY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : afterServiceY + 40;
       doc.setFontSize(16);
       doc.text('Bookings Detail', 20, afterServicesY);
       const bookingRows = reportData.filteredBookings.map((b, i) => {
@@ -512,12 +547,17 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
           customerName = b.name;
         }
         
+        const visitType = b.visit_type === 'home' ? 'Home' : 
+                         b.visit_type === 'online' ? 'Online' : 
+                         b.visit_type === 'clinic' ? 'Clinic' : '-';
+        
         return [
           i + 1,
           customerName,
             (b.customer_phone || b.phone || ''),
             (b.customer_email || b.email || ''),
           b.package_name || b.service || '',
+          visitType,
           date,
           time,
           b.status || 'pending'
@@ -526,11 +566,11 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   autoTable(doc, {
         startY: afterServicesY + 5,
         head: [[
-          '#', 'Customer', 'Phone', 'Email', 'Service', 'Date', 'Time', 'Status'
+          '#', 'Customer', 'Phone', 'Email', 'Service', 'Visit Type', 'Date', 'Time', 'Status'
         ]],
         body: bookingRows,
         theme: 'grid',
-        styles: { fontSize: 9 },
+        styles: { fontSize: 8 },
         headStyles: { fillColor: '#3f83f8', textColor: '#ffffff' }
       });
 
@@ -758,6 +798,52 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                                   <div
                                     className="bg-primary-600 h-2 rounded-full"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <div className="text-sm text-gray-600 w-20 text-right">
+                                  {count} ({percentage.toFixed(1)}%)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Visit Type Breakdown */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <PieChart className="w-5 h-5 mr-2" />
+                      Visit Type Breakdown
+                    </h3>
+                    <div className="space-y-4">
+                      {Object.entries(reportData.visitTypeBreakdown).map(([visitType, count]) => {
+                        const percentage = (count / reportData.totalBookings) * 100;
+                        const iconMap: { [key: string]: string } = {
+                          'Home Visit': '🏠',
+                          'Online': '💻',
+                          'Clinic': '🏥',
+                          'Not specified': '❓'
+                        };
+                        const colorMap: { [key: string]: string } = {
+                          'Home Visit': 'bg-blue-600',
+                          'Online': 'bg-green-600',
+                          'Clinic': 'bg-purple-600',
+                          'Not specified': 'bg-gray-400'
+                        };
+                        return (
+                          <div key={visitType} className="flex items-center space-x-4">
+                            <div className="w-32 text-sm font-medium text-gray-700 flex items-center" title={visitType}>
+                              <span className="mr-2">{iconMap[visitType] || '📍'}</span>
+                              {visitType}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className={`${colorMap[visitType] || 'bg-gray-600'} h-2 rounded-full`}
                                     style={{ width: `${percentage}%` }}
                                   />
                                 </div>
@@ -1022,6 +1108,21 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
+                <div className="lg:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Visit Type
+                  </label>
+                  <select
+                    value={selectedVisitType}
+                    onChange={(e) => setSelectedVisitType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Visit Types</option>
+                    <option value="home">🏠 Home Visit</option>
+                    <option value="online">💻 Online</option>
+                    <option value="clinic">🏥 Clinic</option>
+                  </select>
+                </div>
               </>
             ) : (
               <div className="lg:col-span-1">
@@ -1126,6 +1227,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Phone</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Service</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Visit Type</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
                       </tr>
@@ -1148,12 +1250,16 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                       }
                       
                       const { date } = deriveDateTime(b);
+                      const visitTypeDisplay = b.visit_type === 'home' ? '🏠 Home' :
+                                             b.visit_type === 'online' ? '💻 Online' :
+                                             b.visit_type === 'clinic' ? '🏥 Clinic' : '—';
                       return (
                         <tr key={idx} className="hover:bg-gray-50">
                           <td className="px-4 py-2 font-medium text-gray-900">{customerName}</td>
                           <td className="px-4 py-2 text-gray-700">{email || '—'}</td>
                           <td className="px-4 py-2 text-gray-700">{phone || '—'}</td>
                           <td className="px-4 py-2 text-gray-700">{service}</td>
+                          <td className="px-4 py-2 text-gray-700">{visitTypeDisplay}</td>
                           <td className="px-4 py-2 text-gray-700">{date}</td>
                           <td className="px-4 py-2">
                             <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
@@ -1189,6 +1295,9 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                     }
 
                     const { date } = deriveDateTime(b);
+                    const visitTypeDisplay = b.visit_type === 'home' ? '🏠 Home' :
+                                           b.visit_type === 'online' ? '💻 Online' :
+                                           b.visit_type === 'clinic' ? '🏥 Clinic' : 'Not specified';
                     return (
                       <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-white">
                         <div className="space-y-2">
@@ -1204,6 +1313,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                           </div>
                           <div className="text-sm text-gray-600">
                             <div><strong>Service:</strong> {service}</div>
+                            <div><strong>Visit Type:</strong> {visitTypeDisplay}</div>
                             <div><strong>Date:</strong> {date}</div>
                             {email && <div><strong>Email:</strong> {email}</div>}
                             {phone && <div><strong>Phone:</strong> {phone}</div>}
