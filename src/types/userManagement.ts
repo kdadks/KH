@@ -349,7 +349,7 @@ export interface UserAuthContext {
   authUser: any | null; // Supabase auth user
   loading: boolean;
   isAdmin: boolean; // Admin detection based on authUser without customer profile
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; breachWarning?: string }>;
   logout: () => Promise<void>;
   register: (data: UserRegistrationData) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (data: UserProfileUpdateData) => Promise<{ success: boolean; error?: string }>;

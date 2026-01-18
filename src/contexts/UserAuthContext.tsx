@@ -24,6 +24,8 @@ import {
   resetPasswordWithToken as resetPasswordWithTokenUtil 
 } from '../utils/passwordResetUtils';
 import { withTimeout, logPerformance } from '../utils/performanceUtils';
+import { isRateLimited, recordLoginAttempt, getRemainingAttempts, resetLoginAttempts } from '../utils/loginRateLimiter';
+import { performBreachCheck, getBreachWarning } from '../utils/breachDetection';
 
 interface UserAuthProviderProps {
   children: React.ReactNode;
@@ -205,10 +207,23 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
   }, []);
 
   // Login user
-  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; breachWarning?: string }> => {
     const startTime = Date.now();
     
     try {
+      const normalizedEmail = email.toLowerCase();
+
+      // ============ SECURITY: RATE LIMITING ============
+      // Check if email is rate limited due to failed login attempts
+      const { limited, retryAfterSeconds } = isRateLimited(normalizedEmail);
+      if (limited) {
+        recordLoginAttempt(normalizedEmail, false);
+        return { 
+          success: false, 
+          error: `Too many login attempts. Please try again in ${retryAfterSeconds} seconds.` 
+        };
+      }
+
       // Don't set global loading state - let the UserLogin component handle its own loading state
 
       // Add timeout to prevent hanging in production
@@ -219,64 +234,53 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       const loginPromise = (async () => {
         // Load all patients/customers associated with this email for multi-patient support
         const { patients, error: patientsError } = await withTimeout(
-          getAllPatientsByEmail(email.toLowerCase()),
+          getAllPatientsByEmail(normalizedEmail),
           8000,
           'Patients lookup timed out'
         );
 
         if (patientsError || !patients || patients.length === 0) {
+          recordLoginAttempt(normalizedEmail, false);
           return { success: false, error: 'Invalid credentials' };
         }
 
         // Use the first patient for password verification (all patients share same email/password)
         const primaryPatient = patients[0];
 
-        // Verify password using bcrypt (using primary patient's credentials)
-        let isValidPassword = false;
-        
-        // Check if password is already hashed
-        if (primaryPatient.password && isPasswordHashed(primaryPatient.password)) {
-          // Verify against hashed password
-          isValidPassword = await verifyPassword(password, primaryPatient.password);
-        } else if (primaryPatient.password) {
-          // Handle legacy plain text passwords (for backwards compatibility during transition)
-          // Check if plain text password matches
-          isValidPassword = primaryPatient.password === password;
-          
-          // If valid, hash the password and update it for ALL patients sharing this email (do this async, don't wait)
-          if (isValidPassword) {
-            // Don't await this - let it happen in background to improve login speed
-            (async () => {
-              try {
-                const hashedPassword = await hashPassword(password);
-                // Update password for all patients with this email
-                await supabase
-                  .from('customers')
-                  .update({ password: hashedPassword })
-                  .eq('email', email.toLowerCase())
-                  .eq('is_active', true);
-              } catch (err) {
-                console.warn('Failed to migrate password for all patients:', err);
-              }
-            })();
-          }
+        // ============ SECURITY: NO PLAINTEXT PASSWORDS ============
+        // Only accept hashed passwords - reject any plaintext passwords
+        if (!primaryPatient.password || !isPasswordHashed(primaryPatient.password)) {
+          console.warn(`[SECURITY] Customer ${primaryPatient.id} has no hashed password. Blocking login.`);
+          recordLoginAttempt(normalizedEmail, false);
+          return { 
+            success: false, 
+            error: 'Account security issue. Please contact support to reset your password.' 
+          };
         }
 
-      if (!isValidPassword) {
-        return { success: false, error: 'Invalid credentials' };
-      }
+        // Verify password using bcrypt
+        let isValidPassword = false;
+        try {
+          isValidPassword = await verifyPassword(password, primaryPatient.password);
+        } catch (err) {
+          console.error('Password verification error:', err);
+          recordLoginAttempt(normalizedEmail, false);
+          return { success: false, error: 'Authentication failed. Please try again.' };
+        }
+
+        if (!isValidPassword) {
+          recordLoginAttempt(normalizedEmail, false);
+          const remaining = getRemainingAttempts(normalizedEmail);
+          if (remaining > 0) {
+            return { success: false, error: `Invalid credentials. ${remaining} attempts remaining.` };
+          } else {
+            return { success: false, error: 'Invalid credentials' };
+          }
+        }
       
       // Check if password equals email (default password) and set must_change_password flag
-      // For plain text comparison, check against the original password
-      // For hashed passwords, we need to verify against the email
       let needsPasswordChange = false;
-      if (primaryPatient.password && isPasswordHashed(primaryPatient.password)) {
-        // For hashed passwords, check if the plain password was the email
-        needsPasswordChange = password === primaryPatient.email;
-      } else if (primaryPatient.password) {
-        // For plain text passwords (legacy), direct comparison
-        needsPasswordChange = primaryPatient.password === primaryPatient.email;
-      }
+      needsPasswordChange = password === primaryPatient.email;
       
       if (needsPasswordChange) {
         // Update flag for ALL patients with this email - don't await this
@@ -285,7 +289,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
             await supabase
               .from('customers')
               .update({ must_change_password: true })
-              .eq('email', email.toLowerCase())
+              .eq('email', normalizedEmail)
               .eq('is_active', true);
             // Update local data for all patients
             patients.forEach(patient => {
@@ -296,12 +300,29 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
           }
         })();
       }
+
+      // ============ SECURITY: BREACH DETECTION ============
+      // Check if email or password has been compromised in known breaches
+      let breachWarning: string | null = null;
+      try {
+        const breachResult = await performBreachCheck(normalizedEmail, password);
+        breachWarning = getBreachWarning(breachResult);
+        
+        if (breachResult.isCompromised) {
+          console.warn(`[SECURITY] Breach detected for ${normalizedEmail}:`, breachResult);
+        }
+      } catch (err) {
+        console.warn('Breach detection check failed:', err);
+      }
       
       // Set up multi-patient authentication data
       setAllPatients(patients);
       setIsMultiPatient(patients.length > 1);
       setActivePatient(primaryPatient);
       setUser(primaryPatient); // Set primary patient as current user for backwards compatibility
+      
+      // ============ SECURITY: RECORD SUCCESSFUL LOGIN ============
+      recordLoginAttempt(normalizedEmail, true);
       
       // Update last login time for the primary patient in background - don't wait for it
       (async () => {
@@ -318,7 +339,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         }
       })();
 
-      return { success: true };
+      return { 
+        success: true, 
+        ...(breachWarning && { breachWarning })
+      };
       })();
 
       // Race between login and timeout
@@ -327,6 +351,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
     } catch (error) {
       console.error('Exception in login:', error);
+      recordLoginAttempt(email.toLowerCase(), false);
       return { success: false, error: 'Unexpected error occurred during login' };
     } finally {
       // No need to clear loading state since we're not setting it
