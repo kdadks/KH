@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Check, X, Clock, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit, Trash2, Check, X, Clock, Calendar, Eye } from 'lucide-react';
 import { Package, ServiceTimeSlot } from './types';
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
@@ -26,6 +26,7 @@ export const Services: React.FC<ServicesProps> = ({
   setEditPackage
 }) => {
   const { showSuccess, showError, showConfirm } = useToast();
+  const timeSlotsRef = useRef<HTMLDivElement>(null);
   
   // Available categories for services
   const availableCategories = [
@@ -36,6 +37,10 @@ export const Services: React.FC<ServicesProps> = ({
     'Corporate Packages',
     'Online Session'
   ];
+
+  // Filter states
+  const [filterVisitType, setFilterVisitType] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Helper functions for category management
   const handleCategoryToggle = (category: string, isForNew: boolean = true) => {
@@ -82,8 +87,25 @@ export const Services: React.FC<ServicesProps> = ({
     is_available: true
   });
 
-  // State for bulk time slot creation
+  // State for modals
+  const [showAddService, setShowAddService] = useState(false);
   const [showBulkCreate, setShowBulkCreate] = useState(false);
+
+  // Helper function to determine slot type based on time
+  const calculateSlotType = (startTime: string, endTime: string): 'in-hour' | 'out-of-hour' => {
+    // In-hour: 09:00 - 17:00 (business hours)
+    // Out-of-hour: before 09:00 or after 17:00
+    const startHour = parseInt(startTime.split(':')[0]);
+    const endHour = parseInt(endTime.split(':')[0]);
+    
+    // If any part is outside business hours, it's out-of-hour
+    if (startHour < 9 || endHour > 17) {
+      return 'out-of-hour';
+    }
+    return 'in-hour';
+  };
+
+  // State for bulk time slot creation
   const [bulkCreateData, setBulkCreateData] = useState({
     slot_type: 'in-hour' as 'in-hour' | 'out-of-hour',
     slot_duration: 50,
@@ -558,6 +580,10 @@ export const Services: React.FC<ServicesProps> = ({
     } else {
       setShowTimeSlots(index);
       fetchTimeSlots(serviceId);
+      // Scroll to time slots section after a short delay to allow rendering
+      setTimeout(() => {
+        timeSlotsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     }
   };
 
@@ -604,775 +630,1028 @@ export const Services: React.FC<ServicesProps> = ({
     setEditPackage(null);
   };
 
+  // Filter services based on selected filters
+  const filteredPackages = packages.filter(pkg => {
+    const matchesVisitType = filterVisitType === 'all' || pkg.visitType === filterVisitType;
+    const matchesCategory = filterCategory === 'all' || 
+      (pkg.categories && pkg.categories.includes(filterCategory));
+    return matchesVisitType && matchesCategory;
+  });
+
+  // State for view service modal
+  const [viewServiceIndex, setViewServiceIndex] = useState<number | null>(null);
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Services Management</h2>
-          <p className="text-gray-600 mt-1">Manage your treatment packages and services with time slots</p>
+          <p className="text-gray-600 mt-1">Manage your treatment packages and services</p>
         </div>
-      </div>
-
-      {/* Add New Service */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Service</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">Service Name *</label>
-            </div>
-            <input
-              type="text"
-              value={newPackage.name}
-              onChange={(e) => setNewPackage({ ...newPackage, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Enter service name"
-              required
-            />
-          </div>
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">Visit Type *</label>
-              <span className="text-xs text-gray-500">Where service is provided</span>
-            </div>
-            <select
-              value={newPackage.visitType || 'clinic'}
-              onChange={(e) => setNewPackage({ ...newPackage, visitType: e.target.value as 'home' | 'online' | 'clinic' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-            >
-              <option value="clinic">Clinic Visit</option>
-              <option value="online">Online</option>
-              <option value="home">Home Visit</option>
-            </select>
-          </div>
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">Categories</label>
-              <span className="text-xs text-gray-500">Select one or more categories</span>
-            </div>
-            <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-32 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-2">
-                {availableCategories.map(category => (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => handleCategoryToggle(category, true)}
-                    className={`px-3 py-2 text-sm rounded border transition-colors ${
-                      isCategorySelected(category, true)
-                        ? 'bg-primary-100 text-primary-700 border-primary-300'
-                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Check className={`w-4 h-4 inline mr-2 ${
-                      isCategorySelected(category, true) ? 'text-primary-600' : 'text-transparent'
-                    }`} />
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">Booking Action *</label>
-              <span className="text-xs text-gray-500">How users interact with this service</span>
-            </div>
-            <select
-              value={newPackage.bookingType || 'book_now'}
-              onChange={(e) => setNewPackage({ ...newPackage, bookingType: e.target.value as 'book_now' | 'contact_me' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-            >
-              <option value="book_now">Book Now</option>
-              <option value="contact_me">Contact Me</option>
-            </select>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">
-                Flat Price (optional)
-              </label>
-              <span className="text-xs text-gray-500">Use this OR hourly prices, not both</span>
-            </div>
-            <input
-              type="text"
-              value={newPackage.price || ''}
-              onChange={(e) => setNewPackage({ ...newPackage, price: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="€25 / class or Contact for Quote"
-            />
-          </div>
-          <div>
-            <div className="mb-2 h-12">
-              <label className="block text-sm font-medium text-gray-700">
-                Out of Hour Price
-              </label>
-              <span className="text-xs text-gray-500">After hours/weekend rate</span>
-            </div>
-            <input
-              type="text"
-              value={newPackage.outOfHourPrice || ''}
-              onChange={(e) => setNewPackage({ ...newPackage, outOfHourPrice: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="€80"
-            />
-          </div>
-        </div>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>
-          <textarea
-            value={newPackage.description || ''}
-            onChange={(e) => setNewPackage({ ...newPackage, description: e.target.value })}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            placeholder="Enter service description..."
-          />
-        </div>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Features</label>
-          <div className="space-y-2">
-            {newPackage.features.map((feature, idx) => (
-              <input
-                key={idx}
-                type="text"
-                value={feature}
-                onChange={(e) => handleFeatureChange(idx, e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                placeholder={`Feature ${idx + 1}`}
-              />
-            ))}
-            <button
-              type="button"
-              onClick={addFeatureField}
-              className="flex items-center px-3 py-2 text-sm text-primary-600 hover:text-primary-700"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add Feature
-            </button>
-          </div>
-        </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Service
-        </button>
-      </div>
-
-      {/* Bulk Time Slot Creation */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Bulk Time Slot Creation</h3>
-            <p className="text-sm text-gray-600 mt-1">Create multiple 50-minute time slots for services</p>
-          </div>
+        <div className="flex gap-3">
           <button
-            onClick={() => setShowBulkCreate(!showBulkCreate)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={() => setShowBulkCreate(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             <Calendar className="w-4 h-4 mr-2" />
-            {showBulkCreate ? 'Hide' : 'Bulk Create Slots'}
+            Bulk Create Slots
+          </button>
+          <button
+            onClick={() => setShowAddService(true)}
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Service
           </button>
         </div>
-        
-        {showBulkCreate && (
-          <div className="p-6 space-y-6">
-            {/* Time Range Selection */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Slot Type</label>
-                <select
-                  value={bulkCreateData.slot_type}
-                  onChange={(e) => setBulkCreateData(prev => ({ ...prev, slot_type: e.target.value as 'in-hour' | 'out-of-hour' }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                >
-                  <option value="in-hour">In Hours</option>
-                  <option value="out-of-hour">Out of Hours</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Slot Duration</label>
-                <select
-                  value={bulkCreateData.slot_duration}
-                  onChange={(e) => setBulkCreateData(prev => ({ ...prev, slot_duration: parseInt(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                >
-                  <option value={50}>50 minutes</option>
-                  <option value={30}>30 minutes</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
-                <input
-                  type="time"
-                  value={bulkCreateData.start_time}
-                  onChange={(e) => setBulkCreateData(prev => ({ ...prev, start_time: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
-                <input
-                  type="time"
-                  value={bulkCreateData.end_time}
-                  onChange={(e) => setBulkCreateData(prev => ({ ...prev, end_time: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-            </div>
+      </div>
 
-            {/* Days Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Days of Week</label>
-              <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-                {daysOfWeek.map(day => (
-                  <button
-                    key={day.value}
-                    type="button"
-                    onClick={() => handleDayToggle(day.value)}
-                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                      bulkCreateData.days_of_week.includes(day.value)
-                        ? 'bg-primary-600 text-white border-primary-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {day.label.slice(0, 3)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Service Selection */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">Apply to Services</label>
-                <button
-                  type="button"
-                  onClick={() => setBulkCreateData(prev => ({ 
-                    ...prev, 
-                    apply_to_all_services: !prev.apply_to_all_services,
-                    selected_services: []
-                  }))}
-                  className={`px-3 py-1 text-sm rounded transition-colors ${
-                    bulkCreateData.apply_to_all_services
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+      {/* Services Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">All Services ({filteredPackages.length})</h3>
+            
+            {/* Filters */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Visit Type:</label>
+                <select
+                  value={filterVisitType}
+                  onChange={(e) => setFilterVisitType(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
                 >
-                  {bulkCreateData.apply_to_all_services ? 'All Services Selected' : 'Select All Services'}
-                </button>
+                  <option value="all">All</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="online">Online</option>
+                  <option value="home">Home</option>
+                </select>
               </div>
               
-              {!bulkCreateData.apply_to_all_services && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                  {packages.filter(p => p.id).map(pkg => (
-                    <button
-                      key={pkg.id}
-                      type="button"
-                      onClick={() => handleServiceToggle(pkg.id!)}
-                      className={`p-2 text-left text-sm rounded border transition-colors ${
-                        bulkCreateData.selected_services.includes(pkg.id!)
-                          ? 'bg-primary-50 text-primary-700 border-primary-200'
-                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Check className={`w-4 h-4 inline mr-2 ${
-                        bulkCreateData.selected_services.includes(pkg.id!)
-                          ? 'text-primary-600'
-                          : 'text-transparent'
-                      }`} />
-                      {pkg.name}
-                    </button>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Category:</label>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                >
+                  <option value="all">All</option>
+                  {availableCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
+                </select>
+              </div>
+              
+              {(filterVisitType !== 'all' || filterCategory !== 'all') && (
+                <button
+                  onClick={() => {
+                    setFilterVisitType('all');
+                    setFilterCategory('all');
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {filteredPackages.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Plus className="w-8 h-8 text-gray-400" />
+            </div>
+            {packages.length === 0 ? (
+              <>
+                <p className="text-lg font-medium">No services found</p>
+                <p className="text-sm mt-2">Add your first service to get started</p>
+                <button
+                  onClick={() => setShowAddService(true)}
+                  className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Add Service
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-medium">No services match your filters</p>
+                <p className="text-sm mt-2">Try adjusting your filter criteria</p>
+                <button
+                  onClick={() => {
+                    setFilterVisitType('all');
+                    setFilterCategory('all');
+                  }}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Service Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    In-Hour Price
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Out-of-Hour Price
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Slots
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Visit Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredPackages.map((pkg, index) => {
+                  // Find the original index in the packages array
+                  const originalIndex = packages.findIndex(p => p.id === pkg.id);
+                  return (
+                  <tr key={pkg.id || index} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
+                      {pkg.bookingType === 'contact_me' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 mt-1">
+                          Contact Only
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{pkg.inHourPrice || pkg.price || '—'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{pkg.outOfHourPrice || '—'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => pkg.id && handleViewTimeSlots(pkg.id, originalIndex)}
+                        className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        <Clock className="w-4 h-4 mr-1" />
+                        {pkg.id ? (timeSlotCounts[pkg.id] || 0) : 0}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        pkg.visitType === 'home' ? 'bg-purple-100 text-purple-800' :
+                        pkg.visitType === 'online' ? 'bg-blue-100 text-blue-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {pkg.visitType === 'home' ? '🏠 Home' :
+                         pkg.visitType === 'online' ? '💻 Online' : '🏥 Clinic'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(pkg.categories && pkg.categories.length > 0) ? (
+                          pkg.categories.slice(0, 2).map((cat, idx) => (
+                            <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
+                              {cat}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                        {pkg.categories && pkg.categories.length > 2 && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
+                            +{pkg.categories.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setViewServiceIndex(originalIndex)}
+                          className="text-gray-600 hover:text-blue-600 transition-colors"
+                          title="View details"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(originalIndex)}
+                          className="text-gray-600 hover:text-blue-600 transition-colors"
+                          title="Edit service"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(originalIndex)}
+                          className="text-gray-600 hover:text-red-600 transition-colors"
+                          title="Delete service"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Time Slots Expansion Section */}
+      {showTimeSlots !== null && packages[showTimeSlots] && (
+        <div ref={timeSlotsRef} className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Time Slots for: {packages[showTimeSlots].name}
+            </h3>
+            <button
+              onClick={() => setShowTimeSlots(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Add Time Slot Form */}
+          <div className="bg-gray-50 p-4 rounded-lg border mb-4">
+            <h4 className="text-md font-medium text-gray-700 mb-3">Add New Time Slot</h4>
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Type</label>
+                <select
+                  value={newTimeSlot.slot_type}
+                  onChange={(e) => setNewTimeSlot({ ...newTimeSlot, slot_type: e.target.value as 'in-hour' | 'out-of-hour' })}
+                  className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                >
+                  <option value="in-hour">In Hour</option>
+                  <option value="out-of-hour">Out of Hour</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Duration</label>
+                <select
+                  value={newTimeSlot.slot_duration}
+                  onChange={(e) => setNewTimeSlot({ ...newTimeSlot, slot_duration: parseInt(e.target.value) })}
+                  className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                >
+                  <option value={50}>50 min</option>
+                  <option value={30}>30 min</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Day</label>
+                <select
+                  value={newTimeSlot.day_of_week}
+                  onChange={(e) => setNewTimeSlot({ ...newTimeSlot, day_of_week: parseInt(e.target.value) })}
+                  className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                >
+                  {daysOfWeek.map(day => (
+                    <option key={day.value} value={day.value}>{day.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Start</label>
+                <input
+                  type="time"
+                  step={60}
+                  value={newTimeSlot.start_time}
+                  onChange={(e) => setNewTimeSlot({ ...newTimeSlot, start_time: e.target.value })}
+                  className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">End</label>
+                <input
+                  type="time"
+                  step={60}
+                  value={newTimeSlot.end_time}
+                  onChange={(e) => setNewTimeSlot({ ...newTimeSlot, end_time: e.target.value })}
+                  className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={() => packages[showTimeSlots].id && handleAddTimeSlot(packages[showTimeSlots].id!)}
+                  className="w-full px-3 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
+                >
+                  Add Slot
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Time Slots List */}
+          <div className="space-y-2">
+            {isLoadingSlots ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                <p className="text-sm text-gray-600 mt-2">Loading time slots...</p>
+              </div>
+            ) : timeSlots.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Clock className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p>No time slots configured</p>
+                <p className="text-sm">Add time slots to specify availability</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {timeSlots.map((slot) => (
+                  <div key={slot.id} className="bg-white p-3 rounded border flex justify-between items-center">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className={`inline-block w-2 h-2 rounded-full ${
+                          slot.slot_type === 'in-hour' ? 'bg-green-500' : 'bg-orange-500'
+                        }`}></span>
+                        <span className="text-sm font-medium">
+                          {daysOfWeek.find(d => d.value === slot.day_of_week)?.label}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          slot.slot_type === 'in-hour' 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {slot.slot_type}
+                        </span>
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                          {slot.slot_duration || 50}min
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteTimeSlot(slot.id!)}
+                      className="text-red-500 hover:text-red-700 text-sm p-1"
+                      title="Delete time slot"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* View Service Details Modal */}
+      {viewServiceIndex !== null && packages[viewServiceIndex] && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-2xl font-semibold text-gray-900">Service Details</h3>
+                <button
+                  onClick={() => setViewServiceIndex(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Service Name and Type */}
+              <div>
+                <h4 className="text-xl font-bold text-gray-900 mb-2">{packages[viewServiceIndex].name}</h4>
+                <div className="flex flex-wrap gap-2">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    packages[viewServiceIndex].visitType === 'home' ? 'bg-purple-100 text-purple-800' :
+                    packages[viewServiceIndex].visitType === 'online' ? 'bg-blue-100 text-blue-800' :
+                    'bg-green-100 text-green-800'
+                  }`}>
+                    {packages[viewServiceIndex].visitType === 'home' ? '🏠 Home Visit' :
+                     packages[viewServiceIndex].visitType === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}
+                  </span>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    packages[viewServiceIndex].bookingType === 'contact_me' ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {packages[viewServiceIndex].bookingType === 'contact_me' ? '📞 Contact Me' : '📅 Book Now'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Description */}
+              {packages[viewServiceIndex].description && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Description</h5>
+                  <p className="text-gray-600">{packages[viewServiceIndex].description}</p>
+                </div>
+              )}
+
+              {/* Pricing */}
+              <div>
+                <h5 className="text-sm font-semibold text-gray-700 mb-3">Pricing</h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {packages[viewServiceIndex].price && (
+                    <div className="bg-gray-50 p-4 rounded-lg border">
+                      <div className="text-sm text-gray-600">Standard Price</div>
+                      <div className="text-lg font-semibold text-gray-900 mt-1">{packages[viewServiceIndex].price}</div>
+                    </div>
+                  )}
+                  {packages[viewServiceIndex].inHourPrice && (
+                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                      <div className="text-sm text-green-700">In-Hour Price</div>
+                      <div className="text-lg font-semibold text-green-900 mt-1">{packages[viewServiceIndex].inHourPrice}</div>
+                      <div className="text-xs text-green-600 mt-1">9:00 AM - 5:00 PM</div>
+                    </div>
+                  )}
+                  {packages[viewServiceIndex].outOfHourPrice && (
+                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                      <div className="text-sm text-orange-700">Out-of-Hour Price</div>
+                      <div className="text-lg font-semibold text-orange-900 mt-1">{packages[viewServiceIndex].outOfHourPrice}</div>
+                      <div className="text-xs text-orange-600 mt-1">After hours & weekends</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Categories */}
+              {packages[viewServiceIndex].categories && packages[viewServiceIndex].categories!.length > 0 && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-700 mb-3">Categories</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {packages[viewServiceIndex].categories!.map((cat, idx) => (
+                      <span key={idx} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 font-medium">
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Features */}
+              {packages[viewServiceIndex].features.length > 0 && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-700 mb-3">Features</h5>
+                  <ul className="space-y-2">
+                    {packages[viewServiceIndex].features.filter(Boolean).map((feature, idx) => (
+                      <li key={idx} className="flex items-start">
+                        <Check className="w-5 h-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-gray-700">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Time Slots Summary */}
+              {packages[viewServiceIndex].id && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-700 mb-3">Time Slots</h5>
+                  <div className="flex items-center gap-3 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <Clock className="w-8 h-8 text-blue-600" />
+                    <div>
+                      <div className="text-lg font-semibold text-blue-900">
+                        {timeSlotCounts[packages[viewServiceIndex].id!] || 0} time slots configured
+                      </div>
+                      <button
+                        onClick={() => {
+                          const idx = viewServiceIndex;
+                          setViewServiceIndex(null);
+                          handleViewTimeSlots(packages[idx].id!, idx);
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium mt-1"
+                      >
+                        View and manage time slots →
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Preview */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
-              <div className="text-sm text-gray-600">
-                {(() => {
-                  const timeSlots = generateTimeSlots(bulkCreateData.start_time, bulkCreateData.end_time, bulkCreateData.slot_duration);
-                  const selectedServices = bulkCreateData.apply_to_all_services 
-                    ? packages.filter(p => p.id).length
-                    : bulkCreateData.selected_services.length;
-                  const totalSlots = timeSlots.length * bulkCreateData.days_of_week.length * selectedServices;
-                  
-                  return (
-                    <div className="space-y-1">
-                      <p><strong>{timeSlots.length}</strong> × {bulkCreateData.slot_duration}-minute slots per day</p>
-                      <p><strong>{bulkCreateData.days_of_week.length}</strong> days selected</p>
-                      <p><strong>{selectedServices}</strong> services selected</p>
-                      <p className="text-primary-600 font-medium">Total: <strong>{totalSlots}</strong> time slots will be created</p>
-                    </div>
-                  );
-                })()}
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setViewServiceIndex(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  const idx = viewServiceIndex;
+                  setViewServiceIndex(null);
+                  handleEdit(idx);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Service
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Add Service Modal */}
+      {showAddService && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-semibold text-gray-900">Add New Service</h3>
+                <button
+                  onClick={() => setShowAddService(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-3">
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Service Name *</label>
+                  <input
+                    type="text"
+                    value={newPackage.name}
+                    onChange={(e) => setNewPackage({ ...newPackage, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Enter service name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Visit Type *</label>
+                  <select
+                    value={newPackage.visitType || 'clinic'}
+                    onChange={(e) => setNewPackage({ ...newPackage, visitType: e.target.value as 'home' | 'online' | 'clinic' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                  >
+                    <option value="clinic">🏥 Clinic Visit</option>
+                    <option value="online">💻 Online</option>
+                    <option value="home">🏠 Home Visit</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Booking Action *</label>
+                  <select
+                    value={newPackage.bookingType || 'book_now'}
+                    onChange={(e) => setNewPackage({ ...newPackage, bookingType: e.target.value as 'book_now' | 'contact_me' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                  >
+                    <option value="book_now">📅 Book Now</option>
+                    <option value="contact_me">📞 Contact Me</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Standard Price</label>
+                  <input
+                    type="text"
+                    value={newPackage.price}
+                    onChange={(e) => setNewPackage({ ...newPackage, price: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="€100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">In Hours Price</label>
+                  <input
+                    type="text"
+                    value={newPackage.inHourPrice}
+                    onChange={(e) => setNewPackage({ ...newPackage, inHourPrice: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="€80"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Out of Hours Price</label>
+                  <input
+                    type="text"
+                    value={newPackage.outOfHourPrice}
+                    onChange={(e) => setNewPackage({ ...newPackage, outOfHourPrice: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="€120"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categories</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {availableCategories.map(category => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => handleCategoryToggle(category, true)}
+                      className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                        isCategorySelected(category, true)
+                          ? 'bg-primary-100 text-primary-700 border-primary-300'
+                          : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Check className={`w-4 h-4 inline mr-2 ${
+                        isCategorySelected(category, true) ? 'text-primary-600' : 'text-transparent'
+                      }`} />
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={newPackage.description}
+                  onChange={(e) => setNewPackage({ ...newPackage, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Describe the service..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Features</label>
+                <div className="space-y-2">
+                  {newPackage.features.map((feature, idx) => (
+                    <input
+                      key={idx}
+                      type="text"
+                      value={feature}
+                      onChange={(e) => handleFeatureChange(idx, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder={`Feature ${idx + 1}`}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addFeatureField}
+                    className="flex items-center px-3 py-2 text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Feature
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
               <button
-                type="button"
-                onClick={() => setShowBulkCreate(false)}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => setShowAddService(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
-                type="button"
+                onClick={handleAdd}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Add Service
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Create Modal */}
+      {showBulkCreate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-semibold text-gray-900">Bulk Create Time Slots</h3>
+                <button
+                  onClick={() => setShowBulkCreate(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Time Range Selection */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Slot Duration</label>
+                  <select
+                    value={bulkCreateData.slot_duration}
+                    onChange={(e) => setBulkCreateData(prev => ({ ...prev, slot_duration: parseInt(e.target.value) }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                  >
+                    <option value={50}>50 minutes</option>
+                    <option value={30}>30 minutes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                  <input
+                    type="time"
+                    value={bulkCreateData.start_time}
+                    onChange={(e) => {
+                      const newStartTime = e.target.value;
+                      setBulkCreateData(prev => ({
+                        ...prev,
+                        start_time: newStartTime,
+                        slot_type: calculateSlotType(newStartTime, prev.end_time)
+                      }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                  <input
+                    type="time"
+                    value={bulkCreateData.end_time}
+                    onChange={(e) => {
+                      const newEndTime = e.target.value;
+                      setBulkCreateData(prev => ({
+                        ...prev,
+                        end_time: newEndTime,
+                        slot_type: calculateSlotType(prev.start_time, newEndTime)
+                      }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              {/* Auto-calculated Slot Type Display */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-medium text-gray-700">
+                  Auto-calculated Slot Type:
+                  <span className={`ml-2 font-bold ${
+                    bulkCreateData.slot_type === 'out-of-hour'
+                      ? 'text-orange-600'
+                      : 'text-green-600'
+                  }`}>
+                    {bulkCreateData.slot_type === 'out-of-hour' ? '🌙 Out of Hour' : '🏢 In Hour'}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  In Hour: 09:00 - 17:00 | Out of Hour: Before 09:00 or After 17:00
+                </p>
+              </div>
+
+              {/* Days Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Days of Week</label>
+                <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
+                  {daysOfWeek.map(day => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => handleDayToggle(day.value)}
+                      className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                        bulkCreateData.days_of_week.includes(day.value)
+                          ? 'bg-primary-600 text-white border-primary-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {day.label.slice(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Service Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">Apply to Services</label>
+                  <button
+                    type="button"
+                    onClick={() => setBulkCreateData(prev => ({
+                      ...prev,
+                      apply_to_all_services: !prev.apply_to_all_services,
+                      selected_services: []
+                    }))}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      bulkCreateData.apply_to_all_services
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {bulkCreateData.apply_to_all_services ? 'All Services Selected' : 'Select All Services'}
+                  </button>
+                </div>
+
+                {!bulkCreateData.apply_to_all_services && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {packages.filter(p => p.id).map(pkg => (
+                      <button
+                        key={pkg.id}
+                        type="button"
+                        onClick={() => handleServiceToggle(pkg.id!)}
+                        className={`p-2 text-left text-sm rounded border transition-colors ${
+                          bulkCreateData.selected_services.includes(pkg.id!)
+                            ? 'bg-primary-50 text-primary-700 border-primary-200'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Check className={`w-4 h-4 inline mr-2 ${
+                          bulkCreateData.selected_services.includes(pkg.id!)
+                            ? 'text-primary-600'
+                            : 'text-transparent'
+                        }`} />
+                        {pkg.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowBulkCreate(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
                 onClick={handleBulkCreateTimeSlots}
-                disabled={bulkCreateData.days_of_week.length === 0 || 
-                         (!bulkCreateData.apply_to_all_services && bulkCreateData.selected_services.length === 0)}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Create Time Slots
               </button>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Services List */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Current Services ({packages.length})</h3>
         </div>
-        <div className="divide-y divide-gray-200">
-          {packages.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Plus className="w-6 h-6 text-gray-400" />
+      )}
+
+      {/* Edit Service Modal */}
+      {editIndex !== null && editPackage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-semibold text-gray-900">Edit Service</h3>
+                <button
+                  onClick={handleCancelEdit}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
               </div>
-              <p>No services found</p>
-              <p className="text-sm mt-1">Add your first service to get started</p>
             </div>
-          ) : (
-            packages.map((pkg, idx) => (
-              <div key={pkg.id || idx} className="p-6">
-                {editIndex === idx && editPackage ? (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Service</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Service Name *
-                          </label>
-                        </div>
-                        <input
-                          type="text"
-                          value={editPackage.name}
-                          onChange={(e) => handleEditChange('name', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="Enter service name"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Visit Type *
-                          </label>
-                          <span className="text-xs text-gray-500">Where service is provided</span>
-                        </div>
-                        <select
-                          value={editPackage.visitType || 'clinic'}
-                          onChange={(e) => handleEditChange('visitType', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                        >
-                          <option value="clinic">Clinic Visit</option>
-                          <option value="online">Online</option>
-                          <option value="home">Home Visit</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Categories
-                          </label>
-                          <span className="text-xs text-gray-500">Select one or more categories</span>
-                        </div>
-                        <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-32 overflow-y-auto">
-                          <div className="grid grid-cols-2 gap-2">
-                            {availableCategories.map(category => (
-                              <button
-                                key={category}
-                                type="button"
-                                onClick={() => handleCategoryToggle(category, false)}
-                                className={`px-3 py-2 text-sm rounded border transition-colors ${
-                                  isCategorySelected(category, false)
-                                    ? 'bg-primary-100 text-primary-700 border-primary-300'
-                                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                                }`}
-                              >
-                                <Check className={`w-4 h-4 inline mr-2 ${
-                                  isCategorySelected(category, false) ? 'text-primary-600' : 'text-transparent'
-                                }`} />
-                                {category}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Booking Action *
-                          </label>
-                          <span className="text-xs text-gray-500">How users interact with service</span>
-                        </div>
-                        <select
-                          value={editPackage.bookingType || 'book_now'}
-                          onChange={(e) => handleEditChange('bookingType', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                        >
-                          <option value="book_now">Book Now</option>
-                          <option value="contact_me">Contact Me</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            In-Hour Price
-                          </label>
-                          <span className="text-xs text-gray-500">Regular business hours rate</span>
-                        </div>
-                        <input
-                          type="text"
-                          value={editPackage.inHourPrice || ''}
-                          onChange={(e) => handleEditChange('inHourPrice', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="e.g., €65"
-                        />
-                      </div>
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Out-of-Hour Price
-                          </label>
-                          <span className="text-xs text-gray-500">After hours/weekend rate</span>
-                        </div>
-                        <input
-                          type="text"
-                          value={editPackage.outOfHourPrice || ''}
-                          onChange={(e) => handleEditChange('outOfHourPrice', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="e.g., €80"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Fixed Price (if not hourly)
-                          </label>
-                          <span className="text-xs text-gray-500">Use this OR hourly prices, not both</span>
-                        </div>
-                        <input
-                          type="text"
-                          value={editPackage.price || ''}
-                          onChange={(e) => handleEditChange('price', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="e.g., €90 or Contact for Quote"
-                        />
-                      </div>
-                      <div>
-                        <div className="mb-1 h-12">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Service Description
-                          </label>
-                        </div>
-                        <textarea
-                          value={editPackage.description || ''}
-                          onChange={(e) => handleEditChange('description', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="Detailed description of the service"
-                          rows={2}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">Features</label>
-                      {editPackage.features.map((feature, fidx) => (
-                        <input
-                          key={fidx}
-                          type="text"
-                          value={feature}
-                          onChange={(e) => handleEditFeatureChange(fidx, e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder={`Feature ${fidx + 1}`}
-                        />
-                      ))}
-                      <button
-                        type="button"
-                        onClick={addEditFeatureField}
-                        className="flex items-center px-3 py-2 text-sm text-primary-600 hover:text-primary-700"
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add Feature
-                      </button>
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={handleSaveEdit}
-                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        <Check className="w-4 h-4 mr-2" />
-                        Save Changes
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h4 className="text-xl font-semibold text-gray-900">{pkg.name}</h4>
-                        {pkg.price && (
-                          <p className="text-2xl font-bold text-primary-600 mt-1">{pkg.price}</p>
-                        )}
-                        {(pkg.categories && pkg.categories.length > 0) && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {pkg.categories.map((category, catIdx) => (
-                              <span key={catIdx} className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full">
-                                {category}
-                              </span>
-                            ))}
-                            {typeof pkg.id === 'number' && (
-                              <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-1">
-                                <Clock className="w-3 h-3 mr-1" />
-                                {timeSlotCounts[pkg.id] ?? 0}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {pkg.description && (
-                          <p className="text-gray-600 mt-2 text-sm">{pkg.description}</p>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-                          {pkg.inHourPrice && (
-                            <div className="text-sm">
-                              <span className="text-gray-600">In Hour:</span>
-                              <span className="font-medium ml-1 text-green-600">{pkg.inHourPrice}</span>
-                            </div>
-                          )}
-                          {pkg.outOfHourPrice && (
-                            <div className="text-sm">
-                              <span className="text-gray-600">Out of Hour:</span>
-                              <span className="font-medium ml-1 text-orange-600">{pkg.outOfHourPrice}</span>
-                            </div>
-                          )}
-                        </div>
-                        {pkg.features.length > 0 && (
-                          <ul className="mt-3 space-y-1">
-                            {pkg.features.filter(Boolean).map((feature, fidx) => (
-                              <li key={fidx} className="text-gray-600 flex items-center text-sm">
-                                <Check className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                      <div className="flex flex-col space-y-2 ml-4">
-                        {pkg.id && (
-                          <button
-                            onClick={() => handleViewTimeSlots(pkg.id!, idx)}
-                            className="flex items-center px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-                          >
-                            <Clock className="w-4 h-4 mr-1" />
-                            Time Slots
-                          </button>
-                        )}
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleEdit(idx)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit Service"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(idx)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete Service"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Time Slots Section */}
-                    {showTimeSlots === idx && pkg.id && (
-                      <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
-                        <div className="flex justify-between items-center mb-4">
-                          <h5 className="text-lg font-semibold text-gray-900">Time Slots</h5>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => {
-                                setBulkCreateData(prev => ({
-                                  ...prev,
-                                  apply_to_all_services: false,
-                                  selected_services: [pkg.id!]
-                                }));
-                                setShowBulkCreate(true);
-                              }}
-                              className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                            >
-                              <Calendar className="w-4 h-4 mr-1" />
-                              Quick Bulk
-                            </button>
-                            <button
-                              onClick={() => setShowTimeSlots(null)}
-                              className="text-gray-500 hover:text-gray-700"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </div>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Service Name *</label>
+                  <input
+                    type="text"
+                    value={editPackage.name}
+                    onChange={(e) => handleEditChange('name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    required
+                  />
+                </div>
 
-                        {/* Add Time Slot Form */}
-                        <div className="bg-white p-4 rounded-lg border mb-4">
-                          <h6 className="text-md font-medium text-gray-700 mb-3">Add New Time Slot</h6>
-                          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Type</label>
-                              <select
-                                value={newTimeSlot.slot_type}
-                                onChange={(e) => setNewTimeSlot({ ...newTimeSlot, slot_type: e.target.value as 'in-hour' | 'out-of-hour' })}
-                                className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                              >
-                                <option value="in-hour">In Hour</option>
-                                <option value="out-of-hour">Out of Hour</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Duration</label>
-                              <select
-                                value={newTimeSlot.slot_duration}
-                                onChange={(e) => setNewTimeSlot({ ...newTimeSlot, slot_duration: parseInt(e.target.value) })}
-                                className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                              >
-                                <option value={50}>50 min</option>
-                                <option value={30}>30 min</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Day</label>
-                              <select
-                                value={newTimeSlot.day_of_week}
-                                onChange={(e) => setNewTimeSlot({ ...newTimeSlot, day_of_week: parseInt(e.target.value) })}
-                                className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                              >
-                                {daysOfWeek.map(day => (
-                                  <option key={day.value} value={day.value}>{day.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Start</label>
-                              <input
-                                type="time"
-                                step={60}
-                                value={newTimeSlot.start_time}
-                                onChange={(e) => setNewTimeSlot({ ...newTimeSlot, start_time: e.target.value })}
-                                className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">End</label>
-                              <input
-                                type="time"
-                                step={60}
-                                value={newTimeSlot.end_time}
-                                onChange={(e) => setNewTimeSlot({ ...newTimeSlot, end_time: e.target.value })}
-                                className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                              />
-                            </div>
-                            <div className="flex items-end">
-                              <button
-                                onClick={() => handleAddTimeSlot(pkg.id!)}
-                                className="w-full px-3 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
-                              >
-                                Add Slot
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Visit Type *</label>
+                  <select
+                    value={editPackage.visitType || 'clinic'}
+                    onChange={(e) => handleEditChange('visitType', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                  >
+                    <option value="clinic">🏥 Clinic Visit</option>
+                    <option value="online">💻 Online</option>
+                    <option value="home">🏠 Home Visit</option>
+                  </select>
+                </div>
 
-                        {/* Time Slots List */}
-                        <div className="space-y-2">
-                          {isLoadingSlots ? (
-                            <div className="text-center py-4">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-                              <p className="text-sm text-gray-600 mt-2">Loading time slots...</p>
-                            </div>
-                          ) : timeSlots.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">
-                              <Clock className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                              <p>No time slots configured</p>
-                              <p className="text-sm">Add time slots to specify availability</p>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {timeSlots.map((slot) => (
-                                <div key={slot.id} className="bg-white p-3 rounded border flex justify-between items-center">
-                                  <div>
-                                    <div className="flex items-center space-x-2">
-                                      <span className={`inline-block w-2 h-2 rounded-full ${
-                                        slot.slot_type === 'in-hour' ? 'bg-green-500' : 'bg-orange-500'
-                                      }`}></span>
-                                      <span className="text-sm font-medium">
-                                        {daysOfWeek.find(d => d.value === slot.day_of_week)?.label}
-                                      </span>
-                                      <span className={`text-xs px-2 py-1 rounded-full ${
-                                        slot.slot_type === 'in-hour' 
-                                          ? 'bg-green-100 text-green-700' 
-                                          : 'bg-orange-100 text-orange-700'
-                                      }`}>
-                                        {slot.slot_type}
-                                      </span>
-                                      <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                                        {slot.slot_duration || 50}min
-                                      </span>
-                                    </div>
-                                    <div className="text-sm text-gray-600 mt-1">
-                                      {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleDeleteTimeSlot(slot.id!)}
-                                    className="text-red-500 hover:text-red-700 text-sm p-1"
-                                    title="Delete time slot"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Booking Action *</label>
+                  <select
+                    value={editPackage.bookingType || 'book_now'}
+                    onChange={(e) => handleEditChange('bookingType', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                  >
+                    <option value="book_now">📅 Book Now</option>
+                    <option value="contact_me">📞 Contact Me</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Standard Price</label>
+                  <input
+                    type="text"
+                    value={editPackage.price}
+                    onChange={(e) => handleEditChange('price', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">In Hours Price</label>
+                  <input
+                    type="text"
+                    value={editPackage.inHourPrice}
+                    onChange={(e) => handleEditChange('inHourPrice', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Out of Hours Price</label>
+                  <input
+                    type="text"
+                    value={editPackage.outOfHourPrice}
+                    onChange={(e) => handleEditChange('outOfHourPrice', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
               </div>
-            ))
-          )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categories</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {availableCategories.map(category => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => handleCategoryToggle(category, false)}
+                      className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                        isCategorySelected(category, false)
+                          ? 'bg-primary-100 text-primary-700 border-primary-300'
+                          : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Check className={`w-4 h-4 inline mr-2 ${
+                        isCategorySelected(category, false) ? 'text-primary-600' : 'text-transparent'
+                      }`} />
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={editPackage.description}
+                  onChange={(e) => handleEditChange('description', e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Features</label>
+                <div className="space-y-2">
+                  {editPackage.features.map((feature, idx) => (
+                    <input
+                      key={idx}
+                      type="text"
+                      value={feature}
+                      onChange={(e) => handleEditFeatureChange(idx, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder={`Feature ${idx + 1}`}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addEditFeatureField}
+                    className="flex items-center px-3 py-2 text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Feature
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={handleCancelEdit}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
