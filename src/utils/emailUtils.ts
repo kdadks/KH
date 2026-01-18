@@ -27,6 +27,7 @@ export interface BookingConfirmationData {
   appointment_time: string;
   total_amount: number;
   booking_reference: string;
+  visit_type?: 'clinic' | 'home' | 'online';
   therapist_name?: string;
   clinic_address?: string;
   special_instructions?: string;
@@ -83,6 +84,7 @@ export interface BookingWithPaymentData {
   payment_amount?: number;
   transaction_id?: string;
   next_steps?: string;
+  visit_type?: 'clinic' | 'home' | 'online';
   therapist_name?: string;
   clinic_address?: string;
   special_instructions?: string;
