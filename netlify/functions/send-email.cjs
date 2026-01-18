@@ -405,6 +405,7 @@ const getEmailTemplate = (type, data) => {
               <div class="details">
                 <h3>📅 Appointment Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Total Amount:</strong> €${data.total_amount}</p>
@@ -1333,6 +1334,7 @@ const getEmailTemplate = (type, data) => {
               <div class="details">
                 <h3>📅 Appointment Details:</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${data.booking_reference}</p>
