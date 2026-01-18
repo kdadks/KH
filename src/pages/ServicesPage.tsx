@@ -60,7 +60,7 @@ const ServicesPage: React.FC = () => {
 			setLoading(true);
 			const { data, error } = await supabase
 				.from('services')
-				.select('*')
+				.select('id, name, category, price, in_hour_price, out_of_hour_price, features, booking_type, visit_type, is_active')
 				.eq('is_active', true)
 				.order('category, name');
 
@@ -80,6 +80,7 @@ const ServicesPage: React.FC = () => {
 				outOfHourPrice: service.out_of_hour_price || undefined,
 				features: service.features || [],
 				bookingType: service.booking_type || 'book_now',
+				visitType: service.visit_type || 'clinic',
 			})) || [];
 
 			setServices(transformedServices);
@@ -154,7 +155,16 @@ const ServicesPage: React.FC = () => {
 			// Check if service has the active category in its categories array
 			const serviceCategories = Array.isArray(p.categories) ? p.categories : 
 			                        (p.category ? [p.category] : []);
-			return serviceCategories.includes(activeCategory as any);
+			
+			const categoryMatch = serviceCategories.includes(activeCategory as any);
+			if (!categoryMatch) return false;
+			
+			// Additional filter: if category is "Online Session", only show services with visit_type = "online"
+			if (activeCategory === 'Online Session' && p.visitType !== 'online') {
+				return false;
+			}
+			
+			return true;
 		}
 	);
 
@@ -223,8 +233,15 @@ const ServicesPage: React.FC = () => {
 									key={pkg.name}
 									className="border rounded-lg shadow p-6 flex flex-col h-full"
 								>
-									<h2 className="text-xl font-semibold mb-2">{pkg.name}</h2>
-									<div className="text-primary-600 mb-4 space-y-1">
+									<h2 className="text-xl font-semibold mb-2">{pkg.name}</h2>								{pkg.visitType && (
+									<div className="mb-3">
+										<span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-primary-100 text-primary-700">
+											{pkg.visitType === 'clinic' && '🏥 Clinic'}
+											{pkg.visitType === 'home' && '🏠 Home'}
+											{pkg.visitType === 'online' && '💻 Online'}
+										</span>
+									</div>
+								)}									<div className="text-primary-600 mb-4 space-y-1">
 										{pkg.inHourPrice && (
 											<div className="text-lg font-semibold">
 												In Hours: <span>{pkg.inHourPrice}</span>

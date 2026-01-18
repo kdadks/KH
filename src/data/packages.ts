@@ -21,6 +21,8 @@ export type Package = {
   categories?: PackageCategory[];
   /** Booking action type for user interaction */
   bookingType?: 'book_now' | 'contact_me';
+  /** Visit type: home, online, or clinic */
+  visitType?: 'home' | 'online' | 'clinic';
 };
 
 // Ordered list of categories for UI tabs
