@@ -43,6 +43,19 @@ interface PaymentManagementProps {
   onRefresh?: () => void;
 }
 
+// Helper function to format service name with visit type
+const formatServiceWithVisitType = (serviceName: string, visitType?: 'home' | 'online' | 'clinic'): string => {
+  if (!visitType) return serviceName;
+  
+  const visitTypeLabel = {
+    home: '[Home]',
+    online: '[Online]',
+    clinic: '[Clinic]'
+  }[visitType];
+  
+  return `${serviceName} ${visitTypeLabel}`;
+};
+
 export const PaymentManagement: React.FC<PaymentManagementProps> = ({
   paymentRequests: propPaymentRequests,
   payments: propPayments,
@@ -749,7 +762,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">{payment.customer_name}</p>
-                          <p className="text-sm text-gray-500">{payment.service_name}</p>
+                          <p className="text-sm text-gray-500">{formatServiceWithVisitType(payment.service_name, payment.visit_type)}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -864,7 +877,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {request.service_name || 'No service specified'}
+                          {formatServiceWithVisitType(request.service_name || 'No service specified', request.visit_type)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           €{request.amount.toFixed(2)}
@@ -1017,7 +1030,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                               {payment.customer_name || 'Unknown Customer'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {payment.service_name || 'Payment'}
+                              {formatServiceWithVisitType(payment.service_name || 'Payment', payment.visit_type)}
                             </div>
                           </div>
                         </td>
@@ -1141,7 +1154,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
-                          {booking.package_name}
+                          {formatServiceWithVisitType(booking.package_name, booking.visit_type)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(booking.booking_date).toLocaleDateString()}
@@ -1218,7 +1231,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-600">Service</p>
-                <p className="text-base text-gray-900">{selectedPaymentRequest.service_name}</p>
+                <p className="text-base text-gray-900">{formatServiceWithVisitType(selectedPaymentRequest.service_name, selectedPaymentRequest.visit_type)}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-600">Amount</p>
@@ -1288,7 +1301,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
-                  <p className="text-base text-gray-900">{selectedPaymentRequest.service_name}</p>
+                  <p className="text-base text-gray-900">{formatServiceWithVisitType(selectedPaymentRequest.service_name, selectedPaymentRequest.visit_type)}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
@@ -1465,7 +1478,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Service:</span>
-                    <span className="text-sm font-medium text-gray-900">{selectedPayment.service_name || 'N/A'}</span>
+                    <span className="text-sm font-medium text-gray-900">{formatServiceWithVisitType(selectedPayment.service_name || 'N/A', selectedPayment.visit_type)}</span>
                   </div>
                 </div>
               </div>

@@ -33,6 +33,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
       : booking.customer_name || booking.name || 'Unknown';
   };
 
+  // Helper function to format service name with visit type
+  const formatServiceWithVisitType = (serviceName: string, visitType?: 'home' | 'online' | 'clinic'): string => {
+    if (!visitType) return serviceName;
+    
+    const visitTypeLabel = {
+      home: '[Home]',
+      online: '[Online]',
+      clinic: '[Clinic]'
+    }[visitType];
+    
+    return `${serviceName} ${visitTypeLabel}`;
+  };
+
   // ---------- Date helpers & normalization ----------
   const toDateOnlyString = (d: Date) => d.toISOString().split('T')[0];
   const parseDate = (raw?: string) => {
@@ -212,7 +225,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{getCustomerName(booking)}</p>
-                      <p className="text-xs sm:text-sm text-gray-500 truncate">{booking.package_name || booking.service}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 truncate">{formatServiceWithVisitType(booking.package_name || booking.service, booking.visit_type)}</p>
                       {/* Show date on mobile under the service */}
                       <p className="text-xs text-gray-500 mt-1 sm:hidden">{formatDisplayDate(booking)}</p>
                     </div>

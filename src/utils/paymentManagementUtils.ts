@@ -9,6 +9,7 @@ export interface PaymentRequest {
   customer_name: string;
   customer_email: string;
   service_name: string;
+  visit_type?: 'home' | 'online' | 'clinic'; // Added visit type
   amount: number;
   currency: string;
   status: 'pending' | 'paid' | 'failed' | 'cancelled';
@@ -31,6 +32,7 @@ export interface Payment {
   customer_name?: string; // Added for display
   customer_email?: string; // Added for display
   service_name?: string; // Added for display
+  visit_type?: 'home' | 'online' | 'clinic'; // Added visit type
   payment_date?: string; // Added for actual payment date
   // Extended fields from Supabase payments table
   customer_id?: number;
@@ -67,6 +69,7 @@ export interface BookingWithoutPayment {
   customer_name: string;
   customer_email: string;
   package_name: string;
+  visit_type?: 'home' | 'online' | 'clinic';
   status: string;
   booking_date: string;
   has_payment_request: boolean;
@@ -152,9 +155,29 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
       });
     });
 
+    // Get unique booking IDs to fetch visit_type
+    const bookingIds = [...new Set(paymentRequestsData.map(pr => pr.booking_id).filter(Boolean))];
+    
+    // Fetch booking data to get visit_type
+    const bookingMap = new Map();
+    if (bookingIds.length > 0) {
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('id, package_name, visit_type')
+        .in('id', bookingIds);
+      
+      bookingsData?.forEach(booking => {
+        bookingMap.set(booking.id, {
+          package_name: booking.package_name,
+          visit_type: booking.visit_type
+        });
+      });
+    }
+
     // Combine payment requests with customer data
     return paymentRequestsData.map(pr => {
       const customer = customerMap.get(pr.customer_id);
+      const booking = bookingMap.get(pr.booking_id);
       
       // Extract service name - try service_name column first, then parse from notes
       let serviceName = pr.service_name;
@@ -170,14 +193,15 @@ export const getAllPaymentRequests = async (): Promise<PaymentRequest[]> => {
         customer_id: pr.customer_id,
         customer_name: customer?.name || 'Unknown',
         customer_email: customer?.email || 'Unknown',
-        service_name: serviceName || 'Unknown Service',
+        service_name: serviceName || booking?.package_name || 'Unknown Service',
         amount: pr.amount || 0,
         currency: pr.currency || 'EUR',
         status: pr.status || 'pending',
         due_date: pr.payment_due_date, // Use payment_due_date column from database
         created_at: pr.created_at,
         booking_id: pr.booking_id,
-        invoice_id: pr.invoice_id
+        invoice_id: pr.invoice_id,
+        visit_type: booking?.visit_type
       };
     });
 
@@ -237,7 +261,7 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
     if (bookingIds.length > 0) {
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
-        .select('id, package_name')
+        .select('id, package_name, visit_type')
         .in('id', bookingIds);
       
       if (!bookingError) {
@@ -264,7 +288,10 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
 
     const bookingMap = new Map();
     bookingsData.forEach(booking => {
-      bookingMap.set(booking.id, booking.package_name || 'Payment');
+      bookingMap.set(booking.id, {
+        package_name: booking.package_name || 'Payment',
+        visit_type: booking.visit_type
+      });
     });
 
     // Combine payment data with customer and service information
@@ -279,7 +306,8 @@ export const getRecentPayments = async (limit: number = 5): Promise<Payment[]> =
       created_at: payment.created_at || '',
       customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
       customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
-      service_name: bookingMap.get(payment.booking_id) || 'Payment',
+      service_name: bookingMap.get(payment.booking_id)?.package_name || 'Payment',
+      visit_type: bookingMap.get(payment.booking_id)?.visit_type,
       payment_date: payment.payment_date || payment.created_at
     }));
 
@@ -350,7 +378,7 @@ export const getAllPayments = async (): Promise<Payment[]> => {
     if (bookingIds.length > 0) {
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
-        .select('id, package_name')
+        .select('id, package_name, visit_type')
         .in('id', bookingIds);
       
       if (!bookingError) {
@@ -377,7 +405,10 @@ export const getAllPayments = async (): Promise<Payment[]> => {
 
     const bookingMap = new Map();
     bookingsData.forEach(booking => {
-      bookingMap.set(booking.id, booking.package_name || 'Payment');
+      bookingMap.set(booking.id, {
+        package_name: booking.package_name || 'Payment',
+        visit_type: booking.visit_type
+      });
     });
 
     // Combine payment data with customer and service information
@@ -392,7 +423,8 @@ export const getAllPayments = async (): Promise<Payment[]> => {
       created_at: payment.created_at || '',
       customer_name: customerMap.get(payment.customer_id)?.name || 'Unknown Customer',
       customer_email: customerMap.get(payment.customer_id)?.email || 'Unknown',
-      service_name: bookingMap.get(payment.booking_id) || 'Payment',
+      service_name: bookingMap.get(payment.booking_id)?.package_name || 'Payment',
+      visit_type: bookingMap.get(payment.booking_id)?.visit_type,
       payment_date: payment.payment_date || payment.created_at,
       // Extended fields
       customer_id: payment.customer_id,
@@ -508,7 +540,7 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
     // First get all bookings
     const { data: bookingsData, error: bookingsError } = await supabase
       .from('bookings')
-      .select('id, booking_reference, package_name, status, booking_date, customer_id')
+      .select('id, booking_reference, package_name, visit_type, status, booking_date, customer_id')
       .order('booking_date', { ascending: false });
 
     if (bookingsError) {
@@ -578,6 +610,7 @@ export const getBookingsWithoutPaymentRequests = async (): Promise<BookingWithou
         customer_name: customer?.name || 'Unknown',
         customer_email: customer?.email || 'Unknown',
         package_name: booking.package_name,
+        visit_type: booking.visit_type,
         status: booking.status,
         booking_date: booking.booking_date,
         has_payment_request: false

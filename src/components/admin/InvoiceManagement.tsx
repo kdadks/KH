@@ -40,6 +40,19 @@ interface InvoiceManagementProps {
 
 type ViewMode = 'list' | 'form' | 'preview';
 
+// Helper function to format service name with visit type
+const formatServiceWithVisitType = (serviceName: string, visitType?: 'home' | 'online' | 'clinic'): string => {
+  if (!visitType) return serviceName;
+  
+  const visitTypeLabel = {
+    home: '[Home]',
+    online: '[Online]',
+    clinic: '[Clinic]'
+  }[visitType];
+  
+  return `${serviceName} ${visitTypeLabel}`;
+};
+
 const InvoiceManagement: React.FC<InvoiceManagementProps> = ({ 
   onClose,
   invoices: propInvoices,
@@ -1767,7 +1780,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                     <option value="">Select a confirmed service/booking to auto-populate invoice</option>
                     {availableBookings.map(booking => (
                       <option key={booking.id} value={booking.id}>
-                        {booking.package_name || booking.service} - {
+                        {formatServiceWithVisitType(booking.package_name || booking.service, booking.visit_type)} - {
                           booking.booking_date 
                             ? new Date(booking.booking_date).toLocaleDateString()
                             : (booking.appointment_date || booking.date || 'No date')
@@ -1792,7 +1805,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                   )}
                   {selectedBooking && (
                     <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs">
-                      <p className="text-green-800"><strong>✅ Selected Service:</strong> {selectedBooking.package_name || selectedBooking.service}</p>
+                      <p className="text-green-800"><strong>✅ Selected Service:</strong> {formatServiceWithVisitType(selectedBooking.package_name || selectedBooking.service, selectedBooking.visit_type)}</p>
                       <p className="text-green-600"><strong>Date:</strong> {
                         selectedBooking.booking_date 
                           ? new Date(selectedBooking.booking_date).toLocaleDateString()
