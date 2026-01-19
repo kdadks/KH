@@ -77,7 +77,7 @@ const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
-  return process.env.VITE_SITE_URL || 'https://khtherapy.netlify.app';
+  return process.env.VITE_SITE_URL || 'https://khtherapy.ie';
 };
 
 // Generate proper email subject based on email type
