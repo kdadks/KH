@@ -11,7 +11,9 @@ import {
   Shield,
   Save,
   Eye,
-  EyeOff
+  EyeOff,
+  Check,
+  X
 } from 'lucide-react';
 
 const UserProfile: React.FC = () => {
@@ -46,6 +48,23 @@ const UserProfile: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   });
+
+  // Password validation (same as FirstLoginPasswordChange)
+  const validatePassword = (password: string) => {
+    const requirements = {
+      minLength: password.length >= 8,
+      hasUpper: /[A-Z]/.test(password),
+      hasLower: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+    
+    const isValid = Object.values(requirements).every(req => req);
+    return { requirements, isValid };
+  };
+
+  const passwordValidation = validatePassword(passwordData.newPassword);
+  const passwordsMatch = passwordData.newPassword === passwordData.confirmPassword && passwordData.confirmPassword.length > 0;
 
   // Initialize form with user data
   useEffect(() => {
@@ -89,15 +108,15 @@ const UserProfile: React.FC = () => {
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate passwords match
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      showError('Password Error', 'New passwords do not match');
+    // Validate password strength
+    if (!passwordValidation.isValid) {
+      showError('Invalid Password', 'Please ensure your password meets all requirements');
       return;
     }
 
-    // Validate password strength
-    if (passwordData.newPassword.length < 6) {
-      showError('Password Error', 'Password must be at least 6 characters long');
+    // Validate passwords match
+    if (!passwordsMatch) {
+      showError('Passwords Don\'t Match', 'Please ensure both passwords are identical');
       return;
     }
 
@@ -458,7 +477,6 @@ const UserProfile: React.FC = () => {
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                     className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                     required
-                    minLength={6}
                   />
                   <button
                     type="button"
@@ -472,9 +490,35 @@ const UserProfile: React.FC = () => {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Password must be at least 6 characters long.
-                </p>
+                
+                {/* Password Requirements */}
+                {passwordData.newPassword && (
+                  <div className="mt-2 text-sm space-y-1">
+                    <p className="font-medium text-gray-700">Password must contain:</p>
+                    <div className="space-y-1">
+                      <div className={`flex items-center space-x-2 ${passwordValidation.requirements.minLength ? 'text-green-600' : 'text-red-500'}`}>
+                        {passwordValidation.requirements.minLength ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                        <span>At least 8 characters</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 ${passwordValidation.requirements.hasUpper ? 'text-green-600' : 'text-red-500'}`}>
+                        {passwordValidation.requirements.hasUpper ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                        <span>One uppercase letter</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 ${passwordValidation.requirements.hasLower ? 'text-green-600' : 'text-red-500'}`}>
+                        {passwordValidation.requirements.hasLower ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                        <span>One lowercase letter</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 ${passwordValidation.requirements.hasNumber ? 'text-green-600' : 'text-red-500'}`}>
+                        {passwordValidation.requirements.hasNumber ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                        <span>One number</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 ${passwordValidation.requirements.hasSpecial ? 'text-green-600' : 'text-red-500'}`}>
+                        {passwordValidation.requirements.hasSpecial ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                        <span>One special character</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -501,13 +545,19 @@ const UserProfile: React.FC = () => {
                     )}
                   </button>
                 </div>
+                {passwordData.confirmPassword && (
+                  <div className={`mt-1 text-sm flex items-center space-x-2 ${passwordsMatch ? 'text-green-600' : 'text-red-500'}`}>
+                    {passwordsMatch ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    <span>{passwordsMatch ? 'Passwords match' : 'Passwords do not match'}</span>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !passwordValidation.isValid || !passwordsMatch}
                 className="flex items-center px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
