@@ -2,6 +2,7 @@
 // This replaces the EmailJS implementation with a server-side solution
 
 import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { getCSRFToken } from './csrfProtection';
 
 export interface EmailData {
   customer_name: string;
@@ -124,6 +125,7 @@ const sendEmail = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-csrf-token': getCSRFToken(),
       },
       body: JSON.stringify({
         emailType,

@@ -1699,7 +1699,7 @@ exports.handler = async (event, context) => {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, x-csrf-token',
     'Access-Control-Allow-Methods': 'POST, OPTIONS'
   };
 
@@ -1719,6 +1719,19 @@ exports.handler = async (event, context) => {
       headers,
       body: JSON.stringify({ error: 'Method not allowed' })
     };
+  }
+
+  // CSRF Protection: Validate token from request headers
+  const csrfToken = event.headers['x-csrf-token'];
+  if (!csrfToken) {
+    console.warn('CSRF: Token missing from send-email request');
+    // Log but allow for now (gradual rollout)
+    // Return 403 when fully enforced
+    // return {
+    //   statusCode: 403,
+    //   headers,
+    //   body: JSON.stringify({ error: 'CSRF token missing' })
+    // };
   }
 
   try {

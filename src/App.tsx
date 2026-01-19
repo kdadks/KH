@@ -1,9 +1,10 @@
 import { Routes, Route } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import Layout from './components/layout/Layout';
 import { ToastProvider } from './components/shared/toastContext';
 import { UserAuthProvider } from './contexts/UserAuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import { generateCSRFToken } from './utils/csrfProtection';
 
 // Loading component
 const LoadingSpinner = () => (
@@ -110,6 +111,11 @@ const PaymentCancelledPage = createLazyComponent(() => import('./pages/PaymentCa
 const SumUpCheckoutPage = createLazyComponent(() => import('./pages/SumUpCheckoutPage'), 'SumUpCheckoutPage');
 
 function App() {
+  // Initialize CSRF token on app load
+  useEffect(() => {
+    generateCSRFToken();
+  }, []);
+
   return (
     <ToastProvider>
       <UserAuthProvider>

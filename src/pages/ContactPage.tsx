@@ -7,6 +7,7 @@ import SectionHeading from '../components/shared/SectionHeading';
 import SEOHead from '../components/utils/SEOHead';
 import { supabase } from '../supabaseClient';
 import { useToast } from '../components/shared/toastContext';
+import { getCSRFToken } from '../utils/csrfProtection';
 import {
   validateEmailRealTime,
   validateNameRealTime,
@@ -187,6 +188,7 @@ const ContactPage: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-csrf-token': getCSRFToken(),
         },
         body: JSON.stringify({
           emailType: 'contact_form',

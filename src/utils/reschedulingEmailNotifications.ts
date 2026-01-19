@@ -3,6 +3,8 @@
  * Handles email notifications for rescheduling workflow
  */
 
+import { getCSRFToken } from './csrfProtection';
+
 /**
  * Simple email sending function using the Netlify function
  * @param emailData - Email data to send
@@ -27,6 +29,7 @@ const sendEmail = async (emailData: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-csrf-token': getCSRFToken(),
       },
       body: JSON.stringify(emailData)
     });

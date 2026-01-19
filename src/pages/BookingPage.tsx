@@ -8,6 +8,7 @@ import Container from '../components/shared/Container';
 import SectionHeading from '../components/shared/SectionHeading';
 import Button from '../components/shared/Button';
 import PaymentModal from '../components/shared/PaymentModal';
+import { getCSRFToken } from '../utils/csrfProtection';
 import { createBookingWithCustomer, Customer, BookingRecord } from '../utils/customerBookingUtils';
 import { PaymentRequestWithCustomer } from '../types/paymentTypes';
 import {
@@ -468,6 +469,7 @@ const BookingPage: React.FC = () => {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
+                    'x-csrf-token': getCSRFToken(),
                   },
                   body: JSON.stringify({ checkout_id: checkoutId })
                 });
