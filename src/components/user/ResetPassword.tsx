@@ -4,9 +4,16 @@ import { useUserAuth } from '../../contexts/UserAuthContext';
 import { PasswordResetData } from '../../types/userManagement';
 
 const ResetPassword: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
+  const urlToken = searchParams.get('token');
+
+  // SECURITY FIX 1.8: Use sessionStorage for token instead of URL
+  // This prevents token leakage in browser history, server logs, referer headers
+  const [token, setToken] = useState<string | null>(() => {
+    // Try to get token from sessionStorage first (secure storage)
+    return sessionStorage.getItem('reset_token');
+  });
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,6 +28,19 @@ const ResetPassword: React.FC = () => {
 
   const { validateResetToken, resetPassword } = useUserAuth();
 
+  // SECURITY FIX 1.8: Handle token from URL and move to sessionStorage
+  useEffect(() => {
+    if (urlToken && !token) {
+      // Token is in URL (from email link), move it to sessionStorage
+      sessionStorage.setItem('reset_token', urlToken);
+      setToken(urlToken);
+      
+      // Remove token from URL to prevent history/logging exposure
+      // Use replace history entry so back button doesn't reveal token
+      setSearchParams({}, { replace: true });
+    }
+  }, [urlToken, token, setSearchParams]);
+
   // Validate token on component mount
   useEffect(() => {
     const validateToken = async () => {
@@ -31,19 +51,22 @@ const ResetPassword: React.FC = () => {
       }
 
       try {
-        console.log('Validating reset token:', token);
+        console.log('Validating reset token');
         const result = await validateResetToken(token);
-        console.log('Token validation result:', result);
+        console.log('Token validation result:', result.success ? 'Valid' : 'Invalid');
         
         if (result.success && result.customerEmail) {
           setIsTokenValid(true);
           setCustomerEmail(result.customerEmail);
         } else {
           setError(result.error || 'Invalid or expired reset link');
+          // Clear invalid token from sessionStorage
+          sessionStorage.removeItem('reset_token');
         }
       } catch (err) {
         console.error('Error validating token:', err);
         setError('Failed to validate reset link');
+        sessionStorage.removeItem('reset_token');
       } finally {
         setIsValidating(false);
       }
@@ -51,6 +74,14 @@ const ResetPassword: React.FC = () => {
 
     validateToken();
   }, [token, validateResetToken]);
+
+  // SECURITY FIX 1.8: Cleanup token on component unmount
+  useEffect(() => {
+    return () => {
+      // Clear token if user navigates away without completing reset
+      sessionStorage.removeItem('reset_token');
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +118,10 @@ const ResetPassword: React.FC = () => {
       if (result.success) {
         console.log('Password reset successful, redirecting...');
         setIsSuccess(true);
+        
+        // SECURITY FIX 1.8: Clear token from sessionStorage after successful reset
+        sessionStorage.removeItem('reset_token');
+        
         // Redirect to login after 3 seconds
         setTimeout(() => {
           navigate('/my-account', { 
