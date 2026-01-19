@@ -7,10 +7,7 @@ import { useUserAuth } from '../../contexts/UserAuthContext';
 const Header: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const { authUser, user } = useUserAuth();
-  
-  // Check if user is admin - Supabase Auth user without customer profile is admin
-  const isAdmin = !!authUser && !user;
+  const { authUser, user, isAdmin } = useUserAuth();
 
   useEffect(() => {
     const handleScroll = () => {

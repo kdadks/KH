@@ -26,6 +26,7 @@ import {
 import { withTimeout, logPerformance } from '../utils/performanceUtils';
 import { isRateLimited, recordLoginAttempt, getRemainingAttempts, resetLoginAttempts } from '../utils/loginRateLimiter';
 import { performBreachCheck, getBreachWarning } from '../utils/breachDetection';
+import { isUserAdmin } from '../utils/adminVerification';
 
 interface UserAuthProviderProps {
   children: React.ReactNode;
@@ -45,11 +46,22 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
   const [user, setUser] = useState<UserCustomer | null>(null);
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Multi-patient support state
   const [allPatients, setAllPatients] = useState<UserCustomer[]>([]);
   const [activePatient, setActivePatient] = useState<UserCustomer | null>(null);
   const [isMultiPatient, setIsMultiPatient] = useState(false);
+
+  // Verify admin status against admins table
+  const verifyAdminStatus = useCallback(async (email: string | undefined) => {
+    if (!email) {
+      setIsAdmin(false);
+      return;
+    }
+    const adminStatus = await isUserAdmin(email);
+    setIsAdmin(adminStatus);
+  }, []);
 
   // Initialize authentication state
   useEffect(() => {
@@ -66,6 +78,9 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
         if (session?.user) {
           setAuthUser(session.user);
+          
+          // Verify admin status on session restoration
+          await verifyAdminStatus(session.user.email);
           
           // Only load customer profile if not in admin context
           const isAdminContext = window.location.pathname.startsWith('/admin');
@@ -88,6 +103,9 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         if (event === 'SIGNED_IN' && session?.user) {
           setAuthUser(session.user);
           
+          // Verify admin status on sign in
+          await verifyAdminStatus(session.user.email);
+          
           // Only load customer profile if not in admin context
           const isAdminContext = window.location.pathname.startsWith('/admin');
           if (!isAdminContext) {
@@ -96,6 +114,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
           setUser(null);
+          setIsAdmin(false);
         }
         
         setLoading(false);
@@ -105,7 +124,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     return () => {
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [verifyAdminStatus]);
 
   // Load user profile from customers table
   const loadUserProfile = async (authUserId: string) => {
@@ -570,7 +589,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     user,
     authUser,
     loading,
-    isAdmin: !!authUser && !user, // Admin detection: has auth user but no customer profile
+    isAdmin, // Verified against admins table with is_active = true
     login,
     logout,
     register,
@@ -587,7 +606,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     isMultiPatient,
     switchPatient,
     refreshPatients
-  }), [user, authUser, loading, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser, recordConsent, allPatients, activePatient, isMultiPatient, switchPatient, refreshPatients]);
+  }), [user, authUser, loading, isAdmin, login, logout, register, updateProfile, changePassword, requestPasswordReset, resetPassword, validateResetToken, refreshUser, recordConsent, allPatients, activePatient, isMultiPatient, switchPatient, refreshPatients]);
 
   return (
     <AuthContext.Provider value={contextValue}>
