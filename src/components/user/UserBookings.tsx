@@ -435,7 +435,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming, onResche
           {booking.notes && (
             <div className="bg-gray-50 rounded-md p-3 mb-4">
               <p className="text-sm text-gray-700">
-                <span className="font-medium">Notes:</span> {booking.notes}
+                <span className="font-medium">Notes:</span> {sanitizeText(booking.notes)}
               </p>
             </div>
           )}

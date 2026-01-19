@@ -1150,8 +1150,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     {bookingDetails.notes && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Notes:</span>
-                        <span className="font-medium text-right max-w-xs truncate" title={bookingDetails.notes}>
-                          {bookingDetails.notes}
+                        <span className="font-medium text-right max-w-xs truncate" title={sanitizeText(bookingDetails.notes)}>
+                          {sanitizeText(bookingDetails.notes)}
                         </span>
                       </div>
                     )}

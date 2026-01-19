@@ -19,6 +19,7 @@ import { Customer } from './types';
 import { getCustomerDisplayName, validateCustomerName } from './utils/customerUtils';
 import { decryptCustomersArrayForAdmin, logAdminDataAccess } from '../../utils/adminGdprUtils';
 import { encryptSensitiveData } from '../../utils/gdprUtils';
+import { sanitizeText } from '../../utils/sanitization';
 import * as XLSX from 'xlsx';
 
 interface CustomerManagementProps {

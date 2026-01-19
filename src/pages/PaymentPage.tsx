@@ -262,7 +262,7 @@ const PaymentPage: React.FC = () => {
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Notes:</h4>
                     <p className="text-gray-600 text-sm bg-gray-50 rounded-lg p-3">
-                      {paymentRequest.notes}
+                      {sanitizeText(paymentRequest.notes)}
                     </p>
                   </div>
                 )}
