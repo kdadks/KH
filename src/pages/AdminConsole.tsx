@@ -41,6 +41,8 @@ import {
   getAllPaymentGateways,
   getPaymentStatistics
 } from '../utils/paymentManagementUtils';
+import { useSessionTimeout } from '../hooks/useSessionTimeout';
+import { SessionTimeoutWarning } from '../components/shared/SessionTimeoutWarning';
 
 const AdminConsole = () => {
   const { showError, showSuccess } = useToast();
@@ -90,33 +92,7 @@ const AdminConsole = () => {
   const [filterDate, setFilterDate] = useState('');
   const [filterRange, setFilterRange] = useState<{start: string; end: string} | null>(null);
 
-  // Check if user is already logged in when component mounts
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (session && !error) {
-          setIsLoggedIn(true);
-        }
-      } catch (error) {
-        console.error('Error checking auth status:', error);
-      }
-    };
-
-    // Clear session on page unload
-    const handleBeforeUnload = () => {
-      supabase.auth.signOut();
-    };
-
-    checkAuthStatus();
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
-
-  // Logout handler
+  // Logout handler (defined before useSessionTimeout hook)
   const handleLogout = async () => {
     try {
       setIsLoading(true);
@@ -145,6 +121,40 @@ const AdminConsole = () => {
       setIsLoading(false);
     }
   };
+
+  // Session timeout hook - 15 minutes idle, 60 seconds warning
+  const { showWarning, remainingTime, extendSession } = useSessionTimeout({
+    idleTimeout: 15 * 60 * 1000, // 15 minutes
+    warningTimeout: 60 * 1000, // 60 seconds warning
+    onTimeout: handleLogout,
+    enabled: isLoggedIn, // Only active when logged in
+  });
+
+  // Check if user is already logged in when component mounts
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session && !error) {
+          setIsLoggedIn(true);
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+      }
+    };
+
+    // Clear session on page unload
+    const handleBeforeUnload = () => {
+      supabase.auth.signOut();
+    };
+
+    checkAuthStatus();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   const handleTabChange = (tab: string) => {
     // Set loading state briefly for visual feedback
@@ -702,6 +712,15 @@ const AdminConsole = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Session Timeout Warning Modal */}
+      {showWarning && (
+        <SessionTimeoutWarning
+          remainingTime={remainingTime}
+          onExtendSession={extendSession}
+          onLogout={handleLogout}
+        />
+      )}
+      
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
