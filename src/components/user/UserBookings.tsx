@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getUserBookings } from '../../utils/userManagementUtils';
+import { sanitizeText } from '../../utils/sanitization';
 import { UserBooking, UserCustomer } from '../../types/userManagement';
 import { useToast } from '../shared/toastContext';
 import { 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import logger from '../../utils/logger';
 import { X, CreditCard, Shield, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
+import { sanitizeText } from '../../utils/sanitization';
 import { PaymentRequestWithCustomer, ProcessPaymentData } from '../../types/paymentTypes';
 import { createSumUpCheckoutSession, getSumUpCheckoutStatus } from '../../utils/sumupRealApiImplementation';
 import type { SumUpCreateCheckoutResponse } from '../../utils/sumupRealApiImplementation';

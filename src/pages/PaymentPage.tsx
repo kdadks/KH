@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PaymentRequestWithCustomer } from '../types/paymentTypes';
 import { getPaymentRequestById } from '../utils/paymentRequestUtils';
+import { sanitizeText } from '../utils/sanitization';
 import PaymentModal from '../components/shared/PaymentModal';
 import { useToast } from '../components/shared/toastContext';
 import { CheckCircle, CreditCard, ArrowLeft, ExternalLink } from 'lucide-react';

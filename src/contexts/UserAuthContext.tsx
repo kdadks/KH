@@ -440,13 +440,28 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       // Update local user state
       const updatedUser = { ...user, must_change_password: false };
       setUser(updatedUser);
+      
+      // Also update allPatients array if the user is in there (multi-patient support)
+      if (allPatients.length > 0) {
+        const updatedPatients = allPatients.map(patient => 
+          patient.id === user.id 
+            ? { ...patient, must_change_password: false }
+            : patient
+        );
+        setAllPatients(updatedPatients);
+        
+        // Update activePatient if it's the same user
+        if (activePatient?.id === user.id) {
+          setActivePatient({ ...activePatient, must_change_password: false });
+        }
+      }
 
       return { success: true };
     } catch (error) {
       console.error('Exception in changePassword:', error);
       return { success: false, error: 'Unexpected error occurred' };
     }
-  }, [user]);
+  }, [user, allPatients, activePatient]);
 
   // Refresh user data
   const refreshUser = useCallback(async (): Promise<void> => {
