@@ -49,6 +49,7 @@ export interface PaymentRequestWithCustomer extends PaymentRequest {
   service_name?: string;
   booking_date?: string;
   payment_type?: 'deposit' | 'full';
+  visit_type?: 'clinic' | 'home' | 'online';
 }
 
 export interface PaymentWithCustomer extends Payment {

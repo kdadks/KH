@@ -216,6 +216,11 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
           first_name,
           last_name,
           email
+        ),
+        booking:bookings!payment_requests_booking_id_fkey(
+          visit_type,
+          booking_date,
+          package_name
         )
       `)
       .eq('customer_id', customerId)
@@ -231,7 +236,10 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
     const processedData = data.map(request => {
       let serviceName = 'Service Payment';
       
-      if (request.notes) {
+      // Use package_name from booking if available, otherwise try to extract from notes
+      if (request.booking?.package_name) {
+        serviceName = request.booking.package_name;
+      } else if (request.notes) {
         // Try to extract service name from notes like "20% deposit for Sports / Deep Tissue Massage - Out of Hour (€85) appointment on 8/15/2025"
         const depositMatch = request.notes.match(/deposit for (.+?) appointment/);
         if (depositMatch) {
@@ -253,6 +261,8 @@ export async function getCustomerPaymentRequests(customerId: number): Promise<Pa
       return {
         ...request,
         service_name: serviceName,
+        visit_type: request.booking?.visit_type || undefined,
+        booking_date: request.booking?.booking_date || undefined,
         customer: customer
       } as PaymentRequestWithCustomer;
     });

@@ -243,6 +243,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                     <div className="flex-1">
                       <h3 className="text-sm font-medium text-blue-800">
                         Payment Request: {request.service_name || 'Service Payment'}
+                        {request.visit_type && (
+                          <span className="ml-2 inline-flex items-center text-xs">
+                            {request.visit_type === 'home' ? (
+                              <><Home className="w-3 h-3 mr-1" />Home Visit</>
+                            ) : request.visit_type === 'online' ? (
+                              <><Video className="w-3 h-3 mr-1" />Online</>
+                            ) : (
+                              <><Building2 className="w-3 h-3 mr-1" />Clinic</>
+                            )}
+                          </span>
+                        )}
                       </h3>
                       <p className="text-sm text-blue-700 mt-1">
                         Amount due: <span className="font-semibold">{formatCurrency(request.amount)}</span>

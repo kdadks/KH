@@ -450,11 +450,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming, onResche
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-gray-500">
-              Booking ID: {booking.id}
-            </div>
-            
+          <div className="flex items-center justify-end">
             {isUpcoming && booking.status === 'confirmed' && (
               <div className="flex space-x-2">
                 <button
