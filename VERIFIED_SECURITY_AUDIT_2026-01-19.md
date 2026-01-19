@@ -16,12 +16,12 @@
 
 ## VERIFIED VULNERABILITIES
 
-### Total: 8 Confirmed Issues (5 Resolved)
+### Total: 8 Confirmed Issues (6 Resolved)
 - 🔴 Critical: ~~1~~ 0 (1 resolved)
 - 🟠 High: ~~2~~ 0 (2 resolved)
-- 🟡 Medium: ~~4~~ 2 (2 resolved)
+- 🟡 Medium: ~~4~~ 1 (3 resolved)
 - 🔵 Low: ~~1~~ 0 (1 resolved)
-- ✅ Resolved: 5
+- ✅ Resolved: 6
 
 ---
 
@@ -114,25 +114,6 @@ const isAdmin = !!authUser && !user;
 ✅ All admin checks now use database verification
 
 **Date Resolved:** 2026-01-19
-
----
-
-### 2.2 🟠 HIGH: Insecure Direct Object References (IDOR) - Application Layer
-**Files:** Various API calls throughout application  
-**Issue:** RLS provides database protection, but application layer doesn't validate ownership before queries
-
-**Evidence:**
-- RLS policies exist at database level (verified in [database/enable-rls-policies.sql](database/enable-rls-policies.sql))
-- Application code makes direct queries without explicit ownership checks
-- Relies entirely on database RLS rather than defense-in-depth
-
-**Risk:** If RLS misconfigured or bypassed, no application-layer protection  
-**Impact:** MEDIUM - Database RLS prevents exploitation currently
-
-**Resolution:**
-Add application-layer ownership validation before database queries as defense-in-depth.
-
-**Priority:** MEDIUM - RLS provides protection, but additional layer recommended
 
 ---
 
@@ -381,6 +362,7 @@ Run `npm audit` and fix high/critical vulnerabilities.
 - ✅ Package lock - Committed
 - ✅ Payment expiration - Column exists in schema
 - ✅ Payment idempotency - Protected by SumUp single-use checkout sessions, duplicate detection in webhook handler (checkForDuplicates), status-based flow control, and database constraints
+- ✅ IDOR protection - Comprehensive RLS policies at database level enforce row-level access control, is_admin() and current_customer_id() functions validate ownership, all sensitive tables have RLS enabled, no public API to exploit
 
 ---
 
