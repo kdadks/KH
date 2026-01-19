@@ -2,7 +2,8 @@ import { supabase } from '../supabaseClient';
 import { hashPassword } from './passwordUtils';
 import { createPaymentRequest } from './paymentRequestUtils';
 import { sendWelcomeEmail } from './emailUtils';
-import { encryptSensitiveData, decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
+import { encryptSensitiveDataServer } from './encryptionServerWrapper';
 import { PaymentRequest } from '../types/paymentTypes';
 
 export interface Customer {
@@ -109,7 +110,7 @@ export const findOrCreateCustomer = async (customerData: {
       
       // Only update phone if it's different and provided
       if (customerData.phone && decryptedPhone !== customerData.phone.trim()) {
-        updateData.phone = encryptSensitiveData(customerData.phone.trim());
+        updateData.phone = await encryptSensitiveDataServer(customerData.phone.trim(), 'phone');
       }
       
       // Update eircode if provided (for home visits)
@@ -152,11 +153,18 @@ export const findOrCreateCustomer = async (customerData: {
     const defaultPassword = customerData.email.toLowerCase().trim();
     const hashedDefaultPassword = await hashPassword(defaultPassword);
     
+    // Encrypt sensitive fields using server-side encryption
+    const encryptedFirstName = await encryptSensitiveDataServer(customerData.firstName.trim(), 'first_name');
+    const encryptedLastName = await encryptSensitiveDataServer(customerData.lastName.trim(), 'last_name');
+    const encryptedPhone = customerData.phone?.trim() 
+      ? await encryptSensitiveDataServer(customerData.phone.trim(), 'phone')
+      : undefined;
+    
     const newCustomerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'> = {
-      first_name: encryptSensitiveData(customerData.firstName.trim()),
-      last_name: encryptSensitiveData(customerData.lastName.trim()),
+      first_name: encryptedFirstName,
+      last_name: encryptedLastName,
       email: customerData.email.toLowerCase().trim(),
-      phone: customerData.phone?.trim() ? encryptSensitiveData(customerData.phone.trim()) : undefined,
+      phone: encryptedPhone,
       eircode: customerData.eircode?.trim() ? customerData.eircode.trim().toUpperCase() : undefined,
       country: 'Ireland',
       is_active: true,

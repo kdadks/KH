@@ -22,16 +22,32 @@ if (!DECRYPTION_KEY && import.meta.env.DEV) {
 
 /**
  * Encrypt sensitive data using AES encryption
- * DEPRECATED: Use encryptSensitiveDataServer() instead
- * This function should no longer be used - encryption key is server-only
- * @throws Error - Encryption must go through server
+ * DEPRECATED FOR PRODUCTION: Use encryptSensitiveDataServer() instead
+ * This function is blocked in production for security - encryption key must remain server-side only
+ * @throws Error in production environments
  */
 export const encryptSensitiveData = (data: string): string => {
-  throw new Error(
-    'SECURITY: Client-side encryption is no longer supported. ' +
-    'Use encryptSensitiveDataServer() from encryptionServerWrapper.ts instead. ' +
-    'Encryption key is server-side only for security compliance.'
-  );
+  // Block client-side encryption in production
+  if (import.meta.env.PROD) {
+    throw new Error(
+      'SECURITY: Client-side encryption is disabled in production. ' +
+      'Use encryptSensitiveDataServer() from encryptionServerWrapper.ts instead. ' +
+      'Encryption key must remain server-side only for security compliance.'
+    );
+  }
+  
+  // Allow in development for backward compatibility
+  if (!DECRYPTION_KEY) {
+    console.error('GDPR: Cannot encrypt data - VITE_ENCRYPTION_KEY not configured in .env.local');
+    throw new Error('Encryption key not available. Please configure VITE_ENCRYPTION_KEY in .env.local for development.');
+  }
+  
+  try {
+    return CryptoJS.AES.encrypt(data, DECRYPTION_KEY).toString();
+  } catch (error) {
+    console.error('GDPR: Error encrypting data:', error);
+    throw error;
+  }
 };
 
 /**
