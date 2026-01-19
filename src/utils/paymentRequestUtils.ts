@@ -10,7 +10,6 @@ import {
 import { sendPaymentRequestEmail, sendPaymentConfirmationEmail } from './emailUtils';
 import { PAYMENT_CONFIG } from '../config/paymentConfig';
 import { decryptSensitiveData, isDataEncrypted } from './gdprUtils';
-import { decryptSensitiveDataServer, isDataEncrypted as isDataEncryptedServer } from './encryptionServerWrapper';
 import { getActiveSumUpGateway } from './paymentManagementUtils';
 import { 
   fetchServicePricing, 
@@ -105,7 +104,7 @@ function extractPriceFromServiceName(serviceName: string): number | null {
   // This pattern indicates a fixed booking package that requires payment
   const priceMatch = serviceName.match(/€(\d+)(?!\s*\/|\s*per)/);
   
-  console.log('💰 Price match result:', priceMatch);
+  // Price match calculation complete
   
   if (priceMatch) {
     const price = parseInt(priceMatch[1]);
@@ -156,10 +155,8 @@ export async function createPaymentRequest(
       // Calculate amount based on payment type (default to deposit for backward compatibility)
       if (paymentType === 'full') {
         finalAmount = baseCost; // Full amount
-        console.log(`💰 Creating payment request for FULL amount: €${finalAmount}`);
       } else {
         finalAmount = Math.round(baseCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE); // 20% deposit
-        console.log(`💰 Creating INITIAL payment request for deposit (20%): €${finalAmount} of €${baseCost} - will be updated if user selects full payment`);
       }
     }
     
@@ -457,16 +454,7 @@ export async function processPaymentRequest(
         timestamp: new Date().toISOString()          // Event timestamp
       };
       
-      // Sending webhook payload
-
-      console.log('📤 Sending payment to webhook endpoint:', {
-        endpoint: sumupEndpoint,
-        checkoutId: paymentData.sumup_checkout_id,
-        paymentRequestId: paymentRequestId,
-        payload: requestBody,
-        payloadNote: 'Minimal payload matching real SumUp webhooks',
-        detectionHeader: 'X-Internal-Call: PaymentRequestUtils'
-      });
+      // Routing payment through SumUp webhook handler
 
       const response = await fetch(sumupEndpoint, {
         method: 'POST',
@@ -478,11 +466,7 @@ export async function processPaymentRequest(
         body: JSON.stringify(requestBody)
       });
 
-      console.log('📥 Webhook endpoint response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok
-      });
+      // Webhook response received
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -490,9 +474,8 @@ export async function processPaymentRequest(
         throw new Error(`SumUp endpoint returned ${response.status}: ${errorText}`);
       }
 
-      const responseText = await response.text();
-      console.log('✅ Webhook endpoint success:', responseText);
-      // Payment processed successfully
+      await response.text(); // Consume response body
+      // Payment processed successfully through webhook handler
       
       // Get the created payment record for return (most recent for this payment_request_id)
       const { data: createdPayment, error: fetchError } = await supabase
@@ -551,9 +534,9 @@ export async function processPaymentRequest(
 
         // Try to get service cost from the payment request's service_name or booking
         if (paymentRequest.service_name) {
-          console.log('📊 Attempting to get service cost from payment request service_name:', paymentRequest.service_name);
+          // Attempting to get service cost from payment request
           const dbPrice = await getServicePriceFromDatabase(paymentRequest.service_name);
-          console.log('📊 Service cost from payment request service_name:', dbPrice);
+          // Service cost retrieved from database
           if (dbPrice) {
             serviceCost = dbPrice;
           }
@@ -561,18 +544,18 @@ export async function processPaymentRequest(
 
         // If we couldn't get service cost from service_name, try to get it from booking
         if (serviceCost === 0 && paymentRequest.booking_id) {
-          console.log('📊 Service cost not found via service_name, trying booking package_name...');
+          // Service cost not found via service_name, trying booking package_name
           const { data: booking } = await supabase
             .from('bookings')
             .select('package_name')
             .eq('id', paymentRequest.booking_id)
             .single();
 
-          console.log('📊 Booking package_name:', booking?.package_name);
+          // Retrieved booking package name
 
           if (booking?.package_name) {
             const dbPrice = await getServicePriceFromDatabase(booking.package_name);
-            console.log('📊 Service cost from booking package_name:', dbPrice);
+            // Service cost retrieved from booking
             if (dbPrice) {
               serviceCost = dbPrice;
             }
@@ -581,19 +564,12 @@ export async function processPaymentRequest(
 
         // Determine if this is a full payment (within €2 tolerance for rounding)
         if (serviceCost > 0) {
-          const depositAmount = Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+          // Deposit would be: Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE)
           isFullPayment = paymentRequest.amount >= (serviceCost - 2); // Allow €2 tolerance
 
-          console.log('💰 Payment analysis:', {
-            serviceCost,
-            depositAmount,
-            paidAmount: paymentRequest.amount,
-            isFullPayment,
-            paymentType: isFullPayment ? 'full' : 'deposit'
-          });
+          // Payment type determined based on service cost
         } else {
           // Fallback: assume it's full payment if we can't determine service cost
-          console.log('⚠️ Could not determine service cost, assuming full payment');
           isFullPayment = true;
         }
       } catch (error) {
@@ -604,7 +580,7 @@ export async function processPaymentRequest(
 
       // First check the current booking status before attempting update
       if (paymentRequest.booking_id) {
-        const { data: currentBooking, error: checkError } = await supabase
+        const { error: checkError } = await supabase
           .from('bookings')
           .select('id, status')
           .eq('id', paymentRequest.booking_id)
@@ -613,12 +589,12 @@ export async function processPaymentRequest(
         if (checkError) {
           console.error('❌ Failed to check current booking status:', checkError);
         } else {
-          console.log('🔍 Current booking status for', paymentRequest.booking_id, ':', currentBooking?.status);
+          // Current booking status checked
 
           // ✅ IMPORTANT: Booking status is NOT automatically updated after payment
           // Bookings remain as 'pending' until admin manually confirms them in the admin console
           // This ensures proper workflow: payment → admin review → manual confirmation
-          console.log('� Payment processed - booking status remains', currentBooking?.status, '(admin must manually confirm)');
+          // Payment processed - booking status remains unchanged (admin must manually confirm)
 
           // Dispatch event to notify UI that payment was processed (for tracking purposes only)
           window.dispatchEvent(new CustomEvent('bookingPaymentProcessed', {
@@ -631,7 +607,7 @@ export async function processPaymentRequest(
         }
       } else {
         // Fallback: try to find booking by customer_id if no booking_id in payment request
-        console.log('📍 No booking_id in payment request, trying customer_id:', paymentRequest.customer_id);
+        // Attempting to find customer booking
 
         // First find the most recent booking for this customer
         const { data: customerBookings, error: findError } = await supabase
@@ -644,16 +620,14 @@ export async function processPaymentRequest(
         if (findError) {
           console.error('❌ Failed to find customer bookings:', findError);
         } else if (customerBookings && customerBookings.length > 0) {
-          const mostRecentBooking = customerBookings[0];
-          console.log('🔍 Found most recent booking:', mostRecentBooking.id, 'with status:', mostRecentBooking.status);
-          console.log('💰 Payment processed - booking status remains unchanged (admin must manually confirm)');
+          // Found most recent booking for customer
+          // Payment processed - booking status remains unchanged (admin must manually confirm)
         } else {
-          console.log('⚠️ No bookings found for customer_id:', paymentRequest.customer_id);
+          // No bookings found for customer
         }
       }
 
-      // Log payment completion for tracking purposes
-      console.log('✅ Payment processing complete - booking status NOT changed (awaiting admin confirmation)');
+      // Payment processing complete - booking status NOT changed (awaiting admin confirmation)
     }
 
     // Update payment status to 'paid' and set payment date
@@ -716,7 +690,7 @@ export async function sendPaymentRequestNotification(
       throw new Error('Payment request not found');
     }
     
-    console.log(`📋 Payment request fetched for email - ID: ${paymentRequestId}, Amount: €${paymentRequest.amount}, Notes: ${paymentRequest.notes}`);
+    // Payment request fetched for email notification
 
     // Generate SumUp checkout URL for direct payment (try real API first)
     let directPaymentUrl = '';
@@ -766,7 +740,7 @@ export async function sendPaymentRequestNotification(
         // ALWAYS use internal payment page URL to validate status before proceeding to SumUp
         // This prevents cancelled/paid payment requests from being processed via email links
         directPaymentUrl = `${baseUrl}/payment?request=${paymentRequestId}`;
-        console.log('✅ Using internal payment validation URL (will redirect to SumUp after status check):', directPaymentUrl);
+        // Using internal payment validation URL
       }
       
     } catch (realApiError) {
@@ -967,13 +941,13 @@ export async function getBookingsWithPayments(): Promise<BookingWithPaymentData[
 /**
  * Gets customer deposit payments (for deducting from invoices)
  */
-export async function getCustomerDepositPayments(customerId: number, serviceName?: string, bookingId?: string): Promise<{amount: number, payments: PaymentWithCustomer[]}> {
+export async function getCustomerDepositPayments(customerId: number, _serviceName?: string, bookingId?: string): Promise<{amount: number, payments: PaymentWithCustomer[]}> {
   try {
-    console.log('🔍 Fetching deposit payments for customer:', customerId, 'service:', serviceName, 'booking:', bookingId);
+    // Fetching deposit payments for customer
     
     // Strategy 1: Try to match by booking ID first (most accurate)
     if (bookingId) {
-      console.log('🎯 Using booking ID to find deposits:', bookingId);
+      // Using booking ID to find deposits
       
       const { data: bookingPayments, error: bookingError } = await supabase
         .from('payments')
@@ -1012,34 +986,24 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
             );
           }
         }
-        console.log('💳 Found', bookingPayments.length, 'payments for booking ID:', bookingId);
-        console.log('💳 All payments for this booking:', bookingPayments.map(p => ({ 
-          amount: p.amount, 
-          notes: p.notes, 
-          created_at: p.created_at,
-          payment_request_id: p.payment_request_id,
-          payment_type: p.payment_request_id ? paymentTypesMap[p.payment_request_id] : null
-        })));
+        // Found payments for booking ID
+        // Analyzing all payments for this booking
         
         // Find deposits - only payments where payment_type is 'deposit'
         const deposits = bookingPayments.filter(payment => {
           const paymentType = payment.payment_request_id ? paymentTypesMap[payment.payment_request_id] : null;
-          console.log('🔍 Analyzing payment:', {
-            amount: payment.amount,
-            payment_request_id: payment.payment_request_id,
-            payment_type: paymentType
-          });
+          // Analyzing payment for deposit classification
           
           // Only include payments explicitly marked as 'deposit'
           return paymentType === 'deposit';
         });
         
-        console.log('💰 Found', deposits.length, 'deposits out of', bookingPayments.length, 'total payments');
+        // Deposit search completed
         
         if (deposits.length > 0) {
           // Use the most recent deposit for this booking
           const deposit = deposits[0];
-          console.log('✅ Selected deposit:', deposit.amount, '€');
+          // Selected deposit for invoice deduction
           
           // Decrypt customer data if encrypted
           const customer = deposit.customer;
@@ -1061,17 +1025,16 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
             }] as PaymentWithCustomer[]
           };
         } else {
-          console.log('ℹ️ No deposits found for booking ID:', bookingId);
+          // No deposits found for booking ID
           return { amount: 0, payments: [] };
         }
       } else {
-        console.log('❌ No payments found for booking ID:', bookingId, 'Error:', bookingError);
+        // No payments found for booking ID
         return { amount: 0, payments: [] };
       }
     }
     
     // No booking ID provided, return empty
-    console.log('ℹ️ No booking ID provided, cannot fetch deposits');
     return { amount: 0, payments: [] };
   } catch (error) {
     console.error('❌ Error getting customer deposit payments:', error);
@@ -1085,7 +1048,7 @@ export async function getCustomerDepositPayments(customerId: number, serviceName
  */
 export async function fixBookingStatusBasedOnPayments(bookingId: string): Promise<{ success: boolean; message: string }> {
   try {
-    console.log('🔧 Manual booking status fix for booking:', bookingId);
+    // Manual booking status fix initiated
 
     // Get the booking
     const { data: booking, error: bookingError } = await supabase
@@ -1098,7 +1061,7 @@ export async function fixBookingStatusBasedOnPayments(bookingId: string): Promis
       return { success: false, message: 'Booking not found' };
     }
 
-    console.log('📋 Current booking info:', booking);
+    // Retrieved current booking information
 
     // Get all payments for this customer
     const { data: payments, error: paymentsError } = await supabase
@@ -1121,12 +1084,7 @@ export async function fixBookingStatusBasedOnPayments(bookingId: string): Promis
       return { success: false, message: 'No payments found for this booking' };
     }
 
-    console.log('💳 Found matching payment:', {
-      id: matchingPayment.id,
-      amount: matchingPayment.amount,
-      booking_id: matchingPayment.booking_id,
-      notes: matchingPayment.notes
-    });
+    // Found matching payment for booking
 
     // Get service cost
     let serviceCost = 0;
@@ -1139,18 +1097,11 @@ export async function fixBookingStatusBasedOnPayments(bookingId: string): Promis
       return { success: false, message: 'Could not determine service cost' };
     }
 
-    const depositAmount = Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE);
+    // Deposit would be: Math.round(serviceCost * PAYMENT_CONFIG.DEPOSIT_PERCENTAGE)
     const isFullPayment = matchingPayment.amount >= (serviceCost - 2);
     const targetStatus = isFullPayment ? 'paid' : 'deposit_paid';
 
-    console.log('🎯 Payment analysis for manual fix:', {
-      serviceCost,
-      depositAmount,
-      paidAmount: matchingPayment.amount,
-      isFullPayment,
-      currentStatus: booking.status,
-      targetStatus
-    });
+    // Payment analysis completed for manual fix
 
     if (booking.status === targetStatus) {
       return { success: true, message: `Booking already has correct status: ${targetStatus}` };
@@ -1170,7 +1121,7 @@ export async function fixBookingStatusBasedOnPayments(bookingId: string): Promis
       return { success: false, message: 'Failed to update booking status' };
     }
 
-    console.log(`✅ Booking status manually updated from '${booking.status}' to '${targetStatus}'`);
+    // Booking status manually updated
 
     // Dispatch event to refresh admin views
     if (typeof window !== 'undefined') {

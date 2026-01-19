@@ -278,7 +278,7 @@ const findStatusMismatches = async (): Promise<PaymentDiscrepancy[]> => {
  * Generate payment reconciliation report
  */
 export const generatePaymentReconciliationReport = async (): Promise<PaymentReconciliationReport> => {
-  console.log('🔍 Generating payment reconciliation report...');
+  // Generating payment reconciliation report
 
   try {
     // Get summary statistics
@@ -306,7 +306,7 @@ export const generatePaymentReconciliationReport = async (): Promise<PaymentReco
     };
 
     // Find all types of discrepancies
-    console.log('🔎 Checking for payment discrepancies...');
+    // Checking for payment discrepancies
     
     const [
       missingPayments,
@@ -352,7 +352,7 @@ export const generatePaymentReconciliationReport = async (): Promise<PaymentReco
       recommendations.push('✅ No discrepancies found. Payment system is in sync.');
     }
 
-    console.log(`✅ Reconciliation completed: ${allDiscrepancies.length} discrepancies found`);
+    // Reconciliation completed
 
     return {
       summary,
@@ -376,7 +376,7 @@ export const resolvePaymentDiscrepancy = async (
 ): Promise<{ success: boolean; message: string }> => {
   
   try {
-    console.log(`Resolving discrepancy ${discrepancyId} with resolution: ${resolution}`);
+    // Resolving discrepancy
 
     // Parse discrepancy ID to get payment request ID
     const requestIdStr = discrepancyId.split('_').slice(-1)[0];
@@ -455,7 +455,7 @@ export const autoSyncPaymentStatuses = async (hoursBack: number = 24): Promise<{
   errors: number;
 }> => {
   
-  console.log(`🔄 Auto-syncing payment statuses for last ${hoursBack} hours...`);
+  // Auto-syncing payment statuses
 
   try {
     // Get payment requests with checkout IDs from the specified time period
@@ -492,7 +492,7 @@ export const autoSyncPaymentStatuses = async (hoursBack: number = 24): Promise<{
       }
     }
 
-    console.log(`✅ Auto-sync completed: ${synced} synced, ${errors} errors`);
+    // Auto-sync completed
     
     return { success: true, synced, errors };
 

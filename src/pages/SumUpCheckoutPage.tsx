@@ -18,7 +18,6 @@ const SumUpCheckoutPage: React.FC = () => {
   const checkoutReference = searchParams.get('ref') || searchParams.get('checkout_reference') || '';
   const merchantCode = searchParams.get('merchant_code') || '';
   const returnUrl = searchParams.get('return_url') || '';
-  const cancelUrl = searchParams.get('cancel_url') || '';
   const checkoutId = searchParams.get('id') || searchParams.get('checkout_id') || '';
   const paymentRequestId = searchParams.get('pr_id') || searchParams.get('payment_request_id') || ''; // Extract payment request ID
   const context = searchParams.get('ctx') || searchParams.get('context') || 'booking'; // Extract context for proper redirect behavior
@@ -154,13 +153,7 @@ const SumUpCheckoutPage: React.FC = () => {
     const lastFailure = localStorage.getItem('last_webhook_failure');
     const errors = localStorage.getItem('webhook_simulation_errors');
     
-    console.log('Last webhook success:', lastSuccess ? JSON.parse(lastSuccess) : 'None');
-    console.log('Last webhook failure:', lastFailure ? JSON.parse(lastFailure) : 'None');
-    console.log('Webhook errors:', errors ? JSON.parse(errors) : 'None');
-    
-    // Also check if we can access the debug info
-    console.log('Current checkout reference:', checkoutReference);
-    console.log('Current payment request ID:', paymentRequestId);
+    // Logs removed - sensitive data (payment details, checkout IDs) should not be exposed in production
     
     return {
       success: lastSuccess ? JSON.parse(lastSuccess) : null,
@@ -398,14 +391,9 @@ const SumUpCheckoutPage: React.FC = () => {
     currency: string;
     status: string;
   }) => {
-    // IMMEDIATE DEBUG: Alert to verify function is being called
-    alert(`🚨 DEBUG: simulateWebhookEvent called! Event: ${eventType}, Checkout: ${paymentData.checkout_reference}`);
-    console.log('🚨 WEBHOOK FUNCTION ENTRY POINT - Function is being called!');
-    console.log('🚨 Event Type:', eventType);
-    console.log('🚨 Payment Data:', paymentData);
+    // Webhook simulation - debug alerts and logs removed for production safety
     
     try {
-      console.log('🔗 Simulating webhook event:', { eventType, paymentData });
       
       // Create mock webhook payload matching SumUp's expected format
       const webhookPayload = {

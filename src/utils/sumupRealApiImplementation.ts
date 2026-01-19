@@ -137,16 +137,7 @@ export const createSumUpCheckoutSession = async (
     if (currentEnvironment === 'sandbox' && (effectiveConfig.api_key === 'development-mode' || effectiveConfig.api_key.includes('sandbox') || effectiveConfig.api_key === 'sandbox-test-key-for-workflow-testing')) {
       console.warn(`🧪 ${environmentConfig.displayName}: Creating mock SumUp checkout session with full workflow testing`);
       
-      // Log customer information if provided
-      if (checkoutData.customer) {
-        logger.devOnly(() => {
-          console.log('📧 Customer information included in checkout (internal tracking only):', {
-            name: checkoutData.customer?.name,
-            email: checkoutData.customer?.email
-          });
-          console.log('ℹ️ Note: SumUp checkout UI does not display customer details to users');
-        });
-      }
+      // Customer information included in checkout if provided
       
       const mockResponse: SumUpCreateCheckoutResponse = {
         checkout_reference: checkoutData.checkout_reference,
@@ -169,13 +160,7 @@ export const createSumUpCheckoutSession = async (
     // Real SumUp API (production or sandbox)
     logger.devOnly(() => console.log(`🚀 Using real SumUp API in ${currentEnvironment} mode`));
     
-    // Log configuration being used for debugging
-    console.log('🔧 SumUp API Configuration:', {
-      environment: currentEnvironment,
-      apiKeyPrefix: effectiveConfig.api_key?.substring(0, 20) + '...',
-      merchantCode: effectiveConfig.merchant_id,
-      apiBase: SUMUP_API_BASE
-    });
+    // Using configured SumUp API credentials
     
     // Prepare the API payload
     const apiPayload = {
@@ -197,26 +182,9 @@ export const createSumUpCheckoutSession = async (
       ...(checkoutData.customer ? { customer: checkoutData.customer } : {})
     };
 
-    // Log customer data being sent (for internal SumUp tracking only - not displayed in checkout UI)
-    if (checkoutData.customer) {
-      logger.devOnly(() => {
-        console.log('📧 Customer data sent to SumUp for transaction records:', {
-          customer_email: apiPayload.customer_email,
-          customer_name: apiPayload.customer_name
-        });
-        console.log('ℹ️ Note: Customer details are stored by SumUp but not displayed in their checkout UI');
-      });
-    }
+    // Customer data included for SumUp transaction records
     
-    // Log the actual request payload for debugging
-    console.log('📤 SumUp API Request:', {
-      url: `${SUMUP_API_BASE}/v0.1/checkouts`,
-      payload: {
-        ...apiPayload,
-        // Hide sensitive data
-        merchant_code: apiPayload.merchant_code
-      }
-    });
+    // Sending API request to SumUp
     
     const response = await fetch(`${SUMUP_API_BASE}/v0.1/checkouts`, {
       method: 'POST',
@@ -228,7 +196,7 @@ export const createSumUpCheckoutSession = async (
       body: JSON.stringify(apiPayload)
     });
     
-    console.log('📥 SumUp API Response Status:', response.status, response.statusText);
+    // SumUp API response received
 
     if (!response.ok) {
       let errorData;
@@ -238,20 +206,7 @@ export const createSumUpCheckoutSession = async (
         errorData = { message: 'Could not parse error response' };
       }
       
-      // Enhanced error logging for debugging
-      console.error('🚨 SumUp API Error Details:', {
-        status: response.status,
-        statusText: response.statusText,
-        errorData,
-        requestPayload: {
-          checkout_reference: apiPayload.checkout_reference,
-          amount: apiPayload.amount,
-          currency: apiPayload.currency,
-          merchant_code: apiPayload.merchant_code,
-          environment: currentEnvironment
-        },
-        apiKeyPrefix: effectiveConfig.api_key?.substring(0, 15) + '...'
-      });
+      // SumUp API error occurred
       
       if (response.status === 401) {
         throw new Error(`SumUp API Authentication Failed (401): Invalid API key. Please check your SumUp API credentials at https://developer.sumup.com`);
@@ -266,35 +221,15 @@ export const createSumUpCheckoutSession = async (
 
     const result = await response.json();
     
-    // Log the complete API response for debugging
-    console.log('📥 SumUp API Response Body:', {
-      id: result.id,
-      status: result.status,
-      checkout_reference: result.checkout_reference,
-      amount: result.amount,
-      currency: result.currency,
-      has_hosted_checkout: !!result.hosted_checkout,
-      hosted_checkout_enabled: result.hosted_checkout?.enabled,
-      has_hosted_checkout_url: !!result.hosted_checkout_url,
-      hosted_checkout_url: result.hosted_checkout_url,
-      has_legacy_checkout_url: !!result.checkout_url,
-      legacy_checkout_url: result.checkout_url,
-      all_fields: Object.keys(result)
-    });
+    // SumUp API response received and parsed
     
     // Normalize the checkout URL (prefer hosted_checkout_url over legacy checkout_url)
     if (result.hosted_checkout_url) {
       result.checkout_url = result.hosted_checkout_url;
-      console.log('✅ Using hosted_checkout_url from SumUp:', result.hosted_checkout_url);
+      // Using hosted_checkout_url from SumUp
     } else if (!result.checkout_url) {
       console.error('❌ ISSUE: SumUp API did not return hosted_checkout_url or checkout_url in response!');
-      console.error('📋 This usually means one of the following:');
-      console.error('   1. Missing redirect_url in request (required for hosted checkout)');
-      console.error('   2. Sandbox environment may not support hosted checkouts');
-      console.error('   3. API key permissions may not include checkout URL generation');
-      console.error('   4. Merchant account not configured for online payments');
-      console.error('');
-      console.error('🔍 Full API Response:', JSON.stringify(result, null, 2));
+      console.error('This usually indicates configuration issues with redirect_url, sandbox support, API permissions, or merchant account setup');
     }
     
     return result;
@@ -377,7 +312,9 @@ export const processSumUpPayment = async (
       throw new Error(`SumUp Payment Error: ${response.status} - ${errorData.message || 'Payment failed'}`);
     }
 
-    const result = await response.json();    return result;
+    const result = await response.json();
+    // Payment processing completed
+    return result;
 
   } catch (error) {
     console.error('Error processing SumUp payment:', error);

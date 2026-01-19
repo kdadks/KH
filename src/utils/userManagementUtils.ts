@@ -366,7 +366,7 @@ export const getUserPaymentHistory = async (customerId: string): Promise<{ payme
     // You could implement this based on your payment system
     // TODO: Use customerId to fetch actual payment history
     const payments: PaymentHistoryItem[] = [];
-    console.log('Getting payment history for customer:', customerId);
+    // Fetching payment history for customer
 
     return { payments };
   } catch (error) {

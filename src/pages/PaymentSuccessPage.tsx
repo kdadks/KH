@@ -72,15 +72,7 @@ const PaymentSuccessPage: React.FC = () => {
   const verificationStyle = VERIFICATION_STYLES[verificationStatus];
 
   useEffect(() => {
-    console.log('Payment success page loaded with params:', {
-      transactionIdParam,
-      checkoutReference,
-      amountParam,
-      currencyParam,
-      paymentRequestIdParam,
-      checkoutIdParam,
-      statusParam
-    });
+    // Payment params logging removed for production safety
 
     const verifyPayment = async () => {
       if (!paymentRequestIdParam || !checkoutReference) {
