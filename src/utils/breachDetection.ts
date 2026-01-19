@@ -1,6 +1,7 @@
 /**
  * Breach detection using Have I Been Pwned API
- * Checks if email or password has been compromised in known data breaches
+ * Checks if password has been compromised in known data breaches
+ * Note: Email breach checking is disabled as it requires a paid API key
  */
 
 interface BreachCheckResult {
@@ -27,18 +28,24 @@ const sha1Hash = async (str: string): Promise<string> => {
 
 /**
  * Check if email has been in a known data breach
- * Uses HaveIBeenPwned API
+ * NOTE: Disabled - HaveIBeenPwned API v3 requires a paid API key for email breach checks
+ * See: https://haveibeenpwned.com/API/v3#Authorisation
+ * Keeping function for future use if API key is obtained
  */
-export const checkEmailBreach = async (email: string): Promise<{ compromised: boolean; breachCount: number }> => {
+export const checkEmailBreach = async (_email: string): Promise<{ compromised: boolean; breachCount: number }> => {
+  // Email breach checking requires paid API key - skip to avoid console errors
+  return { compromised: false, breachCount: 0 };
+  
+  /* Original implementation - requires hibp-api-key header:
   try {
     const response = await fetch(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}`, {
       headers: {
-        'User-Agent': 'KH-Therapy-App'
+        'User-Agent': 'KH-Therapy-App',
+        'hibp-api-key': 'YOUR_API_KEY_HERE' // Required for v3 API
       }
     });
 
     if (response.status === 404) {
-      // Email not found in any breach
       return { compromised: false, breachCount: 0 };
     }
 
@@ -47,7 +54,6 @@ export const checkEmailBreach = async (email: string): Promise<{ compromised: bo
       return { compromised: true, breachCount: breaches.length };
     }
 
-    // If rate limited or error, don't fail the login but log warning
     if (response.status === 429) {
       console.warn('HaveIBeenPwned API rate limited');
       return { compromised: false, breachCount: 0 };
@@ -55,10 +61,10 @@ export const checkEmailBreach = async (email: string): Promise<{ compromised: bo
 
     throw new Error(`Unexpected status: ${response.status}`);
   } catch (error) {
-    // Don't fail login if breach check fails
     console.warn('Breach check failed:', error);
     return { compromised: false, breachCount: 0 };
   }
+  */
 };
 
 /**

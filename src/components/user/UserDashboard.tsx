@@ -12,7 +12,10 @@ import {
   X,
   Plus,
   Users,
-  Eye
+  Eye,
+  Home,
+  Video,
+  Building2
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/userManagementUtils';
 import { getCustomerPaymentRequests } from '../../utils/paymentRequestUtils';
@@ -407,14 +410,27 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center">
-                      <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-500">
-                        {booking.timeslot_start_time ? 
-                          `${booking.timeslot_start_time.substring(0, 5)}` : 
-                          'Time TBD'
-                        }
-                      </span>
+                    <div className="flex items-center gap-4">
+                      {/* Visit Type */}
+                      <div className="flex items-center text-sm text-gray-500">
+                        {booking.visit_type === 'home' ? (
+                          <><Home className="w-4 h-4 text-orange-500 mr-1" /><span>Home</span></>
+                        ) : booking.visit_type === 'online' ? (
+                          <><Video className="w-4 h-4 text-blue-500 mr-1" /><span>Online</span></>
+                        ) : (
+                          <><Building2 className="w-4 h-4 text-green-500 mr-1" /><span>Clinic</span></>
+                        )}
+                      </div>
+                      {/* Time */}
+                      <div className="flex items-center">
+                        <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                        <span className="text-sm text-gray-500">
+                          {booking.timeslot_start_time ? 
+                            `${booking.timeslot_start_time.substring(0, 5)}` : 
+                            'Time TBD'
+                          }
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}

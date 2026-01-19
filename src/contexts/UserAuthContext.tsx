@@ -280,7 +280,10 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         // Verify password using bcrypt
         let isValidPassword = false;
         try {
+          console.log('login: Verifying password for user ID:', primaryPatient.id);
+          console.log('login: Stored password hash starts with:', primaryPatient.password?.substring(0, 10));
           isValidPassword = await verifyPassword(password, primaryPatient.password);
+          console.log('login: Password verification result:', isValidPassword);
         } catch (err) {
           console.error('Password verification error:', err);
           recordLoginAttempt(normalizedEmail, false);
@@ -288,6 +291,7 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         }
 
         if (!isValidPassword) {
+          console.log('login: Password verification failed for user ID:', primaryPatient.id);
           recordLoginAttempt(normalizedEmail, false);
           const remaining = getRemainingAttempts(normalizedEmail);
           if (remaining > 0) {
@@ -421,20 +425,54 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
         return { success: false, error: 'Not authenticated' };
       }
 
+      console.log('changePassword: Starting password change for user ID:', user.id);
+
       // Hash the new password before storing it
       const hashedPassword = await hashPassword(passwordData.newPassword);
+      console.log('changePassword: Password hashed successfully, length:', hashedPassword.length);
       
-      const { error: updateError } = await supabase
+      const { data: updateData, error: updateError } = await supabase
         .from('customers')
         .update({ 
           password: hashedPassword,
           must_change_password: false 
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select('id, password, must_change_password');
+
+      console.log('changePassword: Update result - data:', updateData, 'error:', updateError);
 
       if (updateError) {
         console.error('Error updating password:', updateError);
         return { success: false, error: updateError.message };
+      }
+
+      // Verify the update was successful
+      if (!updateData || updateData.length === 0) {
+        console.error('changePassword: No rows were updated!');
+        return { success: false, error: 'Failed to update password - no rows affected' };
+      }
+
+      console.log('changePassword: Password updated in database. Verifying...');
+      
+      // Verify the password was actually saved by reading it back
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('customers')
+        .select('password, must_change_password')
+        .eq('id', user.id)
+        .single();
+      
+      if (verifyError) {
+        console.error('changePassword: Failed to verify password update:', verifyError);
+      } else {
+        console.log('changePassword: Verification - password starts with:', verifyData?.password?.substring(0, 10), 'must_change_password:', verifyData?.must_change_password);
+        
+        // Double-check the hash matches
+        if (verifyData?.password !== hashedPassword) {
+          console.error('changePassword: PASSWORD MISMATCH! Saved password does not match what we sent!');
+          console.log('Expected hash starts with:', hashedPassword.substring(0, 10));
+          console.log('Actual hash starts with:', verifyData?.password?.substring(0, 10));
+        }
       }
 
       // Update local user state

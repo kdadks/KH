@@ -135,6 +135,7 @@ export interface UserBooking {
   booking_date?: string;
   timeslot_start_time?: string;
   timeslot_end_time?: string;
+  visit_type?: 'home' | 'online' | 'clinic'; // Visit type selected by customer
   notes?: string;
   status?: string;
   created_at?: string;

@@ -16,7 +16,10 @@ import {
   RefreshCw,
   Plus,
   Users,
-  User
+  User,
+  Home,
+  Video,
+  Building2
 } from 'lucide-react';
 import BookingModal from './BookingModal';
 import RescheduleModal from './RescheduleModal';
@@ -427,8 +430,13 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, isUpcoming, onResche
             )}
 
             <div className="flex items-center text-sm text-gray-600">
-              <MapPin className="w-4 h-4 mr-2" />
-              <span>KH Therapy Clinic</span>
+              {booking.visit_type === 'home' ? (
+                <><Home className="w-4 h-4 mr-2" /><span>Home Visit</span></>
+              ) : booking.visit_type === 'online' ? (
+                <><Video className="w-4 h-4 mr-2" /><span>Online Session</span></>
+              ) : (
+                <><Building2 className="w-4 h-4 mr-2" /><span>Clinic Visit</span></>
+              )}
             </div>
           </div>
 

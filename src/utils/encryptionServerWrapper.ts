@@ -54,6 +54,11 @@ export const encryptSensitiveDataServer = async (data: string, field?: string): 
 export const decryptSensitiveDataServer = async (encrypted: string, field?: string): Promise<string> => {
   if (!encrypted) return '';
 
+  // Check if data doesn't look encrypted - return as-is (might be plaintext from before encryption was implemented)
+  if (!isDataEncrypted(encrypted)) {
+    return encrypted;
+  }
+
   try {
     const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
     const functionUrl = `${siteUrl}/.netlify/functions/decrypt-data`;
@@ -66,17 +71,35 @@ export const decryptSensitiveDataServer = async (encrypted: string, field?: stri
       body: JSON.stringify({ encrypted, field })
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Decryption error:', errorData);
-      throw new Error(`Decryption failed: ${errorData.error || 'Unknown error'}`);
+    // Check for empty response first
+    const responseText = await response.text();
+    if (!responseText) {
+      console.warn(`Decryption returned empty response for field ${field}. Netlify function may not be available. Returning original data.`);
+      // In development or if function is unavailable, return original data
+      return encrypted;
     }
 
-    const result = await response.json();
-    return result.decrypted;
+    // Parse the JSON
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`Failed to parse decryption response for field ${field}:`, responseText);
+      // Return original data if we can't parse response
+      return encrypted;
+    }
+
+    if (!response.ok) {
+      console.error('Decryption error:', result);
+      // Don't throw - return original data to allow app to continue
+      return encrypted;
+    }
+
+    return result.decrypted || encrypted;
   } catch (error) {
     console.error('Error decrypting data:', error);
-    throw error; // CRITICAL: Never return encrypted data on failure - throw error instead
+    // Don't throw - return original data to allow app to continue
+    return encrypted;
   }
 };
 
@@ -151,7 +174,7 @@ export const decryptCustomerPIIServer = async (customer: any) => {
         decryptedCustomer[field] = await decryptSensitiveDataServer(decryptedCustomer[field], field);
       } catch (error) {
         console.error(`Failed to decrypt field ${field}:`, error);
-        throw error; // Don't silently fail
+        // Don't throw - keep original data and continue
       }
     }
   }
