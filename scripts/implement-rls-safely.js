@@ -19,6 +19,73 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+/**
+ * SECURITY: Whitelist validation for SQL injection prevention
+ * All table names and foreign keys must be in these whitelists
+ * Template string interpolation is only done with validated values
+ */
+const ALLOWED_TABLES = [
+  'customers',
+  'bookings',
+  'invoices',
+  'invoice_items',
+  'payments',
+  'payment_requests',
+  'user_sessions',
+  'admins',
+  'payment_gateways',
+  'payments_tracking',
+  'gdpr_audit_log',
+  'consent_records'
+];
+
+const ALLOWED_FOREIGN_KEYS = {
+  'invoices': 'customer_id',
+  'payments': 'customer_id',
+  'payment_requests': 'customer_id',
+  'user_sessions': 'customer_id',
+  'bookings': 'customer_id'
+};
+
+/**
+ * Validate table name against whitelist
+ * Prevents SQL injection via table name manipulation
+ * @param {string} table - Table name to validate
+ * @returns {boolean} - True if table is allowed
+ */
+function validateTableName(table) {
+  if (!ALLOWED_TABLES.includes(table)) {
+    throw new Error(`⚠️  Invalid table name: "${table}". Not in approved list.`);
+  }
+  return true;
+}
+
+/**
+ * Validate foreign key against whitelist
+ * Prevents SQL injection via column name manipulation
+ * @param {string} table - Table name to validate foreign key for
+ * @param {string} foreignKey - Foreign key column name to validate
+ * @returns {boolean} - True if foreign key is allowed
+ */
+function validateForeignKey(table, foreignKey) {
+  const allowed = ALLOWED_FOREIGN_KEYS[table];
+  if (!allowed || !allowed.includes(foreignKey)) {
+    throw new Error(`⚠️  Invalid foreign key: "${foreignKey}" for table "${table}". Not in approved list.`);
+  }
+  return true;
+}
+
+/**
+ * Escape identifier for safe SQL usage
+ * @param {string} identifier - Column or table name to escape
+ * @returns {string} - Escaped identifier safe for SQL
+ */
+function escapeIdentifier(identifier) {
+  // Remove any quotes first, then wrap in double quotes
+  const cleaned = identifier.replace(/"/g, '');
+  return `"${cleaned}"`;
+}
+
 async function implementRLS() {
   console.log('🛡️  Implementing RLS Policies for KH Therapy Database...\n');
   
@@ -78,36 +145,24 @@ console.log('✅ Helper functions created successfully');
 // Step 2: Enable RLS on tables one by one
 console.log('\n2️⃣  Enabling RLS on tables...');
 
-const sensitiveTablesRls = [
-  'customers',
-  'bookings', 
-  'invoices',
-  'invoice_items',
-  'payments',
-  'payment_requests',
-  'user_sessions',
-  'admins',
-  'payment_gateways',
-  'payments_tracking',
-  'gdpr_audit_log',
-  'consent_records'
-];
-
-for (const table of sensitiveTablesRls) {
+for (const table of ALLOWED_TABLES) {
   try {
-    const { error } = await supabase.rpc('exec_sql', { 
-      sql_query: `ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY;` 
-    });
+    // Validate table name before using in SQL
+    validateTableName(table);
+    
+    // Use validated table name in SQL
+    const sql = `ALTER TABLE public."${table}" ENABLE ROW LEVEL SECURITY;`;
+    const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
     
     if (error) {
       console.log(`❌ Failed to enable RLS on ${table}: ${error.message}`);
     } else {
       console.log(`✅ RLS enabled on ${table}`);
     }
-      } catch (err) {
-        console.log(`❌ Error enabling RLS on ${table}: ${err.message}`);
-      }
-    }
+  } catch (err) {
+    console.log(`❌ Error enabling RLS on ${table}: ${err.message}`);
+  }
+}
 
     // Step 3: Create policies for each table
     console.log('\n3️⃣  Creating RLS policies...');
@@ -196,17 +251,25 @@ for (const table of sensitiveTablesRls) {
     const adminOnlyTables = ['admins', 'payment_gateways', 'payments_tracking', 'gdpr_audit_log', 'consent_records'];
     
     for (const table of adminOnlyTables) {
-      const adminPolicy = `
-        DROP POLICY IF EXISTS "${table}_admin_only_access" ON public.${table};
-        CREATE POLICY "${table}_admin_only_access" ON public.${table}
-            FOR ALL
-            TO authenticated
-            USING (auth.is_admin())
-            WITH CHECK (auth.is_admin());
-      `;
+      try {
+        // Validate table name before using in SQL
+        validateTableName(table);
+        
+        const policyName = `${table}_admin_only_access`;
+        const adminPolicy = `
+          DROP POLICY IF EXISTS ${escapeIdentifier(policyName)} ON public.${escapeIdentifier(table)};
+          CREATE POLICY ${escapeIdentifier(policyName)} ON public.${escapeIdentifier(table)}
+              FOR ALL
+              TO authenticated
+              USING (auth.is_admin())
+              WITH CHECK (auth.is_admin());
+        `;
 
-      const { error } = await supabase.rpc('sql', { query: adminPolicy });
-      console.log(error ? `❌ ${table} policies: ${error.message}` : `✅ ${table} admin-only policies created`);
+        const { error } = await supabase.rpc('sql', { query: adminPolicy });
+        console.log(error ? `❌ ${table} policies: ${error.message}` : `✅ ${table} admin-only policies created`);
+      } catch (err) {
+        console.log(`❌ Error creating policies for ${table}: ${err.message}`);
+      }
     }
 
     // User data tables (invoices, payments, payment_requests, user_sessions)
@@ -218,26 +281,34 @@ for (const table of sensitiveTablesRls) {
     ];
 
     for (const { table, foreign_key } of userDataTables) {
-      const userDataPolicy = `
-        DROP POLICY IF EXISTS "${table}_admin_all_access" ON public.${table};
-        DROP POLICY IF EXISTS "${table}_user_own_access" ON public.${table};
+      try {
+        // Validate inputs before using in SQL
+        validateTableName(table);
+        validateForeignKey(table, foreign_key);
+        
+        const userDataPolicy = `
+          DROP POLICY IF EXISTS "${table}_admin_all_access" ON public.${escapeIdentifier(table)};
+          DROP POLICY IF EXISTS "${table}_user_own_access" ON public.${escapeIdentifier(table)};
 
-        -- Admin can do everything
-        CREATE POLICY "${table}_admin_all_access" ON public.${table}
-            FOR ALL
-            TO authenticated
-            USING (auth.is_admin())
-            WITH CHECK (auth.is_admin());
+          -- Admin can do everything
+          CREATE POLICY "${table}_admin_all_access" ON public.${escapeIdentifier(table)}
+              FOR ALL
+              TO authenticated
+              USING (auth.is_admin())
+              WITH CHECK (auth.is_admin());
 
-        -- Users can view their own data
-        CREATE POLICY "${table}_user_own_access" ON public.${table}
-            FOR SELECT
-            TO authenticated
-            USING (${foreign_key} = auth.current_customer_id());
-      `;
+          -- Users can view their own data
+          CREATE POLICY "${table}_user_own_access" ON public.${escapeIdentifier(table)}
+              FOR SELECT
+              TO authenticated
+              USING (${escapeIdentifier(foreign_key)} = auth.current_customer_id());
+        `;
 
-      const { error } = await supabase.rpc('sql', { query: userDataPolicy });
-      console.log(error ? `❌ ${table} policies: ${error.message}` : `✅ ${table} user data policies created`);
+        const { error } = await supabase.rpc('sql', { query: userDataPolicy });
+        console.log(error ? `❌ ${table} policies: ${error.message}` : `✅ ${table} user data policies created`);
+      } catch (err) {
+        console.log(`❌ Error creating policies for ${table}: ${err.message}`);
+      }
     }
 
     // Special policy for invoice_items (related through invoices)
