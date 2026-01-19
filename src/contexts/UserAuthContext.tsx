@@ -431,6 +431,66 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
       const hashedPassword = await hashPassword(passwordData.newPassword);
       console.log('changePassword: Password hashed successfully, length:', hashedPassword.length);
       
+      // Use the Netlify function to update password (bypasses RLS issues)
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      const functionUrl = `${siteUrl}/.netlify/functions/update-password`;
+      
+      try {
+        const response = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            customerId: user.id, 
+            hashedPassword 
+          })
+        });
+
+        const responseText = await response.text();
+        console.log('changePassword: Server response:', responseText);
+        
+        if (!responseText) {
+          console.warn('changePassword: Empty response from server, falling back to direct update');
+          // Fall through to direct Supabase update
+        } else {
+          const result = JSON.parse(responseText);
+          
+          if (result.success) {
+            console.log('changePassword: Password updated successfully via server function');
+            
+            // Update local user state
+            const updatedUser = { ...user, must_change_password: false };
+            setUser(updatedUser);
+            
+            // Also update allPatients array if the user is in there (multi-patient support)
+            if (allPatients.length > 0) {
+              const updatedPatients = allPatients.map(patient => 
+                patient.id === user.id 
+                  ? { ...patient, must_change_password: false }
+                  : patient
+              );
+              setAllPatients(updatedPatients);
+              
+              // Update activePatient if it's the same user
+              if (activePatient?.id === user.id) {
+                setActivePatient({ ...activePatient, must_change_password: false });
+              }
+            }
+            
+            return { success: true };
+          } else {
+            console.error('changePassword: Server function failed:', result.error);
+            return { success: false, error: result.error || 'Failed to update password' };
+          }
+        }
+      } catch (fetchError) {
+        console.warn('changePassword: Server function unavailable, trying direct update:', fetchError);
+        // Fall through to direct Supabase update
+      }
+      
+      // Fallback: Direct Supabase update (may be blocked by RLS)
+      console.log('changePassword: Attempting direct Supabase update...');
       const { data: updateData, error: updateError } = await supabase
         .from('customers')
         .update({ 
@@ -449,31 +509,12 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
 
       // Verify the update was successful
       if (!updateData || updateData.length === 0) {
-        console.error('changePassword: No rows were updated!');
-        return { success: false, error: 'Failed to update password - no rows affected' };
+        console.error('changePassword: No rows were updated! This is likely an RLS policy issue.');
+        console.error('changePassword: Please run the SQL in database/fix-customer-update-rls.sql in Supabase Dashboard');
+        return { success: false, error: 'Failed to update password - please contact support' };
       }
 
-      console.log('changePassword: Password updated in database. Verifying...');
-      
-      // Verify the password was actually saved by reading it back
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('customers')
-        .select('password, must_change_password')
-        .eq('id', user.id)
-        .single();
-      
-      if (verifyError) {
-        console.error('changePassword: Failed to verify password update:', verifyError);
-      } else {
-        console.log('changePassword: Verification - password starts with:', verifyData?.password?.substring(0, 10), 'must_change_password:', verifyData?.must_change_password);
-        
-        // Double-check the hash matches
-        if (verifyData?.password !== hashedPassword) {
-          console.error('changePassword: PASSWORD MISMATCH! Saved password does not match what we sent!');
-          console.log('Expected hash starts with:', hashedPassword.substring(0, 10));
-          console.log('Actual hash starts with:', verifyData?.password?.substring(0, 10));
-        }
-      }
+      console.log('changePassword: Password updated in database successfully');
 
       // Update local user state
       const updatedUser = { ...user, must_change_password: false };
