@@ -14,6 +14,7 @@
     "migrate-gdpr": "node scripts/migrate-gdpr-compliance.js",
     "test:gdpr": "jest src/tests/gdpr-compliance.test.js",
     "analyze-db": "node scripts/analyze-database-schema.js",
+    "check-rls": "node scripts/check-rls-status.mjs",
     "implement-rls": "node scripts/implement-rls-safely.js",
     "rls-manual": "node scripts/implement-rls-manual.js",
     "setup-google-reviews": "node scripts/setup-google-reviews.js"
