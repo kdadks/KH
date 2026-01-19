@@ -27,8 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*
-!.env.example
-!.env.*.example
 
 # Bolt.new metadata
 .bolt

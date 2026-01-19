@@ -1,14 +1,64 @@
 /**
  * GDPR Encryption/Decryption Wrapper Functions
  * These functions call server-side Netlify functions for encryption/decryption
- * CRITICAL: Encryption key is NEVER exposed to the client
+ * CRITICAL: Encryption key is NEVER exposed to the client in production
  * 
  * SECURITY IMPROVEMENT:
  * - Moved from client-side AES encryption to server-side encryption
  * - Encryption key is stored only on server environment variables
  * - Client sends plaintext over HTTPS to server for encryption
  * - Server returns encrypted data for storage
+ * 
+ * DEVELOPMENT MODE:
+ * - In localhost/development, uses VITE_ENCRYPTION_KEY for client-side decryption
+ * - This enables local development and testing
+ * - Key is ONLY used in development, NOT in production
  */
+
+import * as CryptoJS from 'crypto-js';
+
+/**
+ * Check if running in development mode
+ */
+const isDevelopment = (): boolean => {
+  return import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+};
+
+/**
+ * Get encryption key for client-side decryption (development only)
+ */
+const getClientEncryptionKey = (): string | null => {
+  if (!isDevelopment()) {
+    return null; // Never use client-side key in production
+  }
+  return import.meta.env.VITE_ENCRYPTION_KEY || null;
+};
+
+/**
+ * Client-side decryption (development mode only)
+ */
+const decryptDataClientSide = (encrypted: string): string => {
+  try {
+    const key = getClientEncryptionKey();
+    if (!key) {
+      console.warn('No encryption key available for client-side decryption');
+      return encrypted;
+    }
+
+    const bytes = CryptoJS.AES.decrypt(encrypted, key);
+    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+
+    if (!decrypted) {
+      console.warn('Client-side decryption resulted in empty string');
+      return encrypted;
+    }
+
+    return decrypted;
+  } catch (error) {
+    console.error('Client-side decryption error:', error);
+    return encrypted;
+  }
+};
 
 /**
  * Call server-side encryption function
@@ -47,6 +97,7 @@ export const encryptSensitiveDataServer = async (data: string, field?: string): 
 
 /**
  * Call server-side decryption function
+ * Falls back to client-side decryption in development mode
  * @param encrypted - The encrypted data to decrypt
  * @param field - Optional field name for tracking
  * @returns Decrypted plaintext data
@@ -74,8 +125,14 @@ export const decryptSensitiveDataServer = async (encrypted: string, field?: stri
     // Check for empty response first
     const responseText = await response.text();
     if (!responseText) {
-      console.warn(`Decryption returned empty response for field ${field}. Netlify function may not be available. Returning original data.`);
-      // In development or if function is unavailable, return original data
+      console.warn(`Decryption returned empty response for field ${field}. Netlify function may not be available. Trying client-side decryption...`);
+      
+      // In development or if function is unavailable, try client-side decryption
+      if (isDevelopment()) {
+        console.log(`Using client-side decryption for field ${field}`);
+        return decryptDataClientSide(encrypted);
+      }
+      
       return encrypted;
     }
 
@@ -85,20 +142,38 @@ export const decryptSensitiveDataServer = async (encrypted: string, field?: stri
       result = JSON.parse(responseText);
     } catch (parseError) {
       console.error(`Failed to parse decryption response for field ${field}:`, responseText);
-      // Return original data if we can't parse response
+      
+      // Try client-side decryption as fallback
+      if (isDevelopment()) {
+        console.log(`Falling back to client-side decryption for field ${field}`);
+        return decryptDataClientSide(encrypted);
+      }
+      
       return encrypted;
     }
 
     if (!response.ok) {
       console.error('Decryption error:', result);
-      // Don't throw - return original data to allow app to continue
+      
+      // Try client-side decryption as fallback
+      if (isDevelopment()) {
+        console.log(`Server decryption failed, using client-side decryption for field ${field}`);
+        return decryptDataClientSide(encrypted);
+      }
+      
       return encrypted;
     }
 
     return result.decrypted || encrypted;
   } catch (error) {
     console.error('Error decrypting data:', error);
-    // Don't throw - return original data to allow app to continue
+    
+    // Try client-side decryption as fallback in development
+    if (isDevelopment()) {
+      console.log(`Exception during decryption, falling back to client-side for field ${field}`);
+      return decryptDataClientSide(encrypted);
+    }
+    
     return encrypted;
   }
 };

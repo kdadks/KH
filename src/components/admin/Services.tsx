@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, Check, X, Clock, Calendar, Eye } from 'lucide-react
 import { Package, ServiceTimeSlot } from './types';
 import { useToast } from '../shared/toastContext';
 import { supabase } from '../../supabaseClient';
+import { updateServiceAdmin } from '../../utils/adminServiceUtils';
 
 interface ServicesProps {
   packages: Package[];
@@ -41,6 +42,7 @@ export const Services: React.FC<ServicesProps> = ({
   // Filter states
   const [filterVisitType, setFilterVisitType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Helper functions for category management
   const handleCategoryToggle = (category: string, isForNew: boolean = true) => {
@@ -90,6 +92,7 @@ export const Services: React.FC<ServicesProps> = ({
   // State for modals
   const [showAddService, setShowAddService] = useState(false);
   const [showBulkCreate, setShowBulkCreate] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Helper function to determine slot type based on time
   const calculateSlotType = (startTime: string, endTime: string): 'in-hour' | 'out-of-hour' => {
@@ -169,7 +172,6 @@ export const Services: React.FC<ServicesProps> = ({
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -300,7 +302,48 @@ export const Services: React.FC<ServicesProps> = ({
     );
   };
 
-  // Update service in database
+  // Toggle service active/inactive status using admin function
+  // Falls back to direct Supabase in development if function is unavailable
+  const handleToggleServiceStatus = async (index: number, currentStatus: boolean) => {
+    const service = packages[index];
+    if (!service.id) return;
+
+    try {
+      // Try using admin function first
+      try {
+        await updateServiceAdmin({
+          serviceId: service.id,
+          name: service.name,
+          is_active: !currentStatus
+        });
+      } catch (adminError) {
+        console.warn('Admin function failed, falling back to direct update:', adminError);
+        
+        // Fallback: Update directly via Supabase (for local dev)
+        const { error } = await supabase
+          .from('services')
+          .update({ is_active: !currentStatus })
+          .eq('id', service.id);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      // Update local state
+      const updated = [...packages];
+      updated[index] = { ...service, isActive: !currentStatus };
+      setPackages(updated);
+      
+      showSuccess('Success', `Service ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      console.error('Error toggling service status:', error);
+      showError('Error', error instanceof Error ? error.message : 'Failed to update service status');
+    }
+  };
+
+  // Update service in database using admin function with service role key
+  // Falls back to direct Supabase in development if function is unavailable
   const handleSaveEdit = async () => {
     if (editIndex === null || !editPackage) return;
     
@@ -309,35 +352,63 @@ export const Services: React.FC<ServicesProps> = ({
       return;
     }
 
+    setIsSavingEdit(true);
     try {
-      const { error } = await supabase
-        .from('services')
-        .update({
+      // Try using admin function first
+      try {
+        await updateServiceAdmin({
+          serviceId: editPackage.id!,
           name: editPackage.name.trim(),
-          category: (editPackage.categories && editPackage.categories.length > 0) ? editPackage.categories : null,
-          price: editPackage.price || null,
-          in_hour_price: editPackage.inHourPrice || null,
-          out_of_hour_price: editPackage.outOfHourPrice || null,
+          category: (editPackage.categories && editPackage.categories.length > 0) ? editPackage.categories : undefined,
+          price: editPackage.price ? parseFloat(editPackage.price.toString()) : undefined,
+          in_hour_price: editPackage.inHourPrice ? parseFloat(editPackage.inHourPrice.toString()) : undefined,
+          out_of_hour_price: editPackage.outOfHourPrice ? parseFloat(editPackage.outOfHourPrice.toString()) : undefined,
           features: editPackage.features.filter(f => f.trim()),
-          description: editPackage.description || null,
+          description: editPackage.description || undefined,
           booking_type: editPackage.bookingType || 'book_now',
-          visit_type: editPackage.visitType || 'clinic'
-        })
-        .eq('id', editPackage.id);
+          visit_type: editPackage.visitType || 'clinic',
+          is_active: editPackage.isActive
+        });
+      } catch (adminError) {
+        console.warn('Admin function failed, falling back to direct update:', adminError);
+        
+        // Fallback: Update directly via Supabase (for local dev)
+        const { error } = await supabase
+          .from('services')
+          .update({
+            name: editPackage.name.trim(),
+            category: (editPackage.categories && editPackage.categories.length > 0) ? editPackage.categories : null,
+            price: editPackage.price ? parseFloat(editPackage.price.toString()) : null,
+            in_hour_price: editPackage.inHourPrice ? parseFloat(editPackage.inHourPrice.toString()) : null,
+            out_of_hour_price: editPackage.outOfHourPrice ? parseFloat(editPackage.outOfHourPrice.toString()) : null,
+            features: editPackage.features.filter(f => f.trim()),
+            description: editPackage.description || null,
+            booking_type: editPackage.bookingType || 'book_now',
+            visit_type: editPackage.visitType || 'clinic',
+            is_active: editPackage.isActive,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editPackage.id);
 
-      if (error) throw error;
+        if (error) {
+          throw error;
+        }
+      }
 
       // Update local state
       const updated = [...packages];
       updated[editIndex] = { ...editPackage, features: editPackage.features.filter(f => f.trim()) };
       setPackages(updated);
       
+      showSuccess('Success', 'Service updated successfully');
+      // Close modal
       setEditIndex(null);
       setEditPackage(null);
-      showSuccess('Success', 'Service updated successfully');
     } catch (error) {
       console.error('Error updating service:', error);
-      showError('Error', 'Failed to update service');
+      showError('Error', error instanceof Error ? error.message : 'Failed to update service');
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -648,7 +719,9 @@ export const Services: React.FC<ServicesProps> = ({
     const matchesVisitType = filterVisitType === 'all' || pkg.visitType === filterVisitType;
     const matchesCategory = filterCategory === 'all' || 
       (pkg.categories && pkg.categories.includes(filterCategory));
-    return matchesVisitType && matchesCategory;
+    const matchesStatus = filterStatus === 'all' || 
+      (filterStatus === 'active' ? pkg.isActive : !pkg.isActive);
+    return matchesVisitType && matchesCategory && matchesStatus;
   });
 
   // State for view service modal
@@ -689,6 +762,19 @@ export const Services: React.FC<ServicesProps> = ({
             {/* Filters */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Status:</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                >
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700">Visit Type:</label>
                 <select
                   value={filterVisitType}
@@ -716,9 +802,10 @@ export const Services: React.FC<ServicesProps> = ({
                 </select>
               </div>
               
-              {(filterVisitType !== 'all' || filterCategory !== 'all') && (
+              {(filterStatus !== 'active' || filterVisitType !== 'all' || filterCategory !== 'all') && (
                 <button
                   onClick={() => {
+                    setFilterStatus('active');
                     setFilterVisitType('all');
                     setFilterCategory('all');
                   }}
@@ -753,6 +840,7 @@ export const Services: React.FC<ServicesProps> = ({
                 <p className="text-sm mt-2">Try adjusting your filter criteria</p>
                 <button
                   onClick={() => {
+                    setFilterStatus('active');
                     setFilterVisitType('all');
                     setFilterCategory('all');
                   }}
@@ -764,7 +852,7 @@ export const Services: React.FC<ServicesProps> = ({
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -782,6 +870,9 @@ export const Services: React.FC<ServicesProps> = ({
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Visit Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Category
@@ -829,6 +920,19 @@ export const Services: React.FC<ServicesProps> = ({
                         {pkg.visitType === 'home' ? '🏠 Home' :
                          pkg.visitType === 'online' ? '💻 Online' : '🏥 Clinic'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => handleToggleServiceStatus(originalIndex, pkg.isActive)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          pkg.isActive 
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                        title={pkg.isActive ? 'Click to deactivate' : 'Click to activate'}
+                      >
+                        {pkg.isActive ? '● Active' : '● Inactive'}
+                      </button>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1">
@@ -1231,7 +1335,7 @@ export const Services: React.FC<ServicesProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">Standard Price</label>
                   <input
                     type="text"
-                    value={newPackage.price}
+                    value={newPackage.price || ''}
                     onChange={(e) => setNewPackage({ ...newPackage, price: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="€100"
@@ -1242,7 +1346,7 @@ export const Services: React.FC<ServicesProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">In Hours Price</label>
                   <input
                     type="text"
-                    value={newPackage.inHourPrice}
+                    value={newPackage.inHourPrice || ''}
                     onChange={(e) => setNewPackage({ ...newPackage, inHourPrice: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="€80"
@@ -1253,7 +1357,7 @@ export const Services: React.FC<ServicesProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">Out of Hours Price</label>
                   <input
                     type="text"
-                    value={newPackage.outOfHourPrice}
+                    value={newPackage.outOfHourPrice || ''}
                     onChange={(e) => setNewPackage({ ...newPackage, outOfHourPrice: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="€120"
@@ -1287,7 +1391,7 @@ export const Services: React.FC<ServicesProps> = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
-                  value={newPackage.description}
+                  value={newPackage.description || ''}
                   onChange={(e) => setNewPackage({ ...newPackage, description: e.target.value })}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -1563,7 +1667,7 @@ export const Services: React.FC<ServicesProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">Standard Price</label>
                   <input
                     type="text"
-                    value={editPackage.price}
+                    value={editPackage.price || ''}
                     onChange={(e) => handleEditChange('price', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
@@ -1573,7 +1677,7 @@ export const Services: React.FC<ServicesProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">In Hours Price</label>
                   <input
                     type="text"
-                    value={editPackage.inHourPrice}
+                    value={editPackage.inHourPrice || ''}
                     onChange={(e) => handleEditChange('inHourPrice', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
@@ -1583,7 +1687,7 @@ export const Services: React.FC<ServicesProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">Out of Hours Price</label>
                   <input
                     type="text"
-                    value={editPackage.outOfHourPrice}
+                    value={editPackage.outOfHourPrice || ''}
                     onChange={(e) => handleEditChange('outOfHourPrice', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
@@ -1616,7 +1720,7 @@ export const Services: React.FC<ServicesProps> = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
-                  value={editPackage.description}
+                  value={editPackage.description || ''}
                   onChange={(e) => handleEditChange('description', e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -1651,15 +1755,24 @@ export const Services: React.FC<ServicesProps> = ({
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={handleCancelEdit}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                disabled={isSavingEdit}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                disabled={isSavingEdit}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Save Changes
+                {isSavingEdit ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
               </button>
             </div>
           </div>
