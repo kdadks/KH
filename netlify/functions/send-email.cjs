@@ -1,5 +1,19 @@
 const nodemailer = require('nodemailer');
 
+// HTML Entity Encoding - Prevents XSS vulnerabilities in email templates
+// Encodes special HTML characters to their entity equivalents
+const escapeHtmlEntities = (str) => {
+  if (!str) return '';
+  // Convert string to HTML-safe encoding
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\//g, '&#47;');
+};
+
 // SMTP Configuration
 const createTransporter = () => {
   return nodemailer.createTransport({
@@ -399,25 +413,25 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmation</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Thank you for booking with KH Therapy! Your appointment has been confirmed.</p>
               
               <div class="details">
                 <h3>📅 Appointment Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Total Amount:</strong> €${data.total_amount}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+                <p><strong>Total Amount:</strong> €${escapeHtmlEntities(data.total_amount)}</p>
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
               </div>
               
               ${data.special_instructions ? `
                 <div class="highlight">
                   <h3>📝 Special Instructions</h3>
-                  <p>${data.special_instructions}</p>
+                  <p>${escapeHtmlEntities(data.special_instructions)}</p>
                 </div>
               ` : ''}
               
@@ -455,15 +469,15 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Receipt</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Thank you for your payment! Your transaction has been processed successfully.</p>
               
               <div class="details">
                 <h3>💳 Payment Details</h3>
-                <p><strong>Transaction ID:</strong> ${data.transaction_id}</p>
-                <p><strong>Amount:</strong> €${data.payment_amount}</p>
+                <p><strong>Transaction ID:</strong> ${escapeHtmlEntities(data.transaction_id)}</p>
+                <p><strong>Amount:</strong> €${escapeHtmlEntities(data.payment_amount)}</p>
                 <p><strong>Date:</strong> ${data.payment_date}</p>
-                <p><strong>Service:</strong> ${data.service_name || 'Therapy Session'}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name || 'Therapy Session')}</p>
                 <p><strong>Status:</strong> <span class="success-icon">✅</span> Completed</p>
               </div>
               
@@ -499,15 +513,15 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Payment Request</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>You have a new payment request from KH Therapy. Please review the details below and complete your payment at your convenience.</p>
               
               <div class="details">
                 <h3>💰 Payment Details</h3>
-                <p><strong>Amount:</strong> €${data.amount}</p>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Amount:</strong> €${escapeHtmlEntities(data.amount)}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Due Date:</strong> ${data.due_date}</p>
-                ${data.invoice_number ? `<p><strong>Invoice Number:</strong> ${data.invoice_number}</p>` : ''}
+                ${data.invoice_number ? `<p><strong>Invoice Number:</strong> ${escapeHtmlEntities(data.invoice_number)}</p>` : ''}
               </div>
               
               ${data.payment_url ? `
@@ -610,15 +624,15 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Invoice Notification</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>You have received a new invoice from KH Therapy. Please find the invoice attached as a PDF file.</p>
               
               <div class="details">
                 <h3>📄 Invoice Details</h3>
-                <p><strong>Invoice Number:</strong> ${data.invoice_number}</p>
-                <p><strong>Amount:</strong> €${data.amount}</p>
+                <p><strong>Invoice Number:</strong> ${escapeHtmlEntities(data.invoice_number)}</p>
+                <p><strong>Amount:</strong> €${escapeHtmlEntities(data.amount)}</p>
                 <p><strong>Due Date:</strong> ${data.due_date}</p>
-                <p><strong>Service:</strong> ${data.service_name || 'Therapy Session'}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name || 'Therapy Session')}</p>
               </div>
               
               <div class="payment-instructions">
@@ -674,15 +688,15 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Appointment Reminder</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>This is a friendly reminder about your upcoming appointment with KH Therapy.</p>
               
               <div class="details">
                 <h3>📅 Appointment Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
               </div>
               
               <div class="highlight">
@@ -720,13 +734,13 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Admin Notification</h1>
             </div>
             <div class="content">
-              <h2>🔔 New ${data.notification_type}</h2>
-              <p>${data.message}</p>
+              <h2>🔔 New ${escapeHtmlEntities(data.notification_type)}</h2>
+              <p>${escapeHtmlEntities(data.message)}</p>
               
               <div class="details">
                 <h3>📊 Details</h3>
                 ${Object.keys(data.details || {}).map(key => 
-                  `<p><strong>${key.replace(/_/g, ' ').toUpperCase()}:</strong> ${data.details[key]}</p>`
+                  `<p><strong>${key.replace(/_/g, ' ').toUpperCase()}:</strong> ${escapeHtmlEntities(String(data.details[key]))}</p>`
                 ).join('')}
               </div>
               
@@ -759,7 +773,7 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Welcome to KH Therapy</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Welcome to KH Therapy! We're thrilled to have you join our community of patients. Our dedicated team of qualified physiotherapists is committed to helping you achieve your health and wellness goals through personalized, evidence-based treatment.</p>
               
               <div class="details">
@@ -785,7 +799,7 @@ const getEmailTemplate = (type, data) => {
                 <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; border: 2px solid #ffc107; margin: 15px 0; box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);">
                   <h4 style="color: #856404; margin-top: 0; margin-bottom: 15px; text-align: center;">🔑 Step 2: Your First-Time Login Credentials</h4>
                   <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745; margin: 10px 0;">
-                    <p style="margin: 0; font-size: 16px; font-weight: bold; color: #155724;">📧 Your Login Email: <span style="color: #007bff;">${data.customer_email || 'Your registered email address'}</span></p>
+                    <p style="margin: 0; font-size: 16px; font-weight: bold; color: #155724;">📧 Your Login Email: <span style="color: #007bff;">${escapeHtmlEntities(data.customer_email || 'Your registered email address')}</span></p>
                   </div>
                   <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #dc3545; margin: 10px 0;">
                     <p style="margin: 0; font-size: 16px; font-weight: bold; color: #721c24;">🔐 Your Temporary Password: <span style="color: #dc3545;">Same as your email address</span></p>
@@ -881,7 +895,7 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Password Reset</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>You requested a password reset for your KH Therapy patient account. To create a new password, please click the button below.</p>
               
               ${data.reset_url ? `
@@ -931,30 +945,30 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Confirmed - Payment Received</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Excellent! Your booking has been confirmed and your payment has been successfully processed. We're excited to help you on your health journey!</p>
               
               <div class="details">
                 <h3>📅 Booking Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
               </div>
               
               <div class="details">
                 <h3>💳 Payment Confirmation</h3>
-                <p><strong>Amount Paid:</strong> €${data.payment_amount}</p>
-                ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${data.transaction_id}</p>` : ''}
+                <p><strong>Amount Paid:</strong> €${escapeHtmlEntities(data.payment_amount)}</p>
+                ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${escapeHtmlEntities(data.transaction_id)}</p>` : ''}
                 <p><strong>Status:</strong> <span class="success-icon">✅ Payment Successful</span></p>
               </div>
               
               ${data.next_steps ? `
                 <div class="highlight">
                   <h3>🎯 Next Steps</h3>
-                  <p>${data.next_steps}</p>
+                  <p>${escapeHtmlEntities(data.next_steps)}</p>
                 </div>
               ` : `
                 <div class="highlight">
@@ -969,7 +983,7 @@ const getEmailTemplate = (type, data) => {
               ${data.special_instructions ? `
                 <div class="details">
                   <h3>📝 Special Instructions</h3>
-                  <p>${data.special_instructions}</p>
+                  <p>${escapeHtmlEntities(data.special_instructions)}</p>
                 </div>
               ` : ''}
               
@@ -1000,22 +1014,22 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking Created - Payment Required</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Your booking has been created, but we encountered an issue with your payment. Don't worry - your appointment slot is temporarily reserved while we resolve this.</p>
               
               <div class="details">
                 <h3>📅 Booking Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
               </div>
               
               <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
                 <h3>⚠️ Payment Status</h3>
-                <p><strong>Amount Due:</strong> €${data.payment_amount}</p>
+                <p><strong>Amount Due:</strong> €${escapeHtmlEntities(data.payment_amount)}</p>
                 <p><strong>Status:</strong> <span class="warning-icon">❌ Payment Failed</span></p>
                 <p>Please retry your payment to confirm your booking.</p>
               </div>
@@ -1057,17 +1071,17 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Booking With Payment Pending</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Great news! Your booking has been successfully created. To secure your appointment, please complete the required deposit payment.</p>
               
               <div class="details">
                 <h3>📅 Booking Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
               </div>
               
               <div class="details" style="background-color: #fef9e7; border-left: 4px solid #f59e0b;">
@@ -1079,7 +1093,7 @@ const getEmailTemplate = (type, data) => {
               
               <div class="highlight">
                 <h3>🔄 Next Steps</h3>
-                ${data.next_steps ? `<p>${data.next_steps}</p>` : `
+                ${data.next_steps ? `<p>${escapeHtmlEntities(data.next_steps)}</p>` : `
                 <p>• Check your email for the payment request with secure payment link</p>
                 <p>• Complete the 20% deposit payment to confirm your booking</p>
                 <p>• You can also pay through your patient dashboard</p>
@@ -1399,26 +1413,26 @@ const getEmailTemplate = (type, data) => {
               
               <div class="details">
                 <h3>👤 Contact Information</h3>
-                <p><strong>Name:</strong> ${data.customer_name}</p>
-                <p><strong>Email:</strong> ${data.customer_email}</p>
-                <p><strong>Service Interest:</strong> ${data.service_name || 'General Inquiry'}</p>
+                <p><strong>Name:</strong> ${escapeHtmlEntities(data.customer_name)}</p>
+                <p><strong>Email:</strong> ${escapeHtmlEntities(data.customer_email)}</p>
+                <p><strong>Service Interest:</strong> ${escapeHtmlEntities(data.service_name || 'General Inquiry')}</p>
                 <p><strong>Submitted:</strong> ${data.submission_date} at ${data.submission_time}</p>
               </div>
               
               <div class="details">
                 <h3>💬 Message</h3>
-                <p style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border-left: 4px solid #059669; white-space: pre-wrap;">${data.message}</p>
+                <p style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border-left: 4px solid #059669; white-space: pre-wrap;">${escapeHtmlEntities(data.message)}</p>
               </div>
               
               <div class="highlight">
                 <p><strong>⚡ Action Required</strong></p>
-                <p>Please respond to this inquiry within 24 hours. You can reply directly to <strong>${data.customer_email}</strong> or call them if they provided a phone number.</p>
+                <p>Please respond to this inquiry within 24 hours. You can reply directly to <strong>${escapeHtmlEntities(data.customer_email)}</strong> or call them if they provided a phone number.</p>
               </div>
               
               <div class="details">
                 <h3>📞 Quick Actions</h3>
-                <p>• <a href="mailto:${data.customer_email}?subject=Re: Your inquiry about ${data.service_name || 'our services'}" style="color: #059669; text-decoration: none;">📧 Reply to ${data.customer_name}</a></p>
-                <p>• Review their service interest: <strong>${data.service_name || 'General Inquiry'}</strong></p>
+                <p>• <a href="mailto:${escapeHtmlEntities(data.customer_email)}?subject=Re: Your inquiry about ${escapeHtmlEntities(data.service_name || 'our services')}" style="color: #059669; text-decoration: none;">📧 Reply to ${escapeHtmlEntities(data.customer_name)}</a></p>
+                <p>• Review their service interest: <strong>${escapeHtmlEntities(data.service_name || 'General Inquiry')}</strong></p>
                 <p>• Consider booking them for a consultation if appropriate</p>
               </div>
             </div>
@@ -1446,24 +1460,24 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">Deposit Payment Received</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Great news! Your deposit payment has been successfully received and processed. Your appointment is now secured and confirmed!</p>
               
               <div class="details">
                 <h3>📅 Booking Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
               </div>
               
               <div class="details">
                 <h3>💳 Payment Summary</h3>
-                <p><strong>Deposit Paid:</strong> €${data.payment_amount}</p>
-                ${data.remaining_balance ? `<p><strong>Remaining Balance:</strong> €${data.remaining_balance} (payable after treatment)</p>` : ''}
-                ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${data.transaction_id}</p>` : ''}
+                <p><strong>Deposit Paid:</strong> €${escapeHtmlEntities(data.payment_amount)}</p>
+                ${data.remaining_balance ? `<p><strong>Remaining Balance:</strong> €${escapeHtmlEntities(data.remaining_balance)} (payable after treatment)</p>` : ''}
+                ${data.transaction_id ? `<p><strong>Transaction ID:</strong> ${escapeHtmlEntities(data.transaction_id)}</p>` : ''}
                 <p><strong>Status:</strong> <span class="success-icon">✅ Deposit Confirmed</span></p>
               </div>
               
@@ -1473,14 +1487,14 @@ const getEmailTemplate = (type, data) => {
                 <p>• Please arrive 10 minutes early for check-in</p>
                 <p>• Bring any relevant medical documents or insurance cards</p>
                 <p>• Wear comfortable clothing appropriate for your treatment</p>
-                ${data.remaining_balance ? `<p>• The remaining balance of €${data.remaining_balance} will be collected after your session</p>` : ''}
+                ${data.remaining_balance ? `<p>• The remaining balance of €${escapeHtmlEntities(data.remaining_balance)} will be collected after your session</p>` : ''}
                 <p>• If you need to reschedule, please contact us at least 24 hours in advance</p>
               </div>
               
               ${data.special_instructions ? `
                 <div class="details">
                   <h3>📝 Special Instructions</h3>
-                  <p>${data.special_instructions}</p>
+                  <p>${escapeHtmlEntities(data.special_instructions)}</p>
                 </div>
               ` : ''}
               
@@ -1590,13 +1604,13 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">📅 Booking Rescheduled</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name},</h2>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Your appointment has been successfully rescheduled. Please note the updated details below and save the new appointment to your calendar.</p>
               
               ${data.old_appointment_date ? `
                 <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
                   <h3>❌ Previous Appointment (Cancelled)</h3>
-                  <p><strong>Service:</strong> ${data.service_name}</p>
+                  <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                   <p><strong>Date:</strong> ${data.old_appointment_date}</p>
                   <p><strong>Time:</strong> ${data.old_appointment_time}</p>
                   <p><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">CANCELLED</span></p>
@@ -1605,26 +1619,26 @@ const getEmailTemplate = (type, data) => {
               
               <div class="details" style="background-color: #ecfdf5; border-left: 4px solid #10b981;">
                 <h3>✅ New Appointment Details</h3>
-                <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
                 <p><strong>New Date:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_date}</span></p>
                 <p><strong>New Time:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_time}</span></p>
-                <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                <p><strong>Location:</strong> ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}</p>
+                <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
+                ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
+                <p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland')}</p>
                 <p><strong>Status:</strong> <span style="color: #059669; font-weight: bold;">✅ CONFIRMED</span></p>
               </div>
               
               ${data.reschedule_reason ? `
                 <div class="details" style="background-color: #fffbeb; border-left: 4px solid #f59e0b;">
                   <h3>📝 Reschedule Reason</h3>
-                  <p>${data.reschedule_reason}</p>
+                  <p>${escapeHtmlEntities(data.reschedule_reason)}</p>
                 </div>
               ` : ''}
               
               ${data.special_instructions ? `
                 <div class="details" style="background-color: #f8fafc; border-left: 4px solid #64748b;">
                   <h3>📋 Special Instructions</h3>
-                  <p>${data.special_instructions}</p>
+                  <p>${escapeHtmlEntities(data.special_instructions)}</p>
                 </div>
               ` : ''}
               
@@ -1640,7 +1654,7 @@ const getEmailTemplate = (type, data) => {
               ${data.reschedule_note ? `
                 <div class="highlight" style="background-color: #f0f9ff; border-left: 4px solid #0ea5e9;">
                   <h3>💬 Additional Information</h3>
-                  <p>${data.reschedule_note}</p>
+                  <p>${escapeHtmlEntities(data.reschedule_note)}</p>
                 </div>
               ` : ''}
               
@@ -1681,8 +1695,8 @@ const getEmailTemplate = (type, data) => {
               <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">KH Therapy</h1>
             </div>
             <div class="content">
-              <h2>Hello ${data.customer_name || 'Customer'},</h2>
-              <p>${data.message || 'Thank you for choosing KH Therapy.'}</p>
+              <h2>Hello ${escapeHtmlEntities(data.customer_name || 'Customer')},</h2>
+              <p>${escapeHtmlEntities(data.message || 'Thank you for choosing KH Therapy.')}</p>
             </div>
             <div class="footer">
               <p>KH Therapy | info@khtherapy.ie</p>
