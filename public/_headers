@@ -1,0 +1,25 @@
+# Security Headers for KH Therapy
+# Phase 1: Safe headers with no functionality impact
+
+/*
+  # Prevent clickjacking - allows your site to be shown only on your domain
+  X-Frame-Options: SAMEORIGIN
+  
+  # Prevent MIME type sniffing - ensures files are handled as their declared type
+  X-Content-Type-Options: nosniff
+  
+  # Control referrer information - balance privacy and functionality
+  Referrer-Policy: strict-origin-when-cross-origin
+  
+  # XSS Protection for legacy browsers (modern browsers ignore this, React handles XSS)
+  X-XSS-Protection: 1; mode=block
+  
+  # Force HTTPS connections (31536000 seconds = 1 year)
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  
+  # Disable unnecessary browser features (you don't use camera/mic/geolocation)
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  
+  # Content Security Policy - REPORT-ONLY MODE (won't block anything, just logs violations)
+  # This allows us to see what would break before enforcing
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://gateway.sumup.com https://api.sumup.com https://cdn.jsdelivr.net https://*.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co https://gateway.sumup.com https://api.sumup.com wss://*.supabase.co; frame-src 'self' https://gateway.sumup.com; object-src 'none'; base-uri 'self'; form-action 'self' https://gateway.sumup.com; frame-ancestors 'self';
