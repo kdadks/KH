@@ -51,7 +51,8 @@ const BookingForm: React.FC = () => {
         notes: notes.trim(),
         status: status,
         booking_date: new Date().toISOString().split('T')[0], // Add today's date
-        appointment_date: new Date().toISOString().split('T')[0] // Add today's date
+        appointment_date: new Date().toISOString().split('T')[0], // Add today's date
+        visit_type: 'clinic' as const // Default to clinic for simple bookings
       };
 
       console.log('🔄 Creating booking with data:', { customerData, bookingData });
@@ -107,6 +108,7 @@ const BookingForm: React.FC = () => {
               booking_reference: booking.booking_reference || `KH-${booking.id}`,
               therapist_name: 'KH Therapy Team',
               clinic_address: 'Dublin, Ireland',
+              visit_type: 'clinic',
               special_instructions: booking.notes || 'We will contact you to schedule your appointment'
             };
 

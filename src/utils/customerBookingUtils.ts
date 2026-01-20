@@ -396,6 +396,21 @@ export const createBookingWithCustomer = async (
           console.log('ℹ️ Skipping welcome email - existing customer');
         }
 
+        // Build location/address based on visit type
+        let locationDisplay = undefined;
+        if (bookingData.visit_type === 'clinic') {
+          locationDisplay = 'KH Therapy Clinic, Dublin, Ireland';
+        } else if (bookingData.visit_type === 'home' && customer) {
+          // Build full address for home visits
+          const addressParts = [];
+          if (customer.address_line_1) addressParts.push(customer.address_line_1);
+          if (customer.address_line_2) addressParts.push(customer.address_line_2);
+          if (customer.city) addressParts.push(customer.city);
+          if (customer.county) addressParts.push(customer.county);
+          if (customer.eircode) addressParts.push(customer.eircode);
+          locationDisplay = addressParts.length > 0 ? addressParts.join(', ') : undefined;
+        }
+
         // Then send booking captured notification
         // Sending booking captured notification
         try {
@@ -409,7 +424,8 @@ export const createBookingWithCustomer = async (
             total_amount: 0, // This is just a notification, amount is handled in payment request
             booking_reference: booking.booking_reference || booking.id.toString(),
             therapist_name: 'KH Therapy Team',
-            clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+            clinic_address: locationDisplay,
+            visit_type: bookingData.visit_type || 'clinic',
             special_instructions: bookingData.notes || undefined
           });
 
@@ -435,7 +451,8 @@ export const createBookingWithCustomer = async (
               total_amount: paymentRequest?.amount || 0,
               booking_reference: booking.booking_reference || booking.id.toString(),
               therapist_name: 'KH Therapy Team',
-              clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+              clinic_address: locationDisplay,
+              visit_type: bookingData.visit_type || 'clinic',
               special_instructions: bookingData.notes || undefined
             }
           );
@@ -468,7 +485,8 @@ export const createBookingWithCustomer = async (
                 total_amount: 0, // No amount for contact for quote
                 booking_reference: booking.booking_reference || booking.id.toString(),
                 therapist_name: 'KH Therapy Team',
-                clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+                clinic_address: locationDisplay,
+                visit_type: bookingData.visit_type || 'clinic',
                 special_instructions: bookingData.notes || undefined
               }
             );

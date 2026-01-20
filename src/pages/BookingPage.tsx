@@ -828,7 +828,8 @@ const BookingPage: React.FC = () => {
         total_amount: 0, // No payment required for these bookings
         booking_reference: bookingRecord.booking_reference || `KH-${bookingRecord.id}`,
         therapist_name: 'KH Therapy Team',
-        clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+        clinic_address: visitType === 'clinic' ? 'KH Therapy Clinic, Dublin, Ireland' : undefined,
+        visit_type: visitType as 'clinic' | 'home' | 'online',
         special_instructions: booking.notes || 'We will contact you to schedule your appointment'
       };
 
