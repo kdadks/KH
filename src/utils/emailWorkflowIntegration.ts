@@ -222,7 +222,14 @@ export const integrateAdminConfirmationEmailWorkflow = async (
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
       .select(`
-        *,
+        id,
+        package_name,
+        booking_date,
+        booking_reference,
+        customer_id,
+        timeslot_start_time,
+        notes,
+        visit_type,
         customer:customers!bookings_customer_id_fkey(
           first_name,
           last_name,
