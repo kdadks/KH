@@ -336,6 +336,11 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       special_instructions: booking.notes
     };
     
+    console.log('📧 Sending to email workflow:', {
+      visit_type: bookingEmailData.visit_type,
+      clinic_address: bookingEmailData.clinic_address
+    });
+    
     // Validate data before processing
     const validation = validateEmailWorkflowData(bookingEmailData);
     if (!validation.isValid) {

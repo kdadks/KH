@@ -85,7 +85,8 @@ export const sendBookingRequestReceived = async (
       appointment_time: bookingData.appointment_time,
       booking_reference: bookingData.booking_reference,
       clinic_address: bookingData.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
-      special_instructions: bookingData.special_instructions || bookingData.notes
+      special_instructions: bookingData.special_instructions || bookingData.notes,
+      visit_type: bookingData.visit_type
     });
 
     return result;
@@ -189,6 +190,11 @@ export const sendBookingConfirmationWithCalendar = async (
   adminEmail?: string
 ): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
   try {
+    console.log('📧 sendBookingConfirmationWithCalendar received:', {
+      visit_type: bookingData.visit_type,
+      clinic_address: bookingData.clinic_address
+    });
+    
     const result = await sendAdminBookingConfirmationEmail(
       bookingData.customer_email,
       {
@@ -200,7 +206,8 @@ export const sendBookingConfirmationWithCalendar = async (
         booking_reference: bookingData.booking_reference,
         therapist_name: bookingData.therapist_name || 'KH Therapy Team',
         clinic_address: bookingData.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
-        special_instructions: bookingData.special_instructions || bookingData.notes
+        special_instructions: bookingData.special_instructions || bookingData.notes,
+        visit_type: bookingData.visit_type
       },
       adminEmail || 'info@khtherapy.ie'
     );

@@ -19,6 +19,7 @@ export interface BookingConfirmationData extends EmailData {
   therapist_name?: string;
   clinic_address?: string;
   special_instructions?: string;
+  visit_type?: 'clinic' | 'home' | 'online';
 }
 
 export interface PaymentReceiptData extends EmailData {
@@ -453,6 +454,11 @@ export const sendAdminBookingConfirmationEmail = async (
   adminEmail?: string
 ): Promise<{ customerSuccess: boolean; adminSuccess: boolean }> => {
   try {
+    console.log('📧 sendAdminBookingConfirmationEmail received:', {
+      visit_type: bookingData.visit_type,
+      clinic_address: bookingData.clinic_address
+    });
+    
     // Prepare data with proper customer name decryption
     const decryptedCustomerName = isDataEncrypted(bookingData.customer_name) 
       ? decryptSensitiveData(bookingData.customer_name) 
@@ -462,6 +468,11 @@ export const sendAdminBookingConfirmationEmail = async (
       ...bookingData,
       customer_name: decryptedCustomerName
     };
+    
+    console.log('📧 Sending to email template:', {
+      visit_type: emailData.visit_type,
+      clinic_address: emailData.clinic_address
+    });
     
     // Generate proper subject for booking confirmation
     const subject = generateEmailSubject('admin_booking_confirmation', decryptedCustomerName);
@@ -551,6 +562,7 @@ export const sendBookingCapturedEmail = async (
     booking_reference: string;
     clinic_address?: string;
     special_instructions?: string;
+    visit_type?: 'clinic' | 'home' | 'online';
   }
 ): Promise<{ success: boolean; error?: string }> => {
   try {
