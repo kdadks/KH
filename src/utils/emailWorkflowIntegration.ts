@@ -226,7 +226,12 @@ export const integrateAdminConfirmationEmailWorkflow = async (
         customer:customers!bookings_customer_id_fkey(
           first_name,
           last_name,
-          email
+          email,
+          address_line_1,
+          address_line_2,
+          city,
+          county,
+          eircode
         )
       `)
       .eq('id', bookingId)
@@ -277,6 +282,23 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       }
     };
 
+    // Build location/address based on visit type
+    let locationDisplay = undefined;
+    const visitType = booking.visit_type || 'clinic';
+    
+    if (visitType === 'clinic') {
+      locationDisplay = 'KH Therapy Clinic, Dublin, Ireland';
+    } else if (visitType === 'home' && booking.customer) {
+      // Build full address for home visits
+      const addressParts = [];
+      if (booking.customer.address_line_1) addressParts.push(booking.customer.address_line_1);
+      if (booking.customer.address_line_2) addressParts.push(booking.customer.address_line_2);
+      if (booking.customer.city) addressParts.push(booking.customer.city);
+      if (booking.customer.county) addressParts.push(booking.customer.county);
+      if (booking.customer.eircode) addressParts.push(booking.customer.eircode);
+      locationDisplay = addressParts.length > 0 ? addressParts.join(', ') : undefined;
+    }
+
     const bookingEmailData: BookingEmailData = {
       customer_name: `${booking.customer.first_name} ${booking.customer.last_name}`,
       customer_email: booking.customer.email,
@@ -287,7 +309,8 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       booking_id: booking.id,
       customer_id: booking.customer_id,
       therapist_name: 'KH Therapy Team',
-      clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+      clinic_address: locationDisplay,
+      visit_type: visitType as 'clinic' | 'home' | 'online',
       special_instructions: booking.notes
     };
     
