@@ -293,6 +293,13 @@ export const integrateAdminConfirmationEmailWorkflow = async (
     let locationDisplay = undefined;
     const visitType = booking.visit_type || 'clinic';
     
+    console.log('🔍 Admin Confirmation Email - Visit Type Debug:', {
+      bookingId: booking.id,
+      visitTypeFromDB: booking.visit_type,
+      visitTypeUsed: visitType,
+      packageName: booking.package_name
+    });
+    
     if (visitType === 'clinic') {
       locationDisplay = 'KH Therapy Clinic, Dublin, Ireland';
     } else if (visitType === 'home' && booking.customer) {
@@ -305,6 +312,14 @@ export const integrateAdminConfirmationEmailWorkflow = async (
       if (booking.customer.eircode) addressParts.push(booking.customer.eircode);
       locationDisplay = addressParts.length > 0 ? addressParts.join(', ') : undefined;
     }
+    
+    console.log('🔍 Admin Confirmation Email - Location Display:', {
+      visitType,
+      locationDisplay,
+      isOnline: visitType === 'online',
+      isClinic: visitType === 'clinic',
+      isHome: visitType === 'home'
+    });
 
     const bookingEmailData: BookingEmailData = {
       customer_name: `${booking.customer.first_name} ${booking.customer.last_name}`,
