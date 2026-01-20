@@ -84,7 +84,7 @@ export const sendBookingRequestReceived = async (
       appointment_date: bookingData.appointment_date,
       appointment_time: bookingData.appointment_time,
       booking_reference: bookingData.booking_reference,
-      clinic_address: bookingData.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
+      clinic_address: bookingData.clinic_address,
       special_instructions: bookingData.special_instructions || bookingData.notes,
       visit_type: bookingData.visit_type
     });
@@ -205,7 +205,7 @@ export const sendBookingConfirmationWithCalendar = async (
         total_amount: 0, // Not used in confirmation template
         booking_reference: bookingData.booking_reference,
         therapist_name: bookingData.therapist_name || 'KH Therapy Team',
-        clinic_address: bookingData.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
+        clinic_address: bookingData.clinic_address,
         special_instructions: bookingData.special_instructions || bookingData.notes,
         visit_type: bookingData.visit_type
       },

@@ -166,7 +166,7 @@ const generateICS = (data, isRescheduled = false) => {
     `DTEND;TZID=Europe/Dublin:${formatDate(endDate)}`,
     `SUMMARY:${data.customer_name || data.first_name + ' ' + data.last_name} - ${data.service_name}${isRescheduled ? ' (Rescheduled)' : ''}`,
     `DESCRIPTION:${description}`,
-    `LOCATION:${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}`,
+    ...(data.clinic_address ? [`LOCATION:${data.clinic_address}`] : []),
     'STATUS:CONFIRMED',
     `SEQUENCE:${sequenceNumber}`,
     'BEGIN:VALARM',
@@ -202,8 +202,7 @@ Service: ${data.service_name}
 Date: ${formatDisplayDate(data.appointment_date)}
 Time: ${data.appointment_time}
 Reference: ${data.booking_reference}
-Location: ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}
-
+${data.clinic_address ? `Location: ${data.clinic_address}\n` : ''}
 ${data.special_instructions ? `SPECIAL INSTRUCTIONS\n${data.special_instructions}\n\n` : ''}ACTION REQUIRED
 • Customer confirmation email has been sent automatically
 • Calendar invite has been attached to customer email
@@ -230,8 +229,7 @@ Service: ${data.service_name}
 Date: ${formatDisplayDate(data.appointment_date)}
 Time: ${data.appointment_time}
 Reference: ${data.booking_reference}
-${data.therapist_name ? `Therapist: ${data.therapist_name}\n` : ''}Location: ${data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland'}
-
+${data.therapist_name ? `Therapist: ${data.therapist_name}\n` : ''}${data.clinic_address ? `Location: ${data.clinic_address}\n` : ''}
 ${data.special_instructions ? `SPECIAL INSTRUCTIONS\n${data.special_instructions}\n\n` : ''}IMPORTANT INFORMATION
 • Please arrive 10 minutes early for your appointment
 • Bring any relevant medical documents or reports
@@ -1626,7 +1624,7 @@ const getEmailTemplate = (type, data) => {
                 <p><strong>New Time:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_time}</span></p>
                 <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
                 ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
-                <p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address || 'KH Therapy Clinic, Dublin, Ireland')}</p>
+                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
                 <p><strong>Status:</strong> <span style="color: #059669; font-weight: bold;">✅ CONFIRMED</span></p>
               </div>
               
