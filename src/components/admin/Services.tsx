@@ -271,7 +271,8 @@ export const Services: React.FC<ServicesProps> = ({
     }
   };
 
-  // Delete service from database
+  // Delete service from database (permanently removes the record)
+  // Only allows deletion if no confirmed bookings or payment requests exist
   const handleDelete = async (index: number) => {
     const service = packages[index];
     if (!service.id) {
@@ -280,26 +281,80 @@ export const Services: React.FC<ServicesProps> = ({
       return;
     }
 
-    showConfirm(
-      'Delete Service',
-      `Are you sure you want to delete "${service.name}"? This action cannot be undone.`,
-      async () => {
-        try {
-          const { error } = await supabase
-            .from('services')
-            .update({ is_active: false })
-            .eq('id', service.id);
+    try {
+      // Check if service has ANY bookings (regardless of status - past, present, or future)
+      const { data: bookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('id, booking_reference, status, booking_date')
+        .eq('package_name', service.name)
+        .limit(5); // Get first 5 for display
 
-          if (error) throw error;
-
-          setPackages(packages.filter((_, i) => i !== index));
-          showSuccess('Success', 'Service deleted successfully');
-        } catch (error) {
-          console.error('Error deleting service:', error);
-          showError('Error', 'Failed to delete service');
-        }
+      if (bookingsError) {
+        console.error('Error checking bookings:', bookingsError);
+        throw new Error('Failed to verify booking dependencies');
       }
-    );
+
+      // Check if service has ANY payment requests (regardless of status)
+      const { data: paymentRequests, error: paymentError } = await supabase
+        .from('payment_requests')
+        .select('id, status, created_at')
+        .eq('service_name', service.name)
+        .limit(5); // Get first 5 for display
+
+      if (paymentError) {
+        console.error('Error checking payment requests:', paymentError);
+        throw new Error('Failed to verify payment dependencies');
+      }
+
+      // If service has ANY bookings or payment requests (historical or current), prevent deletion
+      if (bookings && bookings.length > 0) {
+        const bookingRefs = bookings.slice(0, 3).map(b => b.booking_reference || b.id).join(', ');
+        const moreText = bookings.length > 3 ? ` and ${bookings.length - 3} more...` : '';
+        showError(
+          'Cannot Delete Service',
+          `This service has ${bookings.length} booking(s) in the system: ${bookingRefs}${moreText}. Historical records must be preserved. Please set the service to inactive instead.`
+        );
+        return;
+      }
+
+      if (paymentRequests && paymentRequests.length > 0) {
+        showError(
+          'Cannot Delete Service',
+          `This service has ${paymentRequests.length} payment request(s) in the system. Historical financial records must be preserved. Please set the service to inactive instead.`
+        );
+        return;
+      }
+
+      // Safe to delete - no dependencies found
+      showConfirm(
+        'Delete Service',
+        `Are you sure you want to permanently delete "${service.name}"? This action cannot be undone and will remove all associated time slots.`,
+        async () => {
+          try {
+            // Perform a hard delete (removes the record from database)
+            const { error } = await supabase
+              .from('services')
+              .delete()
+              .eq('id', service.id);
+
+            if (error) {
+              console.error('Delete error details:', error);
+              throw error;
+            }
+
+            // Remove from local state
+            setPackages(packages.filter((_, i) => i !== index));
+            showSuccess('Success', 'Service permanently deleted successfully');
+          } catch (error) {
+            console.error('Error deleting service:', error);
+            showError('Error', `Failed to delete service: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error checking service dependencies:', error);
+      showError('Error', error instanceof Error ? error.message : 'Failed to check service dependencies');
+    }
   };
 
   // Toggle service active/inactive status using admin function
@@ -802,10 +857,10 @@ export const Services: React.FC<ServicesProps> = ({
                 </select>
               </div>
               
-              {(filterStatus !== 'active' || filterVisitType !== 'all' || filterCategory !== 'all') && (
+              {(filterStatus !== 'all' || filterVisitType !== 'all' || filterCategory !== 'all') && (
                 <button
                   onClick={() => {
-                    setFilterStatus('active');
+                    setFilterStatus('all');
                     setFilterVisitType('all');
                     setFilterCategory('all');
                   }}
@@ -840,7 +895,7 @@ export const Services: React.FC<ServicesProps> = ({
                 <p className="text-sm mt-2">Try adjusting your filter criteria</p>
                 <button
                   onClick={() => {
-                    setFilterStatus('active');
+                    setFilterStatus('all');
                     setFilterVisitType('all');
                     setFilterCategory('all');
                   }}

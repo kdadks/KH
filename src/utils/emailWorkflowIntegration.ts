@@ -291,12 +291,14 @@ export const integrateAdminConfirmationEmailWorkflow = async (
 
     // Build location/address based on visit type
     let locationDisplay = undefined;
+    // Only default to 'clinic' if visit_type is NULL/undefined (for backward compatibility with old bookings)
     const visitType = booking.visit_type || 'clinic';
     
     console.log('🔍 Admin Confirmation Email - Visit Type Debug:', {
       bookingId: booking.id,
       visitTypeFromDB: booking.visit_type,
       visitTypeUsed: visitType,
+      wasDefaulted: !booking.visit_type,
       packageName: booking.package_name
     });
     

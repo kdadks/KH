@@ -183,7 +183,8 @@ export const Bookings: React.FC<BookingsProps> = ({
     customStartTime: '',
     customEndTime: '',
     notes: '',
-    status: 'pending'
+    status: 'pending',
+    visit_type: 'clinic' as 'clinic' | 'home' | 'online'
   });
 
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
@@ -238,7 +239,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       window.dispatchEvent(new CustomEvent('refreshBookings'));
     };
 
-    const handleBookingStatusUpdate = (event: Event) => {
+    const handleBookingStatusUpdate = (_event: Event) => {
       // Force refresh of bookings to reflect the status change
       window.dispatchEvent(new CustomEvent('refreshBookings'));
     };
@@ -2317,7 +2318,8 @@ export const Bookings: React.FC<BookingsProps> = ({
       customStartTime: '',
       customEndTime: '',
       notes: '',
-      status: 'pending'
+      status: 'pending',
+      visit_type: 'clinic' as 'clinic' | 'home' | 'online'
     });
     setTimeSlots([]);
   };
@@ -2503,7 +2505,8 @@ export const Bookings: React.FC<BookingsProps> = ({
         timeslot_start_time: timeslotStartTime || undefined,
         timeslot_end_time: timeslotEndTime || undefined,
         notes: newBookingData.notes,
-        status: newBookingData.status
+        status: newBookingData.status,
+        visit_type: newBookingData.visit_type || 'clinic' // Include visit type
       };
 
       // Respect the user's selected status - NO auto-confirmation from admin booking modal
@@ -4124,6 +4127,25 @@ export const Bookings: React.FC<BookingsProps> = ({
                     <option value="confirmed">Confirmed</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Visit Type Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Visit Type</label>
+                <select
+                  value={newBookingData.visit_type}
+                  onChange={(e) => handleNewBookingInputChange('visit_type', e.target.value as 'clinic' | 'home' | 'online')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                >
+                  <option value="clinic">🏥 Clinic Visit</option>
+                  <option value="home">🏠 Home Visit</option>
+                  <option value="online">💻 Online Session</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {newBookingData.visit_type === 'clinic' && 'Session at KH Therapy Clinic, Dublin'}
+                  {newBookingData.visit_type === 'home' && 'Therapist will visit customer\'s location'}
+                  {newBookingData.visit_type === 'online' && 'Virtual session via video call'}
+                </p>
               </div>
 
               {/* Custom Time Fields - Show when "Custom Time" is selected */}

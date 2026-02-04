@@ -314,7 +314,7 @@ export const createBookingWithCustomer = async (
       timeslot_start_time: bookingData.timeslot_start_time,
       timeslot_end_time: bookingData.timeslot_end_time,
       notes: bookingData.notes,
-      status: bookingData.status || 'confirmed',
+      status: bookingData.status || 'pending', // Default to 'pending' - requires admin confirmation
       visit_type: bookingData.visit_type || 'clinic' // Include visit type, default to clinic
     };
 

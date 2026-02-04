@@ -446,8 +446,6 @@ const AdminConsole = () => {
   // Fetch customers from database
   const fetchAllCustomers = async () => {
     try {
-      setIsLoading(true);
-      
       // Add timeout protection
       const timeoutId = setTimeout(() => {
         showError('Timeout Error', 'Customer data loading is taking too long. Please check your connection.');
@@ -487,16 +485,12 @@ const AdminConsole = () => {
       console.error('❌ Exception in fetchAllCustomers:', error);
       showError('Connection Error', 'Unable to fetch customer data. Please check your internet connection and try again.');
       setAllCustomers([]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   // Fetch invoices from database
   const fetchAllInvoices = async () => {
     try {
-      setIsLoading(true);
-      
       // Add timeout protection
       const timeoutId = setTimeout(() => {
         showError('Timeout Error', 'Invoice data loading is taking too long. Please check your connection.');
@@ -536,8 +530,6 @@ const AdminConsole = () => {
       console.error('❌ Exception in fetchAllInvoices:', error);
       showError('Connection Error', 'Unable to fetch invoice data. Please check your internet connection and try again.');
       setAllInvoices([]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -547,7 +539,6 @@ const AdminConsole = () => {
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -595,8 +586,6 @@ const AdminConsole = () => {
   // Fetch all payment-related data
   const fetchAllPaymentData = async () => {
     try {
-      setIsLoading(true);
-      
       // Fetch payment data in parallel for better performance
       const [
         paymentRequestsData,
@@ -621,8 +610,6 @@ const AdminConsole = () => {
     } catch (error) {
       console.error('❌ Error fetching payment data:', error);
       showError('Payment Data Error', 'Failed to load payment data. Some features may not be available.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
