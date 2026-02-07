@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Package } from '../data/packages'; // Only import the type
 import { supabase } from '../supabaseClient';
 import SEOHead from '../components/utils/SEOHead';
+import { formatPrice } from '../utils/priceFormatter';
 
 const ServicesPage: React.FC = () => {
 	const navigate = useNavigate();
@@ -244,16 +245,16 @@ const ServicesPage: React.FC = () => {
 								)}									<div className="text-primary-600 mb-4 space-y-1">
 										{pkg.inHourPrice && (
 											<div className="text-lg font-semibold">
-												In Hours: <span>{pkg.inHourPrice}</span>
+												In Hours: <span>{formatPrice(pkg.inHourPrice)}</span>
 											</div>
 										)}
 										{pkg.outOfHourPrice && (
 											<div className="text-lg font-semibold">
-												Out of Hours: <span>{pkg.outOfHourPrice}</span>
+												Out of Hours: <span>{formatPrice(pkg.outOfHourPrice)}</span>
 											</div>
 										)}
 										{!pkg.inHourPrice && !pkg.outOfHourPrice && pkg.price && (
-											<div className="text-2xl font-bold">{pkg.price}</div>
+											<div className="text-2xl font-bold">{formatPrice(pkg.price)}</div>
 										)}
 									</div>
 									<ul className="mb-6 space-y-2">
