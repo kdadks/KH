@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import SectionHeading from '../components/shared/SectionHeading';
 import Container from '../components/shared/Container';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -45,16 +45,27 @@ const ServicesPage: React.FC = () => {
 		fetchServices();
 	}, []);
 
-	// Set active category from URL parameter
+	// Set active category from URL parameter or default to first category
 	useEffect(() => {
+		if (categories.length === 0) return; // Wait for categories to load
+
 		const categoryParam = searchParams.get('category');
 		if (categoryParam) {
+			// Try to set category from URL
 			const categoryName = slugToCategory(categoryParam);
 			if (categories.includes(categoryName)) {
-				setActiveCategory(categoryName);
+				if (activeCategory !== categoryName) {
+					setActiveCategory(categoryName);
+				}
+				return;
 			}
 		}
-	}, [searchParams, categories]);
+		
+		// If no URL param or invalid category, set the first category as active
+		if (!activeCategory || !categories.includes(activeCategory)) {
+			setActiveCategory(categories[0]);
+		}
+	}, [searchParams, categories]); // Removed activeCategory from dependencies to avoid loops
 
 	const fetchServices = async () => {
 		try {
@@ -63,7 +74,7 @@ const ServicesPage: React.FC = () => {
 				.from('services')
 				.select('id, name, category, price, in_hour_price, out_of_hour_price, features, booking_type, visit_type, is_active')
 				.eq('is_active', true)
-				.order('category, name');
+				.order('name');
 
 			if (error) {
 				console.error('Error fetching services:', error);
@@ -71,26 +82,32 @@ const ServicesPage: React.FC = () => {
 			}
 
 			// Transform database services to Package format
-			const transformedServices: Package[] = data?.map(service => ({
-				name: service.name,
-				categories: Array.isArray(service.category) ? service.category : 
-				           (service.category ? [service.category] : []),
-				category: service.category, // Keep for backward compatibility
-				price: service.price || undefined,
-				inHourPrice: service.in_hour_price || undefined,
-				outOfHourPrice: service.out_of_hour_price || undefined,
-				features: service.features || [],
-				bookingType: service.booking_type || 'book_now',
-				visitType: service.visit_type || 'clinic',
-			})) || [];
+			const transformedServices: Package[] = data?.map(service => {
+				// Ensure categories is always an array
+				let categoriesArray: string[] = [];
+				if (Array.isArray(service.category)) {
+					categoriesArray = service.category;
+				} else if (service.category) {
+					categoriesArray = [service.category];
+				}
+
+				return {
+					name: service.name,
+					categories: categoriesArray,
+					category: categoriesArray[0] || undefined, // Keep for backward compatibility
+					price: service.price || undefined,
+					inHourPrice: service.in_hour_price || undefined,
+					outOfHourPrice: service.out_of_hour_price || undefined,
+					features: service.features || [],
+					bookingType: service.booking_type || 'book_now',
+					visitType: service.visit_type || 'clinic',
+				};
+			}) || [];
 
 			setServices(transformedServices);
 
 			// Get unique categories from the data (flatten all categories from arrays)
-			const allCategories = transformedServices.flatMap(service => 
-				Array.isArray(service.categories) ? service.categories : 
-				(service.category ? [service.category] : [])
-			);
+			const allCategories = transformedServices.flatMap(service => service.categories);
 			
 			const uniqueCategories = Array.from(new Set(allCategories))
 				.filter(Boolean) // Remove any null/undefined categories
@@ -132,11 +149,6 @@ const ServicesPage: React.FC = () => {
 				});
 
 			setCategories(uniqueCategories);
-			
-			// Set first category as active if we have categories
-			if (uniqueCategories.length > 0 && !activeCategory) {
-				setActiveCategory(uniqueCategories[0]);
-			}
 		} catch (error) {
 			console.error('Error fetching services:', error);
 		} finally {
@@ -146,18 +158,21 @@ const ServicesPage: React.FC = () => {
 
 	// Handle tab click with URL update
 	const handleCategoryClick = (category: string) => {
+		console.log('Tab clicked:', category); // Debug log
 		setActiveCategory(category);
 		const slug = categoryToSlug(category);
 		navigate(`/services?category=${slug}`, { replace: true });
 	};
 
-	const filtered: Package[] = services.filter(
-		(p) => {
-			// Check if service has the active category in its categories array
-			const serviceCategories = Array.isArray(p.categories) ? p.categories : 
-			                        (p.category ? [p.category] : []);
+	// Memoize filtered services to ensure proper re-calculation
+	const filtered = useMemo(() => {
+		console.log('Filtering services for category:', activeCategory);
+		return services.filter((p) => {
+			// Ensure we have a valid categories array
+			const serviceCategories = p.categories || [];
 			
-			const categoryMatch = serviceCategories.includes(activeCategory as any);
+			// Check if service has the active category
+			const categoryMatch = serviceCategories.includes(activeCategory);
 			if (!categoryMatch) return false;
 			
 			// Additional filter: if category is "Online Session", only show services with visit_type = "online"
@@ -166,8 +181,8 @@ const ServicesPage: React.FC = () => {
 			}
 			
 			return true;
-		}
-	);
+		});
+	}, [services, activeCategory]);
 
 	return (
 		<>
