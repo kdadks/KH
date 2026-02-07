@@ -138,8 +138,16 @@ export const hasAdminDataAccess = async (userId: string): Promise<boolean> => {
   }
 };
 
+// Flag to track if audit logging is available (disable after repeated failures)
+let auditLoggingEnabled = true;
+let consecutiveFailures = 0;
+const MAX_FAILURES_BEFORE_DISABLE = 3;
+
 /**
  * Log admin data access for GDPR audit trail
+ * Note: This is a best-effort logging mechanism. If the audit log table doesn't exist
+ * or is inaccessible, the function will silently fail after a few attempts to avoid
+ * breaking admin functionality and spamming console errors.
  */
 export const logAdminDataAccess = async (
   adminUserId: string | number | null = null, 
@@ -147,6 +155,16 @@ export const logAdminDataAccess = async (
   customerIds: number[], 
   purpose: string = 'Administrative access'
 ) => {
+  // Skip if audit logging has been disabled due to repeated failures
+  if (!auditLoggingEnabled) {
+    return;
+  }
+
+  // Skip if no customer IDs provided
+  if (!customerIds || customerIds.length === 0) {
+    return;
+  }
+
   try {
     // Get current admin user ID if not provided
     let adminUserIdInt: number | null = null;
@@ -182,20 +200,36 @@ export const logAdminDataAccess = async (
       .insert(auditEntries);
 
     if (error) {
-      console.error('Failed to log admin data access:', {
-        error,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-        auditEntries
-      });
+      consecutiveFailures++;
+      
+      // Only log the first few failures, then disable to avoid console spam
+      if (consecutiveFailures <= 2) {
+        console.warn(`[Audit Log] Failed (attempt ${consecutiveFailures}/${MAX_FAILURES_BEFORE_DISABLE}): ${error.message}`);
+      }
+      
+      // Disable audit logging after repeated failures
+      if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISABLE) {
+        auditLoggingEnabled = false;
+        console.warn('[Audit Log] Disabled due to repeated failures. Table may not exist or RLS may be blocking access.');
+      }
+    } else {
+      // Reset failure counter on success
+      consecutiveFailures = 0;
     }
   } catch (error) {
-    console.error('Error logging admin data access:', {
-      error: error instanceof Error ? error.message : error,
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    consecutiveFailures++;
+    
+    // Silently fail for network errors to avoid console spam
+    if (consecutiveFailures <= 2) {
+      console.warn(`[Audit Log] Error (attempt ${consecutiveFailures}/${MAX_FAILURES_BEFORE_DISABLE}):`, 
+        error instanceof Error ? error.message : 'Unknown error');
+    }
+    
+    // Disable audit logging after repeated failures
+    if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISABLE) {
+      auditLoggingEnabled = false;
+      console.warn('[Audit Log] Disabled due to repeated errors.');
+    }
   }
 };
 
