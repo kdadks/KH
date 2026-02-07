@@ -1,3 +1,10 @@
+/**
+ * @deprecated This file contains legacy package data with hardcoded prices.
+ * DO NOT USE FOR PRICING - All service pricing should come from the database.
+ * This file is kept only for type definitions and backward compatibility.
+ * Use the 'services' table in Supabase for all pricing information.
+ */
+
 export type PackageCategory =
   | 'Packages'
   | 'Individual'
@@ -35,6 +42,11 @@ export const packageCategories: PackageCategory[] = [
   'Online Session',
 ];
 
+/**
+ * @deprecated Legacy treatment packages with hardcoded prices.
+ * DO NOT USE - All pricing should come from the database.
+ * Kept only for backward compatibility during migration.
+ */
 export const treatmentPackages: Package[] = [
   // Packages (with both in and out of hour rates as applicable)
   {

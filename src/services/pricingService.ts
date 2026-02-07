@@ -4,22 +4,25 @@ export interface ServicePricing {
   id: number;
   name: string;
   category: string;
-  price?: string; // For flat pricing (e.g., "€90", "Contact for Quote")
-  in_hour_price?: string; // For time-based pricing
-  out_of_hour_price?: string; // For time-based pricing
+  price?: string | number; // For flat pricing - now numeric in DB, may be string in old data
+  in_hour_price?: string | number; // For time-based pricing - now numeric in DB
+  out_of_hour_price?: string | number; // For time-based pricing - now numeric in DB
   features?: string[];
   description?: string;
   is_active: boolean;
 }
 
 /**
- * Extracts numeric price from price string (e.g., "€250" -> 250)
+ * Extracts numeric price from price string or number (e.g., "€250" -> 250, 250 -> 250)
  */
-export function extractNumericPrice(priceString: string): number {
-  if (!priceString) return 0;
+export function extractNumericPrice(priceInput: string | number | undefined | null): number {
+  if (!priceInput) return 0;
   
-  // Remove currency symbols and extract numbers
-  const numericMatch = priceString.match(/\d+/);
+  // If already a number, return it
+  if (typeof priceInput === 'number') return priceInput;
+  
+  // Remove currency symbols and extract numbers from string
+  const numericMatch = priceInput.match(/\d+/);
   return numericMatch ? parseInt(numericMatch[0], 10) : 0;
 }
 
@@ -122,17 +125,17 @@ export async function fetchServicePricing(serviceName: string, retryCount = 0): 
  * Gets the appropriate price for a service based on time slot type
  */
 export function getServicePrice(servicePricing: ServicePricing, timeSlotType: 'in_hour' | 'out_of_hour'): number {
-  // First check if the service has a flat price (like "€90" for Pre & Post Surgery Rehab)
-  if (servicePricing.price && servicePricing.price.trim() !== '') {
+  // First check if the service has a flat price
+  if (servicePricing.price !== null && servicePricing.price !== undefined) {
     return extractNumericPrice(servicePricing.price);
   }
   
   // Otherwise, use time-based pricing
-  const priceString = timeSlotType === 'in_hour' 
+  const priceValue = timeSlotType === 'in_hour' 
     ? servicePricing.in_hour_price 
     : servicePricing.out_of_hour_price;
     
-  return extractNumericPrice(priceString || '');
+  return extractNumericPrice(priceValue);
 }
 
 /**

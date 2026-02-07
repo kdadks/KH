@@ -7,14 +7,15 @@ import { createPaymentRequest } from '../../utils/paymentRequestUtils';
 import PaymentModal from '../shared/PaymentModal';
 import { fetchServicePricing, extractNumericPrice } from '../../services/pricingService';
 import { validateNotesRealTime } from '../../utils/formValidation';
+import { formatPrice } from '../../utils/priceFormatter';
 
 interface Service {
   id: number | string;
   name: string;
   category: string;
-  price?: string;
-  in_hour_price?: string;
-  out_of_hour_price?: string;
+  price?: string | number;
+  in_hour_price?: string | number;
+  out_of_hour_price?: string | number;
   displayName?: string;
   priceType?: string;
 }
@@ -266,23 +267,23 @@ const BookingModal: React.FC<BookingModalProps> = ({
         // Transform services to include separate in-hour/out-of-hour options
         const transformedServices: Service[] = [];
         (data || []).forEach(service => {
-          const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
-          const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
-          const hasMainPrice = service.price && service.price.trim() !== '';
+          const hasInHour = service.in_hour_price !== null && service.in_hour_price !== undefined;
+          const hasOutOfHour = service.out_of_hour_price !== null && service.out_of_hour_price !== undefined;
+          const hasMainPrice = service.price !== null && service.price !== undefined;
 
           if (hasInHour && hasOutOfHour) {
             // Both in-hour and out-of-hour prices exist
             transformedServices.push({
               ...service,
               id: `${service.id}-in`,
-              displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+              displayName: `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`,
               name: service.name,
               priceType: 'in-hour'
             });
             transformedServices.push({
               ...service,
               id: `${service.id}-out`,
-              displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+              displayName: `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`,
               name: service.name,
               priceType: 'out-of-hour'
             });
@@ -292,13 +293,13 @@ const BookingModal: React.FC<BookingModalProps> = ({
             let priceType = 'standard';
             
             if (hasInHour) {
-              displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+              displayName = `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`;
               priceType = 'in-hour';
             } else if (hasOutOfHour) {
-              displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+              displayName = `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`;
               priceType = 'out-of-hour';
             } else if (hasMainPrice) {
-              displayName = `${service.name} (${service.price})`;
+              displayName = `${service.name} (${formatPrice(service.price)})`;
               priceType = 'standard';
             }
             

@@ -76,6 +76,23 @@ export const Services: React.FC<ServicesProps> = ({
     return time.substring(0, 5); // Remove seconds (HH:MM:SS -> HH:MM)
   };
   
+  // Helper function to strip currency symbols and parse to number
+  const parsePrice = (priceString: string | undefined | null): number | null => {
+    if (!priceString || priceString.toString().trim() === '') return null;
+    // Remove all non-numeric characters except decimal point
+    const cleaned = priceString.toString().replace(/[^0-9.]/g, '');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? null : parsed;
+  };
+  
+  // Helper function to format price with € symbol for display
+  const formatPrice = (price: string | number | undefined | null): string => {
+    if (price === null || price === undefined || price === '') return '—';
+    const numPrice = typeof price === 'number' ? price : parseFloat(price.toString().replace(/[^0-9.]/g, ''));
+    // Show whole numbers without decimals, but keep decimals if they exist and are non-zero
+    return isNaN(numPrice) ? '—' : (numPrice % 1 === 0 ? `€${Math.round(numPrice)}` : `€${numPrice.toFixed(2)}`);
+  };
+  
   // State for time slots management
   const [showTimeSlots, setShowTimeSlots] = useState<number | null>(null);
   const [timeSlots, setTimeSlots] = useState<ServiceTimeSlot[]>([]);
@@ -229,9 +246,9 @@ export const Services: React.FC<ServicesProps> = ({
           id: nextId,
           name: newPackage.name.trim(),
           category: (newPackage.categories && newPackage.categories.length > 0) ? newPackage.categories : null,
-          price: newPackage.price || null,
-          in_hour_price: newPackage.inHourPrice || null,
-          out_of_hour_price: newPackage.outOfHourPrice || null,
+          price: parsePrice(newPackage.price),
+          in_hour_price: parsePrice(newPackage.inHourPrice),
+          out_of_hour_price: parsePrice(newPackage.outOfHourPrice),
           features: newPackage.features.filter(f => f.trim()),
           description: newPackage.description || null,
           booking_type: newPackage.bookingType || 'book_now',
@@ -262,7 +279,8 @@ export const Services: React.FC<ServicesProps> = ({
         updated_at: data.updated_at
       };
 
-      setPackages(prev => [transformedService, ...prev]);
+      // Refresh the services list to get proper sort order
+      await fetchServices();
       setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], categories: [], category: '', description: '', bookingType: 'book_now', visitType: 'clinic' });
       showSuccess('Success', 'Service added successfully');
     } catch (error) {
@@ -342,8 +360,8 @@ export const Services: React.FC<ServicesProps> = ({
               throw error;
             }
 
-            // Remove from local state
-            setPackages(packages.filter((_, i) => i !== index));
+            // Refresh the services list
+            await fetchServices();
             showSuccess('Success', 'Service permanently deleted successfully');
           } catch (error) {
             console.error('Error deleting service:', error);
@@ -377,7 +395,10 @@ export const Services: React.FC<ServicesProps> = ({
         // Fallback: Update directly via Supabase (for local dev)
         const { error } = await supabase
           .from('services')
-          .update({ is_active: !currentStatus })
+          .update({ 
+            is_active: !currentStatus,
+            updated_at: new Date().toISOString()
+          })
           .eq('id', service.id);
 
         if (error) {
@@ -385,10 +406,8 @@ export const Services: React.FC<ServicesProps> = ({
         }
       }
 
-      // Update local state
-      const updated = [...packages];
-      updated[index] = { ...service, isActive: !currentStatus };
-      setPackages(updated);
+      // Refresh the services list to reflect the update
+      await fetchServices();
       
       showSuccess('Success', `Service ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
     } catch (error) {
@@ -415,9 +434,9 @@ export const Services: React.FC<ServicesProps> = ({
           serviceId: editPackage.id!,
           name: editPackage.name.trim(),
           category: (editPackage.categories && editPackage.categories.length > 0) ? editPackage.categories : undefined,
-          price: editPackage.price ? parseFloat(editPackage.price.toString()) : undefined,
-          in_hour_price: editPackage.inHourPrice ? parseFloat(editPackage.inHourPrice.toString()) : undefined,
-          out_of_hour_price: editPackage.outOfHourPrice ? parseFloat(editPackage.outOfHourPrice.toString()) : undefined,
+          price: parsePrice(editPackage.price),
+          in_hour_price: parsePrice(editPackage.inHourPrice),
+          out_of_hour_price: parsePrice(editPackage.outOfHourPrice),
           features: editPackage.features.filter(f => f.trim()),
           description: editPackage.description || undefined,
           booking_type: editPackage.bookingType || 'book_now',
@@ -433,9 +452,9 @@ export const Services: React.FC<ServicesProps> = ({
           .update({
             name: editPackage.name.trim(),
             category: (editPackage.categories && editPackage.categories.length > 0) ? editPackage.categories : null,
-            price: editPackage.price ? parseFloat(editPackage.price.toString()) : null,
-            in_hour_price: editPackage.inHourPrice ? parseFloat(editPackage.inHourPrice.toString()) : null,
-            out_of_hour_price: editPackage.outOfHourPrice ? parseFloat(editPackage.outOfHourPrice.toString()) : null,
+            price: parsePrice(editPackage.price),
+            in_hour_price: parsePrice(editPackage.inHourPrice),
+            out_of_hour_price: parsePrice(editPackage.outOfHourPrice),
             features: editPackage.features.filter(f => f.trim()),
             description: editPackage.description || null,
             booking_type: editPackage.bookingType || 'book_now',
@@ -450,10 +469,8 @@ export const Services: React.FC<ServicesProps> = ({
         }
       }
 
-      // Update local state
-      const updated = [...packages];
-      updated[editIndex] = { ...editPackage, features: editPackage.features.filter(f => f.trim()) };
-      setPackages(updated);
+      // Refresh the services list to get proper sort order (most recent edit on top)
+      await fetchServices();
       
       showSuccess('Success', 'Service updated successfully');
       // Close modal
@@ -952,10 +969,10 @@ export const Services: React.FC<ServicesProps> = ({
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{pkg.inHourPrice || pkg.price || '—'}</div>
+                      <div className="text-sm text-gray-900">{formatPrice(pkg.inHourPrice || pkg.price)}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{pkg.outOfHourPrice || '—'}</div>
+                      <div className="text-sm text-gray-900">{formatPrice(pkg.outOfHourPrice)}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
@@ -1232,20 +1249,20 @@ export const Services: React.FC<ServicesProps> = ({
                   {packages[viewServiceIndex].price && (
                     <div className="bg-gray-50 p-4 rounded-lg border">
                       <div className="text-sm text-gray-600">Standard Price</div>
-                      <div className="text-lg font-semibold text-gray-900 mt-1">{packages[viewServiceIndex].price}</div>
+                      <div className="text-lg font-semibold text-gray-900 mt-1">{formatPrice(packages[viewServiceIndex].price)}</div>
                     </div>
                   )}
                   {packages[viewServiceIndex].inHourPrice && (
                     <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                       <div className="text-sm text-green-700">In-Hour Price</div>
-                      <div className="text-lg font-semibold text-green-900 mt-1">{packages[viewServiceIndex].inHourPrice}</div>
+                      <div className="text-lg font-semibold text-green-900 mt-1">{formatPrice(packages[viewServiceIndex].inHourPrice)}</div>
                       <div className="text-xs text-green-600 mt-1">9:00 AM - 5:00 PM</div>
                     </div>
                   )}
                   {packages[viewServiceIndex].outOfHourPrice && (
                     <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                       <div className="text-sm text-orange-700">Out-of-Hour Price</div>
-                      <div className="text-lg font-semibold text-orange-900 mt-1">{packages[viewServiceIndex].outOfHourPrice}</div>
+                      <div className="text-lg font-semibold text-orange-900 mt-1">{formatPrice(packages[viewServiceIndex].outOfHourPrice)}</div>
                       <div className="text-xs text-orange-600 mt-1">After hours & weekends</div>
                     </div>
                   )}

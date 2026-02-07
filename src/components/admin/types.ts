@@ -3,9 +3,9 @@
 export type Package = {
   id?: number;
   name: string;
-  price?: string;
-  inHourPrice?: string;
-  outOfHourPrice?: string;
+  price?: string | number;
+  inHourPrice?: string | number;
+  outOfHourPrice?: string | number;
   features: string[];
   categories?: string[]; // Changed from category?: string to support multiple categories
   category?: string; // Keep for backward compatibility during migration
@@ -23,9 +23,9 @@ export type Service = {
   name: string;
   categories?: string[]; // Changed from category?: string to support multiple categories
   category?: string; // Keep for backward compatibility during migration
-  price?: string;
-  in_hour_price?: string;
-  out_of_hour_price?: string;
+  price?: string | number;
+  in_hour_price?: string | number;
+  out_of_hour_price?: string | number;
   features?: string[];
   description?: string;
   is_active?: boolean;

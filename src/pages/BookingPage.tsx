@@ -10,6 +10,7 @@ import Button from '../components/shared/Button';
 import PaymentModal from '../components/shared/PaymentModal';
 import { getCSRFToken } from '../utils/csrfProtection';
 import { createBookingWithCustomer, Customer, BookingRecord } from '../utils/customerBookingUtils';
+import { formatPrice } from '../utils/priceFormatter';
 import { PaymentRequestWithCustomer } from '../types/paymentTypes';
 import {
   emailValidation,
@@ -42,9 +43,9 @@ interface Service {
   id: number | string;
   name: string;
   category: string;
-  price?: string;
-  in_hour_price?: string;
-  out_of_hour_price?: string;
+  price?: string | number;
+  in_hour_price?: string | number;
+  out_of_hour_price?: string | number;
   displayName?: string;
   priceType?: string;
   visit_type?: 'home' | 'online' | 'clinic';
@@ -276,15 +277,15 @@ const BookingPage: React.FC = () => {
       // Transform all services first
       const transformedServices: Service[] = [];
       allServices.forEach(service => {
-        const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
-        const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
-        const hasMainPrice = service.price && service.price.trim() !== '';
+        const hasInHour = service.in_hour_price !== null && service.in_hour_price !== undefined;
+        const hasOutOfHour = service.out_of_hour_price !== null && service.out_of_hour_price !== undefined;
+        const hasMainPrice = service.price !== null && service.price !== undefined;
 
         if (hasInHour && hasOutOfHour) {
           transformedServices.push({
             ...service,
             id: `${service.id}-in`,
-            displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+            displayName: `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`,
             name: service.name,
             priceType: 'in-hour',
             visit_type: service.visit_type || 'clinic'
@@ -292,7 +293,7 @@ const BookingPage: React.FC = () => {
           transformedServices.push({
             ...service,
             id: `${service.id}-out`,
-            displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+            displayName: `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`,
             name: service.name,
             priceType: 'out-of-hour',
             visit_type: service.visit_type || 'clinic'
@@ -302,13 +303,13 @@ const BookingPage: React.FC = () => {
           let priceType = 'standard';
           
           if (hasInHour) {
-            displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+            displayName = `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`;
             priceType = 'in-hour';
           } else if (hasOutOfHour) {
-            displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+            displayName = `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`;
             priceType = 'out-of-hour';
           } else if (hasMainPrice) {
-            displayName = `${service.name} (${service.price})`;
+            displayName = `${service.name} (${formatPrice(service.price)})`;
             priceType = 'standard';
           }
           
@@ -746,16 +747,16 @@ const BookingPage: React.FC = () => {
         // Transform services to include separate in-hour/out-of-hour options
         const transformedServices: Service[] = [];
         (data || []).forEach(service => {
-          const hasInHour = service.in_hour_price && service.in_hour_price.trim() !== '';
-          const hasOutOfHour = service.out_of_hour_price && service.out_of_hour_price.trim() !== '';
-          const hasMainPrice = service.price && service.price.trim() !== '';
+          const hasInHour = service.in_hour_price !== null && service.in_hour_price !== undefined;
+          const hasOutOfHour = service.out_of_hour_price !== null && service.out_of_hour_price !== undefined;
+          const hasMainPrice = service.price !== null && service.price !== undefined;
 
           if (hasInHour && hasOutOfHour) {
             // Both in-hour and out-of-hour prices exist
             transformedServices.push({
               ...service,
               id: `${service.id}-in`,
-              displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+              displayName: `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`,
               name: service.name,
               priceType: 'in-hour',
               visit_type: service.visit_type || 'clinic'
@@ -763,7 +764,7 @@ const BookingPage: React.FC = () => {
             transformedServices.push({
               ...service,
               id: `${service.id}-out`,
-              displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+              displayName: `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`,
               name: service.name,
               priceType: 'out-of-hour',
               visit_type: service.visit_type || 'clinic'
@@ -774,13 +775,13 @@ const BookingPage: React.FC = () => {
             let priceType = 'standard';
             
             if (hasInHour) {
-              displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+              displayName = `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`;
               priceType = 'in-hour';
             } else if (hasOutOfHour) {
-              displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+              displayName = `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`;
               priceType = 'out-of-hour';
             } else if (hasMainPrice) {
-              displayName = `${service.name} (${service.price})`;
+              displayName = `${service.name} (${formatPrice(service.price)})`;
               priceType = 'standard';
             }
             
@@ -1038,43 +1039,8 @@ const BookingPage: React.FC = () => {
                 originalPaymentAmount: paymentRequest.amount
               });
             } else {
-              console.log('⚠️ Service pricing not found in database, trying packages data...');
-
-              // Fallback to packages data
-              try {
-                const { treatmentPackages } = await import('../data/packages');
-                const packageData = treatmentPackages.find(pkg =>
-                  pkg.name.toLowerCase() === baseServiceName.toLowerCase()
-                );
-
-                if (packageData) {
-                  console.log('✅ Found package data:', packageData);
-
-                  if (packageData.price) {
-                    // Flat price service
-                    const { extractNumericPrice } = await import('../services/pricingService');
-                    actualServiceCost = extractNumericPrice(packageData.price);
-                  } else if (timeSlotType === 'in_hour' && packageData.inHourPrice) {
-                    const { extractNumericPrice } = await import('../services/pricingService');
-                    actualServiceCost = extractNumericPrice(packageData.inHourPrice);
-                  } else if (timeSlotType === 'out_of_hour' && packageData.outOfHourPrice) {
-                    const { extractNumericPrice } = await import('../services/pricingService');
-                    actualServiceCost = extractNumericPrice(packageData.outOfHourPrice);
-                  }
-
-                  console.log('✅ Service cost calculated from packages:', {
-                    packageData,
-                    timeSlotType,
-                    actualServiceCost,
-                    originalPaymentAmount: paymentRequest.amount
-                  });
-                } else {
-                  console.log('⚠️ Service not found in packages data either, using payment request amount:', paymentRequest.amount);
-                }
-              } catch (packageError) {
-                console.error('❌ Error accessing packages data:', packageError);
-                console.log('⚠️ Using payment request amount as final fallback:', paymentRequest.amount);
-              }
+              console.log('⚠️ Service pricing not found in database. Using payment request amount as fallback:', paymentRequest.amount);
+              // All prices should come from database - if not found, use the payment request amount
             }
           } catch (error) {
             console.error('❌ Error calculating service cost:', error);

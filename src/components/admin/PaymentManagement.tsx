@@ -33,6 +33,7 @@ import {
   PaymentGateway as PaymentGatewayType
 } from '../../utils/paymentManagementUtils';
 import { createPaymentRequest, sendPaymentRequestNotification } from '../../utils/paymentRequestUtils';
+import { formatPrice } from '../../utils/priceFormatter';
 
 interface PaymentManagementProps {
   paymentRequests?: PaymentRequestType[];
@@ -45,7 +46,19 @@ interface PaymentManagementProps {
 
 // Helper function to format service name with visit type
 const formatServiceWithVisitType = (serviceName: string, visitType?: 'home' | 'online' | 'clinic'): string => {
-  if (!visitType) return serviceName;
+  if (!serviceName) return 'Not specified';
+  
+  // Fix legacy service names that have prices without € symbol
+  // Pattern: "Service Name - Type (123)" should become "Service Name - Type (€123)"
+  const pricePattern = /\((\d+(?:\.\d+)?)\)$/;
+  const match = serviceName.match(pricePattern);
+  
+  let formattedName = serviceName;
+  if (match && !serviceName.includes('(€') && !serviceName.includes('($')) {
+    formattedName = serviceName.replace(pricePattern, `(€${match[1]})`);
+  }
+  
+  if (!visitType) return formattedName;
   
   const visitTypeLabel = {
     home: '[Home]',
@@ -53,7 +66,7 @@ const formatServiceWithVisitType = (serviceName: string, visitType?: 'home' | 'o
     clinic: '[Clinic]'
   }[visitType];
   
-  return `${serviceName} ${visitTypeLabel}`;
+  return `${formattedName} ${visitTypeLabel}`;
 };
 
 export const PaymentManagement: React.FC<PaymentManagementProps> = ({
@@ -702,7 +715,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Requested</p>
-                  <p className="text-2xl font-bold text-gray-900">€{stats.totalAmount?.toFixed(2) || '0.00'}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatPrice(stats.totalAmount || 0)}</p>
                 </div>
               </div>
             </div>
@@ -726,7 +739,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Paid</p>
-                  <p className="text-2xl font-bold text-gray-900">€{stats.paidAmount?.toFixed(2) || '0.00'}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatPrice(stats.paidAmount || 0)}</p>
                 </div>
               </div>
             </div>
@@ -738,7 +751,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Outstanding</p>
-                  <p className="text-2xl font-bold text-gray-900">€{stats.outstandingAmount.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatPrice(stats.outstandingAmount)}</p>
                 </div>
               </div>
             </div>
@@ -766,7 +779,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium text-gray-900">€{payment.amount.toFixed(2)}</p>
+                        <p className="font-medium text-gray-900">{formatPrice(payment.amount)}</p>
                         <p className="text-xs text-gray-500">
                           {new Date(payment.payment_date || payment.created_at).toLocaleDateString()}
                         </p>
@@ -880,7 +893,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                           {formatServiceWithVisitType(request.service_name || 'No service specified', request.visit_type)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          €{request.amount.toFixed(2)}
+                          {formatPrice(request.amount)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -1036,7 +1049,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-gray-900">
-                            €{payment.amount.toFixed(2)}
+                            {formatPrice(payment.amount)}
                           </div>
                           <div className="text-xs text-gray-500 capitalize">
                             {payment.sumup_payment_type || payment.payment_method || 'N/A'}
@@ -1235,7 +1248,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-600">Amount</p>
-                <p className="text-base font-bold text-gray-900">€{selectedPaymentRequest.amount.toFixed(2)}</p>
+                <p className="text-base font-bold text-gray-900">{formatPrice(selectedPaymentRequest.amount)}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-600">Status</p>
@@ -1454,7 +1467,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Amount:</span>
-                    <span className="text-sm font-bold text-gray-900">€{selectedPayment.amount.toFixed(2)} {selectedPayment.currency}</span>
+                    <span className="text-sm font-bold text-gray-900">{formatPrice(selectedPayment.amount)} {selectedPayment.currency}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Payment Method:</span>
@@ -1592,7 +1605,7 @@ export const PaymentManagement: React.FC<PaymentManagementProps> = ({
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Refund Amount:</span>
                           <span className="text-sm font-medium text-red-700">
-                            €{parseFloat(selectedPayment.refund_amount).toFixed(2)}
+                            {formatPrice(parseFloat(selectedPayment.refund_amount))}
                           </span>
                         </div>
                         {selectedPayment.refund_reason && (

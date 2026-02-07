@@ -35,7 +35,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Helper function to format service name with visit type
   const formatServiceWithVisitType = (serviceName: string, visitType?: 'home' | 'online' | 'clinic'): string => {
-    if (!visitType) return serviceName;
+    if (!serviceName) return 'Not specified';
+    
+    // Fix legacy service names that have prices without € symbol
+    // Pattern: "Service Name - Type (123)" should become "Service Name - Type (€123)"
+    const pricePattern = /\((\d+(?:\.\d+)?)\)$/;
+    const match = serviceName.match(pricePattern);
+    
+    let formattedName = serviceName;
+    if (match && !serviceName.includes('(€') && !serviceName.includes('($')) {
+      formattedName = serviceName.replace(pricePattern, `(€${match[1]})`);
+    }
+    
+    if (!visitType) return formattedName;
     
     const visitTypeLabel = {
       home: '[Home]',
@@ -43,7 +55,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       clinic: '[Clinic]'
     }[visitType];
     
-    return `${serviceName} ${visitTypeLabel}`;
+    return `${formattedName} ${visitTypeLabel}`;
   };
 
   // ---------- Date helpers & normalization ----------

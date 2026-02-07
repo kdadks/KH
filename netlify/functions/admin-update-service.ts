@@ -10,9 +10,9 @@ interface UpdateServiceRequest {
   serviceId: number;
   name: string;
   category?: string[];
-  price?: number;
-  in_hour_price?: number;
-  out_of_hour_price?: number;
+  price?: number | null;
+  in_hour_price?: number | null;
+  out_of_hour_price?: number | null;
   features?: string[];
   description?: string;
   booking_type?: string;

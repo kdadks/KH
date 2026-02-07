@@ -25,7 +25,7 @@ import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big
 import moment from 'moment';
 import { BookingFormData } from './types';
 import { decryptCustomerDataForAdmin } from '../../utils/adminGdprUtils';
-import { treatmentPackages } from '../../data/packages';
+import { formatPrice } from '../../utils/priceFormatter';
 
 interface BookingEventResource extends BookingFormData {
   isMultiple: boolean;
@@ -47,8 +47,8 @@ interface ServiceType {
   name: string;
   displayName: string;
   price?: number | string;
-  in_hour_price?: string;
-  out_of_hour_price?: string;
+  in_hour_price?: number | string;
+  out_of_hour_price?: number | string;
   duration?: number;
   description?: string;
   priceType?: string;
@@ -2077,21 +2077,21 @@ export const Bookings: React.FC<BookingsProps> = ({
       // Transform services to include pricing options
       const transformedServices: ServiceType[] = [];
       data?.forEach((service) => {
-        const hasInHour = service.in_hour_price && typeof service.in_hour_price === 'string' && service.in_hour_price.trim() !== '';
-        const hasOutOfHour = service.out_of_hour_price && typeof service.out_of_hour_price === 'string' && service.out_of_hour_price.trim() !== '';
-        const hasMainPrice = service.price && typeof service.price === 'string' && service.price.trim() !== '';
+        const hasInHour = service.in_hour_price !== null && service.in_hour_price !== undefined;
+        const hasOutOfHour = service.out_of_hour_price !== null && service.out_of_hour_price !== undefined;
+        const hasMainPrice = service.price !== null && service.price !== undefined;
 
         if (hasInHour && hasOutOfHour) {
           transformedServices.push({
             ...service,
             id: `${service.id}-in`,
-            displayName: `${service.name} - In Hour (${service.in_hour_price})`,
+            displayName: `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`,
             priceType: 'in-hour'
           });
           transformedServices.push({
             ...service,
             id: `${service.id}-out`,
-            displayName: `${service.name} - Out of Hour (${service.out_of_hour_price})`,
+            displayName: `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`,
             priceType: 'out-of-hour'
           });
         } else if (hasInHour || hasOutOfHour || hasMainPrice) {
@@ -2099,13 +2099,13 @@ export const Bookings: React.FC<BookingsProps> = ({
           let priceType = 'standard';
           
           if (hasInHour) {
-            displayName = `${service.name} - In Hour (${service.in_hour_price})`;
+            displayName = `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`;
             priceType = 'in-hour';
           } else if (hasOutOfHour) {
-            displayName = `${service.name} - Out of Hour (${service.out_of_hour_price})`;
+            displayName = `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`;
             priceType = 'out-of-hour';
           } else if (hasMainPrice) {
-            displayName = `${service.name} (${service.price})`;
+            displayName = `${service.name} (${formatPrice(service.price)})`;
             priceType = 'standard';
           }
           
@@ -2129,34 +2129,27 @@ export const Bookings: React.FC<BookingsProps> = ({
   const getFullPackageInfo = (serviceName: string): string => {
     if (!serviceName) return 'Not specified';
     
-    // If the service name already contains pricing information (parentheses with €), return as-is
+    // If the service name already contains pricing information with currency symbol, return as-is
     if (serviceName.includes('(€') || serviceName.includes('($')) {
       return serviceName;
     }
     
-    // If no pricing info, find the package in treatmentPackages and add basic info
-    const pkg = treatmentPackages.find(p => p.name === serviceName);
-    if (!pkg) return serviceName; // Return original if not found
+    // Fix legacy service names that have prices without € symbol
+    // Pattern: "Service Name - Type (123)" should become "Service Name - Type (€123)"
+    const pricePattern = /\((\d+(?:\.\d+)?)\)$/;
+    const match = serviceName.match(pricePattern);
     
-    // For services without existing pricing, just add a simple indicator that it's a package
-    // This handles cases where the service name is stored without pricing details
-    if (pkg.price) {
-      return `${pkg.name} (${pkg.price})`;
-    } else if (pkg.inHourPrice && pkg.outOfHourPrice) {
-      // Only show "Package" indicator since we don't know which rate was booked
-      return `${pkg.name} (Package)`;
-    } else if (pkg.inHourPrice) {
-      return `${pkg.name} (${pkg.inHourPrice})`;
-    } else if (pkg.outOfHourPrice) {
-      return `${pkg.name} (${pkg.outOfHourPrice})`;
+    if (match) {
+      return serviceName.replace(pricePattern, `(€${match[1]})`);
     }
     
+    // Return original service name if no price found
     return serviceName;
   };
 
   // Helper function to check if a service is "Contact for Quote"
   const isContactForQuoteService = (serviceDisplayName: string): boolean => {
-    // First check the processed services list (this handles displayNames with pricing)
+    // Check the processed services list (this handles displayNames with pricing)
     const selectedService = services.find(s => s.displayName === serviceDisplayName);
     if (selectedService) {
       return (
@@ -2166,17 +2159,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       ) ? true : false;
     }
     
-    // Fallback: check against original packages data (for raw service names from database)
-    const originalPackage = treatmentPackages.find(pkg => pkg.name === serviceDisplayName);
-    if (originalPackage) {
-      return Boolean(
-        (originalPackage.price && originalPackage.price.toLowerCase().includes('contact for quote')) ||
-        (originalPackage.inHourPrice && originalPackage.inHourPrice.toLowerCase().includes('contact for quote')) ||
-        (originalPackage.outOfHourPrice && originalPackage.outOfHourPrice.toLowerCase().includes('contact for quote'))
-      );
-    }
-    
-    // Final fallback: if service name doesn't contain amount in parentheses and not found in packages
+    // Final fallback: if service name doesn't contain amount in parentheses
     return !serviceDisplayName.includes('(€') && !serviceDisplayName.includes('($');
   };
 
@@ -3271,7 +3254,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                                   return (
                                     <div className="space-y-1">
                                       <p className={`text-xs font-medium ${paymentTypeColor}`}>
-                                        ✓ {paymentTypeLabel} Completed - €{amount.toFixed(2)}
+                                        ✓ {paymentTypeLabel} Completed - {formatPrice(amount)}
                                       </p>
                                       <p className="text-xs text-gray-500">
                                         {paymentType && (
@@ -3298,7 +3281,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                                   return (
                                     <div className="space-y-1">
                                       <p className={`text-xs font-medium ${paymentTypeColor}`}>
-                                        ✓ {paymentTypeLabel} Completed - €{amount.toFixed(2)}
+                                        ✓ {paymentTypeLabel} Completed - {formatPrice(amount)}
                                       </p>
                                       <p className="text-xs text-gray-500">
                                         {paymentType && (
@@ -3325,7 +3308,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                                       <p className={`text-xs font-medium ${
                                         isExpired ? 'text-red-600' : 'text-blue-600'
                                       }`}>
-                                        {isExpired ? '⚠ Overdue' : '📧 Request sent'} - €{status.paymentRequest.amount.toFixed(2)} {requestType}
+                                        {isExpired ? '⚠ Overdue' : '📧 Request sent'} - {formatPrice(status.paymentRequest.amount)} {requestType}
                                       </p>
                                       <p className="text-xs text-gray-500">
                                         {paymentType && (
@@ -3362,7 +3345,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                                   <div className="space-y-1">
                                     <div className="flex items-center space-x-2">
                                       <p className="text-xs text-amber-600">
-                                        ⚠ No payment request - €{depositAmount.toFixed(2)} deposit needed
+                                        ⚠ No payment request - {formatPrice(depositAmount)} deposit needed
                                       </p>
                                       <button
                                         onClick={(e) => {

@@ -1,32 +1,55 @@
 -- Services Management Table Schema
--- This script creates the services table for managing treatment packages and services
+-- This script updates the services table to use numeric price columns
+-- Use this ONLY if the table already exists and you want to update the column types
 
--- Create services table
-CREATE TABLE IF NOT EXISTS services (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  category VARCHAR(100),
-  price VARCHAR(100),
-  in_hour_price VARCHAR(50),
-  out_of_hour_price VARCHAR(50),
-  features TEXT[], -- PostgreSQL array for storing multiple features
-  description TEXT,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
+-- Update existing price columns from VARCHAR to NUMERIC
+-- This will preserve existing data by converting string prices to numeric
 
--- Create services_time_slots table for in-hour and out-of-hour availability slots
-CREATE TABLE IF NOT EXISTS services_time_slots (
-  id SERIAL PRIMARY KEY,
-  service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
-  slot_type VARCHAR(20) NOT NULL CHECK (slot_type IN ('in-hour', 'out-of-hour')),
-  day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6), -- 0=Sunday, 6=Saturday
-  start_time TIME NOT NULL,
-  end_time TIME NOT NULL,
-  is_available BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+-- Step 1: Add temporary numeric columns
+ALTER TABLE services 
+ADD COLUMN IF NOT EXISTS price_temp NUMERIC(10, 2),
+ADD COLUMN IF NOT EXISTS in_hour_price_temp NUMERIC(10, 2),
+ADD COLUMN IF NOT EXISTS out_of_hour_price_temp NUMERIC(10, 2);
+
+-- Step 2: Copy data, stripping € symbols and converting to numeric
+UPDATE services 
+SET 
+  price_temp = CASE 
+    WHEN price IS NULL OR TRIM(price::text) = '' OR LOWER(price::text) LIKE '%contact%' THEN NULL
+    ELSE CAST(REGEXP_REPLACE(price::text, '[^0-9.]', '', 'g') AS NUMERIC(10, 2))
+  END,
+  in_hour_price_temp = CASE 
+    WHEN in_hour_price IS NULL OR TRIM(in_hour_price::text) = '' THEN NULL
+    ELSE CAST(REGEXP_REPLACE(in_hour_price::text, '[^0-9.]', '', 'g') AS NUMERIC(10, 2))
+  END,
+  out_of_hour_price_temp = CASE 
+    WHEN out_of_hour_price IS NULL OR TRIM(out_of_hour_price::text) = '' THEN NULL
+    ELSE CAST(REGEXP_REPLACE(out_of_hour_price::text, '[^0-9.]', '', 'g') AS NUMERIC(10, 2))
+  END;
+
+-- Step 3: Drop old columns
+ALTER TABLE services 
+DROP COLUMN IF EXISTS price CASCADE,
+DROP COLUMN IF EXISTS in_hour_price CASCADE,
+DROP COLUMN IF EXISTS out_of_hour_price CASCADE;
+
+-- Step 4: Rename temp columns to final names
+ALTER TABLE services 
+RENAME COLUMN price_temp TO price;
+
+ALTER TABLE services 
+RENAME COLUMN in_hour_price_temp TO in_hour_price;
+
+ALTER TABLE services 
+RENAME COLUMN out_of_hour_price_temp TO out_of_hour_price;
+
+-- Step 5: Add helpful comments
+COMMENT ON COLUMN services.price IS 'Fixed price in EUR (numeric only, € symbol added in UI)';
+COMMENT ON COLUMN services.in_hour_price IS 'In-hour price in EUR (numeric only, € symbol added in UI)';
+COMMENT ON COLUMN services.out_of_hour_price IS 'Out-of-hour price in EUR (numeric only, € symbol added in UI)';
+
+-- Note: services_time_slots table already exists with data - no schema changes needed for price conversion
+-- The time slots table doesn't store prices, only time slot information
 
 -- Enable Row Level Security
 ALTER TABLE services ENABLE ROW LEVEL SECURITY;

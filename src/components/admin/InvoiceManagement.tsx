@@ -467,9 +467,17 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
               finalIsInHour: isInHour
             });
             
+            // Helper to get numeric price value (handles both string and number types)
+            const getPriceValue = (price: string | number | undefined | null): number => {
+              if (price === null || price === undefined || price === '') return 0;
+              if (typeof price === 'number') return price;
+              // Handle old string format with € symbol
+              return parseFloat(price.replace(/[^0-9.]/g, '') || '0');
+            };
+            
             let unitPrice = isInHour ? 
-              parseFloat(matchingService.in_hour_price?.replace('€', '') || '0') :
-              parseFloat(matchingService.out_of_hour_price?.replace('€', '') || '0');
+              getPriceValue(matchingService.in_hour_price) :
+              getPriceValue(matchingService.out_of_hour_price);
             
             // Fallback: If service price is 0 or not set, try to extract from booking service name
             if (unitPrice === 0) {

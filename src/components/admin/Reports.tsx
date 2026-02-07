@@ -78,6 +78,22 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
     }).format(amount);
   };
 
+  // Helper to format service names with € symbol for legacy data
+  const formatServiceName = (serviceName: string): string => {
+    if (!serviceName) return 'Not specified';
+    
+    // Fix legacy service names that have prices without € symbol
+    // Pattern: "Service Name - Type (123)" should become "Service Name - Type (€123)"
+    const pricePattern = /\((\d+(?:\.\d+)?)\)$/;
+    const match = serviceName.match(pricePattern);
+    
+    if (match && !serviceName.includes('(€') && !serviceName.includes('($')) {
+      return serviceName.replace(pricePattern, `(€${match[1]})`);
+    }
+    
+    return serviceName;
+  };
+
   // Pagination helpers
   const getTotalPages = (totalItems: number, itemsPerPage: number) => {
     return Math.ceil(totalItems / itemsPerPage);
@@ -366,7 +382,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
       ['Unpaid Revenue', `€${reportData.unpaidRevenue.toFixed(2)}`],
       [''],
       ['SERVICE BREAKDOWN', ''],
-      ...Object.entries(reportData.serviceBreakdown).map(([service, count]) => [service, count]),
+      ...Object.entries(reportData.serviceBreakdown).map(([service, count]) => [formatServiceName(service), count]),
       [''],
       ['VISIT TYPE BREAKDOWN', ''],
       ...Object.entries(reportData.visitTypeBreakdown).map(([visitType, count]) => [visitType, count])
@@ -508,7 +524,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
   const afterInvoiceY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 20 : 140;
       doc.setFontSize(16);
       doc.text('Service Breakdown', 20, afterInvoiceY);
-      const serviceData = Object.entries(reportData.serviceBreakdown).map(([service, count]) => [service, count.toString()]);
+      const serviceData = Object.entries(reportData.serviceBreakdown).map(([service, count]) => [formatServiceName(service), count.toString()]);
   autoTable(doc, {
         startY: afterInvoiceY + 5,
         head: [['Service', 'Bookings']],
@@ -790,8 +806,8 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                         const percentage = (count / reportData.totalBookings) * 100;
                         return (
                           <div key={service} className="flex items-center space-x-4">
-                            <div className="w-32 text-sm font-medium text-gray-700 truncate" title={service}>
-                              {service}
+                            <div className="w-32 text-sm font-medium text-gray-700 truncate" title={formatServiceName(service)}>
+                              {formatServiceName(service)}
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center space-x-2">
@@ -1258,7 +1274,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                           <td className="px-4 py-2 font-medium text-gray-900">{customerName}</td>
                           <td className="px-4 py-2 text-gray-700">{email || '—'}</td>
                           <td className="px-4 py-2 text-gray-700">{phone || '—'}</td>
-                          <td className="px-4 py-2 text-gray-700">{service}</td>
+                          <td className="px-4 py-2 text-gray-700">{formatServiceName(service)}</td>
                           <td className="px-4 py-2 text-gray-700">{visitTypeDisplay}</td>
                           <td className="px-4 py-2 text-gray-700">{date}</td>
                           <td className="px-4 py-2">
@@ -1312,7 +1328,7 @@ export const Reports: React.FC<ReportsProps> = ({ allBookings }) => {
                             </span>
                           </div>
                           <div className="text-sm text-gray-600">
-                            <div><strong>Service:</strong> {service}</div>
+                            <div><strong>Service:</strong> {formatServiceName(service)}</div>
                             <div><strong>Visit Type:</strong> {visitTypeDisplay}</div>
                             <div><strong>Date:</strong> {date}</div>
                             {email && <div><strong>Email:</strong> {email}</div>}
