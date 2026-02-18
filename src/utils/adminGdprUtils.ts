@@ -129,11 +129,20 @@ export const hasAdminDataAccess = async (userId: string): Promise<boolean> => {
       .select('id, is_active')
       .eq('email', userId)
       .eq('is_active', true)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
 
-    return !error && !!data;
+    // If there's an error or no data, return false
+    if (error) {
+      // Only log if it's not a 406 (not acceptable) error which happens when table doesn't exist
+      if (error.code !== 'PGRST116' && error.code !== '406') {
+        console.warn('[Admin Access] Check failed:', error.message);
+      }
+      return false;
+    }
+
+    return !!data;
   } catch (error) {
-    console.error('Error checking admin access:', error);
+    // Silently fail for missing tables or RLS issues
     return false;
   }
 };

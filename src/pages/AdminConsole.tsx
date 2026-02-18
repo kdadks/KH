@@ -549,6 +549,8 @@ const AdminConsole = () => {
         const transformedServices: PackageType[] = (data || []).map(service => ({
           id: service.id,
           name: service.name,
+          categories: Array.isArray(service.category) ? service.category :
+                     (service.category ? [service.category] : []),
           category: service.category,
           price: service.price,
           inHourPrice: service.in_hour_price,
@@ -556,6 +558,8 @@ const AdminConsole = () => {
           features: service.features || [],
           description: service.description,
           isActive: service.is_active,
+          bookingType: service.booking_type || 'book_now',
+          visitType: service.visit_type || 'clinic',
           created_at: service.created_at,
           updated_at: service.updated_at
         }));
