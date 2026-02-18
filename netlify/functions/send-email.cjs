@@ -199,10 +199,11 @@ ${customerName}'s booking has been confirmed by an administrator.
 APPOINTMENT DETAILS
 Customer: ${customerName}
 Service: ${data.service_name}
+Visit Type: ${data.visit_type === 'clinic' ? 'Clinic Visit' : data.visit_type === 'home' ? 'Home Visit' : data.visit_type === 'online' ? 'Online Session' : 'Clinic Visit'}
 Date: ${formatDisplayDate(data.appointment_date)}
 Time: ${data.appointment_time}
 Reference: ${data.booking_reference}
-${data.clinic_address ? `Location: ${data.clinic_address}\n` : ''}
+${(data.visit_type !== 'online' && data.clinic_address) ? `${data.visit_type === 'home' ? 'Visit Address' : 'Location'}: ${data.clinic_address}\n` : ''}
 ${data.special_instructions ? `SPECIAL INSTRUCTIONS\n${data.special_instructions}\n\n` : ''}ACTION REQUIRED
 • Customer confirmation email has been sent automatically
 • Calendar invite has been attached to customer email
@@ -226,10 +227,11 @@ Great news! Your booking has been confirmed by our team.
 
 APPOINTMENT DETAILS
 Service: ${data.service_name}
+Visit Type: ${data.visit_type === 'clinic' ? 'Clinic Visit' : data.visit_type === 'home' ? 'Home Visit' : data.visit_type === 'online' ? 'Online Session' : 'Clinic Visit'}
 Date: ${formatDisplayDate(data.appointment_date)}
 Time: ${data.appointment_time}
 Reference: ${data.booking_reference}
-${data.therapist_name ? `Therapist: ${data.therapist_name}\n` : ''}${data.clinic_address ? `Location: ${data.clinic_address}\n` : ''}
+${data.therapist_name ? `Therapist: ${data.therapist_name}\n` : ''}${(data.visit_type !== 'online' && data.clinic_address) ? `${data.visit_type === 'home' ? 'Visit Address' : 'Location'}: ${data.clinic_address}\n` : ''}
 ${data.special_instructions ? `SPECIAL INSTRUCTIONS\n${data.special_instructions}\n\n` : ''}IMPORTANT INFORMATION
 • Please arrive 10 minutes early for your appointment
 • Bring any relevant medical documents or reports
@@ -1232,7 +1234,7 @@ const getEmailTemplate = (type, data) => {
                   <p><strong>Date:</strong> ${formatDisplayDate(data.appointment_date)}</p>
                   <p><strong>Time:</strong> ${data.appointment_time}</p>
                   <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                  ${data.clinic_address ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
+                  ${(data.visit_type !== 'online' && data.clinic_address) ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
                 </div>
 
                 ${data.special_instructions ? `
@@ -1293,7 +1295,7 @@ const getEmailTemplate = (type, data) => {
                   <p><strong>Time:</strong> ${data.appointment_time}</p>
                   <p><strong>Reference:</strong> ${data.booking_reference}</p>
                   ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                  ${data.clinic_address ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
+                  ${(data.visit_type !== 'online' && data.clinic_address) ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
                 </div>
 
                 ${data.special_instructions ? `
@@ -1352,7 +1354,7 @@ const getEmailTemplate = (type, data) => {
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${data.booking_reference}</p>
-                ${data.clinic_address ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
+                ${(data.visit_type !== 'online' && data.clinic_address) ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
               </div>
               
               ${data.special_instructions ? `
@@ -1462,15 +1464,16 @@ const getEmailTemplate = (type, data) => {
             <div class="content">
               <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
               <p>Great news! Your deposit payment has been successfully received and processed. Your appointment is now secured and confirmed!</p>
-              
+
               <div class="details">
                 <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
                 ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
+                ${(data.visit_type !== 'online' && data.clinic_address) ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
               </div>
               
               <div class="details">
@@ -1620,11 +1623,12 @@ const getEmailTemplate = (type, data) => {
               <div class="details" style="background-color: #ecfdf5; border-left: 4px solid #10b981;">
                 <h3>✅ New Appointment Details</h3>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>New Date:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_date}</span></p>
                 <p><strong>New Time:</strong> <span style="color: #059669; font-weight: bold;">${data.appointment_time}</span></p>
                 <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
                 ${data.therapist_name ? `<p><strong>Therapist:</strong> ${escapeHtmlEntities(data.therapist_name)}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
+                ${(data.visit_type !== 'online' && data.clinic_address) ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${escapeHtmlEntities(data.clinic_address)}</p>` : ''}
                 <p><strong>Status:</strong> <span style="color: #059669; font-weight: bold;">✅ CONFIRMED</span></p>
               </div>
               

@@ -14,6 +14,7 @@ interface ServicesProps {
   setEditIndex: React.Dispatch<React.SetStateAction<number | null>>;
   editPackage: Package | null;
   setEditPackage: React.Dispatch<React.SetStateAction<Package | null>>;
+  onRefresh?: () => void;
 }
 
 export const Services: React.FC<ServicesProps> = ({
@@ -24,7 +25,8 @@ export const Services: React.FC<ServicesProps> = ({
   editIndex,
   setEditIndex,
   editPackage,
-  setEditPackage
+  setEditPackage,
+  onRefresh
 }) => {
   const { showSuccess, showError, showConfirm } = useToast();
   const timeSlotsRef = useRef<HTMLDivElement>(null);
@@ -77,7 +79,7 @@ export const Services: React.FC<ServicesProps> = ({
   };
   
   // Helper function to strip currency symbols and parse to number
-  const parsePrice = (priceString: string | undefined | null): number | null => {
+  const parsePrice = (priceString: string | number | undefined | null): number | null => {
     if (!priceString || priceString.toString().trim() === '') return null;
     // Remove all non-numeric characters except decimal point
     const cleaned = priceString.toString().replace(/[^0-9.]/g, '');
@@ -179,9 +181,14 @@ export const Services: React.FC<ServicesProps> = ({
   ];
 
   // Load services from database on component mount
+  // Removed: Now relying on parent AdminConsole to fetch and pass data via props
+  // This prevents conflicts with the refresh button functionality
   useEffect(() => {
-    fetchServices();
-  }, []);
+    // If parent doesn't have data yet, trigger refresh
+    if (packages.length === 0 && onRefresh) {
+      onRefresh();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch all services from database
   const fetchServices = async () => {
@@ -240,7 +247,7 @@ export const Services: React.FC<ServicesProps> = ({
       // Calculate next ID (MAX + 1, or 1 if no services exist)
       const nextId = (maxIdData && maxIdData.length > 0) ? maxIdData[0].id + 1 : 1;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('services')
         .insert([{
           id: nextId,
@@ -260,27 +267,12 @@ export const Services: React.FC<ServicesProps> = ({
 
       if (error) throw error;
 
-      // Transform and add to local state
-      const transformedService: Package = {
-        id: data.id,
-        name: data.name,
-        categories: Array.isArray(data.category) ? data.category : 
-                   (data.category ? [data.category] : []),
-        category: data.category, // Keep for backward compatibility
-        price: data.price,
-        inHourPrice: data.in_hour_price,
-        outOfHourPrice: data.out_of_hour_price,
-        features: data.features || [],
-        description: data.description,
-        isActive: data.is_active,
-        bookingType: data.booking_type || 'book_now',
-        visitType: data.visit_type || 'clinic',
-        created_at: data.created_at,
-        updated_at: data.updated_at
-      };
-
       // Refresh the services list to get proper sort order
-      await fetchServices();
+      if (onRefresh) {
+        onRefresh();
+      } else {
+        await fetchServices();
+      }
       setNewPackage({ name: '', price: '', inHourPrice: '', outOfHourPrice: '', features: [''], categories: [], category: '', description: '', bookingType: 'book_now', visitType: 'clinic' });
       showSuccess('Success', 'Service added successfully');
     } catch (error) {
@@ -361,7 +353,11 @@ export const Services: React.FC<ServicesProps> = ({
             }
 
             // Refresh the services list
-            await fetchServices();
+            if (onRefresh) {
+              onRefresh();
+            } else {
+              await fetchServices();
+            }
             showSuccess('Success', 'Service permanently deleted successfully');
           } catch (error) {
             console.error('Error deleting service:', error);
@@ -407,8 +403,12 @@ export const Services: React.FC<ServicesProps> = ({
       }
 
       // Refresh the services list to reflect the update
-      await fetchServices();
-      
+      if (onRefresh) {
+        onRefresh();
+      } else {
+        await fetchServices();
+      }
+
       showSuccess('Success', `Service ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
     } catch (error) {
       console.error('Error toggling service status:', error);
@@ -470,8 +470,12 @@ export const Services: React.FC<ServicesProps> = ({
       }
 
       // Refresh the services list to get proper sort order (most recent edit on top)
-      await fetchServices();
-      
+      if (onRefresh) {
+        onRefresh();
+      } else {
+        await fetchServices();
+      }
+
       showSuccess('Success', 'Service updated successfully');
       // Close modal
       setEditIndex(null);
@@ -995,10 +999,10 @@ export const Services: React.FC<ServicesProps> = ({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => handleToggleServiceStatus(originalIndex, pkg.isActive)}
+                        onClick={() => handleToggleServiceStatus(originalIndex, pkg.isActive ?? true)}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                          pkg.isActive 
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                          pkg.isActive
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                         title={pkg.isActive ? 'Click to deactivate' : 'Click to activate'}

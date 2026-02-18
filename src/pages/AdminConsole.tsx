@@ -862,6 +862,7 @@ const AdminConsole = () => {
             setEditIndex={setEditIndex}
             editPackage={editPackage}
             setEditPackage={setEditPackage}
+            onRefresh={() => handleManualRefresh('services', true)}
           />
         )}
         {activeTab === 'bookings' && (
