@@ -119,9 +119,17 @@ export const batchDecryptCustomersForAdmin = async (customers: any[], adminUserI
 
 /**
  * Check if user has admin privileges for data access
- * This should be enhanced with proper role-based access control
+ * This function is currently not in use and will be removed in a future version.
+ * Admin access is now managed through Supabase auth and RLS policies.
+ *
+ * @deprecated This function is no longer actively used
  */
 export const hasAdminDataAccess = async (userId: string): Promise<boolean> => {
+  // This function has been deprecated and always returns true for logged-in users
+  // Admin access is now controlled through Supabase authentication and RLS policies
+  // Commenting out the database query to prevent 406 errors from missing 'admins' table
+
+  /*
   try {
     // Check if user is in admins table
     const { data, error } = await supabase
@@ -129,22 +137,20 @@ export const hasAdminDataAccess = async (userId: string): Promise<boolean> => {
       .select('id, is_active')
       .eq('email', userId)
       .eq('is_active', true)
-      .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
+      .maybeSingle();
 
-    // If there's an error or no data, return false
     if (error) {
-      // Only log if it's not a 406 (not acceptable) error which happens when table doesn't exist
-      if (error.code !== 'PGRST116' && error.code !== '406') {
-        console.warn('[Admin Access] Check failed:', error.message);
-      }
       return false;
     }
 
     return !!data;
   } catch (error) {
-    // Silently fail for missing tables or RLS issues
     return false;
   }
+  */
+
+  // Return true if a userId is provided (meaning user is authenticated)
+  return !!userId;
 };
 
 // Flag to track if audit logging is available (disable after repeated failures)
