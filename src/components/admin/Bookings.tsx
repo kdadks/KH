@@ -1508,6 +1508,42 @@ export const Bookings: React.FC<BookingsProps> = ({
   };
 
 
+  // ── Resolve payment type by comparing paid amount to full service price ──────
+  // Fetches the real service price from the DB, then decides:
+  //   amount ≈ 20% of full price → 'deposit'
+  //   amount ≈ 100% of full price → 'full'
+  // Tolerance of ±5% handles minor rounding differences.
+  const resolvePaymentType = async (
+    paidAmount: number,
+    packageName: string,
+    _timeslotStartTime?: string | null
+  ): Promise<'deposit' | 'full' | null> => {
+    try {
+      const { fetchServicePricing, getServicePrice, extractBaseServiceName, determineTimeSlotType } =
+        await import('../../services/pricingService');
+
+      const baseServiceName = extractBaseServiceName(packageName);
+      const timeSlotType = determineTimeSlotType(packageName);
+      const pricing = await fetchServicePricing(baseServiceName);
+      if (!pricing) return null;
+
+      const fullPrice = getServicePrice(pricing, timeSlotType);
+      if (!fullPrice || fullPrice <= 0) return null;
+
+      const ratio = paidAmount / fullPrice;
+      const TOLERANCE = 0.05; // ±5%
+
+      if (Math.abs(ratio - 0.20) <= TOLERANCE) return 'deposit';
+      if (Math.abs(ratio - 1.00) <= TOLERANCE) return 'full';
+
+      // Paid more than 20% but less than 100% → treat as deposit (partial payment)
+      if (ratio < 0.5) return 'deposit';
+      return 'full';
+    } catch {
+      return null;
+    }
+  };
+
   // Payment request functions
   const checkBookingPaymentStatus = async (booking: BookingFormData, retryCount = 0) => {
     if (!booking.customer_id) return { paymentRequest: null, payment: null, paymentType: null };
@@ -1618,33 +1654,22 @@ export const Bookings: React.FC<BookingsProps> = ({
         // This prevents showing incorrect payment amounts for different services
       }
 
-      // Determine payment type from payment request notes field
+      // Determine payment type by comparing the actual payment amount against
+      // the full service price fetched from the database.
+      // This is the authoritative method — no notes text-parsing.
       let paymentType: 'deposit' | 'full' | null = null;
-      if (matchingPaymentRequest?.notes) {
-        const notes = matchingPaymentRequest.notes.toLowerCase();
-        if (notes.includes('deposit') || notes.includes('20%')) {
-          paymentType = 'deposit';
-        } else if (notes.includes('full') || notes.includes('100%') || notes.includes('full payment')) {
-          paymentType = 'full';
-        }
+
+      if (matchingPayment && booking.package_name) {
+        paymentType = await resolvePaymentType(
+          matchingPayment.amount,
+          booking.package_name
+        );
       }
 
-      // If payment exists, also check its payment type field
-      if (matchingPayment) {
-        // Check sumup_payment_type field in payments table
-        const paymentTypeField = (matchingPayment as any).sumup_payment_type;
-        if (paymentTypeField === 'deposit' || paymentTypeField === 'full') {
-          paymentType = paymentTypeField;
-        }
-        // Also check notes in payment record
-        if (!paymentType && matchingPayment.notes) {
-          const paymentNotes = matchingPayment.notes.toLowerCase();
-          if (paymentNotes.includes('deposit') || paymentNotes.includes('20%')) {
-            paymentType = 'deposit';
-          } else if (paymentNotes.includes('full') || paymentNotes.includes('100%') || paymentNotes.includes('full payment')) {
-            paymentType = 'full';
-          }
-        }
+      // Fallback: sumup_payment_type column (set by webhook)
+      if (!paymentType && matchingPayment) {
+        const sf = (matchingPayment as any).sumup_payment_type;
+        if (sf === 'deposit' || sf === 'full') paymentType = sf;
       }
 
       return {
@@ -1765,42 +1790,30 @@ export const Bookings: React.FC<BookingsProps> = ({
             // Find matching payment
             const matchingPayment = allPayments.find(p => p.booking_id === booking.id);
             
-            // Determine payment type
+            // Determine payment type by comparing payment.amount to full service price
             let paymentType: 'deposit' | 'full' | null = null;
-            if (matchingPaymentRequest?.notes) {
-              const notes = matchingPaymentRequest.notes.toLowerCase();
-              if (notes.includes('deposit') || notes.includes('20%')) {
-                paymentType = 'deposit';
-              } else if (notes.includes('full') || notes.includes('100%') || notes.includes('full payment')) {
-                paymentType = 'full';
-              }
+
+            if (matchingPayment && booking.package_name) {
+              paymentType = await resolvePaymentType(
+                matchingPayment.amount,
+                booking.package_name
+              );
             }
-            
-            if (matchingPayment) {
-              const paymentTypeField = (matchingPayment as any).sumup_payment_type;
-              if (paymentTypeField === 'deposit' || paymentTypeField === 'full') {
-                paymentType = paymentTypeField;
-              }
-              if (!paymentType && matchingPayment.notes) {
-                const paymentNotes = matchingPayment.notes.toLowerCase();
-                if (paymentNotes.includes('deposit') || paymentNotes.includes('20%')) {
-                  paymentType = 'deposit';
-                } else if (paymentNotes.includes('full') || paymentNotes.includes('100%') || paymentNotes.includes('full payment')) {
-                  paymentType = 'full';
-                }
-              }
+
+            // Fallback: sumup_payment_type column (set by webhook)
+            if (!paymentType && matchingPayment) {
+              const sf = (matchingPayment as any).sumup_payment_type;
+              if (sf === 'deposit' || sf === 'full') paymentType = sf;
             }
-            
+
             statusMap.set(booking.id, {
               paymentRequest: matchingPaymentRequest || null,
               payment: matchingPayment || null,
               paymentType
             });
 
-            // Set default deposit amount
             if (booking.package_name) {
-              const depositAmount = 75; // Default deposit amount
-              depositMap.set(booking.id, depositAmount);
+              depositMap.set(booking.id, matchingPayment?.amount || 0);
             }
           }
         }
@@ -3245,7 +3258,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                                 
                                 // If payment request is marked as 'paid', show payment completed
                                 if (isPaymentRequestPaid && status?.paymentRequest) {
-                                  const amount = status.paymentRequest.amount;
+                                  const amount = status.payment?.amount ?? status.paymentRequest.amount;
                                   const paymentTypeLabel = paymentType === 'full' ? 'Full Payment' : 
                                                           paymentType === 'deposit' ? 'Deposit' : 
                                                           'Payment';
