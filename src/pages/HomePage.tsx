@@ -30,9 +30,21 @@ const HomePage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="KH THERAPY- Physiotherapy & Rehabilitation Services"
-        description="Professional physiotherapy services with personalized care plans designed to help you move better, feel better, and live better."
+        title="KH Therapy | Female Physiotherapist Dublin | Home Visits & Clinical Pilates"
+        description="KH Therapy – female chartered physiotherapist in Clondalkin, Dublin. Clinic & home visits, Clinical Pilates, women's health, sports injury, postnatal & pelvic floor physio. Serving West Dublin, Lucan & Dublin South."
         canonicalUrl="/"
+        keywords="physiotherapist Dublin, female physiotherapist Dublin, chartered physiotherapist Dublin, home visit physiotherapist Dublin, Pilates classes Dublin, Clinical Pilates Dublin, women's health physiotherapist Dublin, sports injury physiotherapist Dublin, back pain physiotherapist Dublin, postnatal physiotherapy Dublin, pelvic floor physiotherapist Dublin, physio Clondalkin, physio Lucan, KH Therapy"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'WebSite',
+          name: 'KH Therapy',
+          url: 'https://khtherapy.ie',
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: 'https://khtherapy.ie/services?search={search_term_string}',
+            'query-input': 'required name=search_term_string',
+          },
+        }}
       />
       <HeroSection />
       <ServicesSection />

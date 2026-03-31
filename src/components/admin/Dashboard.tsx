@@ -237,7 +237,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{getCustomerName(booking)}</p>
-                      <p className="text-xs sm:text-sm text-gray-500 truncate">{formatServiceWithVisitType(booking.package_name || booking.service, booking.visit_type)}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 truncate">{formatServiceWithVisitType(booking.package_name || booking.service || '', booking.visit_type)}</p>
                       {/* Show date on mobile under the service */}
                       <p className="text-xs text-gray-500 mt-1 sm:hidden">{formatDisplayDate(booking)}</p>
                     </div>

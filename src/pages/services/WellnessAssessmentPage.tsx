@@ -54,9 +54,10 @@ const WellnessAssessmentPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Wellness Assessment - KH Therapy"
-        description="Comprehensive wellness assessment at KH Therapy. Holistic evaluation of physical, mental, emotional, and spiritual well-being to guide healthy lifestyle changes."
+        title="Women's Health & Wellness Assessment Dublin | KH Therapy"
+        description="Women's health physiotherapy and holistic wellness assessments in Dublin. KH Therapy offers postnatal physiotherapy, pregnancy physiotherapy, pelvic floor assessment, and comprehensive wellness evaluations."
         canonicalUrl="/services/wellness-assessment"
+        keywords="women's health physiotherapist Dublin, pelvic floor physiotherapist Dublin, postnatal physiotherapy Dublin, pregnancy physiotherapy Dublin, ante-natal physio Dublin, wellness assessment Dublin, pelvic floor assessment Dublin"
       />
 
       <main>
@@ -109,6 +110,9 @@ const WellnessAssessmentPage: React.FC = () => {
                     </Button>
                     <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
                       Sports Injury
+                    </Button>
+                    <Button to="/services/pilates" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Pilates
                     </Button>
                   </div>
                 </div>

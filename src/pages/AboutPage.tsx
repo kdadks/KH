@@ -19,9 +19,10 @@ const AboutPage = () => {
   return (
     <>
       <SEOHead
-        title="About Us - KH Therapy"
-        description="Learn about KH Therapy’s mission, values, and the story behind our personalized physiotherapy services in Clondalkin, Dublin."
+        title="About KH Therapy | Female Chartered Physiotherapist Dublin"
+        description="Meet the team at KH Therapy – a female chartered physiotherapist practice in Clondalkin, Dublin. Passionate about women's health, sports injury, Clinical Pilates, and home visit physiotherapy across West Dublin and Lucan."
         canonicalUrl="/about"
+        keywords="female physiotherapist Dublin, chartered physiotherapist Dublin, female physiotherapist in Dublin, women's health physiotherapist Dublin, physiotherapist Clondalkin, physiotherapist Lucan, KH Therapy about"
       />
       <main className="py-8 bg-gray-50">
         <Container>

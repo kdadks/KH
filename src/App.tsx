@@ -103,6 +103,10 @@ const ChronicPainPage = createLazyComponent(() => import('./pages/services/Chron
 const PostSurgeryPage = createLazyComponent(() => import('./pages/services/PostSurgeryPage'), 'PostSurgeryPage');
 const NeuromuscularPage = createLazyComponent(() => import('./pages/services/NeuromuscularPage'), 'NeuromuscularPage');
 const WellnessAssessmentPage = createLazyComponent(() => import('./pages/services/WellnessAssessmentPage'), 'WellnessAssessmentPage');
+const OnlineServicesPage = createLazyComponent(() => import('./pages/services/OnlineServicesPage'), 'OnlineServicesPage');
+const PilatesPage = createLazyComponent(() => import('./pages/services/PilatesPage'), 'PilatesPage');
+const HomeVisitsPage = createLazyComponent(() => import('./pages/services/HomeVisitsPage'), 'HomeVisitsPage');
+const CorporateWellnessPage = createLazyComponent(() => import('./pages/services/CorporateWellnessPage'), 'CorporateWellnessPage');
 const UserPortal = createLazyComponent(() => import('./components/UserPortal'), 'UserPortal');
 const ResetPassword = createLazyComponent(() => import('./components/user/ResetPassword'), 'ResetPassword');
 const PaymentPage = createLazyComponent(() => import('./pages/PaymentPage'), 'PaymentPage');
@@ -132,6 +136,10 @@ function App() {
               <Route path="services/post-surgery" element={<PostSurgeryPage />} />
               <Route path="services/neuromuscular" element={<NeuromuscularPage />} />
               <Route path="services/wellness-assessment" element={<WellnessAssessmentPage />} />
+              <Route path="services/online" element={<OnlineServicesPage />} />
+              <Route path="services/pilates" element={<PilatesPage />} />
+              <Route path="services/home-visits" element={<HomeVisitsPage />} />
+              <Route path="services/corporate-wellness" element={<CorporateWellnessPage />} />
               <Route path="testimonials" element={<TestimonialsPage />} />
               <Route path="booking" element={<BookingPage />} />
               <Route path="contact" element={<ContactPage />} />

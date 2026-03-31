@@ -2167,8 +2167,8 @@ export const Bookings: React.FC<BookingsProps> = ({
     if (selectedService) {
       return (
         (selectedService.price && typeof selectedService.price === 'string' && selectedService.price.toLowerCase().includes('contact for quote')) ||
-        (selectedService.in_hour_price && selectedService.in_hour_price.toLowerCase().includes('contact for quote')) ||
-        (selectedService.out_of_hour_price && selectedService.out_of_hour_price.toLowerCase().includes('contact for quote'))
+        (selectedService.in_hour_price && String(selectedService.in_hour_price).toLowerCase().includes('contact for quote')) ||
+        (selectedService.out_of_hour_price && String(selectedService.out_of_hour_price).toLowerCase().includes('contact for quote'))
       ) ? true : false;
     }
     

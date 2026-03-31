@@ -21,22 +21,10 @@ const ServicesPage: React.FC = () => {
 	};
 
 	const slugToCategory = (slug: string): string => {
-		// Map common slugs back to category names
 		const slugMap: { [key: string]: string } = {
-			'corporate-packages': 'Corporate Packages',
-			'corporate-package': 'Corporate Packages',
-			'individual-therapy': 'Individual',
-			'individual': 'Individual',
-			'rehab-fitness': 'Rehab & Fitness',
-			'rehab-&-fitness': 'Rehab & Fitness',
-			'rehab': 'Rehab & Fitness',
-			'packages': 'Packages',
-			'classes': 'Classes',
-			'sports-therapy': 'Sports Therapy',
-			'group-sessions': 'Group Sessions',
-			'online-session': 'Online Session',
-			'online-sessions': 'Online Session',
-			'online': 'Online Session'
+			'home': 'Home',
+			'clinic': 'Clinic',
+			'online': 'Online',
 		};
 		return slugMap[slug] || slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 	};
@@ -83,18 +71,10 @@ const ServicesPage: React.FC = () => {
 
 			// Transform database services to Package format
 			const transformedServices: Package[] = data?.map(service => {
-				// Ensure categories is always an array
-				let categoriesArray: string[] = [];
-				if (Array.isArray(service.category)) {
-					categoriesArray = service.category;
-				} else if (service.category) {
-					categoriesArray = [service.category];
-				}
-
 				return {
 					name: service.name,
-					categories: categoriesArray,
-					category: categoriesArray[0] || undefined, // Keep for backward compatibility
+					categories: service.visit_type ? [service.visit_type] : [],
+					category: service.visit_type || undefined,
 					price: service.price || undefined,
 					inHourPrice: service.in_hour_price || undefined,
 					outOfHourPrice: service.out_of_hour_price || undefined,
@@ -106,47 +86,19 @@ const ServicesPage: React.FC = () => {
 
 			setServices(transformedServices);
 
-			// Get unique categories from the data (flatten all categories from arrays)
-			const allCategories = transformedServices.flatMap(service => service.categories);
-			
-			const uniqueCategories = Array.from(new Set(allCategories))
-				.filter(Boolean) // Remove any null/undefined categories
-				.sort((a, b) => {
-					// Custom sort order: Packages → Individual → Rehab & Fitness → Corporate Packages → Classes → Online Session
-					const order = ['Packages', 'Individual', 'Rehab & Fitness', 'Corporate Packages', 'Classes', 'Online Session'];
-					
-					// Function to find the best match for a category
-					const findOrderIndex = (category: string): number => {
-						const cat = category.toLowerCase();
-						
-						// Exact matches first
-						const exactIndex = order.findIndex(orderCat => orderCat.toLowerCase() === cat);
-						if (exactIndex !== -1) return exactIndex;
-						
-						// Partial matches with specific logic
-						if (cat.includes('package') && !cat.includes('corporate')) return 0; // Packages
-						if (cat.includes('individual') || cat.includes('therapy')) return 1; // Individual
-						if (cat.includes('rehab') || cat.includes('fitness')) return 2; // Rehab & Fitness
-						if (cat.includes('corporate')) return 3; // Corporate Packages
-						if (cat.includes('class')) return 4; // Classes
-						if (cat.includes('online') || cat.includes('session')) return 5; // Online Session
-						
-						return -1; // Not found
-					};
-					
-					const indexA = findOrderIndex(a);
-					const indexB = findOrderIndex(b);
-					
-					// If both categories are in the predefined order, sort by their index
-					if (indexA !== -1 && indexB !== -1) {
-						return indexA - indexB;
-					}
-					// If only one is in the predefined order, prioritize it
-					if (indexA !== -1) return -1;
-					if (indexB !== -1) return 1;
-					// If neither is in the predefined order, sort alphabetically
-					return a.localeCompare(b);
-				});
+			// Build tabs from unique visit_type values, in a fixed display order
+			const visitTypeOrder: Record<string, number> = { home: 0, clinic: 1, online: 2 };
+			const uniqueVisitTypes = Array.from(new Set(data?.map(s => s.visit_type).filter(Boolean)))
+				.sort((a, b) => (visitTypeOrder[a] ?? 99) - (visitTypeOrder[b] ?? 99));
+
+			// Display labels for visit types
+			const visitTypeLabel: Record<string, string> = {
+				home: 'Home',
+				clinic: 'Clinic',
+				online: 'Online',
+			};
+
+			const uniqueCategories = uniqueVisitTypes.map(vt => visitTypeLabel[vt] || vt.charAt(0).toUpperCase() + vt.slice(1));
 
 			setCategories(uniqueCategories);
 		} catch (error) {
@@ -158,7 +110,6 @@ const ServicesPage: React.FC = () => {
 
 	// Handle tab click with URL update
 	const handleCategoryClick = (category: string) => {
-		console.log('Tab clicked:', category); // Debug log
 		setActiveCategory(category);
 		const slug = categoryToSlug(category);
 		navigate(`/services?category=${slug}`, { replace: true });
@@ -166,30 +117,18 @@ const ServicesPage: React.FC = () => {
 
 	// Memoize filtered services to ensure proper re-calculation
 	const filtered = useMemo(() => {
-		console.log('Filtering services for category:', activeCategory);
-		return services.filter((p) => {
-			// Ensure we have a valid categories array
-			const serviceCategories = p.categories || [];
-			
-			// Check if service has the active category
-			const categoryMatch = serviceCategories.includes(activeCategory);
-			if (!categoryMatch) return false;
-			
-			// Additional filter: if category is "Online Session", only show services with visit_type = "online"
-			if (activeCategory === 'Online Session' && p.visitType !== 'online') {
-				return false;
-			}
-			
-			return true;
-		});
+		if (!activeCategory) return [];
+		const activeLower = activeCategory.toLowerCase();
+		return services.filter((p) => p.visitType?.toLowerCase() === activeLower);
 	}, [services, activeCategory]);
 
 	return (
 		<>
 			<SEOHead
-				title="Our Services - KH Therapy"
-				description="Discover KH Therapy's range of physiotherapy services, from sports injury rehabilitation to wellness assessments. Personalized care for your wellness journey."
+				title="Physiotherapy & Pilates Services Dublin | KH Therapy"
+				description="Explore KH Therapy's full range of services in Dublin: clinic & home visit physiotherapy, Clinical Pilates, women's health, sports injury, back pain, postnatal physio, pelvic floor treatment, and online consultations."
 				canonicalUrl="/services"
+				keywords="physiotherapy services Dublin, Clinical Pilates Dublin, home visit physiotherapy Dublin, women's health physiotherapy, sports injury physiotherapy Dublin, back pain physiotherapy Dublin, postnatal physiotherapy Dublin, pelvic floor physiotherapy Dublin, online physiotherapy Dublin"
 			/>
 			<main className="py-8">
 				<Container>

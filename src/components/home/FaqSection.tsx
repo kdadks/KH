@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 import Container from '../shared/Container';
 import SectionHeading from '../shared/SectionHeading';
 
@@ -48,28 +49,44 @@ const FaqSection: React.FC = () => {
 
   const faqs = [
     {
-      question: "What should I expect during my first visit?",
-      answer: "Your first visit will include a comprehensive assessment of your condition, medical history review, physical examination, and discussion of your goals. We'll then develop a personalised treatment plan and may begin initial treatment the same day."
+      question: "Where is KH Therapy located in Dublin?",
+      answer: "KH Therapy is based in Clondalkin, Dublin 22. We provide clinic sessions on-site and home visit physiotherapy services across West Dublin, South Dublin, Lucan, Tallaght, Rathcoole, Saggart, and surrounding areas."
     },
     {
-      question: "How long will my recovery take?",
-      answer: "Recovery time varies depending on your specific condition, its severity, your overall health, and how consistently you follow your treatment plan. During your initial assessment, we'll provide an estimated timeline for your particular situation."
+      question: "Do you offer home visit physiotherapy in Dublin?",
+      answer: "Yes. KH Therapy offers mobile physiotherapy home visits across Dublin, including West Dublin, Lucan, Clondalkin, Tallaght, and Dublin South. Our physiotherapist comes to you, making it ideal for elderly patients, postnatal recovery, or anyone unable to travel to the clinic."
+    },
+    {
+      question: "Is KH Therapy a female physiotherapist practice?",
+      answer: "Yes. KH Therapy is led by a female chartered physiotherapist. Many clients – particularly women seeking women's health physiotherapy, postnatal care, pelvic floor treatment, or pregnancy physiotherapy – prefer to see a female therapist, and we're proud to provide that option in Dublin."
+    },
+    {
+      question: "What Pilates classes do you offer in Dublin?",
+      answer: "KH Therapy offers Clinical Pilates, Mat Pilates, Reformer Pilates, and private one-to-one Pilates sessions in Dublin. Classes are suitable for beginners, those recovering from injury (Rehab Pilates), people with back pain, and postnatal clients. Online Pilates sessions are also available."
     },
     {
       question: "Do I need a doctor's referral to book an appointment?",
-      answer: "No, you don't need a doctor's referral to book an appointment with us. We accept direct bookings from patients. However, if you're claiming through insurance, check if they require a referral for coverage."
+      answer: "No, you don't need a doctor's referral to book with us. We accept direct bookings from patients. If you're claiming through health insurance (VHI, Laya, Irish Life Health, etc.), check with your provider whether a GP referral is required for reimbursement."
     },
     {
-      question: "Is physiotherapy covered by insurance?",
-      answer: "Many insurance plans cover physiotherapy services. We recommend checking with your insurance provider about your specific coverage details. We can provide documentation needed for your claims."
+      question: "What should I expect during my first physiotherapy visit?",
+      answer: "Your first visit includes a comprehensive assessment of your condition, medical history review, physical examination, and goal-setting discussion. We will then develop a personalised treatment plan and may begin initial treatment on the same day."
     },
     {
-      question: "What should I wear to my physiotherapy sessions?",
-      answer: "Wear comfortable, loose-fitting clothes that allow for easy movement and access to the area being treated. For lower body issues, shorts or loose pants are recommended. For upper body concerns, consider a t-shirt or tank top."
+      question: "Do you treat women's health conditions?",
+      answer: "Yes. As a specialist women's health physiotherapist in Dublin, KH Therapy treats pelvic floor dysfunction, postnatal recovery, pregnancy-related pain (back pain, SPD/PGP), ante-natal physiotherapy, and general women's health concerns."
     },
     {
-      question: "Will the treatments be painful?",
-      answer: "Our goal is to minimize pain while maximizing recovery. Some techniques may cause temporary discomfort, but we work within your comfort level. Always communicate with your therapist about your pain tolerance during treatment."
+      question: "Is physiotherapy covered by health insurance in Ireland?",
+      answer: "Most Irish private health insurers (VHI, Laya Healthcare, Irish Life Health) provide partial cover for physiotherapy. We recommend confirming your specific plan details with your insurer. We can provide receipts and relevant documentation to support your claim."
+    },
+    {
+      question: "Do you treat back pain?",
+      answer: "Yes, back pain is one of the most common conditions we treat. KH Therapy's physiotherapists use manual therapy, exercise rehabilitation, and Clinical Pilates to address acute and chronic back pain. Home visits are also available for patients who find it difficult to travel."
+    },
+    {
+      question: "How do I book a physiotherapy appointment in Dublin?",
+      answer: "You can book online via our booking page at khtherapy.ie/booking, or contact us by phone or email. We offer clinic appointments in Clondalkin, Dublin 22, as well as home visits across West Dublin and surrounding areas."
     }
   ];
 
@@ -77,15 +94,31 @@ const FaqSection: React.FC = () => {
     setOpenIndex(openIndex === index ? null : index);
   };
 
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map(faq => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer,
+      },
+    })),
+  };
+
   return (
     <section className="py-12 md:py-16 bg-neutral-50">
+      <Helmet>
+        <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
+      </Helmet>
       <Container size="md">
         <SectionHeading
           title="Frequently Asked Questions"
-          subtitle="Find answers to common questions about our physiotherapy services and treatment approaches."
+          subtitle="Common questions about our physiotherapy, Pilates, and home visit services in Dublin."
           centered={true}
         />
-        
+
         <div className="mt-8">
           {faqs.map((faq, index) => (
             <FaqItem
@@ -98,11 +131,11 @@ const FaqSection: React.FC = () => {
             />
           ))}
         </div>
-        
+
         <div className="text-center mt-12">
           <p className="text-neutral-600">
             Still have questions? Contact us directly at{' '}
-            <a href="tel:+353123456789" className="text-primary-600 font-medium hover:underline">
+            <a href="tel:+353838009404" className="text-primary-600 font-medium hover:underline">
               (083) 8009404
             </a>{' '}
             or{' '}

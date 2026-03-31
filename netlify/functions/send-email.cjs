@@ -662,6 +662,15 @@ const getEmailTemplate = (type, data) => {
               </div>
               
               <p>If you need assistance with payment or have any questions about this invoice, please don't hesitate to contact us. We're here to help!</p>
+
+              <div style="margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border: 1px solid #fde68a; border-radius: 10px; text-align: center;">
+                <p style="margin: 0 0 8px 0; font-size: 18px;">⭐ Enjoyed Your Session?</p>
+                <p style="margin: 0 0 15px 0; color: #374151; font-size: 15px;">We'd love to hear your feedback! Leaving us a Google review takes just a minute and really helps others find the care they need.</p>
+                <a href="https://maps.app.goo.gl/HJqQEHFwp6jHmH6PA" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4285F4; color: white; font-weight: 600; font-size: 15px; padding: 12px 24px; border-radius: 8px; text-decoration: none;">
+                  ⭐ Leave a Google Review
+                </a>
+                <p style="margin: 12px 0 0 0; font-size: 13px; color: #6b7280;">Thank you for your continued support — it means the world to us! 💚</p>
+              </div>
             </div>
             <div class="footer">
               <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>

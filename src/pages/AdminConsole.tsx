@@ -92,6 +92,7 @@ const AdminConsole = () => {
   } | null>(null);
   const [filterDate, setFilterDate] = useState('');
   const [filterRange, setFilterRange] = useState<{start: string; end: string} | null>(null);
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
 
   // Logout handler (defined before useSessionTimeout hook)
   const handleLogout = async () => {
@@ -158,12 +159,19 @@ const AdminConsole = () => {
   }, []);
 
   const handleTabChange = (tab: string) => {
-    // Set loading state briefly for visual feedback
-    if (tab !== activeTab) {
-      setIsLoading(true);
-      setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers' | 'payments');
-      // Clear loading state after a brief delay to allow components to render
-      setTimeout(() => setIsLoading(false), 100);
+    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers' | 'payments');
+  };
+
+  // Tab navigation with silent per-tab background refresh to prevent stale data
+  const handleNavTabChange = (tab: string) => {
+    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers' | 'payments' | 'help');
+    switch (tab) {
+      case 'bookings': fetchAllBookings().catch(() => {}); break;
+      case 'invoices': fetchAllInvoices().catch(() => {}); fetchAllCustomers().catch(() => {}); break;
+      case 'customers': fetchAllCustomers().catch(() => {}); break;
+      case 'payments': fetchAllPaymentData().catch(() => {}); break;
+      case 'availability': setAvailabilityRefreshKey(k => k + 1); break;
+      default: break;
     }
   };
 
@@ -204,46 +212,20 @@ const AdminConsole = () => {
     let dashboardDebounceTimer: NodeJS.Timeout | null = null;
 
     const handleRefreshBookings = () => {
-      // Debounce refresh events to prevent loops
-      if (refreshDebounceTimer) {
-        clearTimeout(refreshDebounceTimer);
-      }
-
+      if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
       refreshDebounceTimer = setTimeout(async () => {
-        console.log('🔄 AdminConsole received refreshBookings event, refreshing booking and payment data...');
-        setIsLoading(true);
-        try {
-          await Promise.all([
-            fetchAllBookings(),
-            fetchAllPaymentData() // Also refresh payment data since booking payments are linked
-          ]);
-        } catch (error) {
-          console.error('❌ Error during refresh:', error);
-        } finally {
-          setIsLoading(false);
-        }
+        await handleManualRefresh('bookings', true);
+        fetchAllPaymentData().catch(() => {});
         refreshDebounceTimer = null;
-      }, 1000); // 1 second debounce
+      }, 1000);
     };
 
     const handleRefreshDashboard = () => {
-      // Debounce dashboard refresh events
-      if (dashboardDebounceTimer) {
-        clearTimeout(dashboardDebounceTimer);
-      }
-
+      if (dashboardDebounceTimer) clearTimeout(dashboardDebounceTimer);
       dashboardDebounceTimer = setTimeout(async () => {
-        console.log('🔄 AdminConsole received refreshDashboard event, refreshing all data...');
-        setIsLoading(true);
-        try {
-          await handleManualRefresh();
-        } catch (error) {
-          console.error('❌ Error during dashboard refresh:', error);
-        } finally {
-          setIsLoading(false);
-        }
+        await handleManualRefresh(undefined, true);
         dashboardDebounceTimer = null;
-      }, 1000); // 1 second debounce
+      }, 1000);
     };
 
     window.addEventListener('refreshBookings', handleRefreshBookings);
@@ -410,34 +392,34 @@ const AdminConsole = () => {
     }
   };
 
-  // Manual refresh function to replace auto-refresh
+  // Manual refresh function — runs all fetches in parallel with a 30-second safety timeout
   const handleManualRefresh = async (dataType?: string, silent?: boolean) => {
+    const fetchTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 30000)
+    );
     try {
       setIsLoading(true);
-      
-      if (!dataType || dataType === 'bookings') {
-        await fetchAllBookings();
-      }
-      if (!dataType || dataType === 'services') {
-        await fetchAllServices();
-      }
-      if (!dataType || dataType === 'customers') {
-        await fetchAllCustomers();
-      }
-      if (!dataType || dataType === 'invoices') {
-        await fetchAllInvoices();
-      }
-      if (!dataType || dataType === 'payments') {
-        await fetchAllPaymentData();
-      }
-      
-      // Only show success message if not in silent mode
+
+      const fetches: Promise<void>[] = [];
+      if (!dataType || dataType === 'bookings')  fetches.push(fetchAllBookings());
+      if (!dataType || dataType === 'services')  fetches.push(fetchAllServices());
+      if (!dataType || dataType === 'customers') fetches.push(fetchAllCustomers());
+      if (!dataType || dataType === 'invoices')  fetches.push(fetchAllInvoices());
+      if (!dataType || dataType === 'payments')  fetches.push(fetchAllPaymentData());
+      if (!dataType || dataType === 'availability') setAvailabilityRefreshKey(k => k + 1);
+
+      // Promise.allSettled so one failing fetch doesn't block the others;
+      // Promise.race against timeout so the spinner can never get permanently stuck.
+      await Promise.race([Promise.allSettled(fetches), fetchTimeout]);
+
       if (!silent) {
         showSuccess('Refresh Complete', 'Data has been refreshed successfully.');
       }
     } catch (error) {
       console.error('Manual refresh error:', error);
-      showError('Refresh Error', 'Failed to refresh data. Please try again.');
+      if (!silent) {
+        showError('Refresh Error', 'Refresh took too long or failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -789,7 +771,7 @@ const AdminConsole = () => {
               ].map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
+                  onClick={() => handleNavTabChange(tab.id)}
                   className={`flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'bg-primary-500 text-white'
@@ -818,7 +800,7 @@ const AdminConsole = () => {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as 'dashboard' | 'bookings' | 'package' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
+                onClick={() => handleNavTabChange(tab.id)}
                 className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
@@ -850,7 +832,14 @@ const AdminConsole = () => {
         {activeTab === 'dashboard' && (
           <Dashboard
             allBookings={allBookings}
-            packages={packages}
+            packages={packages.map(p => ({
+              name: p.name,
+              price: p.price !== undefined ? String(p.price) : undefined,
+              inHourPrice: p.inHourPrice !== undefined ? String(p.inHourPrice) : undefined,
+              outOfHourPrice: p.outOfHourPrice !== undefined ? String(p.outOfHourPrice) : undefined,
+              features: p.features,
+              category: typeof p.category === 'string' ? p.category : undefined
+            }))}
             setActiveTab={handleTabChange}
             setFilterDate={setFilterDate}
             setFilterRange={setFilterRange}
@@ -881,7 +870,7 @@ const AdminConsole = () => {
           />
         )}
         {activeTab === 'availability' && (
-          <Availability />
+          <Availability refreshTrigger={availabilityRefreshKey} />
         )}
         {activeTab === 'customers' && (
           <CustomerManagement 

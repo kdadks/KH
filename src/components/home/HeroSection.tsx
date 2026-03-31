@@ -990,7 +990,7 @@ const HeroSection: React.FC = () => {
               </h1>
               <p className="text-lg md:text-xl mb-8 max-w-2xl">
                 Professional physiotherapy & Pilates services with personalised care plans 
-                designed to help you move better, feel better, and live better.
+                designed to help you move better, feel better, and live better. By experienced female physiotherapist in Dublin, Ireland.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <Button onClick={scrollToWhyChooseUs} size="lg" variant="secondary" icon={<User size={20} />}>
@@ -999,8 +999,14 @@ const HeroSection: React.FC = () => {
                 <Button to="/services" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
                   Explore Services
                 </Button>
-                <Button to="/services?category=corporate-packages" size="lg" variant="primary" className="bg-[#71db77] text-white hover:bg-[#5fcf68]">
-                  Corporate Packages
+                <Button to="/services/home-visits" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
+                  Home Visit
+                </Button>
+                <Button to="/services/online" size="lg" variant="outline" className="border-gray-600 text-gray-700 hover:bg-gray-200">
+                  Online Visit
+                </Button>
+                <Button to="/services/pilates" size="lg" variant="primary" className="bg-[#71db77] text-white hover:bg-[#5fcf68]">
+                  Pilates
                 </Button>
               </div>
               

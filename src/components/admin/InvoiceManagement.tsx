@@ -27,7 +27,6 @@ import { getCustomerDisplayName } from './utils/customerUtils';
 import { useToast } from '../shared/toastContext';
 import { downloadInvoicePDFWithPayments, sendInvoiceByEmail, generateInvoicePreview, PaymentRecord } from '../../services/invoiceService';
 import { createPaymentRequest } from '../../utils/paymentRequestUtils';
-import { extractBaseServiceName, getServicePrice, fetchServicePricing, determineTimeSlotType } from '../../services/pricingService';
 
 interface InvoiceManagementProps {
   onClose?: () => void;
@@ -135,7 +134,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       if (invoices.length === 0) return;
       
       const statusPromises = invoices.map(async (invoice) => {
-        if (invoice.id && invoice.status === 'sent') {
+        if (invoice.id && (invoice.status === 'sent' || invoice.status === 'draft')) {
           const status = await checkInvoicePaymentStatus(invoice.id);
           return { invoiceId: invoice.id.toString(), status };
         }
@@ -346,57 +345,6 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     } catch (error) {
       console.error('Error fetching booking payments:', error);
       setBookingPayments([]);
-    }
-  };
-
-  // Function to check if a booking is fully paid (deposit + remaining balance)
-  const isBookingFullyPaid = async (booking: BookingFormData): Promise<boolean> => {
-    try {
-      // Get service name and extract base name
-      const serviceName = booking.package_name || booking.service || '';
-      const baseServiceName = extractBaseServiceName(serviceName);
-      
-      // Get the service pricing data
-      const servicePricing = await fetchServicePricing(baseServiceName);
-      if (!servicePricing) {
-        // If we can't find the service, don't exclude the booking
-        return false;
-      }
-      
-      // Determine time slot type and get price
-      const serviceNameWithDetails = booking.package_name || booking.service || '';
-      const timeSlotType = determineTimeSlotType(serviceNameWithDetails);
-      const servicePrice = getServicePrice(servicePricing, timeSlotType);
-      
-      if (!servicePrice || servicePrice === 0) {
-        // If we can't determine the price, don't exclude the booking
-        return false;
-      }
-      
-      // Fetch all payments for this booking (both 'paid' and 'completed' status)
-      const { data: payments, error } = await supabase
-        .from('payments')
-        .select('amount, status')
-        .eq('booking_id', booking.id)
-        .in('status', ['paid', 'completed']);
-        
-      if (error) {
-        console.error('Error checking booking payments:', error);
-        return false;
-      }
-      
-      // Calculate total paid amount
-      const totalPaid = (payments || []).reduce((sum, payment) => sum + payment.amount, 0);
-      
-      // Check if total paid equals or exceeds service price
-      const isFullyPaid = totalPaid >= servicePrice;
-      
-      // Booking payment status calculated
-      
-      return isFullyPaid;
-    } catch (error) {
-      console.error('Error checking if booking is fully paid:', error);
-      return false;
     }
   };
 
@@ -963,7 +911,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         created_at: invoice.created_at,
         booking_id: invoice.booking_id,
         invoice_id: invoice.id,
-        notes: 'Offline payment'
+        notes: 'Offline payment',
+        sumup_payment_type: undefined
       } : null;
       
       return { onlinePayments, offlinePayment, invoiceTotal, actualItems };
@@ -1024,10 +973,25 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
         
         invoiceNotes = offlineNotes;
       } else {
-        // Online invoice: deposit deduction applied, draft status
-        finalAmount = Math.max(0, subtotalAmount - customerDeposits.amount);
-        invoiceStatus = editingInvoice ? editingInvoice.status : 'draft';
-        invoiceNotes = `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`;
+        // Online invoice: check if fully paid online
+        const isFullyPaidOnline = fullPaymentAmount >= subtotalAmount;
+        const remainingAfterDeposit = Math.max(0, subtotalAmount - customerDeposits.amount);
+        const isDepositCoveringFull = remainingAfterDeposit === 0 && customerDeposits.amount > 0;
+
+        if (isFullyPaidOnline || isDepositCoveringFull) {
+          // Fully paid online — store actual invoice total and mark as paid immediately
+          finalAmount = subtotalAmount;
+          invoiceStatus = editingInvoice?.status === 'cancelled' ? 'cancelled' : 'paid';
+          const paymentNote = isFullyPaidOnline
+            ? `Full payment received online: €${fullPaymentAmount.toFixed(2)}`
+            : `Deposit fully covered invoice: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}`;
+          invoiceNotes = `${formData.notes}${formData.notes ? '\n\n' : ''}${paymentNote}`;
+        } else {
+          // Partial deposit deducted — send as draft awaiting remaining balance
+          finalAmount = remainingAfterDeposit;
+          invoiceStatus = editingInvoice?.status === 'cancelled' ? 'cancelled' : (editingInvoice?.status ?? 'draft');
+          invoiceNotes = `${formData.notes}${customerDeposits.amount > 0 ? `\n\nDeposit Deducted: €${customerDeposits.amount.toFixed(2)}${customerDeposits.serviceName ? ` (${customerDeposits.serviceName})` : ''}` : ''}`;
+        }
       }
 
       if (editingInvoice) {
@@ -1788,7 +1752,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                     <option value="">Select a confirmed service/booking to auto-populate invoice</option>
                     {availableBookings.map(booking => (
                       <option key={booking.id} value={booking.id}>
-                        {formatServiceWithVisitType(booking.package_name || booking.service, booking.visit_type)} - {
+                        {formatServiceWithVisitType(booking.package_name || booking.service || '', booking.visit_type)} - {
                           booking.booking_date 
                             ? new Date(booking.booking_date).toLocaleDateString()
                             : (booking.appointment_date || booking.date || 'No date')
@@ -1813,7 +1777,7 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                   )}
                   {selectedBooking && (
                     <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs">
-                      <p className="text-green-800"><strong>✅ Selected Service:</strong> {formatServiceWithVisitType(selectedBooking.package_name || selectedBooking.service, selectedBooking.visit_type)}</p>
+                      <p className="text-green-800"><strong>✅ Selected Service:</strong> {formatServiceWithVisitType(selectedBooking.package_name || selectedBooking.service || '', selectedBooking.visit_type)}</p>
                       <p className="text-green-600"><strong>Date:</strong> {
                         selectedBooking.booking_date 
                           ? new Date(selectedBooking.booking_date).toLocaleDateString()
@@ -2689,7 +2653,14 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(invoice.invoice_date)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatCurrency(invoice.total_amount)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <div>{formatCurrency(invoice.subtotal || invoice.total_amount)}</div>
+                      {invoice.subtotal > 0 && invoice.total_amount > 0 && invoice.total_amount !== invoice.subtotal && (
+                        <div className="text-xs text-gray-500">
+                          Balance: {formatCurrency(invoice.total_amount)}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
                         {getStatusIcon(invoice.status)}

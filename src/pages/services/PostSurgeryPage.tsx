@@ -50,9 +50,10 @@ const PostSurgeryPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Post-Surgery Rehabilitation - KH Therapy"
-        description="Expert post-surgery rehabilitation at KH Therapy. Specialized recovery programs to help you heal faster and return to your best function after surgery."
+        title="Post-Surgery Rehabilitation Physiotherapy Dublin | KH Therapy"
+        description="Post-operative and post-surgery physiotherapy rehabilitation in Dublin. KH Therapy delivers expert recovery programmes after hip replacement, knee surgery, shoulder operations, and more. Clinic visits and home visits available."
         canonicalUrl="/services/post-surgery"
+        keywords="post surgery physiotherapy Dublin, post operative rehabilitation Dublin, hip replacement physio Dublin, knee surgery rehabilitation Dublin, post surgery home visit physio Dublin"
       />
       
       <main>
@@ -104,6 +105,9 @@ const PostSurgeryPage: React.FC = () => {
                     </Button>
                     <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
                       Sports Injury
+                    </Button>
+                    <Button to="/services/pilates" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Pilates
                     </Button>
                   </div>
                 </div>

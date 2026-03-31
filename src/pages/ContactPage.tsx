@@ -233,9 +233,10 @@ const ContactPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Contact Us - KH Therapy"
-        description="Get in touch with KH Therapy for professional physiotherapy and rehabilitation services."
+        title="Contact KH Therapy | Physiotherapist Clondalkin Dublin"
+        description="Contact KH Therapy to enquire about physiotherapy, Clinical Pilates, or home visit services in Dublin. Located at Ace Enterprise Centre, Clondalkin, Dublin 22. Serving Lucan, Tallaght, and West Dublin."
         canonicalUrl="/contact"
+        keywords="contact physiotherapist Dublin, physio Clondalkin, physio Dublin 22, physiotherapist near me Dublin, home visit physio contact Dublin, KH Therapy contact"
       />
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
         <Container>

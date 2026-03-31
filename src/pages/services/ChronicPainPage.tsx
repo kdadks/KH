@@ -40,9 +40,10 @@ const ChronicPainPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Chronic Pain Management - KH Therapy"
-        description="Comprehensive chronic pain management at KH Therapy. Evidence-based strategies to help you manage persistent pain and improve your quality of life."
+        title="Chronic & Back Pain Physiotherapy Dublin | KH Therapy"
+        description="Physiotherapy for chronic pain and back pain in Dublin. KH Therapy uses evidence-based techniques including manual therapy, exercise rehabilitation, and pain education to help you manage persistent pain and improve quality of life."
         canonicalUrl="/services/chronic-pain"
+        keywords="chronic pain physiotherapy Dublin, back pain physiotherapist Dublin, back pain physio Dublin, pain management physiotherapy Dublin, persistent pain treatment Dublin"
       />
       
       <main>
@@ -94,6 +95,9 @@ const ChronicPainPage: React.FC = () => {
                     </Button>
                     <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
                       Sports Injury
+                    </Button>
+                    <Button to="/services/pilates" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Pilates
                     </Button>
                   </div>
                 </div>

@@ -41,11 +41,11 @@ const Header: React.FC = () => {
       <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/80 to-white/70 backdrop-blur-xl"></div>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="flex justify-between items-center">
+        <div className="flex items-center">
           {/* Logo Section */}
           <Link
             to="/"
-            className="flex items-center space-x-2 z-10 transition-transform duration-300 hover:scale-105"
+            className="flex items-center space-x-2 flex-shrink-0 z-10 transition-transform duration-300 hover:scale-105"
             onClick={closeMenu}
           >
             <Logo className="w-12 h-12 drop-shadow-lg" />
@@ -58,7 +58,7 @@ const Header: React.FC = () => {
 
           {/* Desktop Navigation - Curved Center Bar with All Items */}
           {!isAdmin && (
-            <nav className="hidden md:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <nav className="hidden md:flex flex-1 items-center justify-center">
               <div className="
                 flex items-center gap-1 px-3 py-2
                 bg-gradient-to-br from-white/90 via-white/95 to-white/90
@@ -92,6 +92,22 @@ const Header: React.FC = () => {
                   }
                 >
                   Services
+                </NavLink>
+                <NavLink
+                  to="/services/pilates"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                >
+                  Pilates
+                </NavLink>
+                <NavLink
+                  to="/services/corporate-wellness"
+                  className={({ isActive }) =>
+                    `${navLinkClasses({ isActive })} ${isActive ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/40' : ''}`
+                  }
+                >
+                  Corporate
                 </NavLink>
                 <NavLink
                   to="/testimonials"
@@ -158,7 +174,7 @@ const Header: React.FC = () => {
           {/* Mobile Navigation Button - Hide for admin users */}
           {!isAdmin && (
             <button 
-              className="md:hidden text-neutral-800 focus:outline-none" 
+              className="md:hidden ml-auto text-neutral-800 focus:outline-none" 
               onClick={toggleMenu}
               aria-label="Toggle menu"
             >
@@ -212,6 +228,32 @@ const Header: React.FC = () => {
                 onClick={closeMenu}
               >
                 Services
+              </NavLink>
+              <NavLink
+                to="/services/pilates"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
+                onClick={closeMenu}
+              >
+                Pilates
+              </NavLink>
+              <NavLink
+                to="/services/corporate-wellness"
+                className={({ isActive }) =>
+                  `block px-4 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                  }`
+                }
+                onClick={closeMenu}
+              >
+                Corporate Wellness
               </NavLink>
               <NavLink
                 to="/testimonials"

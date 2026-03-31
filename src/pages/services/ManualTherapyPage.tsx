@@ -39,9 +39,10 @@ const ManualTherapyPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Manual Therapy - KH Therapy"
-        description="Expert manual therapy services at KH Therapy. Hands-on treatment techniques to relieve pain, improve mobility, and promote natural healing processes."
+        title="Manual Therapy Physiotherapist Dublin | KH Therapy"
+        description="Expert manual therapy and hands-on physiotherapy in Dublin at KH Therapy. Techniques to relieve back pain, neck pain, joint stiffness, and muscle tightness. Clinic sessions in Clondalkin and home visits available."
         canonicalUrl="/services/manual-therapy"
+        keywords="manual therapy Dublin, hands-on physiotherapy Dublin, back pain physiotherapist Dublin, neck pain physiotherapy Dublin, joint mobilisation Dublin, soft tissue therapy Dublin"
       />
       
       <main>
@@ -93,6 +94,9 @@ const ManualTherapyPage: React.FC = () => {
                     </Button>
                     <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
                       Sports Injury
+                    </Button>
+                    <Button to="/services/pilates" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Pilates
                     </Button>
                   </div>
                 </div>

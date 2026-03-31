@@ -29,9 +29,10 @@ const SportsInjuryPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Sports Injury Rehabilitation - KH Therapy"
-        description="Professional sports injury rehabilitation services at KH Therapy. Get back to your sport safely with our specialized treatment programs and expert physiotherapy care."
+        title="Sports Injury Physiotherapist Dublin | KH Therapy"
+        description="Expert sports injury physiotherapy in Dublin at KH Therapy. Treatment for ACL injuries, ankle sprains, shoulder impingement, hamstring strains & more. Clinic in Clondalkin and home visits across Dublin."
         canonicalUrl="/services/sports-injury"
+        keywords="sports injury physiotherapist Dublin, sports physio Dublin, sports injury treatment Dublin, ACL injury physio Dublin, knee injury physiotherapist Dublin, shoulder injury physiotherapist Dublin"
       />
       
       <main>
@@ -83,6 +84,9 @@ const SportsInjuryPage: React.FC = () => {
                     </Button>
                     <Button to="/services/post-surgery" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
                       Post-Surgery
+                    </Button>
+                    <Button to="/services/pilates" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Pilates
                     </Button>
                   </div>
                 </div>

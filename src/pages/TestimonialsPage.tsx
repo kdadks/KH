@@ -8,9 +8,10 @@ const TestimonialsPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Client Testimonials & Reviews - KH Therapy"
-        description="Read authentic Google reviews and testimonials from our clients about KH Therapy's personalized physiotherapy and rehabilitation services in Dublin."
+        title="Client Reviews | KH Therapy Dublin Physiotherapist & Pilates"
+        description="See what clients say about KH Therapy's physiotherapy and Pilates services in Dublin. Authentic Google reviews from patients treated for back pain, sports injuries, postnatal recovery, pelvic floor issues, and more."
         canonicalUrl="/testimonials"
+        keywords="KH Therapy reviews, physiotherapist Dublin reviews, Pilates Dublin reviews, female physiotherapist Dublin reviews, home visit physio Dublin reviews"
       />
       <Container>
         <div className="py-6">
@@ -49,15 +50,30 @@ const TestimonialsPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="mt-6">
-            {/* <GoogleReviewsGrid 
-              maxReviews={12}
-              showPagination={true}
-            /> */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <img src="/Review.jpeg" alt="Client Review 1" className="w-full h-96 object-contain rounded-lg shadow-lg bg-white" />
-              <img src="/Review1.jpeg" alt="Client Review 2" className="w-full h-96 object-contain rounded-lg shadow-lg bg-white" />
-              <img src="/Review2.jpeg" alt="Client Review 3" className="w-full h-96 object-contain rounded-lg shadow-lg bg-white" />
+          <div className="mt-6 overflow-hidden">
+            <style>{`
+              @keyframes marquee-rtl {
+                0%   { transform: translateX(0); }
+                100% { transform: translateX(-50%); }
+              }
+              .marquee-rtl {
+                display: flex;
+                width: max-content;
+                animation: marquee-rtl 18s linear infinite;
+              }
+              .marquee-rtl:hover {
+                animation-play-state: paused;
+              }
+            `}</style>
+            <div className="marquee-rtl">
+              {['/Review.jpeg', '/Review1.jpeg', '/Review2.jpeg', '/Review.jpeg', '/Review1.jpeg', '/Review2.jpeg'].map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Client Review ${(i % 3) + 1}`}
+                  className="h-80 w-auto object-contain rounded-lg shadow-lg bg-white mx-4 flex-shrink-0"
+                />
+              ))}
             </div>
           </div>
         </div>

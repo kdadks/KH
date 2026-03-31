@@ -4,7 +4,6 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import '../../styles/calendar.css';
 import moment from 'moment';
 import { 
-  Plus, 
   Clock, 
   Trash2, 
   Calendar as CalendarIcon,
@@ -52,9 +51,9 @@ interface BookedSlot {
   appointment_time?: string; // Optional fallback fields
 }
 
-type AvailabilityProps = Record<string, never>; // no props
+type AvailabilityProps = { refreshTrigger?: number };
 
-export const Availability: React.FC<AvailabilityProps> = () => {
+export const Availability: React.FC<AvailabilityProps> = ({ refreshTrigger = 0 }) => {
   const { showSuccess, showError } = useToast();
   
   // State management
@@ -85,12 +84,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
   // Calendar view state
   const [calendarViewType, setCalendarViewType] = useState<View>(Views.MONTH);
   const [calendarDate, setCalendarDate] = useState(new Date());
-  
-  // Add slot form state
-  const [newSlotDate, setNewSlotDate] = useState('');
-  const [newSlotStartTime, setNewSlotStartTime] = useState('');
-  const [newSlotEndTime, setNewSlotEndTime] = useState('');
-  const [newSlotError, setNewSlotError] = useState('');
 
   // State management cleaned up - old schedule generation removed
 
@@ -188,6 +181,14 @@ export const Availability: React.FC<AvailabilityProps> = () => {
       showError('Error', `Failed to load booked slots: ${errorMessage}`);
     }
   }, [showError]);
+
+  // Refresh when triggered externally (e.g. from header refresh button)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchAvailabilitySlots();
+      fetchBookedSlots();
+    }
+  }, [refreshTrigger, fetchAvailabilitySlots, fetchBookedSlots]);
 
   // Load availability slots and booked slots from database
   useEffect(() => {
@@ -585,56 +586,6 @@ export const Availability: React.FC<AvailabilityProps> = () => {
     return false;
   };
 
-  // Add new availability slot
-  const handleAddSlot = async () => {
-    setNewSlotError('');
-    
-    if (!newSlotDate || !newSlotStartTime || !newSlotEndTime) {
-      setNewSlotError('Please fill in all fields');
-      return;
-    }
-    
-    if (newSlotStartTime >= newSlotEndTime) {
-      setNewSlotError('End time must be after start time');
-      return;
-    }
-
-    try {
-      // Calculate slot duration in minutes
-      const startTime = new Date(`1970-01-01T${newSlotStartTime}:00`);
-      const endTime = new Date(`1970-01-01T${newSlotEndTime}:00`);
-      const slotDuration = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
-
-      const { error } = await supabase
-        .from('availability')
-        .insert([{
-          date: newSlotDate,
-          start: newSlotStartTime,
-          start_time: newSlotStartTime, // Set both start and start_time for consistency
-          end_time: newSlotEndTime,
-          schedule_type: 'manual', // Mark as manually created
-          slot_duration: slotDuration,
-          is_available: true
-        }])
-        .select();
-
-      if (error) throw error;
-
-      showSuccess('Success', 'Availability slot added successfully');
-      setNewSlotDate('');
-      setNewSlotStartTime('');
-      setNewSlotEndTime('');
-      
-      // Refresh the data
-      await fetchAvailabilitySlots();
-      await fetchBookedSlots();
-    } catch (error) {
-      console.error('Error adding availability slot:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showError('Error', `Failed to add availability slot: ${errorMessage}`);
-    }
-  };
-
   // Delete availability slot - now single step
   const handleDeleteSlot = async (slot: AvailabilitySlot) => {
     if (!slot?.id) return;
@@ -973,17 +924,9 @@ export const Availability: React.FC<AvailabilityProps> = () => {
                   selectable
                   onSelectSlot={(slotInfo) => {
                     const start = slotInfo.start as Date;
-                    const end = slotInfo.end as Date;
                     const pad = (n: number) => n.toString().padStart(2, '0');
                     const dateStr = `${start.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`;
-                    // If multiple existing slots for that date open modal; otherwise prefill form
-                    if (!openSlotsModalIfMultiple(dateStr)) {
-                      const startTime = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
-                      const endTime = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
-                      setNewSlotDate(dateStr);
-                      setNewSlotStartTime(startTime);
-                      setNewSlotEndTime(endTime);
-                    }
+                    openSlotsModalIfMultiple(dateStr);
                   }}
                   onSelectEvent={(event: any) => {
                     // Only allow deletion of available slots, not booked appointments

@@ -58,9 +58,10 @@ const NeuromuscularPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Neuromuscular Therapy - KH Therapy"
-        description="Specialized neuromuscular therapy at KH Therapy. Expert treatment for neurological conditions, movement disorders, and motor control rehabilitation."
+        title="Neuromuscular Physiotherapy Dublin | KH Therapy"
+        description="Specialist neuromuscular physiotherapy in Dublin. KH Therapy treats neurological conditions, movement disorders, and motor control issues with evidence-based rehabilitation."
         canonicalUrl="/services/neuromuscular"
+        keywords="neuromuscular physiotherapy Dublin, neurological physiotherapy Dublin, movement disorder therapy Dublin, motor control rehabilitation Dublin"
       />
       
       <main>
@@ -112,6 +113,9 @@ const NeuromuscularPage: React.FC = () => {
                     </Button>
                     <Button to="/services/sports-injury" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
                       Sports Injury
+                    </Button>
+                    <Button to="/services/pilates" variant="outline" size="sm" className="border-secondary-400 text-secondary-100 hover:bg-secondary-500/20">
+                      Pilates
                     </Button>
                   </div>
                 </div>

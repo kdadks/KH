@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, X } from 'lucide-react';
 import SEOHead from '../components/utils/SEOHead';
 import Container from '../components/shared/Container';
@@ -68,6 +68,7 @@ interface PaymentState {
 const BookingPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<BookingFormData>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [successMsg, setSuccessMsg] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
@@ -90,13 +91,26 @@ const BookingPage: React.FC = () => {
   const [loadingNextSlot, setLoadingNextSlot] = useState(false);
   const [autoSelectTime, setAutoSelectTime] = useState<string | null>(null); // Track time to auto-select
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [visitType, setVisitType] = useState<'home' | 'online' | 'clinic'>('online'); // Default to online
+  const initialVisitType = (): 'home' | 'online' | 'clinic' => {
+    const param = new URLSearchParams(window.location.search).get('visitType');
+    if (param === 'home' || param === 'clinic' || param === 'online') return param;
+    return 'online';
+  };
+  const [visitType, setVisitType] = useState<'home' | 'online' | 'clinic'>(initialVisitType); // Default to online
   const [allServices, setAllServices] = useState<Service[]>([]); // Store all services
 
   // Watch the service, date, and visitType fields to trigger time slot updates
   const watchedService = watch('service');
   const watchedDate = watch('date');
   const watchedEircode = watch('eircode');
+
+  // Sync visitType when URL search params change (e.g. navigating from Home Visits page)
+  useEffect(() => {
+    const param = searchParams.get('visitType');
+    if (param === 'home' || param === 'clinic' || param === 'online') {
+      setVisitType(param);
+    }
+  }, [searchParams]);
 
   // Define resetForm with useCallback
   const resetForm = useCallback(async () => {
@@ -1237,9 +1251,10 @@ const BookingPage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Book Your Appointment | PhysioLife"
-        description="Book your physiotherapy appointment online. Choose from our range of services and select a time that suits you best."
+        title="Book a Physiotherapist in Dublin | KH Therapy"
+        description="Book your physiotherapy, Clinical Pilates, or home visit appointment with KH Therapy in Dublin. Online booking available for clinic sessions in Clondalkin and home visits across West Dublin, Lucan & Dublin South."
         canonicalUrl="/booking"
+        keywords="book physiotherapist Dublin, book physio appointment Dublin, physiotherapy booking Dublin, online physio booking Ireland, book home visit physio Dublin, book Pilates Dublin"
       />
       
       <div className="py-24 bg-neutral-50">

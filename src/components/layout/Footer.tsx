@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, Clock, Facebook, Twitter } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Facebook } from 'lucide-react';
 import { FaInstagram, FaLinkedinIn } from 'react-icons/fa';
 import Logo from '../shared/Logo';
 
@@ -29,9 +29,6 @@ const Footer: React.FC = () => {
               </a>
               <a href="https://www.instagram.com/kh.therapy/" className="text-white hover:text-primary-400 transition-colors" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
                 <FaInstagram size={20} />
-              </a>
-              <a href="https://twitter.com/galway_physio" className="text-white hover:text-primary-400 transition-colors" aria-label="Twitter" target="_blank" rel="noopener noreferrer">
-                <Twitter size={20} />
               </a>
               <a href="https://www.linkedin.com/in/kelly-hodgins-547b05211/" className="text-white hover:text-primary-400 transition-colors" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer">
                 <FaLinkedinIn size={20} />
@@ -85,6 +82,9 @@ const Footer: React.FC = () => {
               </li>
               <li>
                 <Link to="/services/wellness-assessment" className="text-neutral-300 hover:text-white transition-colors">Wellness Assessment</Link>
+              </li>
+              <li>
+                <Link to="/services/pilates" className="text-neutral-300 hover:text-white transition-colors">Pilates</Link>
               </li>
             </ul>
           </div>
