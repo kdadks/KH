@@ -125,7 +125,8 @@ const generateICS = (data, isRescheduled = false) => {
   const sequenceNumber = isRescheduled ? 1 : 0;
   
   // Enhanced description for rescheduled appointments
-  let description = `${data.service_name} appointment at KH Therapy\\nBooking Reference: ${data.booking_reference}`;
+  const visitTypeLabel = data.visit_type === 'clinic' ? '🏥 Clinic' : data.visit_type === 'home' ? '🏠 Home' : data.visit_type === 'online' ? '💻 Online' : '🏥 Clinic';
+  let description = `${visitTypeLabel} - ${data.service_name} appointment at KH Therapy\\nBooking Reference: ${data.booking_reference}`;
   
   if (isRescheduled && data.old_appointment_date && data.old_appointment_time) {
     description += `\\nRescheduled from: ${data.old_appointment_date} at ${data.old_appointment_time}`;
@@ -478,6 +479,7 @@ const getEmailTemplate = (type, data) => {
                 <p><strong>Amount:</strong> €${escapeHtmlEntities(data.payment_amount)}</p>
                 <p><strong>Date:</strong> ${data.payment_date}</p>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name || 'Therapy Session')}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Status:</strong> <span class="success-icon">✅</span> Completed</p>
               </div>
               
@@ -633,6 +635,7 @@ const getEmailTemplate = (type, data) => {
                 <p><strong>Amount:</strong> €${escapeHtmlEntities(data.amount)}</p>
                 <p><strong>Due Date:</strong> ${data.due_date}</p>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name || 'Therapy Session')}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
               </div>
               
               <div class="payment-instructions">
@@ -703,6 +706,7 @@ const getEmailTemplate = (type, data) => {
               <div class="details">
                 <h3>📅 Appointment Details</h3>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
@@ -1029,6 +1033,7 @@ const getEmailTemplate = (type, data) => {
               <div class="details">
                 <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
@@ -1086,6 +1091,7 @@ const getEmailTemplate = (type, data) => {
               <div class="details">
                 <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${escapeHtmlEntities(data.booking_reference)}</p>
@@ -1162,11 +1168,12 @@ const getEmailTemplate = (type, data) => {
               <div class="details">
                 <h3>📅 Booking Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${data.booking_reference}</p>
                 ${data.therapist_name ? `<p><strong>Therapist:</strong> ${data.therapist_name}</p>` : ''}
-                ${data.clinic_address ? `<p><strong>Location:</strong> ${data.clinic_address}</p>` : ''}
+                ${(data.visit_type !== 'online' && data.clinic_address) ? `<p><strong>${data.visit_type === 'home' ? 'Visit Address' : 'Location'}:</strong> ${data.clinic_address}</p>` : ''}
               </div>
               
               <div class="highlight">
@@ -1549,6 +1556,7 @@ const getEmailTemplate = (type, data) => {
               <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
                 <h3>📅 Cancelled Appointment Details</h3>
                 <p><strong>Service:</strong> ${data.service_name}</p>
+                <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                 <p><strong>Original Date:</strong> ${data.appointment_date}</p>
                 <p><strong>Original Time:</strong> ${data.appointment_time}</p>
                 <p><strong>Reference:</strong> ${data.booking_reference}</p>
@@ -1623,6 +1631,7 @@ const getEmailTemplate = (type, data) => {
                 <div class="details" style="background-color: #fef2f2; border-left: 4px solid #ef4444;">
                   <h3>❌ Previous Appointment (Cancelled)</h3>
                   <p><strong>Service:</strong> ${escapeHtmlEntities(data.service_name)}</p>
+                  <p><strong>Visit Type:</strong> ${data.visit_type === 'clinic' ? '🏥 Clinic Visit' : data.visit_type === 'home' ? '🏠 Home Visit' : data.visit_type === 'online' ? '💻 Online Session' : '🏥 Clinic Visit'}</p>
                   <p><strong>Date:</strong> ${data.old_appointment_date}</p>
                   <p><strong>Time:</strong> ${data.old_appointment_time}</p>
                   <p><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">CANCELLED</span></p>

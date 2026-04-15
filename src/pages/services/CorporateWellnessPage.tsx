@@ -108,7 +108,7 @@ const CorporateWellnessPage: React.FC = () => {
                 </h1>
                 <p className="text-xl text-secondary-100 mb-8 leading-relaxed">
                   A healthy team is a productive team. I offer corporate Pilates and movement sessions designed
-                  to help employees feel better physically and mentally — leading to improved focus, reduced
+                  to help employees feel better physically and mentally leading to improved focus, reduced
                   discomfort, and a more positive work environment.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -172,9 +172,9 @@ const CorporateWellnessPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="/Kelly Pic2.jpeg"
+                  src="/Corp.webp"
                   alt="Corporate wellness and workplace Pilates sessions with Kelly"
-                  className="rounded-lg shadow-2xl w-full h-[400px] object-cover object-top"
+                  className="rounded-lg shadow-2xl w-full h-[400px] object-contain object-center"
                 />
                 {/* Stats badge */}
                 <div className="absolute -bottom-4 -left-4 bg-white text-neutral-800 rounded-xl shadow-xl p-5 max-w-[200px]">

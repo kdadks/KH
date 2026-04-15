@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Layers, CheckCircle, ArrowRight, Monitor, RotateCcw, Users } from 'lucide-react';
+import { Layers, CheckCircle, ArrowRight, Monitor, RotateCcw } from 'lucide-react';
 import Container from '../../components/shared/Container';
 import Button from '../../components/shared/Button';
 import SEOHead from '../../components/utils/SEOHead';
@@ -136,7 +136,7 @@ const PilatesPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="/Kelly Pic2.jpeg"
+                  src="/pilates1.webp"
                   alt="Kelly — Qualified Physical Therapist and Pilates instructor"
                   className="rounded-lg shadow-2xl w-full h-[400px] object-cover object-top"
                 />
@@ -183,7 +183,7 @@ const PilatesPage: React.FC = () => {
                 className="relative"
               >
                 <img
-                  src="/Kelly Pic3.jpeg"
+                  src="/pilates2.webp"
                   alt="Pilates session with Kelly"
                   className="rounded-lg shadow-lg w-full h-[400px] object-cover object-top"
                 />
@@ -302,21 +302,16 @@ const PilatesPage: React.FC = () => {
                 viewport={{ once: true }}
                 className="grid grid-cols-2 gap-4"
               >
-                <div className="bg-white p-6 rounded-xl shadow-md text-center">
-                  <Users className="w-10 h-10 text-primary-600 mx-auto mb-3" />
-                  <p className="font-bold text-2xl text-neutral-800">All Levels</p>
-                  <p className="text-neutral-600 text-sm mt-1">Beginner to advanced</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-md text-center">
-                  <RotateCcw className="w-10 h-10 text-primary-600 mx-auto mb-3" />
-                  <p className="font-bold text-2xl text-neutral-800">Mat &amp; Reformer</p>
-                  <p className="text-neutral-600 text-sm mt-1">Two modalities available</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-md text-center col-span-2">
-                  <Monitor className="w-10 h-10 text-primary-600 mx-auto mb-3" />
-                  <p className="font-bold text-2xl text-neutral-800">Online &amp; In-Person</p>
-                  <p className="text-neutral-600 text-sm mt-1">Flexible to fit your lifestyle</p>
-                </div>
+                <img
+                  src="/pilates3.webp"
+                  alt="Pilates class in session"
+                  className="rounded-xl shadow-md w-full h-[220px] object-cover object-top"
+                />
+                <img
+                  src="/pilates4.webp"
+                  alt="Reformer Pilates with Kelly"
+                  className="rounded-xl shadow-md w-full h-[220px] object-cover object-top"
+                />
               </motion.div>
             </div>
           </Container>
