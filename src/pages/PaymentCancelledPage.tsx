@@ -22,7 +22,7 @@ const PaymentCancelledPage: React.FC = () => {
     
     // Auto-redirect to account/payments page after 5 seconds
     const redirectTimer = setTimeout(() => {
-      window.location.href = '/my-account?tab=payments';
+      window.location.href = '/my-account/payments';
     }, 5000);
     
     return () => clearTimeout(redirectTimer);
@@ -125,7 +125,7 @@ const PaymentCancelledPage: React.FC = () => {
               Try Payment Again
             </button>
             <Link
-              to="/my-account"
+              to="/my-account/payments"
               className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center"
             >
               <Home className="w-4 h-4 mr-2" />

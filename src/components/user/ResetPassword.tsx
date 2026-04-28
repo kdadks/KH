@@ -124,7 +124,7 @@ const ResetPassword: React.FC = () => {
         
         // Redirect to login after 3 seconds
         setTimeout(() => {
-          navigate('/my-account', { 
+          navigate('/my-account/dashboard', { 
             replace: true, 
             state: { fromPasswordReset: true } 
           });

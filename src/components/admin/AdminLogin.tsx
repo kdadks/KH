@@ -23,7 +23,7 @@ const AdminLogin: React.FC = () => {
       if (error) {
         setError(error.message);
       } else {
-        navigate('/admin');
+        navigate('/admin/dashboard');
       }
     } catch {
       setError('An unexpected error occurred');

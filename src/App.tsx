@@ -143,7 +143,7 @@ function App() {
               <Route path="testimonials" element={<TestimonialsPage />} />
               <Route path="booking" element={<BookingPage />} />
               <Route path="contact" element={<ContactPage />} />
-              <Route path="my-account" element={<UserPortal />} />
+              <Route path="my-account/*" element={<UserPortal />} />
               <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
               <Route path="terms-of-service" element={<TermsOfServicePage />} />
               <Route path="cookie-policy" element={<CookiePolicyPage />} />

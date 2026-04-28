@@ -260,8 +260,52 @@ export const changeUserPassword = async (
 
 /**
  * Get user invoices with real data filtering
+ * Uses a Netlify serverless function with service role key to bypass RLS,
+ * since the app uses custom authentication (not Supabase Auth) and 
+ * auth.uid() returns NULL for customer portal users.
  */
 export const getUserInvoices = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
+  try {
+    const siteUrl = typeof window !== 'undefined' 
+      ? (import.meta.env.VITE_SITE_URL || window.location.origin)
+      : '';
+    const functionUrl = `${siteUrl}/.netlify/functions/get-customer-invoices`;
+    
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ customerId: parseInt(customerId) })
+    });
+
+    if (!response.ok) {
+      console.error('get-customer-invoices function failed with status:', response.status);
+      // Fall back to direct Supabase query (works when RLS is not enabled)
+      return await getUserInvoicesDirect(customerId);
+    }
+
+    const result = await response.json();
+    
+    if (result.success) {
+      return { invoices: result.invoices || [] };
+    } else {
+      console.error('get-customer-invoices function returned error:', result.error);
+      // Fall back to direct Supabase query
+      return await getUserInvoicesDirect(customerId);
+    }
+  } catch (error) {
+    console.error('Exception in getUserInvoices (Netlify function):', error);
+    // Fall back to direct Supabase query (for local dev or if function unavailable)
+    return await getUserInvoicesDirect(customerId);
+  }
+};
+
+/**
+ * Direct Supabase query fallback for getUserInvoices
+ * Used when Netlify function is unavailable (e.g., local development)
+ */
+const getUserInvoicesDirect = async (customerId: string): Promise<{ invoices: UserInvoice[]; error?: string }> => {
   try {
     // Get all invoices for this customer with their items
     const { data: invoicesData, error: invoicesError } = await supabase
@@ -351,7 +395,7 @@ export const getUserInvoices = async (customerId: string): Promise<{ invoices: U
 
     return { invoices };
   } catch (error) {
-    console.error('Exception in getUserInvoices:', error);
+    console.error('Exception in getUserInvoicesDirect:', error);
     return { invoices: [], error: 'Unexpected error occurred' };
   }
 };
@@ -377,10 +421,34 @@ export const getUserPaymentHistory = async (customerId: string): Promise<{ payme
 
 /**
  * Get user bookings with real data filtering
+ * Uses Netlify function to bypass RLS for custom-auth users.
  */
 export const getUserBookings = async (customerId: string): Promise<{ bookings: UserBooking[]; error?: string }> => {
   try {
-    // Get real bookings for this customer - show pending and confirmed bookings
+    // Try Netlify function first (bypasses RLS)
+    const siteUrl = typeof window !== 'undefined'
+      ? (import.meta.env.VITE_SITE_URL || window.location.origin)
+      : '';
+    const functionUrl = `${siteUrl}/.netlify/functions/get-customer-bookings`;
+
+    try {
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds: [parseInt(customerId)] })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          return { bookings: result.bookings || [] };
+        }
+      }
+    } catch {
+      // Function unavailable, fall through to direct query
+    }
+
+    // Fallback: direct Supabase query (works when RLS is not enforced)
     const { data: bookings, error } = await supabase
       .from('bookings')
       .select('*')
@@ -401,7 +469,41 @@ export const getUserBookings = async (customerId: string): Promise<{ bookings: U
 };
 
 /**
+ * Helper: Fetch dashboard data via Netlify serverless function (bypasses RLS)
+ * Returns raw invoices, bookings, payments, paymentRequests arrays
+ */
+const fetchDashboardDataViaFunction = async (customerIds: number[]): Promise<{
+  success: boolean;
+  invoices: any[];
+  bookings: any[];
+  payments: any[];
+  paymentRequests: any[];
+} | null> => {
+  try {
+    const siteUrl = typeof window !== 'undefined'
+      ? (import.meta.env.VITE_SITE_URL || window.location.origin)
+      : '';
+    const functionUrl = `${siteUrl}/.netlify/functions/get-customer-dashboard`;
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerIds })
+    });
+
+    if (!response.ok) return null;
+
+    const result = await response.json();
+    if (result.success) return result;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Get dashboard data for a customer
+ * Uses Netlify function to bypass RLS for custom-auth users, with fallback to direct queries.
  */
 export const getUserDashboardData = async (customerId: string): Promise<{ data: UserDashboardData | null; error?: string }> => {
   try {
@@ -411,49 +513,62 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
       return { data: null, error: customerError || 'Customer not found' };
     }
 
-    // Get real invoices for this customer - show both sent and paid invoices
-    const { data: invoicesData } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('customer_id', parseInt(customerId))
-      .in('status', ['sent', 'paid']) // Include both sent and paid invoices
-      .order('invoice_date', { ascending: false })
-      .limit(3); // Limit to 3 most recent for dashboard
+    // Try fetching via Netlify function first (bypasses RLS)
+    const serverData = await fetchDashboardDataViaFunction([parseInt(customerId)]);
 
-    // Add overdue calculation to invoices
-    const invoices = invoicesData?.map(invoice => ({
-      ...invoice,
-      is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date()
-    }));
+    let invoices: any[];
+    let bookings: any[];
+    let payments: any[];
+    let paymentRequests: any[];
 
-    // Get real bookings for this customer - show pending and confirmed bookings
-    const { data: bookings } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('customer_id', parseInt(customerId))
-      .in('status', ['pending', 'confirmed'])
-      .order('booking_date', { ascending: false })
-      .limit(5);
+    if (serverData) {
+      // Use server data
+      invoices = serverData.invoices || [];
+      bookings = serverData.bookings || [];
+      payments = serverData.payments || [];
+      paymentRequests = serverData.paymentRequests || [];
+    } else {
+      // Fallback to direct Supabase queries (works when RLS is not enforced)
+      const { data: invoicesData } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('customer_id', parseInt(customerId))
+        .in('status', ['sent', 'paid'])
+        .order('invoice_date', { ascending: false });
 
-    // Get real payments for this customer
-    const payments = await getCustomerPayments(parseInt(customerId));
-    const recentPayments = payments.slice(0, 3); // Show last 3 payments
+      invoices = invoicesData?.map(invoice => ({
+        ...invoice,
+        is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date()
+      })) || [];
 
-    // Get payment requests for this customer
-    const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
-    const paymentRequests = await getCustomerPaymentRequests(parseInt(customerId));
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('customer_id', parseInt(customerId))
+        .in('status', ['pending', 'confirmed'])
+        .order('booking_date', { ascending: false })
+        .limit(5);
+
+      bookings = bookingsData || [];
+      payments = await getCustomerPayments(parseInt(customerId));
+
+      const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
+      paymentRequests = await getCustomerPaymentRequests(parseInt(customerId));
+    }
+
+    const recentPayments = payments.slice(0, 3);
 
     // Calculate stats from real data - include both invoices and payment requests
-    const outstandingInvoices = invoices?.reduce((sum, inv) => 
+    const outstandingInvoices = invoices?.reduce((sum: number, inv: any) => 
       inv.status === 'sent' ? sum + (inv.total_amount || 0) : sum, 0) || 0;
-    const outstandingPaymentRequests = paymentRequests?.reduce((sum, req) => 
+    const outstandingPaymentRequests = paymentRequests?.reduce((sum: number, req: any) => 
       (req.status === 'pending' || req.status === 'sent') ? sum + (req.amount || 0) : sum, 0) || 0;
     const totalOutstanding = outstandingInvoices + outstandingPaymentRequests;
     
-    const overdueInvoices = invoices?.filter(inv => 
+    const overdueInvoices = invoices?.filter((inv: any) => 
       inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
     ).length || 0;
-    const overduePaymentRequests = paymentRequests?.filter(req => 
+    const overduePaymentRequests = paymentRequests?.filter((req: any) => 
       (req.status === 'pending' || req.status === 'sent') &&
       req.payment_due_date && 
       new Date(req.payment_due_date) < new Date()
@@ -461,13 +576,13 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
     const overdueCount = overdueInvoices + overduePaymentRequests;
 
     // Calculate total paid from actual payment records
-    const totalPaid = payments.reduce((sum, payment) => 
+    const totalPaid = payments.reduce((sum: number, payment: any) => 
       payment.status === 'paid' ? sum + payment.amount : sum, 0);
 
     const dashboardData: UserDashboardData = {
       customer: customer,
-      recentInvoices: invoices || [],
-      recentPayments: recentPayments.map(payment => ({
+      recentInvoices: invoices.slice(0, 3) || [],
+      recentPayments: recentPayments.map((payment: any) => ({
         id: payment.id,
         invoice_id: payment.invoice_id || 0,
         customer_id: payment.customer_id,
@@ -483,11 +598,11 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
         sumup_checkout_id: payment.sumup_checkout_id || undefined,
         sumup_payment_type: payment.sumup_payment_type || undefined
       })),
-      overdueInvoices: invoices?.filter(inv => 
+      overdueInvoices: invoices?.filter((inv: any) => 
         inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
       ) || [],
       totalOutstanding: totalOutstanding,
-      upcomingBookings: bookings?.filter(booking =>
+      upcomingBookings: bookings?.filter((booking: any) =>
         (booking.status === 'confirmed' || booking.status === 'pending') && new Date(booking.booking_date) > new Date()
       ) || [],
       stats: {
@@ -507,6 +622,7 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
 
 /**
  * Get consolidated dashboard data for multiple patients
+ * Uses Netlify function to bypass RLS for custom-auth users, with fallback to direct queries.
  */
 export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Promise<{ data: UserDashboardData | null; error?: string }> => {
   try {
@@ -516,63 +632,89 @@ export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Pr
 
     // Use the first patient as the primary customer for display purposes
     const primaryCustomer = patients[0];
-    
-    // Collect data from all patients
+    const customerIds = patients.map(p => p.id);
+
+    // Try fetching via Netlify function first (bypasses RLS)
+    const serverData = await fetchDashboardDataViaFunction(customerIds);
+
     let allInvoices: any[] = [];
     let allBookings: any[] = [];
     let allPayments: any[] = [];
     let allPaymentRequests: any[] = [];
 
-    for (const patient of patients) {
-      // Get invoices for this patient
-      const { data: invoicesData } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('customer_id', patient.id)
-        .in('status', ['sent', 'paid'])
-        .order('invoice_date', { ascending: false });
+    if (serverData) {
+      // Use server data - add patient_name to each record
+      const patientMap = new Map(patients.map(p => [p.id, `${p.first_name} ${p.last_name}`]));
 
-      if (invoicesData) {
-        const invoicesWithOverdue = invoicesData.map(invoice => ({
-          ...invoice,
-          is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date(),
-          patient_name: `${patient.first_name} ${patient.last_name}` // Add patient name for reference
-        }));
-        allInvoices = [...allInvoices, ...invoicesWithOverdue];
-      }
+      allInvoices = (serverData.invoices || []).map((inv: any) => ({
+        ...inv,
+        is_overdue: inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date(),
+        patient_name: patientMap.get(inv.customer_id) || 'Unknown'
+      }));
 
-      // Get bookings for this patient
-      const { data: bookingsData } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('customer_id', patient.id)
-        .in('status', ['pending', 'confirmed'])
-        .order('booking_date', { ascending: false });
+      allBookings = (serverData.bookings || []).map((b: any) => ({
+        ...b,
+        patient_name: patientMap.get(b.customer_id) || 'Unknown'
+      }));
 
-      if (bookingsData) {
-        const bookingsWithPatient = bookingsData.map(booking => ({
-          ...booking,
+      allPayments = (serverData.payments || []).map((p: any) => ({
+        ...p,
+        patient_name: patientMap.get(p.customer_id) || 'Unknown'
+      }));
+
+      allPaymentRequests = (serverData.paymentRequests || []).map((r: any) => ({
+        ...r,
+        patient_name: patientMap.get(r.customer_id) || 'Unknown'
+      }));
+    } else {
+      // Fallback: direct Supabase queries (for local dev)
+      for (const patient of patients) {
+        const { data: invoicesData } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('customer_id', patient.id)
+          .in('status', ['sent', 'paid'])
+          .order('invoice_date', { ascending: false });
+
+        if (invoicesData) {
+          const invoicesWithOverdue = invoicesData.map(invoice => ({
+            ...invoice,
+            is_overdue: invoice.status === 'sent' && invoice.due_date && new Date(invoice.due_date) < new Date(),
+            patient_name: `${patient.first_name} ${patient.last_name}`
+          }));
+          allInvoices = [...allInvoices, ...invoicesWithOverdue];
+        }
+
+        const { data: bookingsData } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('customer_id', patient.id)
+          .in('status', ['pending', 'confirmed'])
+          .order('booking_date', { ascending: false });
+
+        if (bookingsData) {
+          const bookingsWithPatient = bookingsData.map(booking => ({
+            ...booking,
+            patient_name: `${patient.first_name} ${patient.last_name}`
+          }));
+          allBookings = [...allBookings, ...bookingsWithPatient];
+        }
+
+        const payments = await getCustomerPayments(patient.id);
+        const paymentsWithPatient = payments.map(payment => ({
+          ...payment,
           patient_name: `${patient.first_name} ${patient.last_name}`
         }));
-        allBookings = [...allBookings, ...bookingsWithPatient];
+        allPayments = [...allPayments, ...paymentsWithPatient];
+
+        const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
+        const paymentRequests = await getCustomerPaymentRequests(patient.id);
+        const paymentRequestsWithPatient = paymentRequests.map(req => ({
+          ...req,
+          patient_name: `${patient.first_name} ${patient.last_name}`
+        }));
+        allPaymentRequests = [...allPaymentRequests, ...paymentRequestsWithPatient];
       }
-
-      // Get payments for this patient
-      const payments = await getCustomerPayments(patient.id);
-      const paymentsWithPatient = payments.map(payment => ({
-        ...payment,
-        patient_name: `${patient.first_name} ${patient.last_name}`
-      }));
-      allPayments = [...allPayments, ...paymentsWithPatient];
-
-      // Get payment requests for this patient
-      const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
-      const paymentRequests = await getCustomerPaymentRequests(patient.id);
-      const paymentRequestsWithPatient = paymentRequests.map(req => ({
-        ...req,
-        patient_name: `${patient.first_name} ${patient.last_name}`
-      }));
-      allPaymentRequests = [...allPaymentRequests, ...paymentRequestsWithPatient];
     }
 
     // Sort all data by date (most recent first)
@@ -602,7 +744,7 @@ export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Pr
 
     const dashboardData: UserDashboardData = {
       customer: primaryCustomer,
-      recentInvoices: allInvoices.slice(0, 5), // Show top 5 most recent
+      recentInvoices: allInvoices.slice(0, 5),
       recentPayments: allPayments.slice(0, 5).map(payment => ({
         id: payment.id,
         invoice_id: payment.invoice_id || 0,
@@ -618,7 +760,7 @@ export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Pr
         sumup_transaction_id: payment.sumup_transaction_id || undefined,
         sumup_checkout_id: payment.sumup_checkout_id || undefined,
         sumup_payment_type: payment.sumup_payment_type || undefined,
-        patient_name: payment.patient_name // Add patient name
+        patient_name: payment.patient_name
       })),
       overdueInvoices: allInvoices.filter(inv => 
         inv.status === 'sent' && inv.due_date && new Date(inv.due_date) < new Date()
@@ -626,7 +768,7 @@ export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Pr
       totalOutstanding: totalOutstanding,
       upcomingBookings: allBookings.filter(booking =>
         (booking.status === 'confirmed' || booking.status === 'pending') && new Date(booking.booking_date) > new Date()
-      ).slice(0, 5), // Show top 5 upcoming
+      ).slice(0, 5),
       stats: {
         totalInvoices: allInvoices.length,
         totalPaid: totalPaid,

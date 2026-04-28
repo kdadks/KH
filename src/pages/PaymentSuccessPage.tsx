@@ -177,7 +177,7 @@ const PaymentSuccessPage: React.FC = () => {
           
           // Auto-redirect to account page after 2 seconds
           setTimeout(() => {
-            window.location.href = '/my-account?tab=payments&highlight=success';
+            window.location.href = '/my-account/payments';
           }, 2000);
           
           return;
@@ -294,7 +294,7 @@ const PaymentSuccessPage: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
             <Link
-              to="/my-account"
+              to="/my-account/dashboard"
               className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
             >
               <Home className="w-4 h-4 mr-2" />

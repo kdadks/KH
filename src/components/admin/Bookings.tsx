@@ -189,6 +189,7 @@ export const Bookings: React.FC<BookingsProps> = ({
 
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
   const [services, setServices] = useState<ServiceType[]>([]);
+  const [allAdminServices, setAllAdminServices] = useState<ServiceType[]>([]); // All transformed services (unfiltered)
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
@@ -2076,7 +2077,7 @@ export const Bookings: React.FC<BookingsProps> = ({
   };
 
   // New booking functions
-  const fetchServices = async () => {
+  const fetchServices = async (visitTypeFilter?: 'clinic' | 'home' | 'online') => {
     try {
       setLoadingServices(true);
       const { data, error } = await supabase
@@ -2087,25 +2088,28 @@ export const Bookings: React.FC<BookingsProps> = ({
 
       if (error) throw error;
 
-      // Transform services to include pricing options
+      // Transform services to include pricing options AND preserve visit_type
       const transformedServices: ServiceType[] = [];
       data?.forEach((service) => {
         const hasInHour = service.in_hour_price !== null && service.in_hour_price !== undefined;
         const hasOutOfHour = service.out_of_hour_price !== null && service.out_of_hour_price !== undefined;
         const hasMainPrice = service.price !== null && service.price !== undefined;
+        const serviceVisitType = service.visit_type || 'clinic';
 
         if (hasInHour && hasOutOfHour) {
           transformedServices.push({
             ...service,
             id: `${service.id}-in`,
             displayName: `${service.name} - In Hour (${formatPrice(service.in_hour_price)})`,
-            priceType: 'in-hour'
+            priceType: 'in-hour',
+            visit_type: serviceVisitType
           });
           transformedServices.push({
             ...service,
             id: `${service.id}-out`,
             displayName: `${service.name} - Out of Hour (${formatPrice(service.out_of_hour_price)})`,
-            priceType: 'out-of-hour'
+            priceType: 'out-of-hour',
+            visit_type: serviceVisitType
           });
         } else if (hasInHour || hasOutOfHour || hasMainPrice) {
           let displayName = service.name;
@@ -2125,12 +2129,19 @@ export const Bookings: React.FC<BookingsProps> = ({
           transformedServices.push({
             ...service,
             displayName,
-            priceType
+            priceType,
+            visit_type: serviceVisitType
           });
         }
       });
 
-      setServices(transformedServices);
+      // Store all transformed services (unfiltered)
+      setAllAdminServices(transformedServices);
+
+      // Filter by visit type
+      const activeVisitType = visitTypeFilter || newBookingData.visit_type || 'clinic';
+      const filtered = transformedServices.filter(s => s.visit_type === activeVisitType);
+      setServices(filtered);
     } catch (error) {
       console.error('Error fetching services:', error);
     } finally {
@@ -2358,6 +2369,24 @@ export const Bookings: React.FC<BookingsProps> = ({
       [field]: error
     }));
 
+    // When visit_type changes, re-filter services and reset service + time
+    if (field === 'visit_type') {
+      const newVisitType = value as 'clinic' | 'home' | 'online';
+      const filtered = allAdminServices.filter(s => s.visit_type === newVisitType);
+      setServices(filtered);
+      // Reset service and time since available services changed
+      setNewBookingData(prev => ({
+        ...prev,
+        visit_type: newVisitType,
+        service: '',
+        time: '',
+        customStartTime: '',
+        customEndTime: ''
+      }));
+      setTimeSlots([]);
+      return; // Early return since we already updated state
+    }
+
     setNewBookingData(prev => {
       const updated = { ...prev, [field]: value };
 
@@ -2365,6 +2394,14 @@ export const Bookings: React.FC<BookingsProps> = ({
       if (field === 'service' || field === 'date') {
         const serviceName = field === 'service' ? value : updated.service;
         const date = field === 'date' ? value : updated.date;
+        
+        // Reset time when service changes
+        if (field === 'service') {
+          updated.time = '';
+          updated.customStartTime = '';
+          updated.customEndTime = '';
+        }
+        
         if (serviceName && date) {
           // Find the service object to get the ID
           const selectedService = services.find(s => s.displayName === serviceName);
@@ -4047,6 +4084,25 @@ export const Bookings: React.FC<BookingsProps> = ({
                 </div>
               </div>
 
+              {/* Visit Type Selection - must be before Service so services filter by visit type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Visit Type *</label>
+                <select
+                  value={newBookingData.visit_type}
+                  onChange={(e) => handleNewBookingInputChange('visit_type', e.target.value as 'clinic' | 'home' | 'online')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                >
+                  <option value="clinic">🏥 Clinic Visit</option>
+                  <option value="home">🏠 Home Visit</option>
+                  <option value="online">💻 Online Session</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {newBookingData.visit_type === 'clinic' && 'Session at KH Therapy Clinic, Dublin'}
+                  {newBookingData.visit_type === 'home' && 'Therapist will visit customer\'s location'}
+                  {newBookingData.visit_type === 'online' && 'Virtual session via video call'}
+                </p>
+              </div>
+
               {/* Service and Appointment Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -4066,6 +4122,9 @@ export const Bookings: React.FC<BookingsProps> = ({
                   </select>
                   {loadingServices && (
                     <p className="text-xs text-gray-500 mt-1">Loading services...</p>
+                  )}
+                  {!loadingServices && services.length === 0 && (
+                    <p className="text-xs text-orange-600 mt-1">No services available for selected visit type.</p>
                   )}
                 </div>
                 <div>
@@ -4089,7 +4148,7 @@ export const Bookings: React.FC<BookingsProps> = ({
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     disabled={loadingTimeSlots || !newBookingData.service || !newBookingData.date}
                   >
-                    <option value="">Select a time slot</option>
+                    <option value="">{!newBookingData.service ? 'Select a service first' : !newBookingData.date ? 'Select a date first' : 'Select a time slot'}</option>
                     {timeSlots.map((slot) => {
                       const [timeRange, displayRange] = slot.split('|');
                       return (
@@ -4123,25 +4182,6 @@ export const Bookings: React.FC<BookingsProps> = ({
                     <option value="confirmed">Confirmed</option>
                   </select>
                 </div>
-              </div>
-
-              {/* Visit Type Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Visit Type</label>
-                <select
-                  value={newBookingData.visit_type}
-                  onChange={(e) => handleNewBookingInputChange('visit_type', e.target.value as 'clinic' | 'home' | 'online')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="clinic">🏥 Clinic Visit</option>
-                  <option value="home">🏠 Home Visit</option>
-                  <option value="online">💻 Online Session</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  {newBookingData.visit_type === 'clinic' && 'Session at KH Therapy Clinic, Dublin'}
-                  {newBookingData.visit_type === 'home' && 'Therapist will visit customer\'s location'}
-                  {newBookingData.visit_type === 'online' && 'Virtual session via video call'}
-                </p>
               </div>
 
               {/* Custom Time Fields - Show when "Custom Time" is selected */}

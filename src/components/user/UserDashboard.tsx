@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserDashboardData, UserPortalTab, UserCustomer } from '../../types/userManagement';
 import { 
   AlertCircle, 
@@ -45,6 +46,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   viewMode = 'individual',
   onViewModeChange
 }) => {
+  const navigate = useNavigate();
   const { showSuccess } = useToast();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequestWithCustomer[]>([]);
   const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(true);
@@ -87,7 +89,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
     localStorage.setItem('highlightPaymentRequest', requestId.toString());
     localStorage.setItem('autoOpenPaymentModal', 'true');
     showSuccess('Navigating to Payments', 'Opening your payment request...');
-    onTabChange('payments');
+    navigate('/my-account/payments');
   };
 
   if (!data) {
@@ -217,7 +219,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                 Please pay your outstanding amounts to avoid service interruption.
               </p>
               <button
-                onClick={() => onTabChange('invoices')}
+                onClick={() => navigate('/my-account/invoices')}
                 className="text-sm text-red-700 underline hover:text-red-800 mt-2"
               >
                 View outstanding payments →
@@ -271,7 +273,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                           Pay Now
                         </button>
                         <button
-                          onClick={() => onTabChange('payments')}
+                          onClick={() => navigate('/my-account/payments')}
                           className="text-sm text-blue-600 underline hover:text-blue-800"
                         >
                           View all payment requests →
@@ -299,7 +301,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">Recent Invoices</h3>
               <button
-                onClick={() => onTabChange('invoices')}
+                onClick={() => navigate('/my-account/invoices')}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
                 View all →
@@ -350,7 +352,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">Recent Payments</h3>
               <button
-                onClick={() => onTabChange('payments')}
+                onClick={() => navigate('/my-account/payments')}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
                 View all →
@@ -398,7 +400,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">Upcoming Appointments</h3>
               <button
-                onClick={() => onTabChange('bookings')}
+                onClick={() => navigate('/my-account/bookings')}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
                 View all →
@@ -473,7 +475,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               </button>
               
               <button
-                onClick={() => onTabChange('invoices')}
+                onClick={() => navigate('/my-account/invoices')}
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <div className="flex items-center">
@@ -484,7 +486,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               </button>
               
               <button
-                onClick={() => onTabChange('payments')}
+                onClick={() => navigate('/my-account/payments')}
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <div className="flex items-center">
@@ -495,7 +497,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               </button>
               
               <button
-                onClick={() => onTabChange('profile')}
+                onClick={() => navigate('/my-account/profile')}
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <div className="flex items-center">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useUserAuth } from '../contexts/UserAuthContext';
 import { getUserDashboardData, getConsolidatedDashboardData } from '../utils/userManagementUtils';
 import { UserDashboardData, UserPortalTab } from '../types/userManagement';
@@ -22,6 +23,25 @@ import {
   Home
 } from 'lucide-react';
 
+/**
+ * Map route segments to tab IDs and vice versa
+ */
+const TAB_TO_ROUTE: Record<UserPortalTab, string> = {
+  dashboard: 'dashboard',
+  profile: 'profile',
+  invoices: 'invoices',
+  payments: 'payments',
+  bookings: 'bookings'
+};
+
+const ROUTE_TO_TAB: Record<string, UserPortalTab> = {
+  dashboard: 'dashboard',
+  profile: 'profile',
+  invoices: 'invoices',
+  payments: 'payments',
+  bookings: 'bookings'
+};
+
 const UserPortal: React.FC = () => {
   const { 
     user, 
@@ -36,10 +56,21 @@ const UserPortal: React.FC = () => {
     refreshPatients
   } = useUserAuth() as any; // TODO: Update type when UserAuthContext is extended
   const { showSuccess, showError, showInfo } = useToast();
-  const [activeTab, setActiveTab] = useState<UserPortalTab>('dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [dashboardData, setDashboardData] = useState<UserDashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'individual' | 'consolidated'>('individual');
+
+  // Derive active tab from the URL path
+  const getActiveTabFromPath = (): UserPortalTab => {
+    // Extract the segment after /my-account/
+    const pathParts = location.pathname.split('/');
+    const tabSegment = pathParts[pathParts.indexOf('my-account') + 1];
+    return ROUTE_TO_TAB[tabSegment] || 'dashboard';
+  };
+
+  const activeTab = getActiveTabFromPath();
 
   // Load dashboard data when user logs in
   useEffect(() => {
@@ -100,7 +131,7 @@ const UserPortal: React.FC = () => {
   // Listen for navigation events from child components
   useEffect(() => {
     const handleNavigateToInvoices = () => {
-      setActiveTab('invoices');
+      navigate('/my-account/invoices');
     };
 
     const handleRefreshDashboard = () => {
@@ -110,7 +141,7 @@ const UserPortal: React.FC = () => {
     const handleNavigateToDashboardForPayment = () => {
       // Add a brief delay to allow the booking modal to close properly
       setTimeout(() => {
-        setActiveTab('dashboard');
+        navigate('/my-account/dashboard');
         // Also refresh dashboard data to show the new payment request
         loadDashboardData();
         // Show a toast notification about the payment
@@ -127,7 +158,7 @@ const UserPortal: React.FC = () => {
       window.removeEventListener('refreshDashboard', handleRefreshDashboard as EventListener);
       window.removeEventListener('navigateToDashboardForPayment', handleNavigateToDashboardForPayment as EventListener);
     };
-  }, [loadDashboardData]);
+  }, [loadDashboardData, navigate]);
 
   const handleLogout = async () => {
     try {
@@ -140,9 +171,9 @@ const UserPortal: React.FC = () => {
   };
 
   const handleTabChange = (tab: UserPortalTab) => {
-    setActiveTab(tab);
+    navigate(`/my-account/${TAB_TO_ROUTE[tab]}`);
     
-    // Refresh dashboard data when returning to dashboard
+    // Refresh dashboard data when navigating to dashboard
     if (tab === 'dashboard' && user?.id) {
       loadDashboardData();
     }
@@ -194,11 +225,11 @@ const UserPortal: React.FC = () => {
   }
 
   const navigation = [
-    { id: 'dashboard' as UserPortalTab, name: 'Dashboard', icon: Home, description: 'Overview of your account' },
-    { id: 'profile' as UserPortalTab, name: 'Profile', icon: User, description: 'Update your personal information' },
-    { id: 'invoices' as UserPortalTab, name: 'Invoices', icon: FileText, description: 'View your invoices and bills' },
-    { id: 'payments' as UserPortalTab, name: 'Payments', icon: CreditCard, description: 'Payment history and outstanding amounts' },
-    { id: 'bookings' as UserPortalTab, name: 'Bookings', icon: Calendar, description: 'Your appointments and bookings' }
+    { id: 'dashboard' as UserPortalTab, name: 'Dashboard', icon: Home, description: 'Overview of your account', route: '/my-account/dashboard' },
+    { id: 'profile' as UserPortalTab, name: 'Profile', icon: User, description: 'Update your personal information', route: '/my-account/profile' },
+    { id: 'invoices' as UserPortalTab, name: 'Invoices', icon: FileText, description: 'View your invoices and bills', route: '/my-account/invoices' },
+    { id: 'payments' as UserPortalTab, name: 'Payments', icon: CreditCard, description: 'Payment history and outstanding amounts', route: '/my-account/payments' },
+    { id: 'bookings' as UserPortalTab, name: 'Bookings', icon: Calendar, description: 'Your appointments and bookings', route: '/my-account/bookings' }
   ];
 
   return (
@@ -275,8 +306,14 @@ const UserPortal: React.FC = () => {
                   
                   return (
                     <li key={item.id}>
-                      <button
-                        onClick={() => handleTabChange(item.id)}
+                      <Link
+                        to={item.route}
+                        onClick={() => {
+                          // Refresh dashboard data when navigating to dashboard
+                          if (item.id === 'dashboard' && user?.id) {
+                            loadDashboardData();
+                          }
+                        }}
                         className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                           isActive
                             ? 'bg-primary-50 text-primary-700 border border-primary-200'
@@ -290,7 +327,7 @@ const UserPortal: React.FC = () => {
                             {item.description}
                           </div>
                         </div>
-                      </button>
+                      </Link>
                     </li>
                   );
                 })}
@@ -337,8 +374,8 @@ const UserPortal: React.FC = () => {
               )}
 
               {!loading && (
-                <>
-                  {activeTab === 'dashboard' && (
+                <Routes>
+                  <Route path="dashboard" element={
                     <UserDashboard 
                       data={dashboardData} 
                       onRefresh={() => loadDashboardData()}
@@ -349,25 +386,28 @@ const UserPortal: React.FC = () => {
                       viewMode={viewMode}
                       onViewModeChange={handleViewModeChange}
                     />
-                  )}
-                  {activeTab === 'profile' && <UserProfile />}
-                  {activeTab === 'invoices' && <UserInvoices />}
-                  {activeTab === 'payments' && (
+                  } />
+                  <Route path="profile" element={<UserProfile />} />
+                  <Route path="invoices" element={<UserInvoices />} />
+                  <Route path="payments" element={
                     <UserPayments 
                       onDataChange={loadDashboardData}
                       allPatients={allPatients}
                       activePatient={activePatient}
                       isMultiPatient={isMultiPatient}
                     />
-                  )}
-                  {activeTab === 'bookings' && (
+                  } />
+                  <Route path="bookings" element={
                     <UserBookings
                       allPatients={allPatients}
                       activePatient={activePatient}
                       isMultiPatient={isMultiPatient}
                     />
-                  )}
-                </>
+                  } />
+                  {/* Default redirect: /my-account → /my-account/dashboard */}
+                  <Route index element={<Navigate to="/my-account/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/my-account/dashboard" replace />} />
+                </Routes>
               )}
             </div>
           </main>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -109,6 +109,13 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(25);
 
+  // Customer search/autocomplete state
+  const [customerSearchText, setCustomerSearchText] = useState('');
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const [highlightedCustomerIndex, setHighlightedCustomerIndex] = useState(-1);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+  const customerInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (propInvoices && propCustomers && propServices) {
       // Use provided data from parent
@@ -176,6 +183,75 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices]);
 
+  // Click-outside handler for customer search dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
+        setIsCustomerDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filtered customers based on search text
+  const filteredCustomers = React.useMemo(() => {
+    if (!customerSearchText.trim()) return customers;
+    const query = customerSearchText.toLowerCase().trim();
+    return customers.filter(customer => {
+      const displayName = getCustomerDisplayName(customer).toLowerCase();
+      const email = (customer.email || '').toLowerCase();
+      const phone = (customer.phone || '').toLowerCase();
+      return displayName.includes(query) || email.includes(query) || phone.includes(query);
+    });
+  }, [customers, customerSearchText]);
+
+  // Reset highlighted index when filtered list changes
+  useEffect(() => {
+    setHighlightedCustomerIndex(-1);
+  }, [filteredCustomers.length]);
+
+  // Customer selection handler for the searchable dropdown
+  const handleSelectCustomer = (customer: Customer) => {
+    setCustomerSearchText(getCustomerDisplayName(customer) + ' - ' + customer.email);
+    setIsCustomerDropdownOpen(false);
+    setHighlightedCustomerIndex(-1);
+    handleCustomerChange(customer.id ?? 0);
+  };
+
+  // Keyboard navigation for customer dropdown
+  const handleCustomerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isCustomerDropdownOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsCustomerDropdownOpen(true);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedCustomerIndex(prev => 
+          prev < filteredCustomers.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedCustomerIndex(prev => prev > 0 ? prev - 1 : 0);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedCustomerIndex >= 0 && highlightedCustomerIndex < filteredCustomers.length) {
+          handleSelectCustomer(filteredCustomers[highlightedCustomerIndex]);
+        }
+        break;
+      case 'Escape':
+        setIsCustomerDropdownOpen(false);
+        setHighlightedCustomerIndex(-1);
+        break;
+    }
+  };
   const fetchData = useCallback(async () => {
     // Don't fetch if data is provided from parent
     if (propInvoices && propCustomers && propServices) return;
@@ -717,6 +793,8 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
       notes: ''
     });
     setViewMode('form');
+    setCustomerSearchText('');
+    setIsCustomerDropdownOpen(false);
   };
 
   const handleEditInvoice = async (invoice: Invoice) => {
@@ -745,6 +823,12 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
     if (invoice.booking_id) {
       await fetchBookingPayments(invoice.booking_id);
     }
+    
+    // Pre-populate search text with customer name for editing
+    if (invoice.customer) {
+      setCustomerSearchText(getCustomerDisplayName(invoice.customer) + ' - ' + invoice.customer.email);
+    }
+    setIsCustomerDropdownOpen(false);
     
     setViewMode('form');
   };
@@ -1725,19 +1809,106 @@ const InvoiceManagement: React.FC<InvoiceManagementProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Customer *
                   </label>
-                  <select
-                    value={formData.customer_id}
-                    onChange={(e) => handleCustomerChange(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  >
-                    <option value={0}>Select a customer</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {getCustomerDisplayName(customer)} - {customer.email}
-                      </option>
-                    ))}
-                  </select>
+                  <div ref={customerDropdownRef} className="relative">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <input
+                        ref={customerInputRef}
+                        type="text"
+                        value={customerSearchText}
+                        onChange={(e) => {
+                          setCustomerSearchText(e.target.value);
+                          setIsCustomerDropdownOpen(true);
+                          // If user clears the text, also clear the selected customer
+                          if (e.target.value === '') {
+                            handleCustomerChange(0);
+                          }
+                        }}
+                        onFocus={() => setIsCustomerDropdownOpen(true)}
+                        onKeyDown={handleCustomerKeyDown}
+                        placeholder="Search by name, email, or phone..."
+                        className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        autoComplete="off"
+                      />
+                      {customerSearchText && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerSearchText('');
+                            handleCustomerChange(0);
+                            setIsCustomerDropdownOpen(true);
+                            customerInputRef.current?.focus();
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                          title="Clear selection"
+                        >
+                          <XIcon className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {isCustomerDropdownOpen && (
+                      <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredCustomers.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            No customers found matching "{customerSearchText}"
+                          </div>
+                        ) : (
+                          <>
+                            <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
+                              {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
+                            </div>
+                            {filteredCustomers.map((customer, index) => (
+                              <button
+                                key={customer.id}
+                                type="button"
+                                onClick={() => handleSelectCustomer(customer)}
+                                className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-gray-50 last:border-b-0 ${
+                                  highlightedCustomerIndex === index 
+                                    ? 'bg-blue-50 text-blue-900' 
+                                    : formData.customer_id === customer.id 
+                                      ? 'bg-green-50 text-green-900' 
+                                      : 'hover:bg-gray-50 text-gray-900'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium truncate">
+                                      {getCustomerDisplayName(customer)}
+                                      {formData.customer_id === customer.id && (
+                                        <Check className="inline-block w-3.5 h-3.5 ml-1.5 text-green-600" />
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                                      {customer.email && (
+                                        <span className="flex items-center gap-1 truncate">
+                                          <Mail className="w-3 h-3 flex-shrink-0" />
+                                          {customer.email}
+                                        </span>
+                                      )}
+                                      {customer.phone && (
+                                        <span className="flex items-center gap-1">
+                                          <Phone className="w-3 h-3 flex-shrink-0" />
+                                          {customer.phone}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {formData.customer_id > 0 && !isCustomerDropdownOpen && (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <Check className="w-3 h-3 mr-1" />
+                          Customer selected
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

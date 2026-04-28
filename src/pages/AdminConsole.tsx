@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { 
   Calendar, 
@@ -45,8 +46,39 @@ import {
 import { useSessionTimeout } from '../hooks/useSessionTimeout';
 import { SessionTimeoutWarning } from '../components/shared/SessionTimeoutWarning';
 
+// Valid admin tab types
+type AdminTab = 'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help';
+
+// Map URL segments to tab identifiers
+const URL_TO_TAB: Record<string, AdminTab> = {
+  'dashboard': 'dashboard',
+  'services': 'package',
+  'bookings': 'bookings',
+  'availability': 'availability',
+  'customers': 'customers',
+  'invoices': 'invoices',
+  'reports': 'reports',
+  'payments': 'payments',
+  'help': 'help',
+};
+
+// Map tab identifiers to URL segments
+const TAB_TO_URL: Record<AdminTab, string> = {
+  'dashboard': 'dashboard',
+  'package': 'services',
+  'bookings': 'bookings',
+  'availability': 'availability',
+  'customers': 'customers',
+  'invoices': 'invoices',
+  'reports': 'reports',
+  'payments': 'payments',
+  'help': 'help',
+};
+
 const AdminConsole = () => {
   const { showError, showSuccess } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,9 +87,15 @@ const AdminConsole = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  
-  // State management
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help'>('dashboard');
+
+  // Derive active tab from URL
+  const getActiveTabFromURL = useCallback((): AdminTab => {
+    const segments = location.pathname.replace(/^\/admin\/?/, '').split('/');
+    const segment = segments[0] || 'dashboard';
+    return URL_TO_TAB[segment] || 'dashboard';
+  }, [location.pathname]);
+
+  const activeTab = getActiveTabFromURL();
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [newPackage, setNewPackage] = useState<PackageType>({ 
     name: '', 
@@ -107,7 +145,6 @@ const AdminConsole = () => {
       setIsLoggedIn(false);
       setEmail('');
       setPassword('');
-      setActiveTab('dashboard');
       
       // Clear any cached session data
       localStorage.removeItem('supabase.auth.token');
@@ -158,13 +195,16 @@ const AdminConsole = () => {
     };
   }, []);
 
+  // Navigate to an admin tab by URL
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers' | 'payments');
+    const urlSegment = TAB_TO_URL[tab as AdminTab] || tab;
+    navigate(`/admin/${urlSegment}`);
   };
 
   // Tab navigation with silent per-tab background refresh to prevent stale data
   const handleNavTabChange = (tab: string) => {
-    setActiveTab(tab as 'dashboard' | 'package' | 'bookings' | 'availability' | 'reports' | 'invoices' | 'customers' | 'payments' | 'help');
+    const urlSegment = TAB_TO_URL[tab as AdminTab] || tab;
+    navigate(`/admin/${urlSegment}`);
     switch (tab) {
       case 'bookings': fetchAllBookings().catch(() => {}); break;
       case 'invoices': fetchAllInvoices().catch(() => {}); fetchAllCustomers().catch(() => {}); break;
@@ -714,8 +754,8 @@ const AdminConsole = () => {
               >
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
-              <button
-                onClick={() => setActiveTab('help')}
+              <Link
+                to="/admin/help"
                 className={`p-2 rounded-lg transition-colors ${
                   activeTab === 'help' 
                     ? 'text-primary-600 bg-primary-50' 
@@ -724,7 +764,7 @@ const AdminConsole = () => {
                 title="Help & Documentation"
               >
                 <HelpCircle className="w-5 h-5" />
-              </button>
+              </Link>
               <button
                 onClick={() => setShowPasswordModal(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -769,9 +809,20 @@ const AdminConsole = () => {
                 { id: 'reports', label: 'Reports', icon: TrendingUp },
                 { id: 'help', label: 'Help', icon: HelpCircle }
               ].map(tab => (
-                <button
+                <Link
                   key={tab.id}
-                  onClick={() => handleNavTabChange(tab.id)}
+                  to={`/admin/${TAB_TO_URL[tab.id as AdminTab] || tab.id}`}
+                  onClick={() => {
+                    // Trigger background refresh for tab data
+                    switch (tab.id) {
+                      case 'bookings': fetchAllBookings().catch(() => {}); break;
+                      case 'invoices': fetchAllInvoices().catch(() => {}); fetchAllCustomers().catch(() => {}); break;
+                      case 'customers': fetchAllCustomers().catch(() => {}); break;
+                      case 'payments': fetchAllPaymentData().catch(() => {}); break;
+                      case 'availability': setAvailabilityRefreshKey(k => k + 1); break;
+                      default: break;
+                    }
+                  }}
                   className={`flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'bg-primary-500 text-white'
@@ -780,7 +831,7 @@ const AdminConsole = () => {
                 >
                   <tab.icon className="w-4 h-4 mr-1" />
                   {tab.label}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -798,9 +849,20 @@ const AdminConsole = () => {
               { id: 'reports', label: 'Reports', icon: TrendingUp },
               { id: 'help', label: 'Help', icon: HelpCircle }
             ].map(tab => (
-              <button
+              <Link
                 key={tab.id}
-                onClick={() => handleNavTabChange(tab.id)}
+                to={`/admin/${TAB_TO_URL[tab.id as AdminTab] || tab.id}`}
+                onClick={() => {
+                  // Trigger background refresh for tab data
+                  switch (tab.id) {
+                    case 'bookings': fetchAllBookings().catch(() => {}); break;
+                    case 'invoices': fetchAllInvoices().catch(() => {}); fetchAllCustomers().catch(() => {}); break;
+                    case 'customers': fetchAllCustomers().catch(() => {}); break;
+                    case 'payments': fetchAllPaymentData().catch(() => {}); break;
+                    case 'availability': setAvailabilityRefreshKey(k => k + 1); break;
+                    default: break;
+                  }
+                }}
                 className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
@@ -809,7 +871,7 @@ const AdminConsole = () => {
               >
                 <tab.icon className="w-4 h-4 mr-2" />
                 {tab.label}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
@@ -829,79 +891,81 @@ const AdminConsole = () => {
           </div>
         )}
         
-        {activeTab === 'dashboard' && (
-          <Dashboard
-            allBookings={allBookings}
-            packages={packages.map(p => ({
-              name: p.name,
-              price: p.price !== undefined ? String(p.price) : undefined,
-              inHourPrice: p.inHourPrice !== undefined ? String(p.inHourPrice) : undefined,
-              outOfHourPrice: p.outOfHourPrice !== undefined ? String(p.outOfHourPrice) : undefined,
-              features: p.features,
-              category: typeof p.category === 'string' ? p.category : undefined
-            }))}
-            setActiveTab={handleTabChange}
-            setFilterDate={setFilterDate}
-            setFilterRange={setFilterRange}
-          />
-        )}
-        {activeTab === 'package' && (
-          <Services
-            packages={packages}
-            setPackages={setPackages}
-            newPackage={newPackage}
-            setNewPackage={setNewPackage}
-            editIndex={editIndex}
-            setEditIndex={setEditIndex}
-            editPackage={editPackage}
-            setEditPackage={setEditPackage}
-            onRefresh={() => handleManualRefresh('services', true)}
-          />
-        )}
-        {activeTab === 'bookings' && (
-          <Bookings
-            allBookings={allBookings}
-            setAllBookings={setAllBookings}
-            filterDate={filterDate}
-            setFilterDate={setFilterDate}
-            filterRange={filterRange}
-            setFilterRange={setFilterRange}
-            onRefresh={() => handleManualRefresh('bookings')}
-          />
-        )}
-        {activeTab === 'availability' && (
-          <Availability refreshTrigger={availabilityRefreshKey} />
-        )}
-        {activeTab === 'customers' && (
-          <CustomerManagement 
-            customers={allCustomers}
-            setCustomers={setAllCustomers}
-            onRefresh={(silent) => handleManualRefresh('customers', silent)}
-          />
-        )}
-        {activeTab === 'invoices' && (
-          <InvoiceManagement 
-            invoices={allInvoices}
-            setInvoices={setAllInvoices}
-            customers={allCustomers}
-            services={allServices}
-            onRefresh={() => handleManualRefresh('invoices')}
-          />
-        )}
-        {activeTab === 'payments' && (
-          <PaymentManagement 
-            paymentRequests={allPaymentRequests}
-            payments={allPayments}
-            recentPayments={allRecentPayments}
-            gateways={allPaymentGateways}
-            statistics={paymentStatistics}
-            onRefresh={() => handleManualRefresh('payments')}
-          />
-        )}
-        {activeTab === 'reports' && (
-          <Reports allBookings={allBookings} />
-        )}
-        {activeTab === 'help' && (
+        <Routes>
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={
+            <Dashboard
+              allBookings={allBookings}
+              packages={packages.map(p => ({
+                name: p.name,
+                price: p.price !== undefined ? String(p.price) : undefined,
+                inHourPrice: p.inHourPrice !== undefined ? String(p.inHourPrice) : undefined,
+                outOfHourPrice: p.outOfHourPrice !== undefined ? String(p.outOfHourPrice) : undefined,
+                features: p.features,
+                category: typeof p.category === 'string' ? p.category : undefined
+              }))}
+              setActiveTab={handleTabChange}
+              setFilterDate={setFilterDate}
+              setFilterRange={setFilterRange}
+            />
+          } />
+          <Route path="services" element={
+            <Services
+              packages={packages}
+              setPackages={setPackages}
+              newPackage={newPackage}
+              setNewPackage={setNewPackage}
+              editIndex={editIndex}
+              setEditIndex={setEditIndex}
+              editPackage={editPackage}
+              setEditPackage={setEditPackage}
+              onRefresh={() => handleManualRefresh('services', true)}
+            />
+          } />
+          <Route path="bookings" element={
+            <Bookings
+              allBookings={allBookings}
+              setAllBookings={setAllBookings}
+              filterDate={filterDate}
+              setFilterDate={setFilterDate}
+              filterRange={filterRange}
+              setFilterRange={setFilterRange}
+              onRefresh={() => handleManualRefresh('bookings')}
+            />
+          } />
+          <Route path="availability" element={
+            <Availability refreshTrigger={availabilityRefreshKey} />
+          } />
+          <Route path="customers" element={
+            <CustomerManagement 
+              customers={allCustomers}
+              setCustomers={setAllCustomers}
+              onRefresh={(silent) => handleManualRefresh('customers', silent)}
+            />
+          } />
+          <Route path="invoices" element={
+            <InvoiceManagement 
+              invoices={allInvoices}
+              setInvoices={setAllInvoices}
+              customers={allCustomers}
+              services={allServices}
+              onRefresh={() => handleManualRefresh('invoices')}
+            />
+          } />
+          <Route path="payments" element={
+            <PaymentManagement 
+              paymentRequests={allPaymentRequests}
+              payments={allPayments}
+              recentPayments={allRecentPayments}
+              gateways={allPaymentGateways}
+              statistics={paymentStatistics}
+              onRefresh={() => handleManualRefresh('payments')}
+            />
+          } />
+          <Route path="reports" element={
+            <Reports allBookings={allBookings} />
+          } />
+          <Route path="help" element={
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Help & Documentation</h2>
@@ -924,7 +988,7 @@ const AdminConsole = () => {
                 ].map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as 'dashboard' | 'package' | 'bookings' | 'availability' | 'customers' | 'invoices' | 'reports' | 'payments' | 'help')}
+                    onClick={() => handleTabChange(tab.id)}
                     className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors group"
                   >
                     <div className="flex items-center mb-2">
@@ -1149,7 +1213,9 @@ const AdminConsole = () => {
               </div>
             </div>
           </div>
-        )}
+          } />
+          <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+        </Routes>
       </main>
 
       {showPasswordModal && (

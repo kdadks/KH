@@ -295,9 +295,9 @@ const SumUpCheckoutPage: React.FC = () => {
             case 'email':
               return `${baseUrl}/`; // Email payments → Home page
             case 'dashboard':
-              return `${baseUrl}/my-account`; // Dashboard payments → User portal
+              return `${baseUrl}/my-account/dashboard`; // Dashboard payments → User portal
             case 'admin':
-              return `${baseUrl}/admin`; // Admin payments → Admin section
+              return `${baseUrl}/admin/dashboard`; // Admin payments → Admin section
             case 'booking':
             default:
               return `${baseUrl}/payment-success`; // Booking payments → Success page
@@ -586,7 +586,7 @@ const SumUpCheckoutPage: React.FC = () => {
               </p>
               <div className="flex gap-3 justify-center">
                 <button
-                  onClick={() => navigate('/my-account')}
+                  onClick={() => navigate('/my-account/dashboard')}
                   className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
                   Go to My Account

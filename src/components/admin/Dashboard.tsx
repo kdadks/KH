@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, Package, BarChart3 } from 'lucide-react';
 import { BookingFormData } from './types';
 
@@ -26,6 +27,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   setFilterDate, 
   setFilterRange 
 }) => {
+  const navigate = useNavigate();
   // Helper function to get customer name from decrypted data
   const getCustomerName = (booking: BookingFormData): string => {
     return booking.customer_details?.first_name && booking.customer_details?.last_name 
@@ -168,7 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             action: () => {
               setFilterDate(todayStr);
               setFilterRange(null);
-              setActiveTab('bookings');
+              navigate('/admin/bookings');
             }
           },
           {
@@ -179,7 +181,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             action: () => {
               setFilterDate('');
               setFilterRange({ start: weekStartStr, end: weekEndStr });
-              setActiveTab('bookings');
+              navigate('/admin/bookings');
             }
           },
           {
@@ -190,7 +192,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             action: () => {
               setFilterDate('');
               setFilterRange({ start: monthStartStr, end: monthEndStr });
-              setActiveTab('bookings');
+              navigate('/admin/bookings');
             }
           },
           {
@@ -198,7 +200,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             value: packages.length,
             icon: Package,
             color: 'bg-orange-500',
-            action: () => setActiveTab('package')
+            action: () => navigate('/admin/services')
           }
         ].map((stat, index) => (
           <div
