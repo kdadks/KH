@@ -362,7 +362,7 @@ export async function getCustomerPayments(customerId: number): Promise<PaymentWi
         )
       `)
       .eq('customer_id', customerId)
-      .in('status', ['paid', 'processing']) // Show completed and processing payments in history
+      .in('status', ['paid', 'completed', 'processing']) // Show paid/completed and processing payments in history
       .order('created_at', { ascending: false });
 
     if (error) {

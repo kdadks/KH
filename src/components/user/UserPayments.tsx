@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { getCustomerPayments } from '../../utils/paymentRequestUtils';
+import { fetchDashboardDataViaFunction } from '../../utils/userManagementUtils';
 import { PaymentWithCustomer, PAYMENT_STATUS_INFO } from '../../types/paymentTypes';
 import { UserCustomer } from '../../types/userManagement';
 import { useToast } from '../shared/toastContext';
@@ -38,8 +39,9 @@ const UserPayments: React.FC<UserPaymentsProps> = ({
   const { showError } = useToast();
   const [searchParams] = useSearchParams();
   
-  const [payments, setPayments] = useState<PaymentWithCustomer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [allPaymentRequests, setAllPaymentRequests] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeSubTab, setActiveSubTab] = useState<'requests' | 'history'>('requests');
@@ -53,6 +55,9 @@ const UserPayments: React.FC<UserPaymentsProps> = ({
   useEffect(() => {
     if (user?.id) {
       loadPayments();
+    } else if (user !== undefined) {
+      // Auth resolved but no user — not loading
+      setLoading(false);
     }
     
     // If there's a payment request in URL, switch to requests tab
@@ -75,25 +80,45 @@ const UserPayments: React.FC<UserPaymentsProps> = ({
 
     setLoading(true);
     try {
-      if (isMultiPatient && allPatients.length > 0) {
-        // Load payments for all patients
-        let allPaymentsData: PaymentWithCustomer[] = [];
-        
-        for (const patient of allPatients) {
-          const patientPayments = await getCustomerPayments(patient.id);
-          // Add patient info to each payment for filtering
-          const paymentsWithPatient = patientPayments.map(payment => ({
-            ...payment,
-            patient_name: `${patient.first_name} ${patient.last_name}`,
-            patient_id: patient.id
-          }));
-          allPaymentsData = [...allPaymentsData, ...paymentsWithPatient];
-        }
-        setPayments(allPaymentsData);
+      const customerIds = isMultiPatient && allPatients.length > 0
+        ? allPatients.map(p => p.id)
+        : [user.id];
+
+      // Use Netlify function to bypass RLS (same as dashboard)
+      const serverData = await fetchDashboardDataViaFunction(customerIds);
+
+      if (serverData) {
+        // Build combined payment history: payments table + paid invoices
+        const paymentsFromTable = serverData.payments || [];
+        const paidInvoices = (serverData.invoices || []).filter((inv: any) => inv.status === 'paid');
+
+        // Map paid invoices to a payment-like shape for the history list
+        const invoiceRows = paidInvoices.map((inv: any) => ({
+          id: `inv-${inv.id}`,
+          amount: inv.total_paid ?? inv.total_amount ?? 0,
+          currency: inv.currency || 'EUR',
+          status: 'paid',
+          payment_method: 'offline',
+          payment_date: inv.invoice_date,
+          invoice_number: inv.invoice_number,
+          notes: `Invoice ${inv.invoice_number}`,
+          customer_id: inv.customer_id,
+          _source: 'invoice'
+        }));
+
+        // Merge: prefer payments table records; supplement with invoice rows
+        const combined = [...paymentsFromTable, ...invoiceRows];
+        combined.sort((a: any, b: any) =>
+          new Date(b.payment_date || b.created_at || 0).getTime() -
+          new Date(a.payment_date || a.created_at || 0).getTime()
+        );
+        setPayments(combined);
+        setAllPaymentRequests(serverData.paymentRequests || []);
       } else {
-        // Single patient mode
+        // Fallback: direct Supabase queries
         const data = await getCustomerPayments(user.id);
         setPayments(data);
+        setAllPaymentRequests([]); // Ensure PaymentRequests doesn't stay in limbo
       }
     } catch (error) {
       console.error('Error loading payments:', error);
@@ -210,7 +235,8 @@ const UserPayments: React.FC<UserPaymentsProps> = ({
       {/* Tab Content */}
       {activeSubTab === 'requests' && user?.id && (
         <PaymentRequests 
-          customerId={user.id} 
+          customerId={user.id}
+          preloadedRequests={allPaymentRequests}
           onPaymentComplete={() => {
             // Refresh both local payment data and parent dashboard data
             loadPayments();
@@ -262,7 +288,7 @@ const UserPayments: React.FC<UserPaymentsProps> = ({
                 <div>
                   <p className="text-sm font-medium text-green-800">Total Paid</p>
                   <p className="text-2xl font-bold text-green-900">
-                    {formatCurrency(payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0))}
+                    {formatCurrency(payments.filter((p: any) => p.status === 'paid' || p.status === 'completed').reduce((sum: number, p: any) => sum + p.amount, 0))}
                   </p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-green-600" />

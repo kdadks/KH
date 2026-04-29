@@ -9,9 +9,10 @@ import PaymentModal from '../shared/PaymentModal';
 interface PaymentRequestsProps {
   customerId: number;
   onPaymentComplete?: () => void;
+  preloadedRequests?: any[] | null; // Pre-fetched data from Netlify function (bypasses RLS)
 }
 
-const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPaymentComplete }) => {
+const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPaymentComplete, preloadedRequests }) => {
   const [searchParams] = useSearchParams();
   const { showSuccess, showError } = useToast();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequestWithCustomer[]>([]);
@@ -25,8 +26,14 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
   const highlightRequestId = searchParams.get('request') || localStorage.getItem('highlightPaymentRequest');
 
   useEffect(() => {
-    loadPaymentRequests();
-  }, [customerId]);
+    if (preloadedRequests !== null && preloadedRequests !== undefined) {
+      // Use pre-fetched data from parent (avoids RLS-blocked client-side query)
+      setPaymentRequests(preloadedRequests as PaymentRequestWithCustomer[]);
+      setLoading(false);
+    } else {
+      loadPaymentRequests();
+    }
+  }, [customerId, preloadedRequests]);
 
   // Separate effect for auto-opening modal after paymentRequests are loaded
   useEffect(() => {
@@ -116,6 +123,7 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
       case 'sent':
         return <AlertCircle className="w-4 h-4 text-blue-400" />;
       case 'paid':
+      case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-400" />;
       case 'expired':
       case 'cancelled':
@@ -164,7 +172,7 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
   }
 
   const pendingRequests = paymentRequests.filter(req => req.status === 'pending' || req.status === 'sent');
-  const completedRequests = paymentRequests.filter(req => req.status === 'paid' || req.status === 'expired' || req.status === 'cancelled');
+  const completedRequests = paymentRequests.filter(req => ['paid', 'expired', 'cancelled', 'completed'].includes(req.status));
 
   return (
     <div className="space-y-6">
@@ -174,7 +182,8 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
           <h3 className="text-lg font-medium text-gray-900 mb-4">Pending Payment Requests</h3>
           <div className="space-y-4">
             {pendingRequests.map((request) => {
-              const statusInfo = PAYMENT_REQUEST_STATUS_INFO[request.status];
+              const statusInfo = PAYMENT_REQUEST_STATUS_INFO[request.status as keyof typeof PAYMENT_REQUEST_STATUS_INFO]
+                ?? { text: request.status, color: 'gray' as const, icon: 'clock' };
               const isHighlighted = highlightRequestId === request.id.toString();
               
               return (
@@ -265,7 +274,8 @@ const PaymentRequests: React.FC<PaymentRequestsProps> = ({ customerId, onPayment
           <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
           <div className="space-y-3">
             {completedRequests.map((request) => {
-              const statusInfo = PAYMENT_REQUEST_STATUS_INFO[request.status];
+              const statusInfo = PAYMENT_REQUEST_STATUS_INFO[request.status as keyof typeof PAYMENT_REQUEST_STATUS_INFO]
+                ?? { text: request.status === 'completed' ? 'Paid' : request.status, color: 'green' as const, icon: 'check' };
               
               return (
                 <div key={request.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">

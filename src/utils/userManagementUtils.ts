@@ -472,7 +472,7 @@ export const getUserBookings = async (customerId: string): Promise<{ bookings: U
  * Helper: Fetch dashboard data via Netlify serverless function (bypasses RLS)
  * Returns raw invoices, bookings, payments, paymentRequests arrays
  */
-const fetchDashboardDataViaFunction = async (customerIds: number[]): Promise<{
+export const fetchDashboardDataViaFunction = async (customerIds: number[]): Promise<{
   success: boolean;
   invoices: any[];
   bookings: any[];
@@ -552,8 +552,13 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
       bookings = bookingsData || [];
       payments = await getCustomerPayments(parseInt(customerId));
 
-      const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
-      paymentRequests = await getCustomerPaymentRequests(parseInt(customerId));
+      // Query all payment_requests (all statuses) so paid ones count toward totalPaid
+      const { data: paymentRequestsData } = await supabase
+        .from('payment_requests')
+        .select('*')
+        .eq('customer_id', parseInt(customerId))
+        .order('created_at', { ascending: false });
+      paymentRequests = paymentRequestsData || [];
     }
 
     const recentPayments = payments.slice(0, 3);
@@ -575,9 +580,17 @@ export const getUserDashboardData = async (customerId: string): Promise<{ data: 
     ).length || 0;
     const overdueCount = overdueInvoices + overduePaymentRequests;
 
-    // Calculate total paid from actual payment records
-    const totalPaid = payments.reduce((sum: number, payment: any) => 
-      payment.status === 'paid' ? sum + payment.amount : sum, 0);
+    // Calculate total paid:
+    // Source 1: paid invoices (total_paid field, or total_amount if no total_paid)
+    // Source 2: payment_requests with status='paid'
+    // Source 3: payments with status='paid'/'completed' (fallback)
+    const paidFromInvoices = invoices?.reduce((sum: number, inv: any) =>
+      inv.status === 'paid' ? sum + (inv.total_paid ?? inv.total_amount ?? 0) : sum, 0) || 0;
+    const paidFromRequests = paymentRequests?.reduce((sum: number, req: any) =>
+      req.status === 'paid' ? sum + (req.amount || 0) : sum, 0) || 0;
+    const paidFromPayments = payments.reduce((sum: number, payment: any) =>
+      (payment.status === 'paid' || payment.status === 'completed') ? sum + payment.amount : sum, 0);
+    const totalPaid = paidFromInvoices > 0 ? paidFromInvoices : (paidFromRequests > 0 ? paidFromRequests : paidFromPayments);
 
     const dashboardData: UserDashboardData = {
       customer: customer,
@@ -707,9 +720,13 @@ export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Pr
         }));
         allPayments = [...allPayments, ...paymentsWithPatient];
 
-        const { getCustomerPaymentRequests } = await import('./paymentRequestUtils');
-        const paymentRequests = await getCustomerPaymentRequests(patient.id);
-        const paymentRequestsWithPatient = paymentRequests.map(req => ({
+        // Query all payment_requests (all statuses) so paid ones count toward totalPaid
+        const { data: allPatientRequests } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .eq('customer_id', patient.id)
+          .order('created_at', { ascending: false });
+        const paymentRequestsWithPatient = (allPatientRequests || []).map((req: any) => ({
           ...req,
           patient_name: `${patient.first_name} ${patient.last_name}`
         }));
@@ -739,8 +756,14 @@ export const getConsolidatedDashboardData = async (patients: UserCustomer[]): Pr
     ).length;
     const overdueCount = overdueInvoices + overduePaymentRequests;
 
-    const totalPaid = allPayments.reduce((sum, payment) => 
-      payment.status === 'paid' ? sum + payment.amount : sum, 0);
+    // Primary source: paid invoices, then payment_requests, then payments table
+    const paidFromInvoices = allInvoices.reduce((sum, inv: any) =>
+      inv.status === 'paid' ? sum + (inv.total_paid ?? inv.total_amount ?? 0) : sum, 0);
+    const paidFromRequests = allPaymentRequests.reduce((sum, req: any) =>
+      req.status === 'paid' ? sum + (req.amount || 0) : sum, 0);
+    const paidFromPayments = allPayments.reduce((sum, payment) =>
+      (payment.status === 'paid' || payment.status === 'completed') ? sum + payment.amount : sum, 0);
+    const totalPaid = paidFromInvoices > 0 ? paidFromInvoices : (paidFromRequests > 0 ? paidFromRequests : paidFromPayments);
 
     const dashboardData: UserDashboardData = {
       customer: primaryCustomer,
