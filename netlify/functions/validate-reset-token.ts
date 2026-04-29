@@ -5,6 +5,19 @@
 
 import { createClient } from '@supabase/supabase-js';
 import * as bcrypt from 'bcryptjs';
+import * as CryptoJS from 'crypto-js';
+
+const decryptField = (encrypted: string | null | undefined): string => {
+  if (!encrypted) return '';
+  try {
+    const key = process.env.ENCRYPTION_KEY;
+    if (!key) return '';
+    const bytes = CryptoJS.AES.decrypt(encrypted, key);
+    return bytes.toString(CryptoJS.enc.Utf8) || '';
+  } catch {
+    return '';
+  }
+};
 
 const headers = {
   'Content-Type': 'application/json',
@@ -151,6 +164,9 @@ export const handler = async (event: any): Promise<any> => {
 
       // Send success notification email (non-blocking — don't fail the reset if email fails)
       try {
+        const firstName = decryptField(customer.first_name);
+        const lastName = decryptField(customer.last_name);
+        const customerName = `${firstName} ${lastName}`.trim() || customer.email;
         const resetTime = new Date().toLocaleString('en-IE', {
           timeZone: 'Europe/Dublin',
           dateStyle: 'medium',
@@ -165,7 +181,7 @@ export const handler = async (event: any): Promise<any> => {
             recipientEmail: customer.email,
             subject: 'KH Therapy - Your Password Has Been Reset',
             data: {
-              customer_name: `${customer.first_name} ${customer.last_name}`,
+              customer_name: customerName,
               reset_time: resetTime
             }
           })
