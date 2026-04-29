@@ -19,9 +19,7 @@ import {
 } from '../utils/userManagementUtils';
 import { hashPassword, verifyPassword, isPasswordHashed } from '../utils/passwordUtils';
 import { 
-  requestPasswordReset as requestPasswordResetUtil, 
-  validatePasswordResetToken as validatePasswordResetTokenUtil, 
-  resetPasswordWithToken as resetPasswordWithTokenUtil 
+  requestPasswordReset as requestPasswordResetUtil
 } from '../utils/passwordResetUtils';
 import { withTimeout, logPerformance } from '../utils/performanceUtils';
 import { isRateLimited, recordLoginAttempt, getRemainingAttempts, resetLoginAttempts } from '../utils/loginRateLimiter';
@@ -559,20 +557,32 @@ export const UserAuthProvider: React.FC<UserAuthProviderProps> = ({ children }) 
     }
   };
 
-  // Validate password reset token
+  // Validate password reset token - uses Netlify function to bypass RLS for unauthenticated users
   const validateResetToken = async (token: string): Promise<{ success: boolean; error?: string; customerEmail?: string }> => {
     try {
-      return await validatePasswordResetTokenUtil(token);
+      const response = await fetch('/.netlify/functions/validate-reset-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'validate', token })
+      });
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('Exception in validateResetToken:', error);
       return { success: false, error: 'Unexpected error occurred' };
     }
   };
 
-  // Reset password with token
+  // Reset password with token - uses Netlify function to bypass RLS for unauthenticated users
   const resetPassword = async (data: PasswordResetData): Promise<{ success: boolean; error?: string }> => {
     try {
-      return await resetPasswordWithTokenUtil(data);
+      const response = await fetch('/.netlify/functions/validate-reset-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset', token: data.token, newPassword: data.newPassword })
+      });
+      const result = await response.json();
+      return result;
     } catch (error) {
       console.error('Exception in resetPassword:', error);
       return { success: false, error: 'Unexpected error occurred' };

@@ -10,9 +10,19 @@ const ResetPassword: React.FC = () => {
 
   // SECURITY FIX 1.8: Use sessionStorage for token instead of URL
   // This prevents token leakage in browser history, server logs, referer headers
+  // FIX: Read from URL synchronously during initialization to prevent race condition
+  // where Effect 2 (validate) fires with token=null before Effect 1 can migrate urlToken to state
   const [token, setToken] = useState<string | null>(() => {
-    // Try to get token from sessionStorage first (secure storage)
-    return sessionStorage.getItem('reset_token');
+    // Try sessionStorage first (subsequent visits / page refreshes)
+    const sessionToken = sessionStorage.getItem('reset_token');
+    if (sessionToken) return sessionToken;
+    // Synchronously read from URL on fresh email-link click
+    const params = new URLSearchParams(window.location.search);
+    const urlParam = params.get('token');
+    if (urlParam) {
+      sessionStorage.setItem('reset_token', urlParam);
+    }
+    return urlParam;
   });
 
   const [password, setPassword] = useState('');
@@ -28,18 +38,14 @@ const ResetPassword: React.FC = () => {
 
   const { validateResetToken, resetPassword } = useUserAuth();
 
-  // SECURITY FIX 1.8: Handle token from URL and move to sessionStorage
+  // SECURITY FIX 1.8: Clean token from URL after it has been moved to sessionStorage
+  // Token is already in sessionStorage (set synchronously in useState initializer above)
   useEffect(() => {
-    if (urlToken && !token) {
-      // Token is in URL (from email link), move it to sessionStorage
-      sessionStorage.setItem('reset_token', urlToken);
-      setToken(urlToken);
-      
+    if (urlToken) {
       // Remove token from URL to prevent history/logging exposure
-      // Use replace history entry so back button doesn't reveal token
       setSearchParams({}, { replace: true });
     }
-  }, [urlToken, token, setSearchParams]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Validate token on component mount
   useEffect(() => {
@@ -49,6 +55,10 @@ const ResetPassword: React.FC = () => {
         setIsValidating(false);
         return;
       }
+
+      // Ensure spinner shows while validating
+      setIsValidating(true);
+      setError('');
 
       try {
         console.log('Validating reset token');
