@@ -251,6 +251,29 @@ Dublin, Ireland
 For questions or changes, please contact us at info@khtherapy.ie
         `;
       }
+    case 'password_reset_success':
+      return `
+KH THERAPY
+Password Reset Successful
+
+Hello ${data.customer_name},
+
+Your KH Therapy patient account password has been successfully reset. You can now sign in with your new password.
+
+Reset completed: ${data.reset_time || ''}
+
+SECURITY INFORMATION
+- Your old password is no longer valid
+- Your session token has been cleared for security
+- If you did NOT make this change, contact us immediately
+
+Sign in at: https://khtherapy.ie/my-account
+
+If you did not request this change, contact us at info@khtherapy.ie or call +353 83 800 9404 immediately.
+
+---
+KH Therapy | info@khtherapy.ie | +353 83 800 9404
+      `;
     default:
       return '';
   }
@@ -935,6 +958,96 @@ const getEmailTemplate = (type, data) => {
             </div>
             <div class="footer">
               <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p>Your account security is important to us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    case 'password_reset_success':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.ie/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.ie/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">✅ Password Reset Successful</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
+              <p>Your KH Therapy patient account password has been <strong>successfully reset</strong>. You can now sign in with your new password.</p>
+
+              <div class="highlight">
+                <p><strong>🕒 Reset completed:</strong> ${escapeHtmlEntities(data.reset_time || new Date().toLocaleString('en-IE', { timeZone: 'Europe/Dublin' }))}</p>
+              </div>
+
+              <div class="details">
+                <h3>🛡️ Security Information</h3>
+                <p>• Your old password is no longer valid</p>
+                <p>• Your session token has been cleared for security</p>
+                <p>• If you did <strong>not</strong> make this change, contact us immediately</p>
+              </div>
+
+              <div style="text-align: center; margin: 25px 0;">
+                <a href="https://khtherapy.ie/my-account" class="button" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; text-decoration: none; display: inline-block; padding: 14px 28px; border-radius: 8px; margin: 15px 0; font-weight: 600;">🔑 Sign In Now</a>
+              </div>
+
+              <p>If you did not request this password reset, please contact us at <a href="mailto:info@khtherapy.ie">info@khtherapy.ie</a> or call <strong>+353 83 800 9404</strong> immediately so we can secure your account.</p>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
+              <p>Your account security is important to us.</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    case 'password_reset_success':
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>${commonStyles}</head>
+        <body>
+          <div class="container">
+            <div class="header" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 25px 20px; text-align: center; border-radius: 12px 12px 0 0;">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://khtherapy.ie/Logo.png" alt="KH Therapy Logo" class="logo" style="width: 80px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px; border-radius: 8px;" />
+                <img src="https://khtherapy.ie/KHtherapy.png" alt="KH Therapy" style="width: 100px; height: auto; display: inline-block; vertical-align: middle; margin: 0 4px;" />
+              </div>
+              <h1 style="color: white; margin: 5px 0 0 0; font-size: 24px; font-weight: 600; text-shadow: 1px 1px 2px rgba(255,255,255,0.8), 0 0 4px rgba(255,255,255,0.6);">&#x2705; Password Reset Successful</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${escapeHtmlEntities(data.customer_name)},</h2>
+              <p>Your KH Therapy patient account password has been <strong>successfully reset</strong>. You can now sign in with your new password.</p>
+
+              <div class="highlight">
+                <p><strong>&#x1F552; Reset completed:</strong> ${escapeHtmlEntities(data.reset_time || '')}</p>
+              </div>
+
+              <div class="details">
+                <h3>&#x1F6E1;&#xFE0F; Security Information</h3>
+                <p>&#x2022; Your old password is no longer valid</p>
+                <p>&#x2022; Your session token has been cleared for security</p>
+                <p>&#x2022; If you did <strong>not</strong> make this change, contact us immediately</p>
+              </div>
+
+              <div style="text-align: center; margin: 25px 0;">
+                <a href="https://khtherapy.ie/my-account" class="button" style="background-color: #059669; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; text-decoration: none; display: inline-block; padding: 14px 28px; border-radius: 8px; margin: 15px 0; font-weight: 600;">&#x1F511; Sign In Now</a>
+              </div>
+
+              <p>If you did not request this password reset, please contact us at <a href="mailto:info@khtherapy.ie">info@khtherapy.ie</a> or call <strong>+353 83 800 9404</strong> immediately so we can secure your account.</p>
+            </div>
+            <div class="footer">
+              <p><strong>KH Therapy</strong> | &#x1F4E7; info@khtherapy.ie | &#x1F4DE; +353 83 800 9404</p>
               <p>Your account security is important to us.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>

@@ -98,7 +98,7 @@ export const handler = async (event: any): Promise<any> => {
       // Validate token first
       const { data: customer, error } = await supabase
         .from('customers')
-        .select('id, email, password_reset_expires_at')
+        .select('id, email, first_name, last_name, password_reset_expires_at')
         .eq('password_reset_token', token)
         .eq('is_active', true)
         .single();
@@ -147,6 +147,31 @@ export const handler = async (event: any): Promise<any> => {
           headers,
           body: JSON.stringify({ success: false, error: 'Failed to reset password. Please try again.' })
         };
+      }
+
+      // Send success notification email (non-blocking — don't fail the reset if email fails)
+      try {
+        const resetTime = new Date().toLocaleString('en-IE', {
+          timeZone: 'Europe/Dublin',
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        });
+        const siteUrl = process.env.URL || process.env.VITE_SITE_URL || 'https://khtherapy.ie';
+        await fetch(`${siteUrl}/.netlify/functions/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            emailType: 'password_reset_success',
+            recipientEmail: customer.email,
+            subject: 'KH Therapy - Your Password Has Been Reset',
+            data: {
+              customer_name: `${customer.first_name} ${customer.last_name}`,
+              reset_time: resetTime
+            }
+          })
+        });
+      } catch (emailErr) {
+        console.error('Failed to send password reset success email (non-fatal):', emailErr);
       }
 
       return {
