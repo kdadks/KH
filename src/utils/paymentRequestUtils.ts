@@ -1210,7 +1210,7 @@ export async function sendPaymentFailedNotification(
         payment_amount: paymentRequest.amount,
         payment_status: 'failed', // This will trigger the booking_with_payment_failed template
         therapist_name: 'KH Therapy Team',
-        clinic_address: 'Neilstown Village Court, Neilstown Rd, Clondalkin, D22E8P2'
+        clinic_address: 'Clondalkin, Dublin 22, Ireland'
       }
     );
 

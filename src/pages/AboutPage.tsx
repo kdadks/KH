@@ -115,7 +115,7 @@ const AboutPage = () => {
                   <div className="bg-primary-50 border-l-4 border-primary-600 p-3 sm:p-4 rounded-lg">
                     <h4 className="font-semibold text-primary-700 mb-2 text-sm sm:text-base">Clinic & Home Visits</h4>
                     <p className="text-gray-700 text-xs sm:text-sm leading-relaxed">
-                      Neilstown Village Court, neilstown rd, Clondalkin D22E8P2.<br />
+                      Clondalkin, Dublin 22, Ireland<br />
                       <span className="italic">Open since 2020</span>, free parking & late security access<br />
                       Home visits available (rates vary by location)
                     </p>

@@ -563,7 +563,7 @@ const getEmailTemplate = (type, data) => {
             </div>
             <div class="footer">
               <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
-              <p><strong>Address:</strong> Neilstown Village Court, Neilstown Rd, Clondalkin, D22E8P2</p>
+              <p><strong>Address:</strong> Clondalkin, Dublin 22, Ireland</p>
               <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -625,7 +625,7 @@ const getEmailTemplate = (type, data) => {
             </div>
             <div class="footer">
               <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
-              <p><strong>Address:</strong> Neilstown Village Court, Neilstown Rd, Clondalkin, D22E8P2</p>
+              <p><strong>Address:</strong> Clondalkin, Dublin 22, Ireland</p>
               <p>Thank you for choosing KH Therapy for your healthcare needs.</p>
               <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">This email was sent from an automated system. Please do not reply directly to this email.</p>
             </div>
@@ -904,7 +904,7 @@ const getEmailTemplate = (type, data) => {
             </div>
             <div class="footer">
               <p><strong>KH Therapy</strong> | 📧 info@khtherapy.ie | 📞 +353 83 800 9404</p>
-              <p><strong>Clinic Address:</strong> KH Therapy Clinic, Dublin, Ireland</p>
+              <p><strong>Clinic Address:</strong> Clondalkin, Dublin 22, Ireland</p>
               <p><strong>Business Hours:</strong> Monday-Friday 8:00 AM - 6:00 PM | Saturday 9:00 AM - 2:00 PM</p>
               <p style="margin-top: 15px; font-size: 12px; color: #9ca3af;">
                 This welcome email contains important information about your patient portal access. 

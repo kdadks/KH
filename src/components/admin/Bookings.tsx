@@ -177,6 +177,7 @@ export const Bookings: React.FC<BookingsProps> = ({
     lastName: '',
     email: '',
     phone: '',
+    dateOfBirth: '',
     service: '',
     date: '',
     time: '',
@@ -188,6 +189,9 @@ export const Bookings: React.FC<BookingsProps> = ({
   });
 
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
   const [services, setServices] = useState<ServiceType[]>([]);
   const [allAdminServices, setAllAdminServices] = useState<ServiceType[]>([]); // All transformed services (unfiltered)
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
@@ -2319,6 +2323,7 @@ export const Bookings: React.FC<BookingsProps> = ({
       lastName: '',
       email: '',
       phone: '',
+      dateOfBirth: '',
       service: '',
       date: '',
       time: '',
@@ -2328,7 +2333,51 @@ export const Bookings: React.FC<BookingsProps> = ({
       status: 'pending',
       visit_type: 'clinic' as 'clinic' | 'home' | 'online'
     });
+    setCustomerSearchQuery('');
+    setCustomerSearchResults([]);
     setTimeSlots([]);
+  };
+
+  const handleCustomerSearch = async (query: string) => {
+    setCustomerSearchQuery(query);
+    if (!query.trim() || query.trim().length < 2) {
+      setCustomerSearchResults([]);
+      return;
+    }
+    setSearchingCustomers(true);
+    try {
+      const { data: customers, error } = await supabase
+        .from('customers')
+        .select('id, first_name, last_name, email, phone, date_of_birth')
+        .ilike('email', `%${query.trim()}%`)
+        .eq('is_active', true)
+        .limit(10);
+      if (!error && customers) {
+        const decrypted = customers.map((c: any) => decryptCustomerDataForAdmin(c));
+        setCustomerSearchResults(decrypted);
+      } else {
+        setCustomerSearchResults([]);
+      }
+    } catch {
+      setCustomerSearchResults([]);
+    } finally {
+      setSearchingCustomers(false);
+    }
+  };
+
+  const handleSelectCustomer = (customer: any) => {
+    setNewBookingData(prev => ({
+      ...prev,
+      firstName: customer.first_name || '',
+      lastName: customer.last_name || '',
+      email: customer.email || '',
+      phone: customer.phone || '',
+      dateOfBirth: customer.date_of_birth && /^\d{4}-\d{2}-\d{2}$/.test(customer.date_of_birth)
+        ? customer.date_of_birth
+        : ''
+    }));
+    setCustomerSearchQuery('');
+    setCustomerSearchResults([]);
   };
 
   const handleNewBookingInputChange = (field: string, value: string) => {
@@ -2529,7 +2578,8 @@ export const Bookings: React.FC<BookingsProps> = ({
         firstName: newBookingData.firstName,
         lastName: newBookingData.lastName,
         email: newBookingData.email,
-        phone: newBookingData.phone
+        phone: newBookingData.phone,
+        ...(newBookingData.dateOfBirth && { dateOfBirth: newBookingData.dateOfBirth })
       };
 
       const bookingData = {
@@ -3805,6 +3855,21 @@ export const Bookings: React.FC<BookingsProps> = ({
                     </div>
                   </div>
                 )}
+                {selectedBooking.customer_details?.date_of_birth && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm font-medium text-gray-500">Date of Birth:</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {(() => {
+                        const dob = selectedBooking.customer_details.date_of_birth!;
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+                          const [y, m, d] = dob.split('-');
+                          return `${d}/${m}/${y}`;
+                        }
+                        return dob;
+                      })()}
+                    </span>
+                  </div>
+                )}
                 {selectedBooking.notes && (
                   <div>
                     <span className="text-sm font-medium text-gray-500">Notes:</span>
@@ -4017,6 +4082,37 @@ export const Bookings: React.FC<BookingsProps> = ({
             </div>
             
             <div className="p-6 space-y-6 overflow-y-auto">
+              {/* Customer Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search Existing Customer (by email)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customerSearchQuery}
+                    onChange={(e) => handleCustomerSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Type email to search..."
+                  />
+                  {searchingCustomers && (
+                    <span className="absolute right-3 top-2.5 text-sm text-gray-400">Searching...</span>
+                  )}
+                  {customerSearchResults.length > 0 && (
+                    <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {customerSearchResults.map((c) => (
+                        <li
+                          key={c.id}
+                          onClick={() => handleSelectCustomer(c)}
+                          className="px-4 py-2 cursor-pointer hover:bg-primary-50 text-sm"
+                        >
+                          <span className="font-medium">{c.first_name} {c.last_name}</span>
+                          <span className="text-gray-500 ml-2">{c.email}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
               {/* Customer Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -4081,6 +4177,16 @@ export const Bookings: React.FC<BookingsProps> = ({
                   {formErrors.phone && (
                     <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
                   )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={newBookingData.dateOfBirth}
+                    onChange={(e) => handleNewBookingInputChange('dateOfBirth', e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
                 </div>
               </div>
 

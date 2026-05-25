@@ -88,7 +88,7 @@ interface PaymentState {
 
 const HeroSection: React.FC = () => {
   // Form and UI states
-  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; eircode?: string; visitType: string; service: string; preferredDate?: string; time?: string; }
+  interface BookingFormData { firstName: string; lastName: string; email: string; phone: string; dateOfBirth?: string; eircode?: string; visitType: string; service: string; preferredDate?: string; time?: string; }
   const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<BookingFormData>();
   const navigate = useNavigate();
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -658,7 +658,8 @@ const HeroSection: React.FC = () => {
         lastName: data.lastName,
         email: data.email,
         phone: data.phone,
-        ...(data.eircode && visitType === 'home' && { eircode: data.eircode.trim().toUpperCase() }) // Add eircode if provided (for home visits)
+        ...(data.eircode && visitType === 'home' && { eircode: data.eircode.trim().toUpperCase() }),
+        ...(data.dateOfBirth && { dateOfBirth: data.dateOfBirth })
       };
 
       // Prepare booking data for hero section (quick appointment)
@@ -1210,7 +1211,25 @@ const HeroSection: React.FC = () => {
                   </p>
                 )}
               </div>
+              {/* DOB (left) + Phone (right) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="dateOfBirth" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    id="dateOfBirth"
+                    {...register('dateOfBirth')}
+                    max={new Date().toISOString().split('T')[0]}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      errors.dateOfBirth ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                  />
+                  {errors.dateOfBirth && (
+                    <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>
+                  )}
+                </div>
                 <div>
                   <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
                     Phone Number *
@@ -1235,44 +1254,46 @@ const HeroSection: React.FC = () => {
                     </p>
                   )}
                 </div>
-                {visitType === 'home' && (
-                  <div>
-                    <label htmlFor="eircode" className="block text-sm font-medium text-neutral-700 mb-1">
-                      Eircode / Postal Code *
-                    </label>
-                    <input
-                      type="text"
-                      id="eircode"
-                      {...register('eircode', { 
-                        required: visitType === 'home' ? 'Eircode is required for home visits' : false,
-                        pattern: {
-                          value: /^[A-Za-z0-9]{3}\s?[A-Za-z0-9]{4}$/,
-                          message: 'Please enter a valid Irish Eircode (e.g., D01 A2B3)'
-                        },
-                        validate: (value) => {
-                          if (visitType === 'home' && value) {
-                            const normalized = value.replace(/\s/g, '').toUpperCase();
-                            if (normalized.length !== 7) {
-                              return 'Eircode must be 7 characters (e.g., D01A2B3)';
-                            }
-                          }
-                          return true;
-                        }
-                      })}
-                      className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                        errors.eircode ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      }`}
-                      placeholder="D01 A2B3"
-                      maxLength={8}
-                    />
-                    {errors.eircode && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.eircode?.message}
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
+              {/* Eircode — shown below phone row for home visits */}
+              {visitType === 'home' && (
+                <div>
+                  <label htmlFor="eircode" className="block text-sm font-medium text-neutral-700 mb-1">
+                    Eircode / Postal Code *
+                  </label>
+                  <input
+                    type="text"
+                    id="eircode"
+                    {...register('eircode', {
+                      required: visitType === 'home' ? 'Eircode is required for home visits' : false,
+                      pattern: {
+                        value: /^[A-Za-z0-9]{3}\s?[A-Za-z0-9]{4}$/,
+                        message: 'Please enter a valid Irish Eircode (e.g., D01 A2B3)'
+                      },
+                      validate: (value) => {
+                        if (visitType === 'home' && value) {
+                          const normalized = value.replace(/\s/g, '').toUpperCase();
+                          if (normalized.length !== 7) {
+                            return 'Eircode must be 7 characters (e.g., D01A2B3)';
+                          }
+                        }
+                        return true;
+                      }
+                    })}
+                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                      errors.eircode ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                    placeholder="D01 A2B3"
+                    maxLength={8}
+                  />
+                  {errors.eircode && (
+                    <p className="mt-1 text-sm text-red-600">{errors.eircode?.message}</p>
+                  )}
+                  <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                    ⚠️ Please note: Home visits beyond Dublin 22 will incur additional charges. Ensure your address is correct.
+                  </p>
+                </div>
+              )}
               <div>
                 <label htmlFor="service" className="block text-sm font-medium text-neutral-700 mb-1">
                   Service Type *

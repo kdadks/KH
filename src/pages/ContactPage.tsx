@@ -234,7 +234,7 @@ const ContactPage: React.FC = () => {
     <>
       <SEOHead
         title="Contact KH Therapy | Physiotherapist Clondalkin Dublin"
-        description="Contact KH Therapy to enquire about physiotherapy, Clinical Pilates, or home visit services in Dublin. Located at Ace Enterprise Centre, Clondalkin, Dublin 22. Serving Lucan, Tallaght, and West Dublin."
+        description="Contact KH Therapy to enquire about physiotherapy, Clinical Pilates, or home visit services in Dublin. Located at Clondalkin, Dublin 22, Ireland. Serving Lucan, Tallaght, and West Dublin."
         canonicalUrl="/contact"
         keywords="contact physiotherapist Dublin, physio Clondalkin, physio Dublin 22, physiotherapist near me Dublin, home visit physio contact Dublin, KH Therapy contact"
       />
@@ -434,9 +434,7 @@ const ContactPage: React.FC = () => {
                     <div>
                       <h4 className="font-semibold text-gray-900">Address</h4>
                       <p className="text-gray-600 leading-relaxed">
-                        Neilstown Village Court<br />
-                        Neilstown Rd<br />
-                        Clondalkin, D22E8P2
+                        Clondalkin, Dublin 22, Ireland
                       </p>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import SectionHeading from '../components/shared/SectionHeading';
 import Container from '../components/shared/Container';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Package } from '../data/packages'; // Only import the type
 import { supabase } from '../supabaseClient';
 import SEOHead from '../components/utils/SEOHead';
@@ -190,11 +190,21 @@ const ServicesPage: React.FC = () => {
 								>
 									<h2 className="text-xl font-semibold mb-2">{pkg.name}</h2>								{pkg.visitType && (
 									<div className="mb-3">
-										<span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-primary-100 text-primary-700">
-											{pkg.visitType === 'clinic' && '🏥 Clinic'}
-											{pkg.visitType === 'home' && '🏠 Home'}
-											{pkg.visitType === 'online' && '💻 Online'}
-										</span>
+										{pkg.visitType === 'clinic' && (
+											<span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-primary-100 text-primary-700">
+												🏥 Clinic
+											</span>
+										)}
+										{pkg.visitType === 'home' && (
+											<Link to="/services/home-visits" className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors">
+												🏠 Home
+											</Link>
+										)}
+										{pkg.visitType === 'online' && (
+											<Link to="/services/online" className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors">
+												💻 Online
+											</Link>
+										)}
 									</div>
 								)}									<div className="text-primary-600 mb-4 space-y-1">
 										{pkg.inHourPrice && (

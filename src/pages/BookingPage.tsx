@@ -31,6 +31,7 @@ interface BookingFormData {
   lastName: string;
   email: string;
   phone: string;
+  dateOfBirth?: string;
   visitType: string;
   eircode?: string;
   service: string;
@@ -843,7 +844,7 @@ const BookingPage: React.FC = () => {
         total_amount: 0, // No payment required for these bookings
         booking_reference: bookingRecord.booking_reference || `KH-${bookingRecord.id}`,
         therapist_name: 'KH Therapy Team',
-        clinic_address: visitType === 'clinic' ? 'KH Therapy Clinic, Dublin, Ireland' : undefined,
+        clinic_address: visitType === 'clinic' ? 'Clondalkin, Dublin 22, Ireland' : undefined,
         visit_type: visitType as 'clinic' | 'home' | 'online',
         special_instructions: booking.notes || 'We will contact you to schedule your appointment'
       };
@@ -972,7 +973,8 @@ const BookingPage: React.FC = () => {
         lastName: data.lastName,
         email: data.email,
         phone: data.phone,
-        ...(data.eircode && visitType === 'home' && { eircode: data.eircode.trim().toUpperCase() }) // Add eircode if provided (for home visits)
+        ...(data.eircode && visitType === 'home' && { eircode: data.eircode.trim().toUpperCase() }),
+        ...(data.dateOfBirth && { dateOfBirth: data.dateOfBirth })
       };
 
       // Prepare booking data
@@ -1581,29 +1583,49 @@ const BookingPage: React.FC = () => {
                   )}
                 </div>
                 
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    {...register('phone', phoneValidation)}
-                    onChange={(e) => {
-                      const error = validatePhoneRealTime(e.target.value);
-                      setRealTimeErrors(prev => ({ ...prev, phone: error }));
-                      register('phone', phoneValidation).onChange(e);
-                    }}
-                    className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                      realTimeErrors.phone || errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                    }`}
-                    placeholder="+353 1 234 5678"
-                  />
-                  {(realTimeErrors.phone || errors.phone) && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {realTimeErrors.phone || errors.phone?.message}
-                    </p>
-                  )}
+                {/* DOB (left) + Phone (right) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="dateOfBirth" className="block text-sm font-medium text-neutral-700 mb-1">
+                      Date of Birth
+                    </label>
+                    <input
+                      type="date"
+                      id="dateOfBirth"
+                      {...register('dateOfBirth')}
+                      max={new Date().toISOString().split('T')[0]}
+                      className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                        errors.dateOfBirth ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    />
+                    {errors.dateOfBirth && (
+                      <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-neutral-700 mb-1">
+                      Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      {...register('phone', phoneValidation)}
+                      onChange={(e) => {
+                        const error = validatePhoneRealTime(e.target.value);
+                        setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                        register('phone', phoneValidation).onChange(e);
+                      }}
+                      className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
+                        realTimeErrors.phone || errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                      placeholder="+353 1 234 5678"
+                    />
+                    {(realTimeErrors.phone || errors.phone) && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {realTimeErrors.phone || errors.phone?.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Show eircode field only for home visits */}
@@ -1642,9 +1664,10 @@ const BookingPage: React.FC = () => {
                         {errors.eircode?.message}
                       </p>
                     )}
-                    <p className="mt-1 text-xs text-gray-600">
-                      Required for home visit scheduling and location
-                    </p>
+                     {/* Disclaimer displayed when Home Visit is selected */}
+                     <p className="mt-1 text-xs text-gray-600">
+                       Please note: Home visits beyond Dublin 22 will incur additional charges. Ensure your address is correct.
+                     </p>
                   </div>
                 )}
                 

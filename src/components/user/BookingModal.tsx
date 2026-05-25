@@ -18,6 +18,7 @@ interface Service {
   out_of_hour_price?: string | number;
   displayName?: string;
   priceType?: string;
+  visit_type?: string;
 }
 
 interface Customer {
@@ -26,6 +27,7 @@ interface Customer {
   last_name: string;
   email: string;
   phone?: string;
+  date_of_birth?: string;
 }
 
 interface PaymentState {
@@ -78,7 +80,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
     service: '',
     date: '',
     time: '',
-    notes: ''
+    notes: '',
+    dateOfBirth: ''
   });
 
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
@@ -87,11 +90,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
+      const existingDob = customer.date_of_birth && /^\d{4}-\d{2}-\d{2}$/.test(customer.date_of_birth)
+        ? customer.date_of_birth
+        : '';
       setFormData({
         service: '',
         date: '',
         time: '',
-        notes: ''
+        notes: '',
+        dateOfBirth: existingDob
       });
       setSelectedService(null);
       setTimeSlots([]);
@@ -256,7 +263,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
       setLoadingServices(true);
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, category, price, in_hour_price, out_of_hour_price')
+        .select('id, name, category, price, in_hour_price, out_of_hour_price, visit_type')
         .eq('is_active', true)
         .order('name', { ascending: true });
 
@@ -554,7 +561,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
             ? 'Your deposit has been received. You will need to pay the remaining balance before your appointment.'
             : 'Your payment is complete. Your booking is confirmed!',
           therapist_name: 'KH Therapy Team',
-          clinic_address: 'KH Therapy Clinic, Dublin, Ireland'
+          clinic_address: 'Clondalkin, Dublin 22, Ireland'
         }
       );
     } catch (emailError) {
@@ -573,7 +580,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
       service: '',
       date: '',
       time: '',
-      notes: ''
+      notes: '',
+      dateOfBirth: ''
     });
 
     // Close modal and refresh bookings
@@ -631,6 +639,11 @@ const BookingModal: React.FC<BookingModalProps> = ({
         });
         showError('Booking Failed', `Failed to create your booking request: ${error.message}`);
         return;
+      }
+
+      // Save DOB to customer record if provided and valid
+      if (formData.dateOfBirth && formData.dateOfBirth !== customer.date_of_birth) {
+        await supabase.from('customers').update({ date_of_birth: formData.dateOfBirth }).eq('id', customer.id);
       }
 
       // Check if this is a service that doesn't need payment (Contact for Quote, per-session pricing, etc.)
@@ -695,14 +708,14 @@ const BookingModal: React.FC<BookingModalProps> = ({
                 let priceToUse = '';
 
                 // Determine which price field to use based on service type
-                if (formData.service.includes('In Hour') && servicePricing.in_hour_price) {
-                  priceToUse = servicePricing.in_hour_price;
+                 if (formData.service.includes('In Hour') && servicePricing.in_hour_price) {
+                   priceToUse = String(servicePricing.in_hour_price);
                   console.log('💰 Using in_hour_price:', priceToUse);
-                } else if (formData.service.includes('Out of Hour') && servicePricing.out_of_hour_price) {
-                  priceToUse = servicePricing.out_of_hour_price;
+                 } else if (formData.service.includes('Out of Hour') && servicePricing.out_of_hour_price) {
+                   priceToUse = String(servicePricing.out_of_hour_price);
                   console.log('💰 Using out_of_hour_price:', priceToUse);
-                } else if (servicePricing.price) {
-                  priceToUse = servicePricing.price;
+                 } else if (servicePricing.price) {
+                   priceToUse = String(servicePricing.price);
                   console.log('💰 Using standard price:', priceToUse);
                 }
 
@@ -776,7 +789,8 @@ const BookingModal: React.FC<BookingModalProps> = ({
         service: '',
         date: '',
         time: '',
-        notes: ''
+        notes: '',
+        dateOfBirth: ''
       });
       
       // Close modal and refresh bookings
@@ -1002,35 +1016,56 @@ const BookingModal: React.FC<BookingModalProps> = ({
             </div>
           </div>
 
-          {/* Notes - Full Width */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Additional Notes (Optional)
-            </label>
-            <div className="relative">
-              <FileText className="absolute left-3 top-3 text-gray-400" size={20} />
-              <textarea
-                value={formData.notes}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const error = validateNotesRealTime(value);
-                  setFormErrors(prev => ({ ...prev, notes: error }));
-                  setFormData({ ...formData, notes: value });
-                }}
-                rows={4}
-                placeholder="Any special requests, medical conditions, or additional information..."
-                className={`w-full pl-10 pr-3 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
-                  formErrors.notes ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                }`}
-              />
-            </div>
-            {formErrors.notes && (
-              <p className="mt-1 text-sm text-red-600">{formErrors.notes}</p>
-            )}
-            <p className="mt-1 text-xs text-gray-500">
-              {formData.notes.length}/1000 characters
-            </p>
-          </div>
+           {/* Notes - Full Width */}
+           <div className="mb-6">
+             <label className="block text-sm font-medium text-gray-700 mb-2">
+               Additional Notes (Optional)
+             </label>
+             <div className="relative">
+               <FileText className="absolute left-3 top-3 text-gray-400" size={20} />
+               <textarea
+                 value={formData.notes}
+                 onChange={(e) => {
+                   const value = e.target.value;
+                   const error = validateNotesRealTime(value);
+                   setFormErrors(prev => ({ ...prev, notes: error }));
+                   setFormData({ ...formData, notes: value });
+                 }}
+                 rows={4}
+                 placeholder="Any special requests, medical conditions, or additional information..."
+                 className={`w-full pl-10 pr-3 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
+                   formErrors.notes ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                 }`}
+               />
+             </div>
+             {formErrors.notes && (
+               <p className="mt-1 text-sm text-red-600">{formErrors.notes}</p>
+             )}
+             <p className="mt-1 text-xs text-gray-500">
+               {formData.notes.length}/1000 characters
+             </p>
+           </div>
+
+           {/* Disclaimer for Home Visit */}
+           {selectedService?.visit_type === 'home' && (
+             <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+               ⚠️ Please note: Home visits beyond Dublin 22 will incur additional charges. Ensure your address is correct.
+             </p>
+           )}
+
+           {/* Date of Birth */}
+           <div className="mb-6">
+             <label className="block text-sm font-medium text-gray-700 mb-2">
+               Date of Birth
+             </label>
+             <input
+               type="date"
+               value={formData.dateOfBirth}
+               onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+               max={new Date().toISOString().split('T')[0]}
+               className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+             />
+           </div>
 
           {/* Important Notice */}
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4">

@@ -71,6 +71,7 @@ export type BookingFormData = {
     email: string;
     phone?: string;
     eircode?: string; // Include eircode for home visits
+    date_of_birth?: string;
     created_at?: string;
     updated_at?: string;
   };

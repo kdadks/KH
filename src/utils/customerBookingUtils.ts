@@ -67,6 +67,7 @@ export const findOrCreateCustomer = async (customerData: {
   email: string;
   phone?: string;
   eircode?: string;
+  dateOfBirth?: string;
 }): Promise<{ customer: Customer | null; error: string | null; isNewCustomer?: boolean }> => {
   try {
     // First, try to find existing customer by email AND name combination
@@ -118,6 +119,11 @@ export const findOrCreateCustomer = async (customerData: {
         updateData.eircode = customerData.eircode.trim().toUpperCase();
       }
 
+      // Update date_of_birth if provided and not already set
+      if (customerData.dateOfBirth && customerData.dateOfBirth.trim() && !existingCustomer.date_of_birth) {
+        updateData.date_of_birth = customerData.dateOfBirth.trim();
+      }
+
       // Only update if there's something to update
       if (Object.keys(updateData).length > 0) {
         const { data: updatedCustomer, error: updateError } = await supabase
@@ -166,6 +172,7 @@ export const findOrCreateCustomer = async (customerData: {
       email: customerData.email.toLowerCase().trim(),
       phone: encryptedPhone,
       eircode: customerData.eircode?.trim() ? customerData.eircode.trim().toUpperCase() : undefined,
+      date_of_birth: customerData.dateOfBirth?.trim() || undefined,
       country: 'Ireland',
       is_active: true,
       password: hashedDefaultPassword, // Store hashed password

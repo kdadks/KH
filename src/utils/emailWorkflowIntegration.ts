@@ -76,7 +76,7 @@ export const integratePaymentEmailWorkflow = async (
       booking_id: paymentRequest.booking?.id,
       customer_id: paymentRequest.customer_id,
       therapist_name: 'KH Therapy Team',
-      clinic_address: 'KH Therapy Clinic, Dublin, Ireland',
+      clinic_address: 'Clondalkin, Dublin 22, Ireland',
       special_instructions: paymentRequest.booking?.notes
     };
 
@@ -303,7 +303,7 @@ export const integrateAdminConfirmationEmailWorkflow = async (
     });
     
     if (visitType === 'clinic') {
-      locationDisplay = 'KH Therapy Clinic, Dublin, Ireland';
+      locationDisplay = 'Clondalkin, Dublin 22, Ireland';
     } else if (visitType === 'home' && booking.customer) {
       // Build full address for home visits
       const addressParts = [];

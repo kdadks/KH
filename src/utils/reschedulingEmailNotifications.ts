@@ -395,7 +395,7 @@ export const sendReschedulingApprovalNotification = async (
       booking_reference: requestDetails.bookingReference,
       service_name: requestDetails.serviceName,
       therapist_name: 'KH Therapy Team',
-      clinic_address: 'KH Therapy Clinic, Dublin, Ireland'
+      clinic_address: 'Clondalkin, Dublin 22, Ireland'
     });
 
     // Send to admin with ICS attachment
@@ -411,7 +411,7 @@ export const sendReschedulingApprovalNotification = async (
       booking_reference: requestDetails.bookingReference,
       service_name: requestDetails.serviceName,
       therapist_name: 'KH Therapy Team',
-      clinic_address: 'KH Therapy Clinic, Dublin, Ireland'
+      clinic_address: 'Clondalkin, Dublin 22, Ireland'
     });
 
     // Return success if at least customer email was sent
