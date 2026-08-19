@@ -5,11 +5,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('❌ Missing Supabase configuration');
-  console.log('Need VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  console.log('Need VITE_SUPABASE_URL and SUPABASE_SECRET_KEY');
   process.exit(1);
 }
 

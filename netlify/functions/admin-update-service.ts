@@ -58,7 +58,7 @@ export const handler = async (event: any): Promise<any> => {
 
     // Get Supabase credentials from server environment
     const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-    const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SECRET_KEY;
     
     console.log('admin-update-service: Config check', {
       hasUrl: !!SUPABASE_URL,

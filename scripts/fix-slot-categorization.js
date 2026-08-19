@@ -20,11 +20,11 @@ if (fs.existsSync('.env')) {
 
 async function fixSlotCategorization() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_SECRET_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.error('❌ Missing Supabase credentials. Please check your environment variables.');
-    console.error('Required: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
+    console.error('Required: VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY');
     process.exit(1);
   }
 

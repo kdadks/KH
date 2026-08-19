@@ -23,15 +23,15 @@ dotenv.config();
 
 // Configuration - loaded from environment variables
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_PUBLISHABLE_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const ENCRYPTION_KEY = process.env.VITE_ENCRYPTION_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !ENCRYPTION_KEY) {
-  throw new Error('Missing required environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_ENCRYPTION_KEY must be set');
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || !ENCRYPTION_KEY) {
+  throw new Error('Missing required environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and VITE_ENCRYPTION_KEY must be set');
 }
 
 // Supabase client setup
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 /**
  * Encrypt sensitive data using AES encryption

@@ -8,12 +8,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ Missing required environment variables');
+  console.error('Missing required environment variables');
   console.error('   VITE_SUPABASE_URL:', !!supabaseUrl);
-  console.error('   SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceKey);
+  console.error('   SUPABASE_SECRET_KEY:', !!supabaseServiceKey);
   process.exit(1);
 }
 

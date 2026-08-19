@@ -109,14 +109,14 @@ const initializeSupabase = async () => {
     
     // Use VITE_SUPABASE_URL as fallback since it's already available
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY;
     
     // Supabase configuration validated
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('❌ Missing required Netlify environment variables:');
       console.error('   - SUPABASE_URL or VITE_SUPABASE_URL:', !!supabaseUrl);
-      console.error('   - SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceKey);
+      console.error('   - SUPABASE_SECRET_KEY:', !!supabaseServiceKey);
       throw new Error('Missing Supabase configuration - please check Netlify environment variables');
     }
     
