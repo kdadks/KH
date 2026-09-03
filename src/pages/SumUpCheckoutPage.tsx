@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CreditCard, CheckCircle } from 'lucide-react';
 import { PaymentEnvironmentIndicator } from '../components/ui/PaymentEnvironmentIndicator';
+import { supabase } from '../supabaseClient';
 
 const SumUpCheckoutPage: React.FC = () => {
   // SumUp checkout page initialization
@@ -109,12 +110,6 @@ const SumUpCheckoutPage: React.FC = () => {
     setStatusError(null);
     
     try {
-      // Import supabase client
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
       const { data: paymentRequest, error } = await supabase
         .from('payment_requests')
         .select('id, status, service_name, amount, currency')

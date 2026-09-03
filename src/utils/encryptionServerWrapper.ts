@@ -70,7 +70,7 @@ export const encryptSensitiveDataServer = async (data: string, field?: string): 
   if (!data) return '';
 
   try {
-    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const siteUrl = isDevelopment() ? window.location.origin : (import.meta.env.VITE_SITE_URL || window.location.origin);
     const functionUrl = `${siteUrl}/.netlify/functions/encrypt-data`;
 
     const response = await fetch(functionUrl, {
@@ -84,6 +84,12 @@ export const encryptSensitiveDataServer = async (data: string, field?: string): 
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Encryption error:', errorData);
+      
+      if (isDevelopment()) {
+        const key = getClientEncryptionKey();
+        if (key) return CryptoJS.AES.encrypt(data, key).toString();
+      }
+      
       throw new Error(`Encryption failed: ${errorData.error || 'Unknown error'}`);
     }
 
@@ -91,7 +97,18 @@ export const encryptSensitiveDataServer = async (data: string, field?: string): 
     return result.encrypted;
   } catch (error) {
     console.error('Error encrypting data:', error);
-    throw error; // CRITICAL: Never return plaintext on failure - throw error instead
+    
+    // In development mode or if Netlify serverless functions are not running locally,
+    // fallback to client-side encryption using VITE_ENCRYPTION_KEY
+    if (isDevelopment()) {
+      const key = getClientEncryptionKey();
+      if (key) {
+        console.log(`Using client-side encryption fallback for field ${field}`);
+        return CryptoJS.AES.encrypt(data, key).toString();
+      }
+    }
+    
+    throw error; // Never return plaintext on failure in production
   }
 };
 
@@ -111,7 +128,7 @@ export const decryptSensitiveDataServer = async (encrypted: string, field?: stri
   }
 
   try {
-    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const siteUrl = isDevelopment() ? window.location.origin : (import.meta.env.VITE_SITE_URL || window.location.origin);
     const functionUrl = `${siteUrl}/.netlify/functions/decrypt-data`;
 
     const response = await fetch(functionUrl, {
