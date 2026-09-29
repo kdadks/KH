@@ -3763,6 +3763,7 @@ export const Bookings: React.FC<BookingsProps> = ({
             notes: bookingToReschedule.notes,
             status: bookingToReschedule.status
           }}
+          isAdmin={true}
           onRescheduleComplete={handleRescheduleComplete}
         />
       )}

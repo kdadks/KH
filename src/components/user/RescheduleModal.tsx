@@ -9,6 +9,7 @@ interface RescheduleModalProps {
   onClose: () => void;
   booking: UserBooking;
   onRescheduleComplete: (oldDate?: string, oldTime?: string, newDate?: string, newTime?: string, reason?: string) => void;
+  isAdmin?: boolean;
 }
 
 interface AvailabilitySlot {
@@ -24,7 +25,8 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
   isOpen,
   onClose,
   booking,
-  onRescheduleComplete
+  onRescheduleComplete,
+  isAdmin = false
 }) => {
   const { showError, showSuccess } = useToast();
   const [availableSlots, setAvailableSlots] = useState<AvailabilitySlot[]>([]);
@@ -222,11 +224,15 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
       }
 
       // Check if this requires approval workflow (24-hour rule for customers)
-      const appointmentDateTime = new Date(`${booking.booking_date}`);
+      // Admins always bypass the 24-hour approval restriction
+      const bookingDateStr = booking.booking_date || '';
+      const appointmentDateTime = new Date(bookingDateStr);
       const currentTime = new Date();
-      const hoursUntilAppointment = (appointmentDateTime.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
+      const hoursUntilAppointment = !isNaN(appointmentDateTime.getTime())
+        ? (appointmentDateTime.getTime() - currentTime.getTime()) / (1000 * 60 * 60)
+        : 0;
       
-      const requiresApproval = hoursUntilAppointment < 24;
+      const requiresApproval = !isAdmin && hoursUntilAppointment < 24;
 
       if (requiresApproval) {
         // Use approval workflow for requests within 24 hours
@@ -253,7 +259,7 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
           showError('Error', result.errors?.[0] || 'Failed to submit rescheduling request');
         }
       } else {
-        // Direct rescheduling for requests more than 24 hours in advance
+        // Direct rescheduling for admins or customer requests more than 24 hours in advance
         // Update the booking with new date and time
         const newDateTime = `${formData.date}T${selectedSlot.start_time}`;
 
@@ -268,7 +274,7 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
 
         if (updateError) {
           console.error('Error updating booking:', updateError);
-          showError('Error', 'Failed to reschedule booking');
+          showError('Error', updateError.message || 'Failed to reschedule booking');
           return;
         }
 
@@ -283,35 +289,37 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
           // Don't fail the reschedule for this, just log it
         }
 
-        // Send immediate rescheduling notification
-        try {
-          const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
-          
-          await integrateBookingReschedulingWorkflow(
-            booking.id,
-            formData.date,
-            selectedSlot.start_time,
-            {
-              reschedule_reason: 'Customer self-rescheduled',
-              reschedule_note: 'Customer rescheduled their appointment through the customer portal.',
-              rescheduled_by: 'customer',
-              old_appointment_date: booking.booking_date?.split('T')[0] || '',
-              old_appointment_time: booking.timeslot_start_time || ''
-            }
-          );
-        } catch (emailError) {
-          console.warn('Email notification failed:', emailError);
-          // Don't fail the reschedule for email issues
-        }
+        // If customer self-rescheduling, send immediate customer notification internally
+        if (!isAdmin) {
+          try {
+            const { integrateBookingReschedulingWorkflow } = await import('../../utils/emailWorkflowIntegration');
+            
+            await integrateBookingReschedulingWorkflow(
+              booking.id,
+              formData.date,
+              selectedSlot.start_time,
+              {
+                reschedule_reason: 'Customer self-rescheduled',
+                reschedule_note: 'Customer rescheduled their appointment through the customer portal.',
+                rescheduled_by: 'customer',
+                old_appointment_date: booking.booking_date?.split('T')[0] || '',
+                old_appointment_time: booking.timeslot_start_time || ''
+              }
+            );
+          } catch (emailError) {
+            console.warn('Email notification failed:', emailError);
+            // Don't fail the reschedule for email issues
+          }
 
-        showSuccess('Success', 'Booking rescheduled successfully! You will receive a confirmation email with the updated appointment details.');
+          showSuccess('Success', 'Booking rescheduled successfully! You will receive a confirmation email with the updated appointment details.');
+        }
         
-        // Pass the rescheduling details to the callback for admin email notification
+        // Pass the rescheduling details to the callback
         const oldDate = booking.booking_date?.split('T')[0] || '';
         const oldTime = booking.timeslot_start_time || '';
         const newDate = formData.date;
         const newTime = selectedSlot.start_time;
-        const reason = 'Customer self-rescheduled';
+        const reason = isAdmin ? 'Rescheduled by admin' : 'Customer self-rescheduled';
         
         onRescheduleComplete(oldDate, oldTime, newDate, newTime, reason);
       }

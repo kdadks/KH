@@ -11,17 +11,20 @@
  */
 export const canRescheduleBooking = (appointmentDate: string, appointmentTime: string): boolean => {
   try {
-    // Parse the appointment date and time
-    const appointmentDateTime = new Date(`${appointmentDate}T${appointmentTime}`);
+    if (!appointmentDate) return false;
+    let dateTimeStr: string;
+    if (appointmentDate.includes('T')) {
+      dateTimeStr = appointmentDate;
+    } else {
+      dateTimeStr = `${appointmentDate}T${appointmentTime || '00:00:00'}`;
+    }
+    const appointmentDateTime = new Date(dateTimeStr);
+    if (isNaN(appointmentDateTime.getTime())) return false;
+
     const currentTime = new Date();
-    
-    // Calculate the difference in milliseconds
     const timeDifference = appointmentDateTime.getTime() - currentTime.getTime();
-    
-    // Convert to hours
     const hoursUntilAppointment = timeDifference / (1000 * 60 * 60);
-    
-    // Must be at least 24 hours before appointment
+
     return hoursUntilAppointment >= 24;
   } catch (error) {
     console.error('Error checking rescheduling eligibility:', error);

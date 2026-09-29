@@ -39,7 +39,7 @@ export const submitReschedulingRequest = async (requestData: {
     // Get booking details to verify eligibility
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('id, customer_id, appointment_date, appointment_time, booking_status, booking_reference')
+      .select('*')
       .eq('id', requestData.bookingId)
       .single();
 
@@ -50,16 +50,20 @@ export const submitReschedulingRequest = async (requestData: {
       };
     }
 
+    const origDate = booking.appointment_date || (booking.booking_date ? booking.booking_date.split('T')[0] : requestData.originalDate);
+    const origTime = booking.appointment_time || booking.timeslot_start_time || requestData.originalTime || '00:00:00';
+    const bookingStatus = booking.booking_status || booking.status || 'confirmed';
+
     // Check if booking status allows rescheduling
-    if (!isBookingEligibleForRescheduling(booking.booking_status)) {
+    if (!isBookingEligibleForRescheduling(bookingStatus)) {
       return {
         success: false,
-        error: `Bookings with status "${booking.booking_status}" cannot be rescheduled`
+        error: `Bookings with status "${bookingStatus}" cannot be rescheduled`
       };
     }
 
     // Double-check the 24-hour rule using actual booking data
-    if (!canRescheduleBooking(booking.appointment_date, booking.appointment_time)) {
+    if (!canRescheduleBooking(origDate, origTime)) {
       return {
         success: false,
         error: 'Rescheduling must be requested at least 24 hours before the appointment'
@@ -93,8 +97,8 @@ export const submitReschedulingRequest = async (requestData: {
     const newRequest: Partial<ReschedulingRequest> = {
       bookingId: requestData.bookingId,
       customerId: booking.customer_id,
-      originalAppointmentDate: booking.appointment_date,
-      originalAppointmentTime: booking.appointment_time,
+      originalAppointmentDate: origDate,
+      originalAppointmentTime: origTime,
       requestedAppointmentDate: requestData.newDate,
       requestedAppointmentTime: requestData.newTime,
       rescheduleReason: requestData.reason,

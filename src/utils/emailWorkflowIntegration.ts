@@ -887,17 +887,21 @@ export const submitCustomerReschedulingRequest = async (
       };
     }
 
+    const appointmentDate = booking.appointment_date || (booking.booking_date ? booking.booking_date.split('T')[0] : '');
+    const appointmentTime = booking.appointment_time || booking.timeslot_start_time || '00:00:00';
+    const bookingStatus = booking.booking_status || booking.status || 'confirmed';
+
     // Check if booking status allows rescheduling
-    if (!isBookingEligibleForRescheduling(booking.booking_status)) {
+    if (!isBookingEligibleForRescheduling(bookingStatus)) {
       return {
         success: false,
         results: {},
-        errors: [`Bookings with status "${booking.booking_status}" cannot be rescheduled`]
+        errors: [`Bookings with status "${bookingStatus}" cannot be rescheduled`]
       };
     }
 
     // Check 24-hour rule
-    if (!canRescheduleBooking(booking.appointment_date, booking.appointment_time)) {
+    if (!canRescheduleBooking(appointmentDate, appointmentTime)) {
       return {
         success: false,
         results: {},
@@ -908,8 +912,8 @@ export const submitCustomerReschedulingRequest = async (
     // Validate request data
     const validation = validateReschedulingRequest({
       bookingId,
-      originalDate: booking.appointment_date,
-      originalTime: booking.appointment_time,
+      originalDate: appointmentDate,
+      originalTime: appointmentTime,
       newDate: requestData.newAppointmentDate,
       newTime: requestData.newAppointmentTime,
       reason: requestData.reschedule_reason
@@ -926,8 +930,8 @@ export const submitCustomerReschedulingRequest = async (
     // Submit the rescheduling request to the database
     const submitResult = await submitReschedulingRequest({
       bookingId,
-      originalDate: booking.appointment_date,
-      originalTime: booking.appointment_time,
+      originalDate: appointmentDate,
+      originalTime: appointmentTime,
       newDate: requestData.newAppointmentDate,
       newTime: requestData.newAppointmentTime,
       reason: requestData.reschedule_reason,
@@ -950,16 +954,16 @@ export const submitCustomerReschedulingRequest = async (
       customer_name: booking.customer?.name || booking.customer_name || 'Customer',
       customer_email: booking.customer?.email || booking.customer_email,
       service_name: booking.service?.name || booking.service_name || 'Physiotherapy Session',
-      appointment_date: booking.appointment_date,
-      appointment_time: booking.appointment_time,
+      appointment_date: appointmentDate,
+      appointment_time: appointmentTime,
       booking_reference: booking.booking_reference || `KH-${bookingId}`,
       booking_id: bookingId,
       customer_id: booking.customer_id,
       therapist_name: booking.therapist_name || 'KH Therapy Team',
       clinic_address: booking.clinic_address || 'KH Therapy Clinic, Dublin, Ireland',
       special_instructions: booking.special_instructions || '',
-      old_appointment_date: booking.appointment_date,
-      old_appointment_time: booking.appointment_time
+      old_appointment_date: appointmentDate,
+      old_appointment_time: appointmentTime
     };
 
     // Send notification emails
